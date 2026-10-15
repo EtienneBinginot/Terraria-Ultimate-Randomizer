@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Microsoft.Xna.Framework;
 using Terraria;
@@ -6,11 +7,12 @@ using Terraria.ID;
 using Terraria.Localization;
 using Terraria.ModLoader;
 using UltimateRandomizer.Common.Core;
+using UltimateRandomizer.Common.Features;
 
 namespace UltimateRandomizer.Common.Commands
 {
 	// /rdebug item <name or id>   category, tier and stack of an item
-	// /rdebug npc <name or id>    tier of an enemy
+	// /rdebug npc <name or id>    tier and drop table of an enemy in this world
 	// /rdebug tier                tier unlocked in this world
 	// /rdebug pool                writes the number of items per category and tier to the log
 	public class DebugCommand : ModCommand
@@ -76,6 +78,19 @@ namespace UltimateRandomizer.Common.Commands
 			}
 			caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.Npc",
 				Lang.GetNPCNameValue(type), NpcTiers.BaseTier(type), NpcTiers.EffectiveTier(type)), Color.Yellow);
+			if (!SeedSystem.WorldReady || !ItemPool.Ready) return;
+			List<PlannedDrop> drops = RandomNpcDropRule.Plan(type, Main.expertMode);
+			if (drops.Count == 0)
+			{
+				caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.NoDrops"), Color.Yellow);
+			}
+			foreach (PlannedDrop drop in drops)
+			{
+				string stack = drop.StackMin == drop.StackMax ? drop.StackMin.ToString() : $"{drop.StackMin}-{drop.StackMax}";
+				string chance = drop.Chance >= 1f ? "100%" : $"{drop.Chance * 100:0.##}% (1/{Math.Round(1 / drop.Chance)})";
+				string conditions = drop.Conditions == null || drop.Conditions.Count == 0 ? "" : " *";
+				caller.Reply($"  {Lang.GetItemNameValue(drop.Item)} x{stack} : {chance}{conditions}", Color.White);
+			}
 		}
 
 		private static int FindItem(string name)

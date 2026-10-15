@@ -66,6 +66,16 @@ namespace UltimateRandomizer.Common.Configs
 		}
 	}
 
+	public enum DropTableStyle
+	{
+		// Random number of drops per enemy (usually few, sometimes many) with vanilla-like rates (1/1, 1/3, 1/10, 1/50...)
+		VanillaLike,
+		// Same number of drops and same rates as the original enemy, each item replaced by one of the same category
+		MirrorOriginal,
+		// Fixed chance for every slot
+		Simple
+	}
+
 	public class LootConfig : ModConfig
 	{
 		public override ConfigScope Mode => ConfigScope.ServerSide;
@@ -77,25 +87,40 @@ namespace UltimateRandomizer.Common.Configs
 		[ReloadRequired]
 		public bool RandomizeMobDrops;
 
-		[Range(0, 10)]
-		[DefaultValue(1)]
+		[DefaultValue(DropTableStyle.VanillaLike)]
+		[DrawTicks]
+		public DropTableStyle DropTableStyle;
+
+		[DefaultValue(true)]
+		public bool EnemiesWithoutDropsCanDrop;
+
+		[DefaultValue(false)]
+		public bool CrittersCanDrop;
+
+		[Range(0, 20)]
+		[DefaultValue(0)]
 		public int DropSlotsMin;
 
-		[Range(0, 10)]
-		[DefaultValue(3)]
+		[Range(0, 20)]
+		[DefaultValue(6)]
 		public int DropSlotsMax;
+
+		[Range(0.1f, 10f)]
+		[Increment(0.1f)]
+		[DefaultValue(1f)]
+		public float DropRateMultiplier;
 
 		[Range(1f, 100f)]
 		[Increment(1f)]
 		[DefaultValue(25f)]
 		public float DropChance;
 
-		[Range(0, 20)]
-		[DefaultValue(4)]
+		[Range(0, 30)]
+		[DefaultValue(5)]
 		public int BossDropSlotsMin;
 
-		[Range(0, 20)]
-		[DefaultValue(8)]
+		[Range(0, 30)]
+		[DefaultValue(12)]
 		public int BossDropSlotsMax;
 
 		public CategoryWeights DropCategoryWeights = new();

@@ -15,6 +15,7 @@ Commands: {
 		Npc: "{0}: tier {1} (used for rolls: {2})"
 		Tier: Unlocked tier: {0} ({1})
 		PoolLogged: The item pool was written to client.log.
+		NoDrops: This enemy drops nothing in this world.
 	}
 }
 
@@ -109,6 +110,24 @@ Configs: {
 		}
 
 		Tooltip: ""
+	}
+
+	DropTableStyle: {
+		Tooltip: ""
+		VanillaLike: {
+			Label: Vanilla-like
+			Tooltip: ""
+		}
+
+		MirrorOriginal: {
+			Label: Mirror of the original
+			Tooltip: ""
+		}
+
+		Simple: {
+			Label: Simple
+			Tooltip: ""
+		}
 	}
 
 	GeneralConfig: {
@@ -257,9 +276,36 @@ Configs: {
 			Tooltip: Progression drops (protected items) and treasure bags keep their original chance.
 		}
 
+		DropTableStyle: {
+			Label: Drop table style
+			Tooltip:
+				'''
+				Vanilla-like: each enemy has a random number of drops (usually few, sometimes many) with rates like the base game
+				(1/1 for materials, 1/50 for equipment...). Items above the enemy's level are rarer.
+				Mirror of the original: same number of drops and same rates as the original enemy, each item replaced by one of the same category.
+				Simple: every slot has the fixed chance below.
+				'''
+		}
+
+		EnemiesWithoutDropsCanDrop: {
+			Label: Enemies without drops can drop items
+			Tooltip: Enemies that drop nothing in the base game also get random drops.
+		}
+
+		CrittersCanDrop: {
+			Label: Critters can drop items
+			Tooltip: Bunnies, birds, butterflies... also get random drops.
+		}
+
+		DropRateMultiplier: {
+			Label: Drop rate multiplier
+			Tooltip: Multiplies every drop chance (vanilla-like and mirror styles). 2 = twice as many drops.
+		}
+
+
 		DropSlotsMin: {
 			Label: Random drop slots (minimum)
-			Tooltip: Number of possible random drops for a normal enemy. Each enemy type has its own fixed number in a world.
+			Tooltip: Number of possible random drops of a normal enemy. Each enemy type gets its own fixed number in a world, usually close to the minimum.
 		}
 
 		DropSlotsMax: {
@@ -269,7 +315,7 @@ Configs: {
 
 		DropChance: {
 			Label: Drop chance of each slot (%)
-			Tooltip: For normal enemies. Items above the enemy's level are rarer. Bosses always drop all their slots.
+			Tooltip: Only used by the Simple style. Items above the enemy's level are rarer.
 		}
 
 		BossDropSlotsMin: {

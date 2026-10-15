@@ -13,10 +13,12 @@ namespace UltimateRandomizer.Common.Features
 		public static bool KeepOriginal(int itemType) =>
 			!ItemPool.IsRandomizable(itemType) || ItemPool.Info[itemType].Category == ItemCategory.Bag;
 
-		public static bool ConditionsMet(in DropRateInfo entry, DropAttemptInfo info)
+		public static bool ConditionsMet(in DropRateInfo entry, DropAttemptInfo info) => ConditionsMet(entry.conditions, info);
+
+		public static bool ConditionsMet(List<IItemDropRuleCondition> conditions, DropAttemptInfo info)
 		{
-			if (entry.conditions == null) return true;
-			foreach (IItemDropRuleCondition condition in entry.conditions)
+			if (conditions == null) return true;
+			foreach (IItemDropRuleCondition condition in conditions)
 			{
 				if (condition != null && !condition.CanDrop(info)) return false;
 			}

@@ -15,6 +15,7 @@ Commands: {
 		Npc: "{0} : tier {1} (utilisé pour les tirages : {2})"
 		Tier: Tier débloqué : {0} ({1})
 		PoolLogged: La répartition des objets a été écrite dans client.log.
+		NoDrops: Cet ennemi ne donne rien dans ce monde.
 	}
 }
 
@@ -109,6 +110,24 @@ Configs: {
 		}
 
 		// Tooltip: ""
+	}
+
+	DropTableStyle: {
+		Tooltip: ""
+		VanillaLike: {
+			Label: Façon vanilla
+			Tooltip: ""
+		}
+
+		MirrorOriginal: {
+			Label: Miroir de l'original
+			Tooltip: ""
+		}
+
+		Simple: {
+			Label: Simple
+			Tooltip: ""
+		}
 	}
 
 	GeneralConfig: {
@@ -257,9 +276,36 @@ Configs: {
 			Tooltip: Les drops de progression (objets protégés) et les sacs de trésor gardent leur chance d'origine.
 		}
 
+		DropTableStyle: {
+			Label: Style de table de loot
+			Tooltip:
+				'''
+				Façon vanilla : chaque ennemi a un nombre de drops aléatoire (souvent peu, parfois beaucoup) avec des taux comme le jeu de base
+				(1/1 pour les matériaux, 1/50 pour l'équipement...). Les objets au-dessus du niveau de l'ennemi sont plus rares.
+				Miroir de l'original : même nombre de drops et mêmes taux que l'ennemi d'origine, chaque objet remplacé par un objet de même catégorie.
+				Simple : chaque emplacement a la chance fixe ci-dessous.
+				'''
+		}
+
+		EnemiesWithoutDropsCanDrop: {
+			Label: Les ennemis sans drop peuvent dropper
+			Tooltip: Les ennemis qui ne donnent rien dans le jeu de base reçoivent aussi des drops aléatoires.
+		}
+
+		CrittersCanDrop: {
+			Label: Les critters peuvent dropper
+			Tooltip: Lapins, oiseaux, papillons... reçoivent aussi des drops aléatoires.
+		}
+
+		DropRateMultiplier: {
+			Label: Multiplicateur de taux de drop
+			Tooltip: Multiplie toutes les chances de drop (styles façon vanilla et miroir). 2 = deux fois plus de drops.
+		}
+
+
 		DropSlotsMin: {
 			Label: Emplacements de drop aléatoires (minimum)
-			Tooltip: Nombre de drops aléatoires possibles pour un ennemi normal. Chaque type d'ennemi a son nombre fixe dans un monde.
+			Tooltip: Nombre de drops aléatoires possibles d'un ennemi normal. Chaque type d'ennemi a son nombre fixe dans un monde, souvent proche du minimum.
 		}
 
 		DropSlotsMax: {
@@ -269,7 +315,7 @@ Configs: {
 
 		DropChance: {
 			Label: Chance de drop de chaque emplacement (%)
-			Tooltip: Pour les ennemis normaux. Les objets au-dessus du niveau de l'ennemi sont plus rares. Les boss donnent toujours tous leurs emplacements.
+			Tooltip: Utilisé seulement par le style Simple. Les objets au-dessus du niveau de l'ennemi sont plus rares.
 		}
 
 		BossDropSlotsMin: {
