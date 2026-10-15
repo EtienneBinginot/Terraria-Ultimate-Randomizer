@@ -137,5 +137,25 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		[ReloadRequired]
 		public bool RandomizeOtherBags;
+
+		[Header("World")]
+		[DefaultValue(true)]
+		public bool RandomizeChests;
+
+		[Range(0, 5)]
+		[DefaultValue(0)]
+		public int ChestTierBonus;
+
+		[DefaultValue(true)]
+		public bool RandomizeFishing;
+
+		[DefaultValue(true)]
+		public bool CratesStayCrates;
+
+		[DefaultValue(true)]
+		public bool RandomizeOreDrops;
+
+		[DefaultValue(true)]
+		public bool RandomizePotDrops;
 	}
 }

@@ -1,4 +1,5 @@
 Chat.OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer est aussi activé : le loot est randomisé deux fois. N'active qu'un seul des deux randomizers dans Manage Mods."
+Chat.StartingKit: "Ultimate Randomizer : tu as reçu un kit de départ aléatoire pour ce monde !"
 
 Commands: {
 	Seed: {
@@ -16,6 +17,13 @@ Commands: {
 		Tier: Tier débloqué : {0} ({1})
 		PoolLogged: La répartition des objets a été écrite dans client.log.
 		NoDrops: Cet ennemi ne donne rien dans ce monde.
+	}
+
+	Chests: {
+		Description: "Randomise les coffres naturels d'un monde créé sans le mod"
+		AlreadyDone: "Les coffres sont déjà randomisés dans ce monde."
+		Warning: "Ceci randomise une fois tous les coffres naturels sans nom. Les coffres renommés sont ignorés, mais les coffres de joueur sans nom de style naturel peuvent être modifiés. Tape /rchests confirm pour continuer."
+		Done: "{0} coffres randomisés."
 	}
 }
 
@@ -269,6 +277,7 @@ Configs: {
 		Headers: {
 			Mobs: Ennemis et boss
 			Bags: Sacs et caisses
+			World: Monde : coffres, pêche, minage
 		}
 
 		RandomizeMobDrops: {
@@ -346,6 +355,36 @@ Configs: {
 		RandomizeOtherBags: {
 			Label: Randomiser les autres sacs
 			Tooltip: Sacs de friandises, cadeaux, sacs d'herbes, géodes, boîtes de vers...
+		}
+
+		RandomizeChests: {
+			Label: Randomiser les coffres des nouveaux mondes
+			Tooltip: "Chaque objet d'un coffre naturel est remplacé par un objet de même catégorie, à la création du monde. Pour les anciens mondes, utilise /rchests."
+		}
+
+		ChestTierBonus: {
+			Label: Bonus de tier des coffres
+			Tooltip: "Rend le contenu des coffres meilleur de ce nombre de tiers."
+		}
+
+		RandomizeFishing: {
+			Label: Randomiser la pêche
+			Tooltip: "Chaque poisson donne un autre objet de même catégorie et de même tier. Les poissons de quête ne changent jamais."
+		}
+
+		CratesStayCrates: {
+			Label: Les caisses restent des caisses
+			Tooltip: "Les caisses pêchées ne sont pas remplacées (leur contenu est randomisé à l'ouverture)."
+		}
+
+		RandomizeOreDrops: {
+			Label: Randomiser les minerais minés
+			Tooltip: "Chaque minerai donne un autre minerai ou lingot du même tier (toujours le même dans un monde)."
+		}
+
+		RandomizePotDrops: {
+			Label: Randomiser le contenu des pots
+			Tooltip: "Les objets des pots sont remplacés par des objets de même catégorie. Les pièces et les coeurs ne changent pas."
 		}
 	}
 
@@ -460,7 +499,40 @@ Configs: {
 
 	EconomyConfig: {
 		DisplayName: 4. Économie
-		Headers.Stacks: Taille des stacks
+		Headers: {
+			Shops: Boutiques
+			Stacks: Taille des stacks
+		}
+
+		RandomizeShops: {
+			Label: Randomiser les boutiques
+			Tooltip: "Chaque objet en vente est remplacé par un objet de même catégorie. Il garde les conditions d'apparition de l'objet d'origine."
+		}
+
+		PriceMultiplierMin: {
+			Label: Multiplicateur de prix (minimum)
+			Tooltip: "Prix = valeur de l'objet x un multiplicateur aléatoire. Jamais sous 1 : acheter puis revendre ne rapporte jamais d'argent."
+		}
+
+		PriceMultiplierMax: {
+			Label: Multiplicateur de prix (maximum)
+			Tooltip: ""
+		}
+
+		MinimumPrice: {
+			Label: Prix minimum (pièces de cuivre)
+			Tooltip: "100 cuivre = 1 argent."
+		}
+
+		NoDuplicatesInShop: {
+			Label: Pas de doublons dans une boutique
+			Tooltip: ""
+		}
+
+		ShopsFollowProgression: {
+			Label: Les boutiques suivent la progression
+			Tooltip: "Les boutiques vendent de meilleurs objets à mesure que tu bats les boss."
+		}
 
 		StackCaps: {
 			Label: Stack maximum par catégorie
@@ -548,6 +620,149 @@ Configs: {
 
 		Misc: {
 			Label: Divers
+			Tooltip: ""
+		}
+	}
+
+	CraftingConfig: {
+		DisplayName: "5. Craft et Shimmer"
+		Headers: {
+			Recipes: Recettes
+			Shimmer: Shimmer
+		}
+
+		RandomizeRecipes: {
+			Label: Randomiser les résultats des recettes
+			Tooltip: "Chaque recette donne un objet de même catégorie et de même tier que l'original. Les recettes redeviennent normales quand tu quittes le monde."
+		}
+
+		RecipeValueGuard: {
+			Label: Garde-fou de valeur
+			Tooltip: "Un résultat peut valoir au maximum ce nombre de fois ses ingrédients. Empêche de transformer des ingrédients bon marché en fortune."
+		}
+
+		DisableDecraftOfRandomizedResults: {
+			Label: Pas de décraft Shimmer des résultats aléatoires
+			Tooltip: "Empêche de dupliquer des objets en craftant un résultat aléatoire puis en le décraftant dans le Shimmer."
+		}
+
+		RandomizeShimmer: {
+			Label: Randomiser les transmutations du Shimmer
+			Tooltip: "Chaque transformation du Shimmer donne un autre objet de même catégorie et de même tier. Le décraft n'est pas concerné."
+		}
+	}
+
+	EnemiesConfig: {
+		DisplayName: "6. Ennemis et boss"
+		Headers: {
+			Bosses: Boss
+			Enemies: Ennemis normaux
+		}
+
+		RandomizeBossHealth: {
+			Label: Randomiser la vie des boss
+			Tooltip: "La vie normale de chaque boss est multipliée par une valeur aléatoire entre le minimum et le maximum, fixe pour le monde. Les bonus expert et maître s'ajoutent par-dessus."
+		}
+
+		BossHealthMin: {
+			Label: Vie des boss : multiplicateur minimum
+			Tooltip: "0.5 = moitié de la vie."
+		}
+
+		BossHealthMax: {
+			Label: Vie des boss : multiplicateur maximum
+			Tooltip: "3 = triple de la vie."
+		}
+
+		RandomizeBossDamage: {
+			Label: Randomiser les dégâts des boss
+			Tooltip: "Dégâts de contact seulement : les projectiles gardent leurs propres dégâts."
+		}
+
+		BossDamageMin: {
+			Label: Dégâts des boss : multiplicateur minimum
+			Tooltip: ""
+		}
+
+		BossDamageMax: {
+			Label: Dégâts des boss : multiplicateur maximum
+			Tooltip: ""
+		}
+
+		RandomizeEnemyStats: {
+			Label: Randomiser les ennemis normaux
+			Tooltip: "La vie, les dégâts, la défense et la taille de chaque type d'ennemi sont multipliés par des valeurs aléatoires fixes pour le monde."
+		}
+
+		EnemyHealthMin: {
+			Label: Vie : multiplicateur minimum
+			Tooltip: ""
+		}
+
+		EnemyHealthMax: {
+			Label: Vie : multiplicateur maximum
+			Tooltip: ""
+		}
+
+		EnemyDamageMin: {
+			Label: Dégâts : multiplicateur minimum
+			Tooltip: ""
+		}
+
+		EnemyDamageMax: {
+			Label: Dégâts : multiplicateur maximum
+			Tooltip: ""
+		}
+
+		EnemyDefenseMin: {
+			Label: Défense : multiplicateur minimum
+			Tooltip: ""
+		}
+
+		EnemyDefenseMax: {
+			Label: Défense : multiplicateur maximum
+			Tooltip: ""
+		}
+
+		EnemyScaleMin: {
+			Label: Taille : multiplicateur minimum
+			Tooltip: "Change aussi la hitbox. De grandes valeurs peuvent bloquer les ennemis."
+		}
+
+		EnemyScaleMax: {
+			Label: Taille : multiplicateur maximum
+			Tooltip: ""
+		}
+	}
+
+	ExtrasConfig: {
+		DisplayName: "7. Extras"
+		Headers: {
+			StartingKit: Kit de départ
+		}
+
+		StartingKit: {
+			Label: Kit de départ aléatoire
+			Tooltip: "Donne à chaque personnage un kit aléatoire la première fois qu'il entre dans un monde."
+		}
+
+		KitWeapons: {
+			Label: Armes
+			Tooltip: ""
+		}
+
+		KitAccessories: {
+			Label: Accessoires
+			Tooltip: ""
+		}
+
+		KitPotions: {
+			Label: Potions
+			Tooltip: ""
+		}
+
+		KitTools: {
+			Label: Outils
 			Tooltip: ""
 		}
 	}
