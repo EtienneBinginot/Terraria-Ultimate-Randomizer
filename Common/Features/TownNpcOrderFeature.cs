@@ -59,9 +59,17 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		private static void ApplyShuffledConditions()
+		// Town NPC types in condition order, and who arrives with each condition (for the debug tools and tests)
+		public static int[] ConditionOwners => MoveInNpcs.Select(p => p.type).ToArray();
+
+		public static int[] Arrivals()
 		{
-			// Who arrives with which condition: a permutation fixed for the world
+			EnsureArrivals();
+			return (int[])arrivals.Clone();
+		}
+
+		private static void EnsureArrivals()
+		{
 			if (arrivals == null || arrivalsSeed != SeedSystem.WorldSeed)
 			{
 				arrivals = MoveInNpcs.Select(p => p.type).ToArray();
@@ -73,6 +81,12 @@ namespace UltimateRandomizer.Common.Features
 				}
 				arrivalsSeed = SeedSystem.WorldSeed;
 			}
+		}
+
+		private static void ApplyShuffledConditions()
+		{
+			// Who arrives with which condition: a permutation fixed for the world
+			EnsureArrivals();
 			int firstReady = 0;
 			for (int i = 0; i < MoveInNpcs.Length; i++)
 			{

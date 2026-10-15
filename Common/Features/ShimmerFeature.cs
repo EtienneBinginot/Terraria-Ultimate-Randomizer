@@ -12,6 +12,10 @@ namespace UltimateRandomizer.Common.Features
 		private static int[] original;
 		private static bool applied;
 
+		public static int OriginalTransform(int type) => original != null && type < original.Length ? original[type] : -1;
+
+		public static bool Applied => applied;
+
 		public override void PostSetupRecipes()
 		{
 			original = (int[])ItemID.Sets.ShimmerTransformToItem.Clone();

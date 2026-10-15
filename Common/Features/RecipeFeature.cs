@@ -22,6 +22,14 @@ namespace UltimateRandomizer.Common.Features
 
 		public static int OriginalResult(int recipeIndex) => originalTypes != null && recipeIndex < originalTypes.Length ? originalTypes[recipeIndex] : 0;
 
+		public static int OriginalStack(int recipeIndex) => originalStacks != null && recipeIndex < originalStacks.Length ? originalStacks[recipeIndex] : 0;
+
+		public static int RecipeCount => originalTypes?.Length ?? 0;
+
+		public static bool Applied => applied;
+
+		public static int[] OriginalDecraft(int type) => originalDecraft != null && type < originalDecraft.Length ? originalDecraft[type] : null;
+
 		public override void PostSetupRecipes()
 		{
 			int count = Recipe.numRecipes;

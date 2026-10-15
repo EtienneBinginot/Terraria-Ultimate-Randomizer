@@ -112,6 +112,19 @@ namespace UltimateRandomizer.Common.Features
 			return npcType;
 		}
 
+		// Natural enemies of a tier (night list: every one of them), for the debug tools
+		public static List<int> NaturalEnemies(int tier)
+		{
+			Build();
+			List<int> result = new();
+			for (int m = 0; m < MovementCount; m++)
+			{
+				if (m == (int)Movement.Critter) continue;
+				result.AddRange(nightBuckets[m, Tiers.Clamp(tier)]);
+			}
+			return result;
+		}
+
 		public static bool IsSwappable(int npcType)
 		{
 			Build();

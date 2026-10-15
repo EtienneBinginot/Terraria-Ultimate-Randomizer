@@ -1,3 +1,102 @@
+Keybinds.Debug.DisplayName: "Ouvrir le panneau de débogage du randomizer"
+
+Debug: {
+	Title: "Ultimate Randomizer - débogage"
+	NeedWorld: "Charge d'abord un monde."
+	SinglePlayerOnly: "Cette action ne marche qu'en solo."
+	TabOverview: "Vue d'ensemble"
+	TabInspector: "Inspecteur"
+	TabTools: "Outils"
+	TabTests: "Tests"
+	On: "oui"
+	Off: "non"
+	Seed: "Graine"
+	Mode: "Mode"
+	Network: "Partie"
+	SinglePlayer: "solo"
+	Multiplayer: "multijoueur"
+	Tier: "Tier débloqué"
+	Limit: "Tier max autorisé"
+	Gating: "Blocage"
+	Pool: "Objets randomisables / protégés / exclus"
+	Snapshots: "Tables de loot ennemis / sacs"
+	Recipes: "Recettes"
+	Shimmer: "Shimmer"
+	Chests: "Coffres"
+	SetTier: "Régler la progression (boss vaincus) au tier :"
+	NewSeed: "Nouvelle graine"
+	PoolTable: "Objets par catégorie, tiers 0 à 9 :"
+	TierSet: "Progression réglée sur {0}."
+	SeedSet: "Nouvelle graine : {0}."
+	HoverItem: "Objet sous la souris (ou en main)"
+	NoItem: "Survole un objet ou tiens-en un."
+	ItemInfo: "Catégorie {0}, tier {1} ({2}), protégé {3}, exclu {4}, stack {5}-{6}, valeur {7}"
+	ShufflePartner: "Partenaire du mélange garanti : {0}"
+	NearestNpc: "PNJ le plus proche de la souris"
+	NoNpc: "Aucun PNJ près de la souris."
+	NpcTier: "tier {0} (tirages : {1})"
+	Multipliers: "Multiplicateurs : vie x{0}, dégâts x{1}, défense x{2}, taille x{3}"
+	Swappable: "Peut être remplacé par les ennemis aléatoires."
+	NotSwappable: "Jamais remplacé par les ennemis aléatoires."
+	Drops: "Loot dans ce monde :"
+	NoDrops: "Ne donne rien dans ce monde."
+	ExtraTag: "(en plus)"
+	ConditionTag: "(conditions)"
+	Player: "Joueur"
+	GodMode: "Invincible"
+	SpawnRate: "Apparitions"
+	SpawnRateNormal: "normales"
+	SpawnRateNone: "aucune"
+	SpawnRateHigh: "beaucoup"
+	ToggleGodMode: "Invincible oui/non"
+	CycleSpawnRate: "Taux d'apparition"
+	GiveKit: "Kit de test"
+	World: "Monde"
+	Day: "jour"
+	Night: "nuit"
+	SpawnEnemies: "Faire apparaître 5 ennemis"
+	KillHostiles: "Tuer les ennemis à l'écran"
+	ToggleDay: "Jour/nuit"
+	GiveBags: "Tous les sacs de boss"
+	OpenJournal: "Journal"
+	ToolsHelp: "Astuce : onglet Inspecteur + souris sur un ennemi = son loot ; tue-le pour comparer. Les ennemis invoqués apparaissent comme des naturels (les ennemis aléatoires s'appliquent)."
+	RunTests: "Lancer tous les tests"
+	TestsHelp: "Lance tous les tests automatiques dans le monde actuel. Les résultats vont aussi dans client.log."
+	TestSummary: "{0} réussis, {1} échoués, {2} ignorés"
+}
+
+Tests: {
+	NoWorld: "Monde chargé"
+	PoolBuilt: "Liste d'objets construite, chaque catégorie principale a des objets"
+	Classification: "Les objets connus sont bien classés"
+	Determinism: "Les tirages sont déterministes et dépendent de la graine"
+	GatingRespected: "Aucun objet au-dessus du tier autorisé (blocage par progression)"
+	NoProtectedRolled: "Les objets protégés et exclus ne sont jamais donnés au hasard"
+	SameCategory: "Les remplaçants gardent la catégorie"
+	ShuffleBijection: "Mélange garanti : chaque objet obtenable est donné exactement une fois"
+	StackRules: "Les tailles de stack sont valides"
+	PriceFloor: "Les prix des boutiques ne sont jamais sous la valeur de l'objet"
+	DropRates: "Les taux de drop sont valides"
+	SnapshotsCaptured: "Les tables de loot d'origine ont été lues"
+	MobPlansValid: "Toutes les tables de loot des ennemis sont valides"
+	ProtectedDropsKept: "Les drops de progression sont conservés"
+	NoMinionFarms: "Les minions de boss et les PNJ n'ont pas de drops aléatoires"
+	BagPlansValid: "Tous les contenus de sacs sont valides"
+	BagsKeepCoins: "Les sacs de boss gardent leurs pièces"
+	RecipesSafe: "Recettes : pas d'ingrédient identique au résultat, garde-fou respecté"
+	MiningProtected: "Les recettes de pioches et de lingots ne changent pas"
+	DecraftSafe: "Le décraft au Shimmer ne peut pas dupliquer d'objets"
+	ShimmerCoherent: "Les transformations du Shimmer gardent catégorie et valeur"
+	ShopSimulation: "Boutique simulée : pas de doublons, prix justes, cases spéciales intactes"
+	EnemySwapPool: "Ennemis aléatoires : ni morceaux de boss, ni minions, ni ennemis d'événement"
+	EnemySwapDaylight: "Ennemis aléatoires : rien qui fuit le jour, de jour"
+	TownOrderPermutation: "L'ordre des PNJ est une permutation valide"
+	EnemyStatRanges: "Les multiplicateurs des boss restent dans les limites"
+	ConfigTexts: "Chaque réglage a un texte"
+	OtherTexts: "Chaque message a un texte"
+	ConfigRanges: "Les réglages sont cohérents"
+}
+
 Keybinds.Journal.DisplayName: Ouvrir le journal du randomizer
 
 Journal: {
@@ -834,5 +933,15 @@ Configs: {
 			Tooltip: "Chaque condition d'arrivée amène un autre PNJ : le Sorcier peut venir avec 50 pièces d'argent, le Marchand après Skeletron... Fixe pour le monde. Les PNJ à sauver (Gobelin, Mécanicienne...) ne sont pas concernés."
 		}
 
+	}
+
+	ClientConfig: {
+		DisplayName: "8. Client"
+		Headers.Debug: Outils de débogage
+
+		DebugTools: {
+			Label: Outils de débogage (touche K)
+			Tooltip: "Affiche le panneau de débogage avec la touche K : état du randomizer, inspecteur, outils de test et tests automatiques."
+		}
 	}
 }
