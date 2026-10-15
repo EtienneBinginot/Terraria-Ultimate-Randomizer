@@ -1,0 +1,336 @@
+Chat: {
+	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
+}
+
+Commands: {
+	Seed: {
+		Description: Shows or changes the randomizer seed of this world
+		Show: "World randomizer seed: {0}"
+		Changed: "World seed changed to {0}: everything is randomized again."
+		NotAllowed: Only the host can change the seed, and only if allowed in the config.
+	}
+
+	Debug: {
+		Description: Randomizer debug information
+		NotFound: "Not found: {0}"
+		Item: "{0}: {1}, tier {2} ({3}), protected: {4}, excluded: {5}, stack {6}-{7}"
+		Npc: "{0}: tier {1} (used for rolls: {2})"
+		Tier: "Unlocked tier: {0} ({1})"
+		PoolLogged: The item pool was written to client.log.
+	}
+}
+
+Configs: {
+	RandomizerMode: {
+		Chaos.Label: Chaos
+		Coherent.Label: Coherent
+		Shuffle.Label: Guaranteed shuffle
+	}
+
+	SeedSource: {
+		Random.Label: Random
+		FromWorldSeed.Label: From the world seed
+		Fixed.Label: Fixed
+	}
+
+	Tier: {
+		PreBoss.Label: Pre-boss
+		PostEyeOfCthulhu.Label: After the Eye of Cthulhu
+		PostEvilBoss.Label: After the Eater of Worlds / Brain
+		PostSkeletron.Label: After Skeletron
+		Hardmode.Label: Hardmode
+		PostMechBoss.Label: After a mechanical boss
+		PostPlantera.Label: After Plantera
+		PostGolem.Label: After Golem
+		PostCultist.Label: After the Lunatic Cultist
+		PostMoonLord.Label: After the Moon Lord
+	}
+
+	GeneralConfig: {
+		DisplayName: "1. General"
+		Headers: {
+			Mode: Mode
+			Seed: Seed
+			Exclusions: Exclusions
+		}
+
+		RandomizerMode: {
+			Label: Randomizer mode
+			Tooltip:
+				'''
+				Chaos: anything can come from anywhere (like the original tRandomizer).
+				Coherent: random, but categories and tiers are respected and items unlock with progression.
+				Guaranteed shuffle: every item is swapped with another of the same category and tier, so everything stays obtainable.
+				'''
+		}
+
+		SeedSource: {
+			Label: Seed of new worlds
+			Tooltip:
+				'''
+				Random: each world gets its own random seed.
+				From the world seed: two worlds created with the same seed get the same randomization.
+				Fixed: every new world uses the fixed seed below.
+				'''
+		}
+
+		FixedSeed: {
+			Label: Fixed seed
+			Tooltip: Used when the seed source is Fixed.
+		}
+
+		AllowSeedChange: {
+			Label: Allow /rseed to change the seed
+			Tooltip: Lets the host (or the single player) change the seed of the current world with /rseed set or /rseed random.
+		}
+
+		ExcludedItems: {
+			Label: Excluded items
+			Tooltip: These items are never randomized and never given as a random item.
+		}
+
+		ExcludedMods: {
+			Label: Excluded mods
+			Tooltip: Internal names of mods whose items are left out of the randomizer (for example CalamityMod).
+		}
+	}
+
+	ProgressionConfig: {
+		DisplayName: "2. Progression and protection"
+		Headers: {
+			TierGating: Unlocking items with progression
+			Protection: Protected progression items
+			Tiers: Tiers
+		}
+
+		TierGating: {
+			Label: Lock items behind progression
+			Tooltip:
+				'''
+				Items of a tier not unlocked yet (bosses defeated) are replaced by an item of the highest allowed tier,
+				until you progress. Prevents getting the Zenith from the first slime.
+				'''
+		}
+
+		TierAllowance: {
+			Label: Tiers allowed above your progression
+			Tooltip: 0 = only tiers already unlocked. 1 = one tier ahead (default), and so on.
+		}
+
+		JackpotTierChance: {
+			Label: Jackpot chance (%)
+			Tooltip: Chance for a drop slot to aim 2 or 3 tiers higher than normal. It still respects the progression lock.
+		}
+
+		RuntimeJackpotChance: {
+			Label: Lucky drop chance (%)
+			Tooltip: Chance, on each kill, to ignore the progression lock and get the real item right away.
+		}
+
+		MechTierRequiresAllThree: {
+			Label: Mechanical tier needs the three mechanical bosses
+			Tooltip: Off: one mechanical boss is enough to unlock the tier.
+		}
+
+		ScaleWeakEnemiesWithProgression: {
+			Label: Weak enemies follow your progression
+			Tooltip: On: early enemies drop items close to your current tier instead of staying at their own level.
+		}
+
+		ProtectedItems: {
+			Label: Protected items
+			Tooltip: Never replaced (drops, recipes...) and never given as a random item. Keeps progression possible.
+		}
+
+		AutoProtectBossSummons: {
+			Label: Protect all boss summons
+			Tooltip: Also protects boss summoning items from other mods.
+		}
+
+		ProtectCraftingStations: {
+			Label: Protect crafting stations
+			Tooltip: Work benches, anvils, furnaces... any item placing a tile that some recipe requires.
+		}
+
+		ProtectPickaxeProgression: {
+			Label: Protect pickaxe recipes
+			Tooltip: Pickaxe recipes are never randomized, so you can always mine the next ore.
+		}
+
+		TierOverrides: {
+			Label: Tier overrides
+			Tooltip: Forces the tier of specific items (useful for items from other mods).
+		}
+	}
+
+	TierOverride: {
+		Tooltip: ""
+		Item: {
+			Label: Item
+			Tooltip: ""
+		}
+
+		Tier: {
+			Label: Tier
+			Tooltip: ""
+		}
+	}
+
+	LootConfig: {
+		DisplayName: "3. Loot"
+		Headers: {
+			Mobs: Enemies and bosses
+			Bags: Bags and crates
+		}
+
+		RandomizeMobDrops: {
+			Label: Randomize enemy and boss drops
+			Tooltip: Progression drops (protected items) and treasure bags keep their original chance.
+		}
+
+		DropSlotsMin: {
+			Label: Random drop slots (minimum)
+			Tooltip: Number of possible random drops for a normal enemy. Each enemy type has its own fixed number in a world.
+		}
+
+		DropSlotsMax: {
+			Label: Random drop slots (maximum)
+			Tooltip: ""
+		}
+
+		DropChance: {
+			Label: Drop chance of each slot (%)
+			Tooltip: For normal enemies. Items above the enemy's level are rarer. Bosses always drop all their slots.
+		}
+
+		BossDropSlotsMin: {
+			Label: Boss drop slots (minimum)
+			Tooltip: In expert and master mode, bosses with a treasure bag put their loot in the bag instead.
+		}
+
+		BossDropSlotsMax: {
+			Label: Boss drop slots (maximum)
+			Tooltip: ""
+		}
+
+		DropCategoryWeights: {
+			Label: Category weights of random drops
+			Tooltip: Relative chance of each kind of item. 0 = never. Lower dyes and vanity to get more useful items.
+		}
+
+		RandomizeBossBags: {
+			Label: Randomize treasure bags
+			Tooltip: Each item in the bag is replaced by an item of the same category and tier.
+		}
+
+		RandomizeCrates: {
+			Label: Randomize fishing crates
+			Tooltip: ""
+		}
+
+		RandomizeOtherBags: {
+			Label: Randomize other bags
+			Tooltip: Goodie bags, presents, herb bags, geodes, cans of worms...
+		}
+	}
+
+	CategoryWeights: {
+		Tooltip: ""
+		Material.Label: Materials
+		OreBar.Label: Ores and bars
+		Potion.Label: Potions
+		Food.Label: Food
+		Ammo.Label: Ammo
+		WeaponMelee.Label: Melee weapons
+		WeaponRanged.Label: Ranged weapons
+		WeaponMagic.Label: Magic weapons
+		WeaponSummon.Label: Summon weapons
+		WeaponOther.Label: Other weapons
+		Armor.Label: Armor
+		Accessory.Label: Accessories
+		Tool.Label: Tools
+		Block.Label: Blocks and walls
+		Furniture.Label: Furniture
+		MountPet.Label: Mounts and pets
+		Vanity.Label: Vanity
+		Dye.Label: Dyes
+		Critter.Label: Critters
+		Bag.Label: Bags and crates
+		Misc.Label: Miscellaneous
+		Material.Tooltip: ""
+		OreBar.Tooltip: ""
+		Potion.Tooltip: ""
+		Food.Tooltip: ""
+		Ammo.Tooltip: ""
+		WeaponMelee.Tooltip: ""
+		WeaponRanged.Tooltip: ""
+		WeaponMagic.Tooltip: ""
+		WeaponSummon.Tooltip: ""
+		WeaponOther.Tooltip: ""
+		Armor.Tooltip: ""
+		Accessory.Tooltip: ""
+		Tool.Tooltip: ""
+		Block.Tooltip: ""
+		Furniture.Tooltip: ""
+		MountPet.Tooltip: ""
+		Vanity.Tooltip: ""
+		Dye.Tooltip: ""
+		Critter.Tooltip: ""
+		Bag.Tooltip: ""
+		Misc.Tooltip: ""
+	}
+
+	EconomyConfig: {
+		DisplayName: "4. Economy"
+		Headers: {
+			Stacks: Stack sizes
+		}
+
+		StackCaps: {
+			Label: Maximum stack per category
+			Tooltip: Largest amount given at once. The item's own maximum stack still applies.
+		}
+
+		StackMultiplier: {
+			Label: Stack multiplier
+			Tooltip: Multiplies all the maximums above.
+		}
+
+		ValueBasedStacks: {
+			Label: Keep the value of replaced items
+			Tooltip: When an item replaces another, the amount is adjusted so the total value stays close to the original.
+		}
+	}
+
+	StackCaps: {
+		Tooltip: ""
+		Material.Label: Materials
+		OreBar.Label: Ores and bars
+		Potion.Label: Potions
+		Food.Label: Food
+		Ammo.Label: Ammo
+		Weapon.Label: Weapons
+		Equipment.Label: Armor, accessories, tools, vanity, mounts
+		Block.Label: Blocks and walls
+		Furniture.Label: Furniture
+		Dye.Label: Dyes
+		Critter.Label: Critters
+		Bag.Label: Bags and crates
+		BossSummon.Label: Boss summons
+		Misc.Label: Miscellaneous
+		Material.Tooltip: ""
+		OreBar.Tooltip: ""
+		Potion.Tooltip: ""
+		Food.Tooltip: ""
+		Ammo.Tooltip: ""
+		Weapon.Tooltip: ""
+		Equipment.Tooltip: ""
+		Block.Tooltip: ""
+		Furniture.Tooltip: ""
+		Dye.Tooltip: ""
+		Critter.Tooltip: ""
+		Bag.Tooltip: ""
+		BossSummon.Tooltip: ""
+		Misc.Tooltip: ""
+	}
+}

@@ -1,0 +1,18 @@
+==[Ultimate Randomizer]==
+A complete, configurable randomizer for Terraria, tied to each world.
+
+Current features:
+- Random enemy and boss drops, random treasure bags, crates and goodie bags
+- Coherent mode: items keep their category and tier, and unlock as you defeat bosses (no Zenith from the first slime... unless you are very lucky)
+- Guaranteed shuffle mode: every item is swapped with another one of the same kind, so everything stays obtainable
+- Chaos mode: anything from anywhere
+- One seed per world, saved in the world and shared with every player in multiplayer
+- Coherent stack sizes, protected progression items, everything configurable
+
+Commands: /rseed (show or change the world seed), /rdebug
+
+Do not enable it together with tRandomizer.
+
+==[Credits]==
+Based on tRandomizer by ImplicitSaber (MIT license): https://github.com/ImplicitSaber/tRandomizer
+Ultimate Randomizer by Etienne Binginot, MIT license.

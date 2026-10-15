@@ -1,0 +1,3 @@
+displayName = Ultimate Randomizer
+author = Etienne Binginot (based on tRandomizer by ImplicitSaber)
+version = 0.1.0
