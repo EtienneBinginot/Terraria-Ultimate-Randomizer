@@ -1,53 +1,119 @@
-Chat: {
-	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
-}
+Chat.OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
 
 Commands: {
 	Seed: {
 		Description: Shows or changes the randomizer seed of this world
-		Show: "World randomizer seed: {0}"
-		Changed: "World seed changed to {0}: everything is randomized again."
+		Show: World randomizer seed: {0}
+		Changed: World seed changed to {0}: everything is randomized again.
 		NotAllowed: Only the host can change the seed, and only if allowed in the config.
 	}
 
 	Debug: {
 		Description: Randomizer debug information
-		NotFound: "Not found: {0}"
+		NotFound: Not found: {0}
 		Item: "{0}: {1}, tier {2} ({3}), protected: {4}, excluded: {5}, stack {6}-{7}"
 		Npc: "{0}: tier {1} (used for rolls: {2})"
-		Tier: "Unlocked tier: {0} ({1})"
+		Tier: Unlocked tier: {0} ({1})
 		PoolLogged: The item pool was written to client.log.
 	}
 }
 
 Configs: {
 	RandomizerMode: {
-		Chaos.Label: Chaos
-		Coherent.Label: Coherent
-		Shuffle.Label: Guaranteed shuffle
+		Chaos: {
+			Label: Chaos
+			Tooltip: ""
+		}
+
+		Coherent: {
+			Label: Coherent
+			Tooltip: ""
+		}
+
+		Shuffle: {
+			Label: Guaranteed shuffle
+			Tooltip: ""
+		}
+
+		Tooltip: ""
 	}
 
 	SeedSource: {
-		Random.Label: Random
-		FromWorldSeed.Label: From the world seed
-		Fixed.Label: Fixed
+		Random: {
+			Label: Random
+			Tooltip: ""
+		}
+
+		FromWorldSeed: {
+			Label: From the world seed
+			Tooltip: ""
+		}
+
+		Fixed: {
+			Label: Fixed
+			Tooltip: ""
+		}
+
+		Tooltip: ""
 	}
 
 	Tier: {
-		PreBoss.Label: Pre-boss
-		PostEyeOfCthulhu.Label: After the Eye of Cthulhu
-		PostEvilBoss.Label: After the Eater of Worlds / Brain
-		PostSkeletron.Label: After Skeletron
-		Hardmode.Label: Hardmode
-		PostMechBoss.Label: After a mechanical boss
-		PostPlantera.Label: After Plantera
-		PostGolem.Label: After Golem
-		PostCultist.Label: After the Lunatic Cultist
-		PostMoonLord.Label: After the Moon Lord
+		PreBoss: {
+			Label: Pre-boss
+			Tooltip: ""
+		}
+
+		PostEyeOfCthulhu: {
+			Label: After the Eye of Cthulhu
+			Tooltip: ""
+		}
+
+		PostEvilBoss: {
+			Label: After the Eater of Worlds / Brain
+			Tooltip: ""
+		}
+
+		PostSkeletron: {
+			Label: After Skeletron
+			Tooltip: ""
+		}
+
+		Hardmode: {
+			Label: Hardmode
+			Tooltip: ""
+		}
+
+		PostMechBoss: {
+			Label: After a mechanical boss
+			Tooltip: ""
+		}
+
+		PostPlantera: {
+			Label: After Plantera
+			Tooltip: ""
+		}
+
+		PostGolem: {
+			Label: After Golem
+			Tooltip: ""
+		}
+
+		PostCultist: {
+			Label: After the Lunatic Cultist
+			Tooltip: ""
+		}
+
+		PostMoonLord: {
+			Label: After the Moon Lord
+			Tooltip: ""
+		}
+
+		Tooltip: ""
 	}
 
 	GeneralConfig: {
-		DisplayName: "1. General"
+		DisplayName: 1. General
+
 		Headers: {
 			Mode: Mode
 			Seed: Seed
@@ -96,7 +162,8 @@ Configs: {
 	}
 
 	ProgressionConfig: {
-		DisplayName: "2. Progression and protection"
+		DisplayName: 2. Progression and protection
+
 		Headers: {
 			TierGating: Unlocking items with progression
 			Protection: Protected progression items
@@ -165,6 +232,7 @@ Configs: {
 
 	TierOverride: {
 		Tooltip: ""
+
 		Item: {
 			Label: Item
 			Tooltip: ""
@@ -177,7 +245,8 @@ Configs: {
 	}
 
 	LootConfig: {
-		DisplayName: "3. Loot"
+		DisplayName: 3. Loot
+
 		Headers: {
 			Mobs: Enemies and bosses
 			Bags: Bags and crates
@@ -236,55 +305,116 @@ Configs: {
 
 	CategoryWeights: {
 		Tooltip: ""
-		Material.Label: Materials
-		OreBar.Label: Ores and bars
-		Potion.Label: Potions
-		Food.Label: Food
-		Ammo.Label: Ammo
-		WeaponMelee.Label: Melee weapons
-		WeaponRanged.Label: Ranged weapons
-		WeaponMagic.Label: Magic weapons
-		WeaponSummon.Label: Summon weapons
-		WeaponOther.Label: Other weapons
-		Armor.Label: Armor
-		Accessory.Label: Accessories
-		Tool.Label: Tools
-		Block.Label: Blocks and walls
-		Furniture.Label: Furniture
-		MountPet.Label: Mounts and pets
-		Vanity.Label: Vanity
-		Dye.Label: Dyes
-		Critter.Label: Critters
-		Bag.Label: Bags and crates
-		Misc.Label: Miscellaneous
-		Material.Tooltip: ""
-		OreBar.Tooltip: ""
-		Potion.Tooltip: ""
-		Food.Tooltip: ""
-		Ammo.Tooltip: ""
-		WeaponMelee.Tooltip: ""
-		WeaponRanged.Tooltip: ""
-		WeaponMagic.Tooltip: ""
-		WeaponSummon.Tooltip: ""
-		WeaponOther.Tooltip: ""
-		Armor.Tooltip: ""
-		Accessory.Tooltip: ""
-		Tool.Tooltip: ""
-		Block.Tooltip: ""
-		Furniture.Tooltip: ""
-		MountPet.Tooltip: ""
-		Vanity.Tooltip: ""
-		Dye.Tooltip: ""
-		Critter.Tooltip: ""
-		Bag.Tooltip: ""
-		Misc.Tooltip: ""
+
+		Material: {
+			Label: Materials
+			Tooltip: ""
+		}
+
+		OreBar: {
+			Label: Ores and bars
+			Tooltip: ""
+		}
+
+		Potion: {
+			Label: Potions
+			Tooltip: ""
+		}
+
+		Food: {
+			Label: Food
+			Tooltip: ""
+		}
+
+		Ammo: {
+			Label: Ammo
+			Tooltip: ""
+		}
+
+		WeaponMelee: {
+			Label: Melee weapons
+			Tooltip: ""
+		}
+
+		WeaponRanged: {
+			Label: Ranged weapons
+			Tooltip: ""
+		}
+
+		WeaponMagic: {
+			Label: Magic weapons
+			Tooltip: ""
+		}
+
+		WeaponSummon: {
+			Label: Summon weapons
+			Tooltip: ""
+		}
+
+		WeaponOther: {
+			Label: Other weapons
+			Tooltip: ""
+		}
+
+		Armor: {
+			Label: Armor
+			Tooltip: ""
+		}
+
+		Accessory: {
+			Label: Accessories
+			Tooltip: ""
+		}
+
+		Tool: {
+			Label: Tools
+			Tooltip: ""
+		}
+
+		Block: {
+			Label: Blocks and walls
+			Tooltip: ""
+		}
+
+		Furniture: {
+			Label: Furniture
+			Tooltip: ""
+		}
+
+		MountPet: {
+			Label: Mounts and pets
+			Tooltip: ""
+		}
+
+		Vanity: {
+			Label: Vanity
+			Tooltip: ""
+		}
+
+		Dye: {
+			Label: Dyes
+			Tooltip: ""
+		}
+
+		Critter: {
+			Label: Critters
+			Tooltip: ""
+		}
+
+		Bag: {
+			Label: Bags and crates
+			Tooltip: ""
+		}
+
+		Misc: {
+			Label: Miscellaneous
+			Tooltip: ""
+		}
 	}
 
 	EconomyConfig: {
-		DisplayName: "4. Economy"
-		Headers: {
-			Stacks: Stack sizes
-		}
+		DisplayName: 4. Economy
+		Headers.Stacks: Stack sizes
 
 		StackCaps: {
 			Label: Maximum stack per category
@@ -304,33 +434,75 @@ Configs: {
 
 	StackCaps: {
 		Tooltip: ""
-		Material.Label: Materials
-		OreBar.Label: Ores and bars
-		Potion.Label: Potions
-		Food.Label: Food
-		Ammo.Label: Ammo
-		Weapon.Label: Weapons
-		Equipment.Label: Armor, accessories, tools, vanity, mounts
-		Block.Label: Blocks and walls
-		Furniture.Label: Furniture
-		Dye.Label: Dyes
-		Critter.Label: Critters
-		Bag.Label: Bags and crates
-		BossSummon.Label: Boss summons
-		Misc.Label: Miscellaneous
-		Material.Tooltip: ""
-		OreBar.Tooltip: ""
-		Potion.Tooltip: ""
-		Food.Tooltip: ""
-		Ammo.Tooltip: ""
-		Weapon.Tooltip: ""
-		Equipment.Tooltip: ""
-		Block.Tooltip: ""
-		Furniture.Tooltip: ""
-		Dye.Tooltip: ""
-		Critter.Tooltip: ""
-		Bag.Tooltip: ""
-		BossSummon.Tooltip: ""
-		Misc.Tooltip: ""
+
+		Material: {
+			Label: Materials
+			Tooltip: ""
+		}
+
+		OreBar: {
+			Label: Ores and bars
+			Tooltip: ""
+		}
+
+		Potion: {
+			Label: Potions
+			Tooltip: ""
+		}
+
+		Food: {
+			Label: Food
+			Tooltip: ""
+		}
+
+		Ammo: {
+			Label: Ammo
+			Tooltip: ""
+		}
+
+		Weapon: {
+			Label: Weapons
+			Tooltip: ""
+		}
+
+		Equipment: {
+			Label: Armor, accessories, tools, vanity, mounts
+			Tooltip: ""
+		}
+
+		Block: {
+			Label: Blocks and walls
+			Tooltip: ""
+		}
+
+		Furniture: {
+			Label: Furniture
+			Tooltip: ""
+		}
+
+		Dye: {
+			Label: Dyes
+			Tooltip: ""
+		}
+
+		Critter: {
+			Label: Critters
+			Tooltip: ""
+		}
+
+		Bag: {
+			Label: Bags and crates
+			Tooltip: ""
+		}
+
+		BossSummon: {
+			Label: Boss summons
+			Tooltip: ""
+		}
+
+		Misc: {
+			Label: Miscellaneous
+			Tooltip: ""
+		}
 	}
 }
