@@ -37,6 +37,8 @@ namespace UltimateRandomizer.Common.Core
 		public int TierJitterUp;
 		public bool AllowJackpot;
 		public bool IgnoreGating;
+		// The progression lock never goes below this tier (a boss can always drop items of its own level)
+		public int MinLimit;
 	}
 
 	// Every randomizable item sorted by category and tier. All features pick their items here.
@@ -142,8 +144,9 @@ namespace UltimateRandomizer.Common.Core
 			Random rng = DetRandom.Get(request.Keys);
 			if (mode == RandomizerMode.Chaos)
 			{
-				rolledTier = rng.Next(Tiers.Count);
-				return PickFromBucket(AnyCategory(rng), rolledTier, rng);
+				int picked = PickFromBucket(AnyCategory(rng), rng.Next(Tiers.Count), rng);
+				rolledTier = TierOf(picked);
+				return picked;
 			}
 
 			int target = request.SourceTier + rng.Next(-request.TierJitterDown, request.TierJitterUp + 1);
@@ -158,24 +161,29 @@ namespace UltimateRandomizer.Common.Core
 				CategoryPolicy.Any => AnyCategory(rng),
 				_ => WeightedCategory(rng, LootConfig.Instance.DropCategoryWeights)
 			};
-			int intended = PickFromBucket(category, target, rng);
-			rolledTier = target;
-			if (request.IgnoreGating || !progression.TierGating) return intended;
-
-			int limit = Tiers.Clamp(ProgressionSystem.UnlockedTier + progression.TierAllowance);
-			if (target <= limit) return intended;
+			bool gated = !request.IgnoreGating && progression.TierGating;
+			int limit = gated ? Tiers.Clamp(Math.Max(ProgressionSystem.UnlockedTier + progression.TierAllowance, request.MinLimit)) : Tiers.Max;
+			if (target <= limit)
+			{
+				int intended = PickFromBucket(category, target, rng, limit);
+				rolledTier = TierOf(intended);
+				return intended;
+			}
 
 			// Not unlocked yet: a stand-in from the highest allowed tier, until progression catches up
-			rolledTier = limit;
 			int[] fallbackKeys = new int[request.Keys.Length + 2];
 			request.Keys.CopyTo(fallbackKeys, 0);
 			fallbackKeys[^2] = RollKey.Fallback;
 			fallbackKeys[^1] = limit;
-			return PickFromBucket(category, limit, DetRandom.Get(fallbackKeys));
+			int fallback = PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), limit);
+			rolledTier = TierOf(fallback);
+			return fallback;
 		}
 
+		public static int TierOf(int type) => IsValid(type) ? Info[type].Tier : 0;
+
 		// Looks for an item in the wanted tier, then the tiers below, then above; then in other categories
-		public static int PickFromBucket(ItemCategory category, int tier, Random rng)
+		public static int PickFromBucket(ItemCategory category, int tier, Random rng, int maxTier = Tiers.Max)
 		{
 			if (buckets == null) return ItemID.DirtBlock;
 			if (!categoryHasItems[(int)category]) category = categoryHasItems[(int)ItemCategory.Material] ? ItemCategory.Material : ItemCategory.Misc;
@@ -184,11 +192,12 @@ namespace UltimateRandomizer.Common.Core
 			{
 				if (tiers[t].Length > 0) return tiers[t][rng.Next(tiers[t].Length)];
 			}
-			for (int t = tier + 1; t < Tiers.Count; t++)
+			// Above the wanted tier, but never above what progression allows
+			for (int t = tier + 1; t <= Math.Min(maxTier, Tiers.Max); t++)
 			{
 				if (tiers[t].Length > 0) return tiers[t][rng.Next(tiers[t].Length)];
 			}
-			return ItemID.DirtBlock;
+			return category is ItemCategory.Material or ItemCategory.Misc ? ItemID.Gel : PickFromBucket(ItemCategory.Material, tier, rng, maxTier);
 		}
 
 		public static ItemCategory WeightedCategory(Random rng, CategoryWeights weights)
@@ -231,6 +240,7 @@ namespace UltimateRandomizer.Common.Core
 		{
 			int[] map = new int[Info.Length];
 			for (int i = 0; i < map.Length; i++) map[i] = i;
+			HashSet<int> obtainable = Obtainability.Collect();
 			for (int c = 0; c < ItemCategories.Count; c++)
 			{
 				// Tiny groups are merged with the next tier, otherwise their items could only map to themselves
@@ -238,7 +248,8 @@ namespace UltimateRandomizer.Common.Core
 				List<int> current = new();
 				for (int t = 0; t < Tiers.Count; t++)
 				{
-					current.AddRange(buckets[c][t]);
+					// Only items that exist somewhere in the world: so every one of them stays obtainable
+					current.AddRange(buckets[c][t].Where(obtainable.Contains));
 					if (current.Count >= 3)
 					{
 						groups.Add(current);
@@ -278,6 +289,7 @@ namespace UltimateRandomizer.Common.Core
 			DetRandom.Unload();
 			NpcTiers.Unload();
 			LootSnapshot.Unload();
+			Obtainability.Unload();
 		}
 	}
 }

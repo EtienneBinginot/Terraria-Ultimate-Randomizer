@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Terraria;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
@@ -11,21 +12,17 @@ namespace UltimateRandomizer.Common.Features
 {
 	public class MobLootNPC : GlobalNPC
 	{
-		// Runs once at load, before any world exists: we only save the original table and install our rule
+		// Runs once per enemy (and per variant) at load, before any world exists. The original rules are kept:
+		// their items are swapped when they spawn (LootSubstitutionItem). We only add a rule for extra random drops.
 		public override void ModifyNPCLoot(NPC npc, NPCLoot npcLoot)
 		{
-			if (!LootConfig.Instance.RandomizeMobDrops) return;
-			List<IItemDropRule> rules = npcLoot.Get(false);
-			LootSnapshot.Npcs[npc.type] = LootSnapshot.Capture(rules);
-			foreach (IItemDropRule rule in rules)
-			{
-				if (rule != null) npcLoot.Remove(rule);
-			}
-			npcLoot.Add(new RandomNpcDropRule(npc.type));
+			List<IItemDropRule> rules = npcLoot.Get(false).Where(r => r != null).Distinct().ToList();
+			LootSnapshot.Npcs[npc.netID] = LootSnapshot.Capture(rules);
+			npcLoot.Add(new RandomNpcDropRule(npc.netID));
 		}
 	}
 
-	// One possible drop of an enemy in the current world
+	// One possible drop of an enemy in the current world (used by the journal, the debug tools and the extra drops)
 	public struct PlannedDrop
 	{
 		public int Item;
@@ -33,18 +30,19 @@ namespace UltimateRandomizer.Common.Features
 		public int StackMax;
 		public float Chance;
 		public List<IItemDropRuleCondition> Conditions;
+		public bool Extra;
 	}
 
-	// Picks the drops when the enemy dies, from the world seed and the current progression
+	// Extra random drops, on top of the (replaced) original drops: a random number per enemy type, vanilla-like rates
 	public class RandomNpcDropRule : IItemDropRule
 	{
-		private readonly int npcType;
+		private readonly int netId;
 
 		public List<IItemDropRuleChainAttempt> ChainedRules { get; } = new();
 
-		public RandomNpcDropRule(int npcType)
+		public RandomNpcDropRule(int netId)
 		{
-			this.npcType = npcType;
+			this.netId = netId;
 		}
 
 		public bool CanDrop(DropAttemptInfo info) => true;
@@ -52,92 +50,73 @@ namespace UltimateRandomizer.Common.Features
 		public ItemDropAttemptResult TryDroppingItem(DropAttemptInfo info)
 		{
 			NPC npc = info.npc;
-			if (!SeedSystem.WorldReady || !ItemPool.Ready || npc == null || npc.SpawnedFromStatue)
+			if (!SeedSystem.WorldReady || !ItemPool.Ready || npc == null || npc.SpawnedFromStatue || !ExtraDropsAllowedNow(info))
 			{
 				return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			}
-			bool lucky = info.rng.NextFloat() * 100 < ProgressionConfig.Instance.RuntimeJackpotChance;
-			foreach (PlannedDrop drop in Plan(npcType, info.IsExpertMode, lucky))
+			foreach (PlannedDrop drop in ExtraDrops(netId, npc.type, info.IsExpertMode, DropHelper.RollLucky()))
 			{
-				if (!DropHelper.ConditionsMet(drop.Conditions, info) || info.rng.NextFloat() >= drop.Chance) continue;
-				DropHelper.Drop(info, drop.Item, drop.StackMin, drop.StackMax);
+				if (info.rng.NextFloat() >= drop.Chance) continue;
+				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
+				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), drop.Item, stack, false);
 			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
 		}
 
-		public static bool IsBoss(int npcType) =>
-			NPCID.Sets.ShouldBeCountedAsBoss[npcType] || (ContentSamples.NpcsByNetId.TryGetValue(npcType, out NPC sample) && sample.boss);
+		// Multi-part bosses drop their loot once: the last Eater of Worlds segment, the last of the Twins
+		private bool ExtraDropsAllowedNow(DropAttemptInfo info)
+		{
+			NPC npc = info.npc;
+			if (!IsBossType(npc.type)) return true;
+			if (!npc.boss) return false;
+			if (npc.type == NPCID.Retinazer || npc.type == NPCID.Spazmatism) return new Conditions.MissingTwin().CanDrop(info);
+			return true;
+		}
 
-		// The full drop table of an enemy in this world (also used by /rdebug npc)
-		public static List<PlannedDrop> Plan(int npcType, bool expert, bool lucky = false)
+		public static bool IsBossType(int type) =>
+			type > 0 && (NPCID.Sets.ShouldBeCountedAsBoss[type] || (ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample) && sample.boss));
+
+		// Everything an enemy can drop in this world: the replaced original drops, then the extra ones
+		public static List<PlannedDrop> Plan(int netId, bool expert)
 		{
 			List<PlannedDrop> drops = new();
-			List<DropRateInfo> original = LootSnapshot.ForNpc(npcType);
+			int type = ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId;
+			bool isBoss = IsBossType(type);
+			foreach (DropRateInfo entry in LootSnapshot.ForNpc(netId))
+			{
+				int item = entry.itemId;
+				int min = entry.stackMin;
+				int max = entry.stackMax;
+				if (LootConfig.Instance.RandomizeMobDrops)
+				{
+					item = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(type), entry.itemId, NpcTiers.EffectiveTier(type), isBoss ? NpcTiers.BaseTier(type) : 0, false);
+					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);
+				}
+				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions });
+			}
+			drops.AddRange(ExtraDrops(netId, type, expert, false));
+			return drops;
+		}
+
+		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, bool lucky)
+		{
+			List<PlannedDrop> drops = new();
 			LootConfig cfg = LootConfig.Instance;
-			bool shuffle = GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle;
-			bool isBoss = IsBoss(npcType);
-			bool bagBoss = false;
-			List<DropRateInfo> replaced = new();
+			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal) return drops;
+			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) return drops;
+			List<DropRateInfo> original = LootSnapshot.ForNpc(netId);
+			bool isBoss = IsBossType(type);
+			if (!CanHaveExtraDrops(type, isBoss, original)) return drops;
+			// In expert mode, a boss with a treasure bag puts its loot in the bag
+			if (isBoss && expert && original.Any(d => ItemID.Sets.BossBag[d.itemId])) return drops;
 
-			foreach (DropRateInfo entry in original)
-			{
-				if (ItemID.Sets.BossBag[entry.itemId]) bagBoss = true;
-				if (DropHelper.KeepOriginal(entry.itemId))
-				{
-					drops.Add(FromEntry(entry, entry.itemId, entry.stackMin, entry.stackMax, entry.dropRate));
-				}
-				else
-				{
-					replaced.Add(entry);
-				}
-			}
-
-			if (shuffle)
-			{
-				// Same drop table, every item swapped with its partner
-				foreach (DropRateInfo entry in replaced)
-				{
-					int item = ItemPool.Shuffled(entry.itemId);
-					(int min, int max) = DropHelper.ScaledRange(entry, item);
-					drops.Add(FromEntry(entry, item, min, max, entry.dropRate));
-				}
-				return drops;
-			}
-
-			if (!CanHaveRandomDrops(npcType, isBoss)) return drops;
-			int npcKey = DetRandom.NpcKey(npcType);
-			int sourceTier = NpcTiers.EffectiveTier(npcType);
-
-			if (cfg.DropTableStyle == DropTableStyle.MirrorOriginal && replaced.Count > 0)
-			{
-				for (int i = 0; i < replaced.Count; i++)
-				{
-					DropRateInfo entry = replaced[i];
-					RollRequest request = new()
-					{
-						Keys = new[] { RollKey.MobDrop, npcKey, 1000 + i },
-						SourceTier = ItemPool.Info[entry.itemId].Tier,
-						OriginalItem = entry.itemId,
-						Policy = CategoryPolicy.SameAsOriginal,
-						TierJitterDown = 0,
-						TierJitterUp = 1,
-						AllowJackpot = true,
-						IgnoreGating = lucky
-					};
-					int item = ItemPool.Roll(request);
-					(int min, int max) = DropHelper.ScaledRange(entry, item);
-					drops.Add(FromEntry(entry, item, min, max, Math.Min(1f, entry.dropRate * cfg.DropRateMultiplier)));
-				}
-				return drops;
-			}
-
-			// In expert mode, a boss with a treasure bag puts its loot in the bag (randomized there)
-			if (isBoss && bagBoss && expert) return drops;
-			if (!isBoss && replaced.Count == 0 && !cfg.EnemiesWithoutDropsCanDrop) return drops;
-
+			int npcKey = DetRandom.NpcKey(type);
+			int sourceTier = NpcTiers.EffectiveTier(type);
+			bool critter = NPCID.Sets.CountsAsCritter[type];
 			Random slotRng = DetRandom.Get(RollKey.MobDropSlots, npcKey);
 			int minSlots = isBoss ? cfg.BossDropSlotsMin : cfg.DropSlotsMin;
 			int maxSlots = Math.Max(minSlots, isBoss ? cfg.BossDropSlotsMax : cfg.DropSlotsMax);
+			if (critter) maxSlots = Math.Min(maxSlots, Math.Max(minSlots, 2));
 			// Skewed towards few drops for normal enemies: most drop little, a few drop a lot
 			double skew = isBoss || cfg.DropTableStyle == DropTableStyle.Simple ? 1.0 : 1.8;
 			int slots = Math.Min(maxSlots, minSlots + (int)Math.Floor((maxSlots - minSlots + 1) * Math.Pow(slotRng.NextDouble(), skew)));
@@ -146,14 +125,15 @@ namespace UltimateRandomizer.Common.Features
 			{
 				RollRequest request = new()
 				{
-					Keys = new[] { RollKey.MobDrop, npcKey, slot },
+					Keys = new[] { RollKey.MobDrop, npcKey, 1000 + slot },
 					SourceTier = sourceTier,
 					OriginalItem = -1,
 					Policy = CategoryPolicy.Weighted,
 					TierJitterDown = 1,
 					TierJitterUp = 1,
 					AllowJackpot = true,
-					IgnoreGating = lucky
+					IgnoreGating = lucky,
+					MinLimit = isBoss ? NpcTiers.BaseTier(type) : 0
 				};
 				int item = ItemPool.Roll(request, out int tier);
 				float chance;
@@ -163,37 +143,31 @@ namespace UltimateRandomizer.Common.Features
 				}
 				else
 				{
-					// A boss always drops its first slot
+					// A boss always drops its first extra slot
 					int denominator = isBoss && slot == 0 ? 1 : DropRates.Denominator(item, tier, sourceTier, isBoss, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item, 7));
 					chance = Math.Min(1f, cfg.DropRateMultiplier / denominator);
 				}
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
-				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance });
+				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true });
 			}
 			return drops;
 		}
 
-		private static bool CanHaveRandomDrops(int npcType, bool isBoss)
+		private static bool CanHaveExtraDrops(int type, bool isBoss, List<DropRateInfo> original)
 		{
-			if (!ContentSamples.NpcsByNetId.TryGetValue(npcType, out NPC sample)) return false;
-			if (sample.townNPC || NPCID.Sets.ActsLikeTownNPC[npcType] || NPCID.Sets.IsTownPet[npcType]) return false;
-			if (NPCID.Sets.CountsAsCritter[npcType]) return LootConfig.Instance.CrittersCanDrop;
-			return isBoss || !sample.friendly;
+			if (!ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample)) return false;
+			if (sample.townNPC || NPCID.Sets.ActsLikeTownNPC[type] || NPCID.Sets.IsTownPet[type] || type == NPCID.TorchGod) return false;
+			if (NPCID.Sets.CountsAsCritter[type]) return LootConfig.Instance.CrittersCanDrop;
+			if (NPCID.Sets.ProjectileNPC[type] || sample.lifeMax <= 5 || (sample.friendly && !isBoss)) return false;
+			if (isBoss) return true;
+			// Boss minions and parts drop nothing and give no money: they must not become loot farms
+			if (original.Count == 0 && sample.value <= 0) return false;
+			return original.Count > 0 || LootConfig.Instance.EnemiesWithoutDropsCanDrop;
 		}
 
-		private static PlannedDrop FromEntry(in DropRateInfo entry, int item, int min, int max, float chance) => new()
-		{
-			Item = item,
-			StackMin = min,
-			StackMax = max,
-			Chance = chance,
-			Conditions = entry.conditions
-		};
-
-		// The bestiary is built before any world exists: only the drops kept from the original table can be shown
+		// The bestiary is built before any world exists: the original drops are reported by their own rules
 		public void ReportDroprates(List<DropRateInfo> drops, DropRateInfoChainFeed ratesInfo)
 		{
-			DropHelper.ReportKept(LootSnapshot.ForNpc(npcType), drops, ratesInfo);
 			Chains.ReportDroprates(ChainedRules, 1f, drops, ratesInfo);
 		}
 	}

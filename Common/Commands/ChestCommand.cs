@@ -11,7 +11,7 @@ namespace UltimateRandomizer.Common.Commands
 	// /rchests: randomizes the natural chests of a world created without the mod (once, host only)
 	public class ChestCommand : ModCommand
 	{
-		public override CommandType Type => CommandType.World;
+		public override CommandType Type => CommandType.World | CommandType.Console;
 
 		public override string Command => "rchests";
 
@@ -38,7 +38,7 @@ namespace UltimateRandomizer.Common.Commands
 				caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Chests.Warning"), Color.Orange);
 				return;
 			}
-			int count = ChestSystem.RandomizeAllChests();
+			int count = ChestSystem.RandomizeAllChests(existingWorld: true);
 			caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Chests.Done", count), Color.LightGreen);
 		}
 	}

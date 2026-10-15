@@ -22,10 +22,8 @@ namespace UltimateRandomizer.Common.Configs
 		Fixed
 	}
 
-	public class GeneralConfig : ModConfig
+	public class GeneralConfig : RandomizerConfig
 	{
-		public override ConfigScope Mode => ConfigScope.ServerSide;
-
 		public static GeneralConfig Instance => ModContent.GetInstance<GeneralConfig>();
 
 		[Header("Mode")]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -18,6 +19,8 @@ namespace UltimateRandomizer.Common.Features
 		private static long[] ingredientValues;
 		private static int[][] originalDecraft;
 		private static bool applied;
+
+		public static int OriginalResult(int recipeIndex) => originalTypes != null && recipeIndex < originalTypes.Length ? originalTypes[recipeIndex] : 0;
 
 		public override void PostSetupRecipes()
 		{
@@ -41,6 +44,7 @@ namespace UltimateRandomizer.Common.Features
 				}
 				recipeKeys[i] = key;
 				ingredientValues[i] = value;
+				Obtainability.RecipeResults.Add(recipe.createItem.type);
 			}
 			int[][] decraft = ItemID.Sets.CraftingRecipeIndices;
 			originalDecraft = new int[decraft.Length][];
@@ -70,54 +74,95 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (originalTypes == null) return;
 			CraftingConfig cfg = CraftingConfig.Instance;
-			bool protectPickaxes = ProgressionConfig.Instance.ProtectPickaxeProgression;
+			bool protectMining = ProgressionConfig.Instance.ProtectPickaxeProgression;
 			HashSet<int> newResults = new();
+			bool[] changed = new bool[originalTypes.Length];
 			for (int i = 0; i < originalTypes.Length && i < Recipe.numRecipes; i++)
 			{
 				Recipe recipe = Main.recipe[i];
 				int original = originalTypes[i];
 				Item result = recipe.createItem;
-				bool keep = !ItemPool.IsRandomizable(original)
-					|| (protectPickaxes && ContentSamples.ItemsByType.TryGetValue(original, out Item sample) && sample.pick > 0);
-				if (keep)
+				if (KeepRecipe(original, protectMining))
 				{
 					SetResult(result, original, originalStacks[i]);
 					continue;
 				}
-				int replacement = original;
-				int stack = originalStacks[i];
-				long maxValue = (long)(ingredientValues[i] * cfg.RecipeValueGuard) + Item.gold;
-				for (int attempt = 0; attempt < 6; attempt++)
-				{
-					RollRequest request = new()
-					{
-						Keys = new[] { RollKey.Recipe, recipeKeys[i], attempt },
-						SourceTier = ItemPool.Info[original].Tier,
-						OriginalItem = original,
-						Policy = CategoryPolicy.SameAsOriginal,
-						TierJitterDown = 0,
-						TierJitterUp = 0,
-						AllowJackpot = false
-					};
-					replacement = ItemPool.Roll(request);
-					stack = StackRules.Scaled(original, originalStacks[i], replacement);
-					// Value guard: crafting must not turn cheap ingredients into a fortune
-					if ((long)StackRules.ValueOf(replacement) * stack <= maxValue) break;
-				}
+				(int replacement, int stack) = RollResult(i, recipe, cfg);
 				SetResult(result, replacement, stack);
-				if (replacement != original) newResults.Add(replacement);
+				if (replacement != original || stack != originalStacks[i])
+				{
+					changed[i] = true;
+					newResults.Add(replacement);
+				}
 			}
+			ApplyDecraftRules(changed, newResults, cfg.DisableDecraftOfRandomizedResults);
+			applied = true;
+			RefreshCraftingMenu();
+		}
+
+		// Pickaxes and bars (the mining chain: anvils, Molten Pickaxe...) are never randomized when protected
+		private static bool KeepRecipe(int original, bool protectMining)
+		{
+			if (!ItemPool.IsRandomizable(original)) return true;
+			if (!protectMining) return false;
+			if (ItemPool.Info[original].Category == ItemCategory.OreBar) return true;
+			return ContentSamples.ItemsByType.TryGetValue(original, out Item sample) && sample.pick > 0;
+		}
+
+		private static (int type, int stack) RollResult(int i, Recipe recipe, CraftingConfig cfg)
+		{
+			int original = originalTypes[i];
+			int originalStack = originalStacks[i];
+			long originalValue = (long)Math.Max(StackRules.ValueOf(original), 0) * originalStack;
+			// Value guard: crafting must not turn cheap ingredients into a fortune (1 silver of tolerance)
+			long maxValue = (long)(Math.Max(ingredientValues[i], originalValue) * cfg.RecipeValueGuard) + Item.silver;
+			int ingredientCount = recipe.requiredItem.Sum(ingredient => ingredient.stack);
+			for (int attempt = 0; attempt < 8; attempt++)
+			{
+				RollRequest request = new()
+				{
+					Keys = new[] { RollKey.Recipe, recipeKeys[i], attempt },
+					SourceTier = ItemPool.Info[original].Tier,
+					OriginalItem = original,
+					Policy = CategoryPolicy.SameAsOriginal,
+					TierJitterDown = 0,
+					TierJitterUp = 0,
+					AllowJackpot = false
+				};
+				int replacement = ItemPool.Roll(request);
+				// A recipe must never give back one of its own ingredients (1 Wood -> 4 Wood would be infinite)
+				if (recipe.requiredItem.Any(ingredient => ingredient.type == replacement)) continue;
+				int stack = StackRules.Scaled(original, originalStack, replacement);
+				if (StackRules.ValueOf(replacement) <= 0) stack = Math.Min(stack, Math.Max(1, ingredientCount));
+				if ((long)StackRules.ValueOf(replacement) * stack <= maxValue) return (replacement, stack);
+			}
+			return (original, originalStack);
+		}
+
+		// Shimmer decrafting uses CraftingRecipeIndices[item] and the recipe's result stack: it must only point to
+		// recipes that still produce that item, otherwise decrafting would duplicate ingredients
+		private static void ApplyDecraftRules(bool[] changed, HashSet<int> newResults, bool disableNewResults)
+		{
 			RestoreDecraft();
-			if (cfg.DisableDecraftOfRandomizedResults)
+			if (originalDecraft == null) return;
+			int[][] decraft = ItemID.Sets.CraftingRecipeIndices;
+			for (int type = 0; type < decraft.Length && type < originalDecraft.Length; type++)
+			{
+				int[] indices = originalDecraft[type];
+				if (indices == null || indices.Length == 0) continue;
+				if (indices.Any(index => index < changed.Length && changed[index]))
+				{
+					decraft[type] = indices.Where(index => index >= changed.Length || !changed[index]).ToArray();
+				}
+			}
+			if (disableNewResults)
 			{
 				// Otherwise: craft a random result from cheap ingredients, shimmer it, get its expensive vanilla ingredients
 				foreach (int type in newResults)
 				{
-					if (type < ItemID.Sets.CraftingRecipeIndices.Length) ItemID.Sets.CraftingRecipeIndices[type] = Array.Empty<int>();
+					if (type < decraft.Length) decraft[type] = Array.Empty<int>();
 				}
 			}
-			applied = true;
-			RefreshCraftingMenu();
 		}
 
 		private static void Restore()

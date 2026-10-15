@@ -14,7 +14,7 @@ namespace UltimateRandomizer.Common.Commands
 	// /rseed random     picks a new random one (host only)
 	public class SeedCommand : ModCommand
 	{
-		public override CommandType Type => CommandType.World;
+		public override CommandType Type => CommandType.World | CommandType.Console;
 
 		public override string Command => "rseed";
 

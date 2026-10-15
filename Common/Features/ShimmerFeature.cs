@@ -44,9 +44,20 @@ namespace UltimateRandomizer.Common.Features
 					set[type] = target;
 					continue;
 				}
+				set[type] = PickTransformation(type, target);
+			}
+			applied = true;
+		}
+
+		// Same category and tier as the original result, and never worth much more (no shimmer money machine)
+		private static int PickTransformation(int type, int target)
+		{
+			long maxValue = Math.Max(StackRules.ValueOf(target), StackRules.ValueOf(type)) * 3L + Terraria.Item.silver;
+			for (int attempt = 0; attempt < 6; attempt++)
+			{
 				RollRequest request = new()
 				{
-					Keys = new[] { RollKey.Shimmer, DetRandom.ItemKey(type) },
+					Keys = new[] { RollKey.Shimmer, DetRandom.ItemKey(type), attempt },
 					SourceTier = ItemPool.Info[target].Tier,
 					OriginalItem = target,
 					Policy = CategoryPolicy.SameAsOriginal,
@@ -55,9 +66,9 @@ namespace UltimateRandomizer.Common.Features
 					AllowJackpot = false
 				};
 				int replacement = ItemPool.Roll(request);
-				set[type] = replacement == type ? target : replacement;
+				if (replacement != type && StackRules.ValueOf(replacement) <= maxValue) return replacement;
 			}
-			applied = true;
+			return target;
 		}
 
 		private static void Restore()

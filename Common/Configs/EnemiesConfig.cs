@@ -12,10 +12,8 @@ namespace UltimateRandomizer.Common.Configs
 		PerSpawn
 	}
 
-	public class EnemiesConfig : ModConfig
+	public class EnemiesConfig : RandomizerConfig
 	{
-		public override ConfigScope Mode => ConfigScope.ServerSide;
-
 		public static EnemiesConfig Instance => ModContent.GetInstance<EnemiesConfig>();
 
 		[Header("Bosses")]

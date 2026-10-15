@@ -1,61 +1,56 @@
 using System;
-using System.Collections.Generic;
 using Terraria;
-using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
+using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
 	public static class DropHelper
 	{
-		// Items kept as they were: progression items, excluded items (coins, hearts...) and bags (their content is randomized instead)
+		// Context of the items dropped by our own extra-drop rule, so they are not replaced a second time
+		public const string ExtraDropContext = "UltimateRandomizer_ExtraDrop";
+
+		// Items kept as they are: progression items, excluded items (coins, hearts...) and bags (their content is replaced instead)
 		public static bool KeepOriginal(int itemType) =>
 			!ItemPool.IsRandomizable(itemType) || ItemPool.Info[itemType].Category == ItemCategory.Bag;
 
-		public static bool ConditionsMet(in DropRateInfo entry, DropAttemptInfo info) => ConditionsMet(entry.conditions, info);
-
-		public static bool ConditionsMet(List<IItemDropRuleCondition> conditions, DropAttemptInfo info)
+		// The item replacing an original drop of a source (enemy or bag), the same every time in a world
+		public static int Replacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky)
 		{
-			if (conditions == null) return true;
-			foreach (IItemDropRuleCondition condition in conditions)
+			if (KeepOriginal(originalItem)) return originalItem;
+			RollRequest request = new()
 			{
-				if (condition != null && !condition.CanDrop(info)) return false;
-			}
-			return true;
+				Keys = new[] { rollKind, sourceKey, DetRandom.ItemKey(originalItem) },
+				SourceTier = Tiers.Clamp(Math.Max(sourceTier, ItemPool.Info[originalItem].Tier)),
+				OriginalItem = originalItem,
+				Policy = CategoryPolicy.SameAsOriginal,
+				TierJitterDown = 0,
+				TierJitterUp = 1,
+				AllowJackpot = true,
+				IgnoreGating = lucky,
+				MinLimit = minLimit
+			};
+			return ItemPool.Roll(request);
 		}
 
-		// Drops an entry of an original drop table, with its original conditions and chance
-		public static void TryDropEntry(DropAttemptInfo info, in DropRateInfo entry, int itemType, int stackMin, int stackMax)
-		{
-			if (!ConditionsMet(entry, info) || info.rng.NextFloat() >= entry.dropRate) return;
-			Drop(info, itemType, stackMin, stackMax);
-		}
+		public static bool RollLucky() => Main.rand.NextFloat() * 100 < ProgressionConfig.Instance.RuntimeJackpotChance;
 
-		public static void Drop(DropAttemptInfo info, int itemType, int stackMin, int stackMax)
+		// Stack range of a replacement item, from the original range (keeps roughly the same value)
+		public static (int min, int max) ScaledRange(int originalItem, int stackMin, int stackMax, int newType)
 		{
-			if (itemType <= ItemID.None) return;
-			stackMin = Math.Max(1, stackMin);
-			stackMax = Math.Max(stackMin, stackMax);
-			CommonCode.DropItem(info, itemType, info.rng.Next(stackMin, stackMax + 1));
-		}
-
-		// Stack range of a replacement item, from the original entry's range
-		public static (int min, int max) ScaledRange(in DropRateInfo entry, int newType)
-		{
-			int min = StackRules.Scaled(entry.itemId, entry.stackMin, newType);
-			int max = StackRules.Scaled(entry.itemId, entry.stackMax, newType);
+			int min = StackRules.Scaled(originalItem, stackMin, newType);
+			int max = StackRules.Scaled(originalItem, stackMax, newType);
 			return (min, Math.Max(min, max));
 		}
 
-		public static void ReportKept(List<DropRateInfo> source, List<DropRateInfo> drops, DropRateInfoChainFeed ratesInfo)
+		// Turns an item that was just spawned into another one, keeping its position and slot
+		public static void ChangeSpawnedItem(Item item, int newType, int stack)
 		{
-			foreach (DropRateInfo entry in source)
-			{
-				if (!KeepOriginal(entry.itemId)) continue;
-				DropRateInfo copy = new(entry.itemId, entry.stackMin, entry.stackMax, entry.dropRate * ratesInfo.parentDroprateChance, entry.conditions);
-				drops.Add(copy);
-			}
+			if (newType <= ItemID.None || newType == item.type) return;
+			item.ChangeItemType(newType);
+			item.stack = Math.Max(1, stack);
+			item.Prefix(-1);
 		}
 	}
 }

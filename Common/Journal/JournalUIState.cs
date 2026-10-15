@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.GameContent.UI.Elements;
+using Terraria.GameInput;
 using Terraria.ID;
 using Terraria.Localization;
 using Terraria.UI;
@@ -91,12 +92,17 @@ namespace UltimateRandomizer.Common.Journal
 		private static List<JournalRow> MonsterRows()
 		{
 			List<JournalRow> rows = new();
-			foreach (int type in LootSnapshot.Npcs.Keys.OrderBy(t => Lang.GetNPCNameValue(t)))
+			List<(string name, int netId, NPC sample)> killed = new();
+			foreach (int netId in LootSnapshot.Npcs.Keys)
 			{
-				if (!ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample) || Main.BestiaryTracker.Kills.GetKillCount(sample) <= 0) continue;
-				List<PlannedDrop> drops = RandomNpcDropRule.Plan(type, Main.expertMode);
+				if (!ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) || Main.BestiaryTracker.Kills.GetKillCount(sample) <= 0) continue;
+				killed.Add((sample.TypeName, netId, sample));
+			}
+			foreach ((string name, int netId, NPC sample) in killed.OrderBy(k => k.name))
+			{
+				List<PlannedDrop> drops = RandomNpcDropRule.Plan(netId, Main.expertMode);
 				if (drops.Count == 0) continue;
-				rows.Add(new JournalRow(Header(Lang.GetNPCNameValue(type), NpcTiers.BaseTier(type)) + "\n" + DropsText(drops)));
+				rows.Add(new JournalRow(Header(name, NpcTiers.BaseTier(sample.type)) + "\n" + DropsText(drops)));
 			}
 			return rows;
 		}
@@ -108,7 +114,7 @@ namespace UltimateRandomizer.Common.Journal
 			foreach (int type in LootSnapshot.Items.Keys.OrderBy(t => Lang.GetItemNameValue(t)))
 			{
 				if (!journal.HasOpened(type)) continue;
-				rows.Add(new JournalRow($"[i:{type}] " + Header(Lang.GetItemNameValue(type), LootSnapshot.BagTier(type)) + "\n" + DropsText(RandomBagRule.Plan(type))));
+				rows.Add(new JournalRow($"[i:{type}] " + Header(Lang.GetItemNameValue(type), LootSnapshot.BagTier(type)) + "\n" + DropsText(BagPlan.Plan(type))));
 			}
 			return rows;
 		}
@@ -139,7 +145,11 @@ namespace UltimateRandomizer.Common.Journal
 		{
 			base.Update(gameTime);
 			// Clicks on the journal must not use the held item
-			if (panel != null && panel.ContainsPoint(Main.MouseScreen)) Main.LocalPlayer.mouseInterface = true;
+			if (panel != null && panel.ContainsPoint(Main.MouseScreen))
+			{
+				Main.LocalPlayer.mouseInterface = true;
+				PlayerInput.LockVanillaMouseScroll("UltimateRandomizer/Journal");
+			}
 		}
 	}
 

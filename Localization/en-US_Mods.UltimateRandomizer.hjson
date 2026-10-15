@@ -1,16 +1,19 @@
-Keybinds.Journal.DisplayName: "Open the randomizer journal"
+Keybinds.Journal.DisplayName: Open the randomizer journal
 
 Journal: {
-	Title: "Randomizer journal"
-	Monsters: "Monsters"
-	Bags: "Bags"
-	Empty: "Nothing discovered yet: kill monsters and open bags!"
-	Tier: "tier {0}"
-	Description: "Opens the randomizer journal (also the J key)"
+	Title: Randomizer journal
+	Monsters: Monsters
+	Bags: Bags
+	Empty: Nothing discovered yet: kill monsters and open bags!
+	Tier: tier {0}
+	Description: Opens the randomizer journal (also the J key)
 }
 
-Chat.OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
-Chat.StartingKit: "Ultimate Randomizer: you received a random starting kit for this world!"
+Chat: {
+	ConfigHostOnly: "Only the host can change the Ultimate Randomizer settings."
+	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
+	StartingKit: Ultimate Randomizer: you received a random starting kit for this world!
+}
 
 Commands: {
 	Seed: {
@@ -31,9 +34,9 @@ Commands: {
 	}
 
 	Chests: {
-		Description: "Randomizes the natural chests of a world created without the mod"
-		AlreadyDone: "Chests are already randomized in this world."
-		Warning: "This randomizes every unnamed natural chest, once. Chests you placed and renamed are skipped, but unnamed player chests of natural styles may be changed. Type /rchests confirm to proceed."
+		Description: Randomizes the natural chests of a world created without the mod
+		AlreadyDone: Chests are already randomized in this world.
+		Warning: "This randomizes once the natural chests of this world. Chests with a name, and chests near the spawn point or town NPC houses (probably yours) are skipped. Type /rchests confirm to proceed."
 		Done: "{0} chests randomized."
 	}
 }
@@ -133,6 +136,7 @@ Configs: {
 
 	DropTableStyle: {
 		Tooltip: ""
+
 		VanillaLike: {
 			Label: Vanilla-like
 			Tooltip: ""
@@ -247,6 +251,11 @@ Configs: {
 			Tooltip: Never replaced (drops, recipes...) and never given as a random item. Keeps progression possible.
 		}
 
+		ProtectProgressionMaterials: {
+			Label: Protect progression materials
+			Tooltip: "Shadow Scales, Tissue Samples, Hallowed Bars, mechanical souls, lunar fragments, Luminite, Ectoplasm and biome keys are never randomized."
+		}
+
 		AutoProtectBossSummons: {
 			Label: Protect all boss summons
 			Tooltip: Also protects boss summoning items from other mods.
@@ -258,8 +267,8 @@ Configs: {
 		}
 
 		ProtectPickaxeProgression: {
-			Label: Protect pickaxe recipes
-			Tooltip: Pickaxe recipes are never randomized, so you can always mine the next ore.
+			Label: Protect the mining progression
+			Tooltip: "Pickaxe and bar recipes are never randomized, and mined ores only turn into other ores of the same tier: you can always reach the next ore."
 		}
 
 		TierOverrides: {
@@ -293,28 +302,22 @@ Configs: {
 
 		RandomizeMobDrops: {
 			Label: Randomize enemy and boss drops
-			Tooltip: Progression drops (protected items) and treasure bags keep their original chance.
+			Tooltip: "Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions. Progression items, coins and treasure bags are kept."
 		}
 
 		DropTableStyle: {
-			Label: Drop table style
-			Tooltip:
-				'''
-				Vanilla-like: each enemy has a random number of drops (usually few, sometimes many) with rates like the base game
-				(1/1 for materials, 1/50 for equipment...). Items above the enemy's level are rarer.
-				Mirror of the original: same number of drops and same rates as the original enemy, each item replaced by one of the same category.
-				Simple: every slot has the fixed chance below.
-				'''
+			Label: Extra drops
+			Tooltip: "On top of the replaced original drops. Vanilla-like: each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced)."
 		}
 
 		EnemiesWithoutDropsCanDrop: {
-			Label: Enemies without drops can drop items
-			Tooltip: Enemies that drop nothing in the base game also get random drops.
+			Label: Enemies without drops get extra drops
+			Tooltip: "Enemies that drop nothing in the base game also get extra random drops. Boss minions and parts never do."
 		}
 
 		CrittersCanDrop: {
-			Label: Critters can drop items
-			Tooltip: Bunnies, birds, butterflies... also get random drops.
+			Label: Critters get extra drops
+			Tooltip: "Bunnies, birds, butterflies, insects... get up to 2 extra random drops."
 		}
 
 		DropRateMultiplier: {
@@ -322,14 +325,13 @@ Configs: {
 			Tooltip: Multiplies every drop chance (vanilla-like and mirror styles). 2 = twice as many drops.
 		}
 
-
 		DropSlotsMin: {
-			Label: Random drop slots (minimum)
-			Tooltip: Number of possible random drops of a normal enemy. Each enemy type gets its own fixed number in a world, usually close to the minimum.
+			Label: Extra drops (minimum)
+			Tooltip: "Number of possible extra drops of a normal enemy. Each enemy type gets its own fixed number in a world, usually close to the minimum."
 		}
 
 		DropSlotsMax: {
-			Label: Random drop slots (maximum)
+			Label: Extra drops (maximum)
 			Tooltip: ""
 		}
 
@@ -339,12 +341,12 @@ Configs: {
 		}
 
 		BossDropSlotsMin: {
-			Label: Boss drop slots (minimum)
-			Tooltip: In expert and master mode, bosses with a treasure bag put their loot in the bag instead.
+			Label: Boss extra drops (minimum)
+			Tooltip: "In expert and master mode, bosses with a treasure bag get no extra drops: their bag content is randomized instead."
 		}
 
 		BossDropSlotsMax: {
-			Label: Boss drop slots (maximum)
+			Label: Boss extra drops (maximum)
 			Tooltip: ""
 		}
 
@@ -370,32 +372,32 @@ Configs: {
 
 		RandomizeChests: {
 			Label: Randomize chests of new worlds
-			Tooltip: "Each item of a natural chest is replaced by an item of the same category, at world creation. For older worlds, use /rchests."
+			Tooltip: Each item of a natural chest is replaced by an item of the same category, at world creation. For older worlds, use /rchests.
 		}
 
 		ChestTierBonus: {
 			Label: Chest tier bonus
-			Tooltip: "Makes chest content this many tiers better."
+			Tooltip: Makes chest content this many tiers better.
 		}
 
 		RandomizeFishing: {
 			Label: Randomize fishing
-			Tooltip: "Each fish gives another item of the same category and tier. Quest fish are never changed."
+			Tooltip: Each fish gives another item of the same category and tier. Quest fish are never changed.
 		}
 
 		CratesStayCrates: {
 			Label: Crates stay crates
-			Tooltip: "Fished crates are not replaced (their content is randomized when opened)."
+			Tooltip: Fished crates are not replaced (their content is randomized when opened).
 		}
 
 		RandomizeOreDrops: {
 			Label: Randomize mined ores
-			Tooltip: "Each ore gives another ore or bar of the same tier (always the same one in a world)."
+			Tooltip: Each ore gives another ore or bar of the same tier (always the same one in a world).
 		}
 
 		RandomizePotDrops: {
 			Label: Randomize pot loot
-			Tooltip: "Items from pots are replaced by items of the same category. Coins and hearts are unchanged."
+			Tooltip: Items from pots are replaced by items of the same category. Coins and hearts are unchanged.
 		}
 	}
 
@@ -510,6 +512,7 @@ Configs: {
 
 	EconomyConfig: {
 		DisplayName: 4. Economy
+
 		Headers: {
 			Shops: Shops
 			Stacks: Stack sizes
@@ -517,12 +520,12 @@ Configs: {
 
 		RandomizeShops: {
 			Label: Randomize shops
-			Tooltip: "Each shop item is replaced by an item of the same category. It keeps the original item's unlock conditions."
+			Tooltip: Each shop item is replaced by an item of the same category. It keeps the original item's unlock conditions.
 		}
 
 		PriceMultiplierMin: {
 			Label: Price multiplier (minimum)
-			Tooltip: "Price = item value x a random multiplier. Never below 1, so buying and reselling never makes money."
+			Tooltip: Price = item value x a random multiplier. Never below 1, so buying and reselling never makes money.
 		}
 
 		PriceMultiplierMax: {
@@ -532,7 +535,7 @@ Configs: {
 
 		MinimumPrice: {
 			Label: Minimum price (copper coins)
-			Tooltip: "100 copper = 1 silver."
+			Tooltip: 100 copper = 1 silver.
 		}
 
 		NoDuplicatesInShop: {
@@ -542,7 +545,7 @@ Configs: {
 
 		ShopsFollowProgression: {
 			Label: Shops follow progression
-			Tooltip: "Shops sell better items as you defeat bosses."
+			Tooltip: Shops sell better items as you defeat bosses.
 		}
 
 		StackCaps: {
@@ -636,7 +639,8 @@ Configs: {
 	}
 
 	CraftingConfig: {
-		DisplayName: "5. Crafting and shimmer"
+		DisplayName: 5. Crafting and shimmer
+
 		Headers: {
 			Recipes: Recipes
 			Shimmer: Shimmer
@@ -644,27 +648,28 @@ Configs: {
 
 		RandomizeRecipes: {
 			Label: Randomize recipe results
-			Tooltip: "Each recipe gives an item of the same category and tier as the original. Recipes go back to normal when you leave the world."
+			Tooltip: Each recipe gives an item of the same category and tier as the original. Recipes go back to normal when you leave the world.
 		}
 
 		RecipeValueGuard: {
 			Label: Value guard
-			Tooltip: "A result can be worth at most this many times its ingredients. Prevents turning cheap ingredients into a fortune."
+			Tooltip: A result can be worth at most this many times its ingredients. Prevents turning cheap ingredients into a fortune.
 		}
 
 		DisableDecraftOfRandomizedResults: {
 			Label: No shimmer decrafting of random results
-			Tooltip: "Prevents duplicating items by crafting a random result then decrafting it in shimmer."
+			Tooltip: Prevents duplicating items by crafting a random result then decrafting it in shimmer.
 		}
 
 		RandomizeShimmer: {
 			Label: Randomize shimmer transmutations
-			Tooltip: "Each shimmer transformation gives another item of the same category and tier. Decrafting is not affected."
+			Tooltip: Each shimmer transformation gives another item of the same category and tier. Decrafting is not affected.
 		}
 	}
 
 	EnemySwapMode: {
 		Tooltip: ""
+
 		PerType: {
 			Label: Per type
 			Tooltip: ""
@@ -677,7 +682,8 @@ Configs: {
 	}
 
 	EnemiesConfig: {
-		DisplayName: "6. Enemies and bosses"
+		DisplayName: 6. Enemies and bosses
+
 		Headers: {
 			Bosses: Bosses
 			Enemies: Normal enemies
@@ -686,22 +692,22 @@ Configs: {
 
 		RandomizeBossHealth: {
 			Label: Randomize boss health
-			Tooltip: "The normal health of each boss is multiplied by a random value between the minimum and maximum, fixed for the world. Expert and master bonuses apply on top."
+			Tooltip: The normal health of each boss is multiplied by a random value between the minimum and maximum, fixed for the world. Expert and master bonuses apply on top.
 		}
 
 		BossHealthMin: {
 			Label: Boss health: minimum multiplier
-			Tooltip: "0.5 = half health."
+			Tooltip: 0.5 = half health.
 		}
 
 		BossHealthMax: {
 			Label: Boss health: maximum multiplier
-			Tooltip: "3 = triple health."
+			Tooltip: 3 = triple health.
 		}
 
 		RandomizeBossDamage: {
 			Label: Randomize boss damage
-			Tooltip: "Contact damage only: projectiles keep their own damage."
+			Tooltip: "Contact damage and projectiles of each boss are multiplied by a random value fixed for the world."
 		}
 
 		BossDamageMin: {
@@ -716,7 +722,7 @@ Configs: {
 
 		RandomizeEnemyStats: {
 			Label: Randomize normal enemies
-			Tooltip: "Health, damage, defense and size of each enemy type are multiplied by random values fixed for the world."
+			Tooltip: Health, damage, defense and size of each enemy type are multiplied by random values fixed for the world.
 		}
 
 		EnemyHealthMin: {
@@ -751,7 +757,7 @@ Configs: {
 
 		EnemyScaleMin: {
 			Label: Size: minimum multiplier
-			Tooltip: "Changes the hitbox too. Large values can make enemies get stuck."
+			Tooltip: Changes the hitbox too. Large values can make enemies get stuck.
 		}
 
 		EnemyScaleMax: {
@@ -761,27 +767,27 @@ Configs: {
 
 		RandomizeEnemySpawns: {
 			Label: Randomize enemy spawns
-			Tooltip: "Naturally spawning enemies become another enemy of the same tier that moves the same way (ground, flying, water). Bosses and worms are never changed."
+			Tooltip: Naturally spawning enemies become another enemy of the same tier that moves the same way (ground, flying, water). Bosses and worms are never changed.
 		}
 
 		EnemySwapMode: {
 			Label: Replacement mode
-			Tooltip: "Per type: each enemy is always replaced by the same other enemy in a world. Per spawn: every spawn picks a new replacement."
+			Tooltip: Per type: each enemy is always replaced by the same other enemy in a world. Per spawn: every spawn picks a new replacement.
 		}
 
 		EnemySwapChance: {
 			Label: Replacement chance (%)
-			Tooltip: "Share of enemies (per type) or of spawns (per spawn) that are replaced."
+			Tooltip: Share of enemies (per type) or of spawns (per spawn) that are replaced.
 		}
 
 		SwapCritters: {
 			Label: Also swap critters
-			Tooltip: "Critters are only swapped with other critters."
+			Tooltip: Critters are only swapped with other critters.
 		}
 
 		SwapEventEnemies: {
 			Label: Also swap invasion enemies
-			Tooltip: "Goblin army, pirates, Frost Legion, Martians, Old One's Army."
+			Tooltip: Goblin army, pirates, Frost Legion, Martians, Old One's Army.
 		}
 
 		SwapModdedEnemies: {
@@ -791,7 +797,8 @@ Configs: {
 	}
 
 	ExtrasConfig: {
-		DisplayName: "7. Extras"
+		DisplayName: 7. Extras
+
 		Headers: {
 			StartingKit: Starting kit
 			TownNpcs: Town NPCs
@@ -799,7 +806,7 @@ Configs: {
 
 		StartingKit: {
 			Label: Random starting kit
-			Tooltip: "Gives each character a random kit the first time it enters a world."
+			Tooltip: Gives each character a random kit the first time it enters a world.
 		}
 
 		KitWeapons: {
@@ -824,12 +831,8 @@ Configs: {
 
 		RandomizeTownNpcOrder: {
 			Label: Random arrival order of town NPCs
-			Tooltip: "Each arrival condition brings another NPC: the Wizard may come with 50 silver, the Merchant after Skeletron... Fixed for the world."
+			Tooltip: "Each arrival condition brings another NPC: the Wizard may come with 50 silver, the Merchant after Skeletron... Fixed for the world. Rescued NPCs (Goblin, Mechanic...) are not affected."
 		}
 
-		IncludeRescuedNpcs: {
-			Label: Include rescued NPCs
-			Tooltip: "Goblin Tinkerer, Wizard, Mechanic, Stylist, Tax Collector, Angler, Tavernkeep and Golfer are shuffled too: rescuing one brings another."
-		}
 	}
 }

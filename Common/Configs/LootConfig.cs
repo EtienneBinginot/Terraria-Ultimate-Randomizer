@@ -76,15 +76,12 @@ namespace UltimateRandomizer.Common.Configs
 		Simple
 	}
 
-	public class LootConfig : ModConfig
+	public class LootConfig : RandomizerConfig
 	{
-		public override ConfigScope Mode => ConfigScope.ServerSide;
-
 		public static LootConfig Instance => ModContent.GetInstance<LootConfig>();
 
 		[Header("Mobs")]
 		[DefaultValue(true)]
-		[ReloadRequired]
 		public bool RandomizeMobDrops;
 
 		[DefaultValue(DropTableStyle.VanillaLike)]
@@ -94,7 +91,7 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool EnemiesWithoutDropsCanDrop;
 
-		[DefaultValue(false)]
+		[DefaultValue(true)]
 		public bool CrittersCanDrop;
 
 		[Range(0, 20)]
@@ -102,7 +99,7 @@ namespace UltimateRandomizer.Common.Configs
 		public int DropSlotsMin;
 
 		[Range(0, 20)]
-		[DefaultValue(6)]
+		[DefaultValue(3)]
 		public int DropSlotsMax;
 
 		[Range(0.1f, 10f)]
@@ -116,26 +113,23 @@ namespace UltimateRandomizer.Common.Configs
 		public float DropChance;
 
 		[Range(0, 30)]
-		[DefaultValue(5)]
+		[DefaultValue(2)]
 		public int BossDropSlotsMin;
 
 		[Range(0, 30)]
-		[DefaultValue(12)]
+		[DefaultValue(6)]
 		public int BossDropSlotsMax;
 
 		public CategoryWeights DropCategoryWeights = new();
 
 		[Header("Bags")]
 		[DefaultValue(true)]
-		[ReloadRequired]
 		public bool RandomizeBossBags;
 
 		[DefaultValue(true)]
-		[ReloadRequired]
 		public bool RandomizeCrates;
 
 		[DefaultValue(true)]
-		[ReloadRequired]
 		public bool RandomizeOtherBags;
 
 		[Header("World")]

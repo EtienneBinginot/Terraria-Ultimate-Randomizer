@@ -13,26 +13,34 @@ namespace UltimateRandomizer.Common.Core
 	{
 		public static int WorldSeed { get; private set; }
 
-		// False on the main menu and while the mod loads: features must not change anything then
+		// False on the main menu and while a world loads: features must not change anything then
 		public static bool WorldReady { get; private set; }
 
+		// Fired when anything the randomization depends on changes (seed, config, world entered or left)
 		public static event Action OnSeedChanged;
 
 		public static int ChooseNewSeed()
 		{
 			GeneralConfig cfg = GeneralConfig.Instance;
+			string seedText = Main.ActiveWorldFileData?.SeedText;
 			return cfg.SeedSource switch
 			{
 				SeedSource.Fixed => cfg.FixedSeed,
-				SeedSource.FromWorldSeed => DetRandom.StableHash(Main.ActiveWorldFileData?.SeedText ?? ""),
+				SeedSource.FromWorldSeed when !string.IsNullOrEmpty(seedText) => DetRandom.StableHash(seedText),
 				_ => Random.Shared.Next()
 			};
 		}
 
-		public static void SetSeed(int seed)
+		private static void Activate(int seed)
 		{
 			WorldSeed = seed;
-			ProgressionSystem.Refresh();
+			WorldReady = true;
+			ProgressionSystem.Refresh(notify: false);
+			Changed();
+		}
+
+		private static void Changed()
+		{
 			ItemPool.OnSeedChanged();
 			OnSeedChanged?.Invoke();
 		}
@@ -40,30 +48,39 @@ namespace UltimateRandomizer.Common.Core
 		// Changes the seed of the current world (command) and sends it to every player
 		public static void ChangeSeed(int seed)
 		{
-			SetSeed(seed);
-			if (Main.netMode == NetmodeID.Server)
-			{
-				NetMessage.SendData(MessageID.WorldData);
-			}
+			Activate(seed);
+			if (Main.netMode == NetmodeID.Server) NetMessage.SendData(MessageID.WorldData);
+		}
+
+		// A config value changed: recompute everything that depends on it
+		public static void NotifyConfigChanged()
+		{
+			if (WorldReady && ItemPool.Ready) Changed();
 		}
 
 		// Chests are randomized during world generation, before the world data exists
-		public override void PreWorldGen() => SetSeed(ChooseNewSeed());
+		public override void PreWorldGen()
+		{
+			WorldReady = false;
+			WorldSeed = ChooseNewSeed();
+			ItemPool.OnSeedChanged();
+		}
 
 		public override void OnWorldLoad()
 		{
-			// New world: pick a seed. LoadWorldData overrides it right after if the world already has one
-			WorldReady = true;
-			SetSeed(ChooseNewSeed());
+			// Multiplayer clients get the seed from the server (NetReceive) and nothing else
+			if (Main.netMode == NetmodeID.MultiplayerClient) return;
+			// Default for worlds without a saved seed; LoadWorldData overrides it
+			WorldSeed = ChooseNewSeed();
 		}
 
 		public override void LoadWorldData(TagCompound tag)
 		{
-			if (tag.ContainsKey("seed"))
-			{
-				SetSeed(tag.GetInt("seed"));
-			}
+			if (tag.ContainsKey("seed")) WorldSeed = tag.GetInt("seed");
 		}
+
+		// Single player and server: the world is fully loaded, everything is computed once here
+		public override void PostWorldLoad() => Activate(WorldSeed);
 
 		public override void SaveWorldData(TagCompound tag)
 		{
@@ -80,15 +97,12 @@ namespace UltimateRandomizer.Common.Core
 		{
 			int seed = reader.ReadInt32();
 			int contentHash = reader.ReadInt32();
+			if (Main.netMode != NetmodeID.MultiplayerClient) return;
 			if (contentHash != ItemPool.ContentHash)
 			{
 				Mod.Logger.Warn("The server has a different item list than this client: randomization may not match.");
 			}
-			if (!WorldReady || seed != WorldSeed)
-			{
-				WorldReady = true;
-				SetSeed(seed);
-			}
+			if (!WorldReady || seed != WorldSeed) Activate(seed);
 		}
 
 		public override void OnWorldUnload()

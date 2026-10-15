@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+using System;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -8,35 +8,52 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// Mined ores give another ore or bar of the same tier; pots give random items of the same kind as their usual loot
+	// Mined ores give another ore of the same tier (1 for 1); pots give items of the same kind as their usual loot
 	public class TileDropItem : GlobalItem
 	{
+		// Vanilla removes the pot tile before spawning its loot: this flag tells us the loot comes from a pot
+		[ThreadStatic]
+		private static bool inPotDrop;
+
+		public override void Load() => On_WorldGen.SpawnThingsFromPot += MarkPotDrop;
+
+		private static void MarkPotDrop(On_WorldGen.orig_SpawnThingsFromPot orig, int i, int j, int x2, int y2, int style)
+		{
+			inPotDrop = true;
+			try
+			{
+				orig(i, j, x2, y2, style);
+			}
+			finally
+			{
+				inPotDrop = false;
+			}
+		}
+
 		public override void OnSpawn(Item item, IEntitySource source)
 		{
-			if (source is not EntitySource_TileBreak tileBreak || !SeedSystem.WorldReady || !ItemPool.Ready) return;
+			if (source is not EntitySource_TileBreak || !SeedSystem.WorldReady || !ItemPool.Ready) return;
 			if (!ItemPool.IsRandomizable(item.type)) return;
 			LootConfig cfg = LootConfig.Instance;
-			Point coords = tileBreak.TileCoords;
-			bool isPot = WorldGen.InWorld(coords.X, coords.Y) && Main.tile[coords.X, coords.Y].HasTile && Main.tile[coords.X, coords.Y].TileType == TileID.Pots;
-			bool isOre = item.createTile >= TileID.Dirt && TileID.Sets.Ore[item.createTile];
-			int key;
-			if (isPot && cfg.RandomizePotDrops)
+			if (inPotDrop)
 			{
-				key = DetRandom.Hash(RollKey.TileDrop, 1, DetRandom.ItemKey(item.type), Main.rand.Next(4));
+				if (cfg.RandomizePotDrops) ReplacePotItem(item);
 			}
-			else if (isOre && !isPot && cfg.RandomizeOreDrops)
+			else if (cfg.RandomizeOreDrops && IsOre(item.type))
 			{
-				// Always the same ore for a given ore in this world
-				key = DetRandom.Hash(RollKey.TileDrop, 2, DetRandom.ItemKey(item.type));
+				ReplaceOre(item);
 			}
-			else
-			{
-				return;
-			}
+		}
+
+		private static bool IsOre(int type) =>
+			ContentSamples.ItemsByType.TryGetValue(type, out Item sample) && sample.createTile >= TileID.Dirt && TileID.Sets.Ore[sample.createTile];
+
+		private static void ReplacePotItem(Item item)
+		{
 			int original = item.type;
 			RollRequest request = new()
 			{
-				Keys = new[] { key },
+				Keys = new[] { RollKey.TileDrop, 1, DetRandom.ItemKey(original), Main.rand.Next(4) },
 				SourceTier = ItemPool.Info[original].Tier,
 				OriginalItem = original,
 				Policy = CategoryPolicy.SameAsOriginal,
@@ -45,12 +62,32 @@ namespace UltimateRandomizer.Common.Features
 				AllowJackpot = false
 			};
 			int replacement = ItemPool.Roll(request);
-			if (replacement == original) return;
-			int stack = StackRules.Scaled(original, item.stack, replacement);
-			// Vanilla helper for items already in the world: keeps position, velocity and slot
-			item.ChangeItemType(replacement);
-			item.stack = stack;
-			item.Prefix(-1);
+			DropHelper.ChangeSpawnedItem(item, replacement, StackRules.Scaled(original, item.stack, replacement));
+		}
+
+		// Always the same ore for a given ore in a world, and only ores: mining placed ore can't create value
+		private static void ReplaceOre(Item item)
+		{
+			int original = item.type;
+			for (int attempt = 0; attempt < 10; attempt++)
+			{
+				RollRequest request = new()
+				{
+					Keys = new[] { RollKey.TileDrop, 2, DetRandom.ItemKey(original), attempt },
+					SourceTier = ItemPool.Info[original].Tier,
+					OriginalItem = original,
+					Policy = CategoryPolicy.SameAsOriginal,
+					TierJitterDown = 0,
+					TierJitterUp = 0,
+					AllowJackpot = false
+				};
+				int replacement = ItemPool.Roll(request);
+				if (IsOre(replacement) && ItemPool.TierOf(replacement) == ItemPool.TierOf(original))
+				{
+					DropHelper.ChangeSpawnedItem(item, replacement, item.stack);
+					return;
+				}
+			}
 		}
 	}
 }

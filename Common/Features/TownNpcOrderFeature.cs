@@ -16,7 +16,8 @@ namespace UltimateRandomizer.Common.Features
 		private static readonly (int type, Func<bool> condition)[] MoveInNpcs =
 		{
 			(NPCID.Merchant, () => AnyPlayer(p => CoinValue(p) >= Item.silver * 50)),
-			(NPCID.Nurse, () => NPC.AnyNPCs(NPCID.Merchant) && AnyPlayer(p => p.statLifeMax > 100)),
+			// Vanilla needs the Merchant; here any first arrival counts, otherwise the Merchant could need himself
+			(NPCID.Nurse, () => TownNpcCount() >= 2 && AnyPlayer(p => p.statLifeMax > 100)),
 			(NPCID.ArmsDealer, () => AnyPlayer(p => HasItem(p, i => i.useAmmo == AmmoID.Bullet || i.ammo == AmmoID.Bullet))),
 			(NPCID.Dryad, () => NPC.downedBoss1 || NPC.downedBoss2 || NPC.downedBoss3 || NPC.downedQueenBee || NPC.downedSlimeKing || NPC.downedDeerclops || Main.hardMode),
 			(NPCID.Demolitionist, () => AnyPlayer(p => HasItem(p, i => Explosives.Contains(i.type)))),
@@ -31,18 +32,6 @@ namespace UltimateRandomizer.Common.Features
 			(NPCID.Cyborg, () => NPC.downedPlantBoss)
 		};
 
-		private static readonly (int type, Func<bool> condition)[] RescuedNpcs =
-		{
-			(NPCID.GoblinTinkerer, () => NPC.savedGoblin),
-			(NPCID.Wizard, () => NPC.savedWizard),
-			(NPCID.Mechanic, () => NPC.savedMech),
-			(NPCID.Stylist, () => NPC.savedStylist),
-			(NPCID.TaxCollector, () => NPC.savedTaxCollector),
-			(NPCID.Angler, () => NPC.savedAngler),
-			(NPCID.DD2Bartender, () => NPC.savedBartender),
-			(NPCID.Golfer, () => NPC.savedGolfer)
-		};
-
 		private static readonly HashSet<int> Explosives = new()
 		{
 			ItemID.Bomb, ItemID.StickyBomb, ItemID.BouncyBomb, ItemID.Dynamite, ItemID.StickyDynamite, ItemID.BouncyDynamite,
@@ -51,14 +40,18 @@ namespace UltimateRandomizer.Common.Features
 
 		public override void Load() => On_Main.UpdateTime_SpawnTownNPCs += AfterVanillaChecks;
 
+		private static int[] arrivals;
+		private static int arrivalsSeed;
+
 		private static void AfterVanillaChecks(On_Main.orig_UpdateTime_SpawnTownNPCs orig)
 		{
 			orig();
-			ExtrasConfig cfg = ExtrasConfig.Instance;
-			if (Main.netMode == NetmodeID.MultiplayerClient || !SeedSystem.WorldReady || !cfg.RandomizeTownNpcOrder) return;
+			// Vanilla only re-evaluates arrivals every couple of minutes, and resets this counter when it does
+			if (Main.checkForSpawns != 0) return;
+			if (Main.netMode == NetmodeID.MultiplayerClient || !SeedSystem.WorldReady || !ExtrasConfig.Instance.RandomizeTownNpcOrder) return;
 			try
 			{
-				ApplyShuffledConditions(cfg.IncludeRescuedNpcs);
+				ApplyShuffledConditions();
 			}
 			catch (Exception e)
 			{
@@ -66,30 +59,44 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		private static void ApplyShuffledConditions(bool includeRescued)
+		private static void ApplyShuffledConditions()
 		{
-			(int type, Func<bool> condition)[] participants = includeRescued ? MoveInNpcs.Concat(RescuedNpcs).ToArray() : MoveInNpcs;
 			// Who arrives with which condition: a permutation fixed for the world
-			int[] arrivals = participants.Select(p => p.type).ToArray();
-			Random rng = DetRandom.Get(RollKey.TownNpc, participants.Length);
-			for (int i = arrivals.Length - 1; i > 0; i--)
+			if (arrivals == null || arrivalsSeed != SeedSystem.WorldSeed)
 			{
-				int j = rng.Next(i + 1);
-				(arrivals[i], arrivals[j]) = (arrivals[j], arrivals[i]);
+				arrivals = MoveInNpcs.Select(p => p.type).ToArray();
+				Random rng = DetRandom.Get(RollKey.TownNpc, arrivals.Length);
+				for (int i = arrivals.Length - 1; i > 0; i--)
+				{
+					int j = rng.Next(i + 1);
+					(arrivals[i], arrivals[j]) = (arrivals[j], arrivals[i]);
+				}
+				arrivalsSeed = SeedSystem.WorldSeed;
 			}
-			HashSet<int> participantTypes = participants.Select(p => p.type).ToHashSet();
 			int firstReady = 0;
-			for (int i = 0; i < participants.Length; i++)
+			for (int i = 0; i < MoveInNpcs.Length; i++)
 			{
 				int arriving = arrivals[i];
-				bool ready = participants[i].condition() && !NPC.AnyNPCs(arriving);
+				bool ready = MoveInNpcs[i].condition() && !NPC.AnyNPCs(arriving);
 				Main.townNPCCanSpawn[arriving] = ready;
 				if (ready && firstReady == 0) firstReady = arriving;
 			}
-			if (WorldGen.prioritizedTownNPCType == 0 || participantTypes.Contains(WorldGen.prioritizedTownNPCType))
+			// Keep vanilla's choice when it is not one of ours (Guide, Truffle, Princess, rescued NPCs, a homeless NPC...)
+			int prioritized = WorldGen.prioritizedTownNPCType;
+			bool ours = MoveInNpcs.Any(p => p.type == prioritized);
+			if (prioritized == 0 || (ours && !Main.townNPCCanSpawn[prioritized] && !IsHomeless(prioritized)))
 			{
 				WorldGen.prioritizedTownNPCType = firstReady;
 			}
+		}
+
+		private static bool IsHomeless(int type)
+		{
+			for (int i = 0; i < Main.maxNPCs; i++)
+			{
+				if (Main.npc[i].active && Main.npc[i].type == type && Main.npc[i].homeless) return true;
+			}
+			return false;
 		}
 
 		private static bool AnyPlayer(Func<Player, bool> predicate)

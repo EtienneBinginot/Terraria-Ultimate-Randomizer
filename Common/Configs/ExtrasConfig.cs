@@ -4,10 +4,8 @@ using Terraria.ModLoader.Config;
 
 namespace UltimateRandomizer.Common.Configs
 {
-	public class ExtrasConfig : ModConfig
+	public class ExtrasConfig : RandomizerConfig
 	{
-		public override ConfigScope Mode => ConfigScope.ServerSide;
-
 		public static ExtrasConfig Instance => ModContent.GetInstance<ExtrasConfig>();
 
 		[Header("StartingKit")]
@@ -33,8 +31,5 @@ namespace UltimateRandomizer.Common.Configs
 		[Header("TownNpcs")]
 		[DefaultValue(true)]
 		public bool RandomizeTownNpcOrder;
-
-		[DefaultValue(false)]
-		public bool IncludeRescuedNpcs;
 	}
 }

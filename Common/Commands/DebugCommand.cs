@@ -96,7 +96,7 @@ namespace UltimateRandomizer.Common.Commands
 		private static int FindItem(string name)
 		{
 			name = name.Trim();
-			if (int.TryParse(name, out int id)) return id;
+			if (int.TryParse(name, out int id)) return id > 0 && id < ItemLoader.ItemCount ? id : 0;
 			if (ItemID.Search.TryGetId(name.Replace(" ", ""), out id)) return id;
 			for (int type = 1; type < ItemLoader.ItemCount; type++)
 			{
@@ -108,7 +108,7 @@ namespace UltimateRandomizer.Common.Commands
 		private static int FindNpc(string name)
 		{
 			name = name.Trim();
-			if (int.TryParse(name, out int id)) return id;
+			if (int.TryParse(name, out int id)) return id > 0 && id < NPCLoader.NPCCount ? id : 0;
 			if (NPCID.Search.TryGetId(name.Replace(" ", ""), out id)) return id;
 			for (int type = 1; type < NPCLoader.NPCCount; type++)
 			{

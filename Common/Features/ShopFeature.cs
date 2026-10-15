@@ -9,6 +9,15 @@ namespace UltimateRandomizer.Common.Features
 {
 	public class ShopNPC : GlobalNPC
 	{
+		// Load time: remember what shops sell, so the guaranteed shuffle knows these items are obtainable
+		public override void ModifyShop(NPCShop shop)
+		{
+			foreach (NPCShop.Entry entry in shop.Entries)
+			{
+				if (entry?.Item != null && !entry.Item.IsAir) Obtainability.ShopItems.Add(entry.Item.type);
+			}
+		}
+
 		// Runs on the local client each time a shop is opened. The original item is part of the key,
 		// so each replacement keeps the original's unlock conditions (moon phase, progression...)
 		public override void ModifyActiveShop(NPC npc, string shopName, Item[] items)

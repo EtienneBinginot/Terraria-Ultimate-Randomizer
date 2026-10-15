@@ -4,10 +4,8 @@ using Terraria.ModLoader.Config;
 
 namespace UltimateRandomizer.Common.Configs
 {
-	public class CraftingConfig : ModConfig
+	public class CraftingConfig : RandomizerConfig
 	{
-		public override ConfigScope Mode => ConfigScope.ServerSide;
-
 		public static CraftingConfig Instance => ModContent.GetInstance<CraftingConfig>();
 
 		[Header("Recipes")]

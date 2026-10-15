@@ -16,7 +16,7 @@ namespace UltimateRandomizer.Common.Features
 
 		public override void PostWorldGen()
 		{
-			if (LootConfig.Instance.RandomizeChests) RandomizeAllChests();
+			if (LootConfig.Instance.RandomizeChests) RandomizeAllChests(existingWorld: false);
 		}
 
 		public override void ClearWorld() => ChestsRandomized = false;
@@ -25,8 +25,9 @@ namespace UltimateRandomizer.Common.Features
 
 		public override void LoadWorldData(TagCompound tag) => ChestsRandomized = tag.GetBool("chestsRandomized");
 
-		// Returns the number of chests changed
-		public static int RandomizeAllChests()
+		// Returns the number of chests changed. On an existing world, chests near houses and the spawn point are skipped:
+		// they are probably the players' storage
+		public static int RandomizeAllChests(bool existingWorld)
 		{
 			if (!ItemPool.Ready) return 0;
 			int changed = 0;
@@ -35,7 +36,7 @@ namespace UltimateRandomizer.Common.Features
 				Chest chest = Main.chest[c];
 				if (chest == null || !string.IsNullOrEmpty(chest.name)) continue;
 				int chestTier = ChestTier(chest.x, chest.y);
-				if (chestTier < 0) continue;
+				if (chestTier < 0 || (existingWorld && NearPlayerBase(chest.x, chest.y))) continue;
 				for (int slot = 0; slot < chest.item.Length; slot++)
 				{
 					Item item = chest.item[slot];
@@ -63,6 +64,18 @@ namespace UltimateRandomizer.Common.Features
 			}
 			ChestsRandomized = true;
 			return changed;
+		}
+
+		private static bool NearPlayerBase(int x, int y)
+		{
+			const int Distance = 60;
+			if (Math.Abs(x - Main.spawnTileX) < Distance && Math.Abs(y - Main.spawnTileY) < Distance) return true;
+			for (int i = 0; i < Main.maxNPCs; i++)
+			{
+				NPC npc = Main.npc[i];
+				if (npc.active && npc.townNPC && !npc.homeless && Math.Abs(x - npc.homeTileX) < Distance && Math.Abs(y - npc.homeTileY) < Distance) return true;
+			}
+			return false;
 		}
 
 		// How advanced a natural chest is, from its tile style. -1 = not a natural chest

@@ -10,6 +10,15 @@ namespace UltimateRandomizer.Common.Core
 	// Items required for progression: never replaced, and never given as a random replacement
 	public static class Protection
 	{
+		// Materials needed for the pickaxe and progression chain, and biome keys
+		private static readonly int[] ProgressionMaterials =
+		{
+			ItemID.ShadowScale, ItemID.TissueSample, ItemID.HallowedBar, ItemID.SoulofMight, ItemID.SoulofSight, ItemID.SoulofFright,
+			ItemID.FragmentSolar, ItemID.FragmentVortex, ItemID.FragmentNebula, ItemID.FragmentStardust, ItemID.LunarOre, ItemID.Ectoplasm,
+			ItemID.JungleKey, ItemID.CorruptionKey, ItemID.CrimsonKey, ItemID.HallowedKey, ItemID.FrozenKey, ItemID.DungeonDesertKey,
+			ItemID.LightKey, ItemID.NightKey
+		};
+
 		public static HashSet<int> BuildProtectedSet()
 		{
 			ProgressionConfig cfg = ProgressionConfig.Instance;
@@ -18,6 +27,7 @@ namespace UltimateRandomizer.Common.Core
 			{
 				if (def != null && !def.IsUnloaded && def.Type > ItemID.None) set.Add(def.Type);
 			}
+			if (cfg.ProtectProgressionMaterials) set.UnionWith(ProgressionMaterials);
 			int count = ItemLoader.ItemCount;
 			if (cfg.AutoProtectBossSummons)
 			{

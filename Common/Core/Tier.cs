@@ -53,17 +53,15 @@ namespace UltimateRandomizer.Common.Core
 			return (int)Tier.PreBoss;
 		}
 
-		public static void Refresh()
+		public static void Refresh(bool notify = true)
 		{
 			int tier = ComputeUnlockedTier();
 			if (tier != UnlockedTier)
 			{
 				UnlockedTier = tier;
-				OnTierChanged?.Invoke();
+				if (notify && SeedSystem.WorldReady) OnTierChanged?.Invoke();
 			}
 		}
-
-		public override void OnWorldLoad() => UnlockedTier = ComputeUnlockedTier();
 
 		public override void PostUpdateEverything()
 		{

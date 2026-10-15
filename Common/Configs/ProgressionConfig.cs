@@ -19,10 +19,8 @@ namespace UltimateRandomizer.Common.Configs
 		public override int GetHashCode() => (Item?.GetHashCode() ?? 0) * 31 + (int)Tier;
 	}
 
-	public class ProgressionConfig : ModConfig
+	public class ProgressionConfig : RandomizerConfig
 	{
-		public override ConfigScope Mode => ConfigScope.ServerSide;
-
 		public static ProgressionConfig Instance => ModContent.GetInstance<ProgressionConfig>();
 
 		[Header("TierGating")]
@@ -62,6 +60,10 @@ namespace UltimateRandomizer.Common.Configs
 			new(ItemID.CelestialSigil), new(ItemID.GoblinBattleStandard), new(ItemID.PirateMap), new(ItemID.SnowGlobe),
 			new(ItemID.PumpkinMoonMedallion), new(ItemID.NaughtyPresent), new(ItemID.SolarTablet), new(ItemID.LihzahrdAltar)
 		};
+
+		[DefaultValue(true)]
+		[ReloadRequired]
+		public bool ProtectProgressionMaterials;
 
 		[DefaultValue(true)]
 		[ReloadRequired]

@@ -51,10 +51,8 @@ namespace UltimateRandomizer.Common.Configs
 		}
 	}
 
-	public class EconomyConfig : ModConfig
+	public class EconomyConfig : RandomizerConfig
 	{
-		public override ConfigScope Mode => ConfigScope.ServerSide;
-
 		public static EconomyConfig Instance => ModContent.GetInstance<EconomyConfig>();
 
 		[Header("Shops")]
