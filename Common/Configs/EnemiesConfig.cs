@@ -4,6 +4,14 @@ using Terraria.ModLoader.Config;
 
 namespace UltimateRandomizer.Common.Configs
 {
+	public enum EnemySwapMode
+	{
+		// Each enemy type is always replaced by the same other type in a world
+		PerType,
+		// Every spawn picks a new replacement
+		PerSpawn
+	}
+
 	public class EnemiesConfig : ModConfig
 	{
 		public override ConfigScope Mode => ConfigScope.ServerSide;
@@ -80,5 +88,30 @@ namespace UltimateRandomizer.Common.Configs
 		[Increment(0.05f)]
 		[DefaultValue(1f)]
 		public float EnemyScaleMax;
+
+		[Header("EnemySwap")]
+		[DefaultValue(true)]
+		public bool RandomizeEnemySpawns;
+
+		[DefaultValue(EnemySwapMode.PerType)]
+		[DrawTicks]
+		public EnemySwapMode EnemySwapMode;
+
+		[Range(0f, 100f)]
+		[Increment(5f)]
+		[DefaultValue(100f)]
+		public float EnemySwapChance;
+
+		[DefaultValue(false)]
+		[ReloadRequired]
+		public bool SwapCritters;
+
+		[DefaultValue(false)]
+		[ReloadRequired]
+		public bool SwapEventEnemies;
+
+		[DefaultValue(true)]
+		[ReloadRequired]
+		public bool SwapModdedEnemies;
 	}
 }

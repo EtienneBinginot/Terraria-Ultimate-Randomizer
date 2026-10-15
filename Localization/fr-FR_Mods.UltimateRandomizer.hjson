@@ -1,3 +1,14 @@
+Keybinds.Journal.DisplayName: "Ouvrir le journal du randomizer"
+
+Journal: {
+	Title: "Journal du randomizer"
+	Monsters: "Monstres"
+	Bags: "Sacs"
+	Empty: "Rien de découvert pour l'instant : tue des monstres et ouvre des sacs !"
+	Tier: "tier {0}"
+	Description: "Ouvre le journal du randomizer (aussi avec la touche J)"
+}
+
 Chat.OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer est aussi activé : le loot est randomisé deux fois. N'active qu'un seul des deux randomizers dans Manage Mods."
 Chat.StartingKit: "Ultimate Randomizer : tu as reçu un kit de départ aléatoire pour ce monde !"
 
@@ -652,11 +663,25 @@ Configs: {
 		}
 	}
 
+	EnemySwapMode: {
+		Tooltip: ""
+		PerType: {
+			Label: Par type
+			Tooltip: ""
+		}
+
+		PerSpawn: {
+			Label: À chaque apparition
+			Tooltip: ""
+		}
+	}
+
 	EnemiesConfig: {
 		DisplayName: "6. Ennemis et boss"
 		Headers: {
 			Bosses: Boss
 			Enemies: Ennemis normaux
+			EnemySwap: Ennemis aléatoires
 		}
 
 		RandomizeBossHealth: {
@@ -733,12 +758,43 @@ Configs: {
 			Label: Taille : multiplicateur maximum
 			Tooltip: ""
 		}
+
+		RandomizeEnemySpawns: {
+			Label: Randomiser les apparitions d'ennemis
+			Tooltip: "Les ennemis qui apparaissent naturellement deviennent un autre ennemi du même tier qui se déplace pareil (sol, vol, eau). Les boss et les vers ne changent jamais."
+		}
+
+		EnemySwapMode: {
+			Label: Mode de remplacement
+			Tooltip: "Par type : chaque ennemi est toujours remplacé par le même autre ennemi dans un monde. À chaque apparition : chaque apparition tire un nouveau remplaçant."
+		}
+
+		EnemySwapChance: {
+			Label: Chance de remplacement (%)
+			Tooltip: "Part des ennemis (par type) ou des apparitions (à chaque apparition) qui sont remplacés."
+		}
+
+		SwapCritters: {
+			Label: Remplacer aussi les critters
+			Tooltip: "Les critters ne sont remplacés que par d'autres critters."
+		}
+
+		SwapEventEnemies: {
+			Label: Remplacer aussi les ennemis d'invasion
+			Tooltip: "Armée gobeline, pirates, Légion du givre, Martiens, Armée de l'Ancien."
+		}
+
+		SwapModdedEnemies: {
+			Label: Inclure les ennemis des autres mods
+			Tooltip: ""
+		}
 	}
 
 	ExtrasConfig: {
 		DisplayName: "7. Extras"
 		Headers: {
 			StartingKit: Kit de départ
+			TownNpcs: PNJ de ville
 		}
 
 		StartingKit: {
@@ -764,6 +820,16 @@ Configs: {
 		KitTools: {
 			Label: Outils
 			Tooltip: ""
+		}
+
+		RandomizeTownNpcOrder: {
+			Label: Ordre d'arrivée aléatoire des PNJ
+			Tooltip: "Chaque condition d'arrivée amène un autre PNJ : le Sorcier peut venir avec 50 pièces d'argent, le Marchand après Skeletron... Fixe pour le monde."
+		}
+
+		IncludeRescuedNpcs: {
+			Label: Inclure les PNJ à sauver
+			Tooltip: "Gobelin bricoleur, Sorcier, Mécanicienne, Styliste, Percepteur, Pêcheur, Tavernier et Golfeur sont aussi mélangés : en sauver un en amène un autre."
 		}
 	}
 }

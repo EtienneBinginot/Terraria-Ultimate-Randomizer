@@ -1,3 +1,14 @@
+Keybinds.Journal.DisplayName: "Open the randomizer journal"
+
+Journal: {
+	Title: "Randomizer journal"
+	Monsters: "Monsters"
+	Bags: "Bags"
+	Empty: "Nothing discovered yet: kill monsters and open bags!"
+	Tier: "tier {0}"
+	Description: "Opens the randomizer journal (also the J key)"
+}
+
 Chat.OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
 Chat.StartingKit: "Ultimate Randomizer: you received a random starting kit for this world!"
 
@@ -652,11 +663,25 @@ Configs: {
 		}
 	}
 
+	EnemySwapMode: {
+		Tooltip: ""
+		PerType: {
+			Label: Per type
+			Tooltip: ""
+		}
+
+		PerSpawn: {
+			Label: Per spawn
+			Tooltip: ""
+		}
+	}
+
 	EnemiesConfig: {
 		DisplayName: "6. Enemies and bosses"
 		Headers: {
 			Bosses: Bosses
 			Enemies: Normal enemies
+			EnemySwap: Random enemies
 		}
 
 		RandomizeBossHealth: {
@@ -733,12 +758,43 @@ Configs: {
 			Label: Size: maximum multiplier
 			Tooltip: ""
 		}
+
+		RandomizeEnemySpawns: {
+			Label: Randomize enemy spawns
+			Tooltip: "Naturally spawning enemies become another enemy of the same tier that moves the same way (ground, flying, water). Bosses and worms are never changed."
+		}
+
+		EnemySwapMode: {
+			Label: Replacement mode
+			Tooltip: "Per type: each enemy is always replaced by the same other enemy in a world. Per spawn: every spawn picks a new replacement."
+		}
+
+		EnemySwapChance: {
+			Label: Replacement chance (%)
+			Tooltip: "Share of enemies (per type) or of spawns (per spawn) that are replaced."
+		}
+
+		SwapCritters: {
+			Label: Also swap critters
+			Tooltip: "Critters are only swapped with other critters."
+		}
+
+		SwapEventEnemies: {
+			Label: Also swap invasion enemies
+			Tooltip: "Goblin army, pirates, Frost Legion, Martians, Old One's Army."
+		}
+
+		SwapModdedEnemies: {
+			Label: Include enemies from other mods
+			Tooltip: ""
+		}
 	}
 
 	ExtrasConfig: {
 		DisplayName: "7. Extras"
 		Headers: {
 			StartingKit: Starting kit
+			TownNpcs: Town NPCs
 		}
 
 		StartingKit: {
@@ -764,6 +820,16 @@ Configs: {
 		KitTools: {
 			Label: Tools
 			Tooltip: ""
+		}
+
+		RandomizeTownNpcOrder: {
+			Label: Random arrival order of town NPCs
+			Tooltip: "Each arrival condition brings another NPC: the Wizard may come with 50 silver, the Merchant after Skeletron... Fixed for the world."
+		}
+
+		IncludeRescuedNpcs: {
+			Label: Include rescued NPCs
+			Tooltip: "Goblin Tinkerer, Wizard, Mechanic, Stylist, Tax Collector, Angler, Tavernkeep and Golfer are shuffled too: rescuing one brings another."
 		}
 	}
 }

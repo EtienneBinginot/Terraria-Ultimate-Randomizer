@@ -29,5 +29,12 @@ namespace UltimateRandomizer.Common.Configs
 		[Range(0, 5)]
 		[DefaultValue(1)]
 		public int KitTools;
+
+		[Header("TownNpcs")]
+		[DefaultValue(true)]
+		public bool RandomizeTownNpcOrder;
+
+		[DefaultValue(false)]
+		public bool IncludeRescuedNpcs;
 	}
 }

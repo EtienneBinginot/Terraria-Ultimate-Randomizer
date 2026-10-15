@@ -46,13 +46,9 @@ namespace UltimateRandomizer.Common.Features
 			};
 			int replacement = ItemPool.Roll(request);
 			if (replacement == original) return;
-			// SetDefaults resets the position: keep where the item was spawned
-			Vector2 position = item.position;
-			Vector2 velocity = item.velocity;
 			int stack = StackRules.Scaled(original, item.stack, replacement);
-			item.SetDefaults(replacement);
-			item.position = position;
-			item.velocity = velocity;
+			// Vanilla helper for items already in the world: keeps position, velocity and slot
+			item.ChangeItemType(replacement);
 			item.stack = stack;
 			item.Prefix(-1);
 		}

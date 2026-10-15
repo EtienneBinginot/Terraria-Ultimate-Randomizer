@@ -49,32 +49,45 @@ namespace UltimateRandomizer.Common.Features
 			{
 				return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			}
+			foreach (PlannedDrop drop in Plan(bagType))
+			{
+				if (!DropHelper.ConditionsMet(drop.Conditions, info) || info.rng.NextFloat() >= drop.Chance) continue;
+				DropHelper.Drop(info, drop.Item, drop.StackMin, drop.StackMax);
+			}
+			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
+		}
+
+		// The content of a bag in this world (also used by the journal)
+		public static List<PlannedDrop> Plan(int bagType)
+		{
+			List<PlannedDrop> drops = new();
 			List<DropRateInfo> original = LootSnapshot.ForItem(bagType);
 			int bagKey = DetRandom.ItemKey(bagType);
 			int sourceTier = LootSnapshot.BagTier(bagType);
 			for (int i = 0; i < original.Count; i++)
 			{
 				DropRateInfo entry = original[i];
-				if (DropHelper.KeepOriginal(entry.itemId))
+				int item = entry.itemId;
+				int min = entry.stackMin;
+				int max = entry.stackMax;
+				if (!DropHelper.KeepOriginal(entry.itemId))
 				{
-					DropHelper.TryDropEntry(info, entry, entry.itemId, entry.stackMin, entry.stackMax);
-					continue;
+					RollRequest request = new()
+					{
+						Keys = new[] { RollKey.BagDrop, bagKey, i },
+						SourceTier = sourceTier,
+						OriginalItem = entry.itemId,
+						Policy = CategoryPolicy.SameAsOriginal,
+						TierJitterDown = 0,
+						TierJitterUp = 0,
+						AllowJackpot = true
+					};
+					item = ItemPool.Roll(request);
+					(min, max) = DropHelper.ScaledRange(entry, item);
 				}
-				RollRequest request = new()
-				{
-					Keys = new[] { RollKey.BagDrop, bagKey, i },
-					SourceTier = sourceTier,
-					OriginalItem = entry.itemId,
-					Policy = CategoryPolicy.SameAsOriginal,
-					TierJitterDown = 0,
-					TierJitterUp = 0,
-					AllowJackpot = true
-				};
-				int replacement = ItemPool.Roll(request);
-				(int min, int max) = DropHelper.ScaledRange(entry, replacement);
-				DropHelper.TryDropEntry(info, entry, replacement, min, max);
+				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions });
 			}
-			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
+			return drops;
 		}
 
 		public void ReportDroprates(List<DropRateInfo> drops, DropRateInfoChainFeed ratesInfo)
