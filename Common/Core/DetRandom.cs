@@ -15,6 +15,18 @@ namespace UltimateRandomizer.Common.Core
 		public const int BossHealth = 6;
 		public const int BossDamage = 7;
 		public const int Shuffle = 8;
+		public const int Shimmer = 9;
+		public const int Chest = 10;
+		public const int Fishing = 11;
+		public const int TileDrop = 12;
+		public const int StartingKit = 13;
+		public const int EnemyLife = 14;
+		public const int EnemyDamage = 15;
+		public const int EnemyDefense = 16;
+		public const int EnemyScale = 17;
+		public const int EnemySwap = 18;
+		public const int TownNpc = 19;
+		public const int Price = 20;
 		public const int Fallback = 0xFA11;
 	}
 

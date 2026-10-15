@@ -57,6 +57,31 @@ namespace UltimateRandomizer.Common.Configs
 
 		public static EconomyConfig Instance => ModContent.GetInstance<EconomyConfig>();
 
+		[Header("Shops")]
+		[DefaultValue(true)]
+		public bool RandomizeShops;
+
+		// At least 1: below 0.2, buying then selling back would make infinite money
+		[Range(1f, 10f)]
+		[Increment(0.1f)]
+		[DefaultValue(1f)]
+		public float PriceMultiplierMin;
+
+		[Range(1f, 10f)]
+		[Increment(0.1f)]
+		[DefaultValue(2.5f)]
+		public float PriceMultiplierMax;
+
+		[Range(0, 1000000)]
+		[DefaultValue(100)]
+		public int MinimumPrice;
+
+		[DefaultValue(true)]
+		public bool NoDuplicatesInShop;
+
+		[DefaultValue(true)]
+		public bool ShopsFollowProgression;
+
 		[Header("Stacks")]
 		public StackCaps StackCaps = new();
 
