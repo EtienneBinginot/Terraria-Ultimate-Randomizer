@@ -27,9 +27,9 @@ Debug: {
 	GuaranteedOn: Guaranteed drop of: {0}
 	GuaranteedTag: (guaranteed)
 	Individual: "{0}: health x{1}, damage x{2}, defense x{3}, size x{4}; loot bonus x{5}"
-	Adaptive: "Adaptive power: health x{0}, damage x{1} (included above)"
+	Adaptive: Adaptive power: health x{0}, damage x{1} (included above)
 	Power: Adaptive power
-	PowerStats: "power {0}, gap {1} tiers: enemies health x{2} damage x{3}, bosses health x{4} damage x{5}"
+	PowerStats: power {0}, gap {1} tiers: enemies health x{2} damage x{3}, bosses health x{4} damage x{5}
 	KindNormal: Normal
 	KindGiant: Giant
 	KindMini: Mini
@@ -221,8 +221,8 @@ Chat: {
 	ConfigHostOnly: Only the host can change the Ultimate Randomizer settings.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
 	StartingKit: Ultimate Randomizer: you received a random starting kit for this world!
-	PowerUp: "Your equipment is ahead of the world: new enemies get x{0} health and x{1} damage."
-	PowerDown: "The world is catching up with your equipment: new enemies get x{0} health and x{1} damage."
+	PowerUp: Your equipment is ahead of the world: new enemies get x{0} health and x{1} damage.
+	PowerDown: The world is catching up with your equipment: new enemies get x{0} health and x{1} damage.
 	PowerCaughtUp: The world has caught up with your equipment: new enemies are back to normal.
 }
 
@@ -246,8 +246,8 @@ Commands: {
 		Biome: "{0}: {1} places ({2} enemies), {3} changed, {4} shared with unusual guests"
 		BiomesLogged: The full list of each biome was written to client.log.
 		BiomesOff: Enemies are not redistributed by biome in this world (mode or setting): this is the map it would use.
-		Codex: "Codex (version {0}): {1} kills of {2} enemies, {3} items dropped by {4} enemies, {5} recipes, {6} item types seen, {7} enemies seen in {8} biomes, {9} chests opened, {10} bags opened"
-		CodexSources: "Other sources (item types received): {0}"
+		Codex: Codex (version {0}): {1} kills of {2} enemies, {3} items dropped by {4} enemies, {5} recipes, {6} item types seen, {7} enemies seen in {8} biomes, {9} chests opened, {10} bags opened
+		CodexSources: Other sources (item types received): {0}
 	}
 
 	Chests: {
@@ -428,7 +428,7 @@ Configs: {
 			Protection: Protected progression items
 			Tiers: Tiers
 			Guarantees: Guaranteed sources
-			AdaptivePower: "Adaptive power"
+			AdaptivePower: Adaptive power
 		}
 
 		TierGating: {
@@ -441,8 +441,8 @@ Configs: {
 		}
 
 		TierAllowance: {
-			Label: "Tiers allowed above your progression"
-			Tooltip: "0 = only tiers already unlocked. 3 = three tiers ahead (default), and so on. Adaptive power makes enemies stronger if your equipment gets ahead of the world."
+			Label: Tiers allowed above your progression
+			Tooltip: 0 = only tiers already unlocked. 3 = three tiers ahead (default), and so on. Adaptive power makes enemies stronger if your equipment gets ahead of the world.
 		}
 
 		JackpotTierChance: {
@@ -456,13 +456,13 @@ Configs: {
 		}
 
 		WildDropChance: {
-			Label: "Madness: drops above the limit (%)"
-			Tooltip: "Share of the random drops of enemies and bags that go above the progression limit, at any time. Each tier further above is rarer (see the next setting): an early Zenith is possible, but extremely rare. Enemies then adapt to your equipment (adaptive power). 0 = classic progression."
+			Label: Madness: drops above the limit (%)
+			Tooltip: Share of the random drops of enemies and bags that go above the progression limit, at any time. Each tier further above is rarer (see the next setting): an early Zenith is possible, but extremely rare. Enemies then adapt to your equipment (adaptive power). 0 = classic progression.
 		}
 
 		WildTierDecay: {
-			Label: "Madness: rarity per extra tier"
-			Tooltip: "How much rarer each tier above the limit is for madness drops: 3 = one tier above is 3 times more frequent than two tiers above. Higher = madness stays closer to the limit."
+			Label: Madness: rarity per extra tier
+			Tooltip: How much rarer each tier above the limit is for madness drops: 3 = one tier above is 3 times more frequent than two tiers above. Higher = madness stays closer to the limit.
 		}
 
 		MechTierRequiresAllThree: {
@@ -476,38 +476,38 @@ Configs: {
 		}
 
 		AdaptivePower: {
-			Label: "Enemies adapt to your equipment"
-			Tooltip: "Strong items may come early, but then enemies and bosses get stronger: every tier of power above the world's progression multiplies their health and damage when they spawn (bosses are measured again during the fight). Enemies never get weaker. Power = best weapon carried, inventory and Void Vault (50%), armor (25%) and 3 best accessories (25%), the best of the worn ones and of the loadouts."
+			Label: Enemies adapt to your equipment
+			Tooltip: Strong items may come early, but then enemies and bosses get stronger: every tier of power above the world's progression multiplies their health and damage when they spawn (bosses are measured again during the fight). Enemies never get weaker. Power = best weapon carried, inventory and Void Vault (50%), armor (25%) and 3 best accessories (25%), the best of the worn ones and of the loadouts.
 		}
 
 		AdaptiveGrace: {
-			Label: "Free tiers of power"
-			Tooltip: "Tiers of power above your progression that do not make enemies stronger yet."
+			Label: Free tiers of power
+			Tooltip: Tiers of power above your progression that do not make enemies stronger yet.
 		}
 
 		LifeGrowthPerTier: {
-			Label: "Enemy health per tier of power"
-			Tooltip: "Enemy health multiplier for each tier of power too many (multiplied again for each tier)."
+			Label: Enemy health per tier of power
+			Tooltip: Enemy health multiplier for each tier of power too many (multiplied again for each tier).
 		}
 
 		DamageGrowthPerTier: {
-			Label: "Enemy damage per tier of power"
-			Tooltip: "Enemy damage multiplier for each tier of power too many (multiplied again for each tier)."
+			Label: Enemy damage per tier of power
+			Tooltip: Enemy damage multiplier for each tier of power too many (multiplied again for each tier).
 		}
 
 		BossLifeGrowthPerTier: {
-			Label: "Boss health per tier of power"
-			Tooltip: "Same for bosses and their parts, which answer to the strongest player."
+			Label: Boss health per tier of power
+			Tooltip: Same for bosses and their parts, which answer to the strongest player.
 		}
 
 		BossDamageGrowthPerTier: {
-			Label: "Boss damage per tier of power"
-			Tooltip: "Same for the damage of bosses, their parts and their projectiles."
+			Label: Boss damage per tier of power
+			Tooltip: Same for the damage of bosses, their parts and their projectiles.
 		}
 
 		AdaptiveCap: {
-			Label: "Maximum multiplier"
-			Tooltip: "Enemy health and damage are never multiplied by more than this by adaptive power."
+			Label: Maximum multiplier
+			Tooltip: Enemy health and damage are never multiplied by more than this by adaptive power.
 		}
 
 		ProtectedItems: {
@@ -531,8 +531,8 @@ Configs: {
 		}
 
 		ProtectPickaxeProgression: {
-			Label: "Protect the mining progression"
-			Tooltip: "On: pickaxe and bar recipes are never randomized. Off: they are, and a pickaxe strong enough for each new ore is guaranteed on common enemies when the recipes don't give one in time. Mined ores only turn into other ores of the same tier."
+			Label: Protect the mining progression
+			Tooltip: On: pickaxe and bar recipes are never randomized. Off: they are, and a pickaxe strong enough for each new ore is guaranteed on common enemies when the recipes don't give one in time. Mined ores only turn into other ores of the same tier.
 		}
 
 		GuaranteedDropMultiplier: {
@@ -601,13 +601,13 @@ Configs: {
 		}
 
 		CrittersCanDrop: {
-			Label: "Critters get random drops"
-			Tooltip: "Bunnies, birds, butterflies, insects... get up to 2 extra random drops (more with loot abundance) and a share of the small frequent drop."
+			Label: Critters get random drops
+			Tooltip: Bunnies, birds, butterflies, insects... get up to 2 extra random drops (more with loot abundance) and a share of the small frequent drop.
 		}
 
 		CritterDropFactor: {
-			Label: "Critter frequent drop share"
-			Tooltip: "Share of the small frequent drop (material, potion, ammo...) that critters get, compared with other enemies. They come in swarms and die in one hit: 0.5 = half as often, 0 = never."
+			Label: Critter frequent drop share
+			Tooltip: Share of the small frequent drop (material, potion, ammo...) that critters get, compared with other enemies. They come in swarms and die in one hit: 0.5 = half as often, 0 = never.
 		}
 
 		DropRateMultiplier: {
@@ -631,13 +631,13 @@ Configs: {
 		}
 
 		CommonDropChance: {
-			Label: "Small frequent drop (%)"
-			Tooltip: "Every enemy also has one small drop fixed for the world (material, potion, ammo, food, block or ore), with this chance. Most kills then give something."
+			Label: Small frequent drop (%)
+			Tooltip: Every enemy also has one small drop fixed for the world (material, potion, ammo, food, block or ore), with this chance. Most kills then give something.
 		}
 
 		LootAbundance: {
-			Label: "Loot abundance"
-			Tooltip: "Scales the random drops of enemies: more extra drops, more often, and more small frequent drops (above 100 %, extra ones). 2 = about twice as many items per kill as 1; the default 3 gives about three times as many. Guaranteed drops (stations, progression items) are not affected."
+			Label: Loot abundance
+			Tooltip: Scales the random drops of enemies: more extra drops, more often, and more small frequent drops (above 100 %, extra ones). 2 = about twice as many items per kill as 1; the default 3 gives about three times as many. Guaranteed drops (stations, progression items) are not affected.
 		}
 
 		BossDropSlotsMin: {
@@ -1043,18 +1043,18 @@ Configs: {
 		}
 
 		LimitRecipeValue: {
-			Label: "Limit the value of results"
-			Tooltip: "Off: a randomized recipe can give any item of its original's category and tier, whatever its price. On: the result is worth at most 'Value guard' times its ingredients."
+			Label: Limit the value of results
+			Tooltip: Off: a randomized recipe can give any item of its original's category and tier, whatever its price. On: the result is worth at most 'Value guard' times its ingredients.
 		}
 
 		RecipeValueGuard: {
-			Label: "Value guard"
-			Tooltip: "When 'Limit the value of results' is on: a result can be worth at most this many times its ingredients."
+			Label: Value guard
+			Tooltip: When 'Limit the value of results' is on: a result can be worth at most this many times its ingredients.
 		}
 
 		CraftedValueFromIngredients: {
-			Label: "Crafted items sell for their ingredients"
-			Tooltip: "An item made through a randomized recipe sells for what its ingredients were worth (never more than its normal price), so crafting can't be used to make money."
+			Label: Crafted items sell for their ingredients
+			Tooltip: An item made through a randomized recipe sells for what its ingredients were worth (never more than its normal price), so crafting can't be used to make money.
 		}
 
 		DisableDecraftOfRandomizedResults: {
@@ -1068,8 +1068,8 @@ Configs: {
 		}
 
 		FurnitureSurpriseChance: {
-			Label: "Furniture surprise chance (%)"
-			Tooltip: "Like the recipe surprise chance, for recipes making furniture, blocks or walls (most vanilla recipes): the chance they give an item of any category (loot weights) instead of more furniture."
+			Label: Furniture surprise chance (%)
+			Tooltip: Like the recipe surprise chance, for recipes making furniture, blocks or walls (most vanilla recipes): the chance they give an item of any category (loot weights) instead of more furniture.
 		}
 
 		IngredientMode: {
@@ -1122,7 +1122,7 @@ Configs: {
 		}
 
 		ByBiome: {
-			Label: "By biome"
+			Label: By biome
 			Tooltip: ""
 		}
 	}
@@ -1294,28 +1294,28 @@ Configs: {
 		}
 
 		RandomizeEnemySpawns: {
-			Label: "Randomize enemy spawns"
-			Tooltip: "Naturally spawning enemies become another enemy of the same tier that moves the same way (ground, flying, water). Bosses and worms are never changed."
+			Label: Randomize enemy spawns
+			Tooltip: Naturally spawning enemies become another enemy of the same tier that moves the same way (ground, flying, water). Bosses and worms are never changed.
 		}
 
 		EnemySwapMode: {
-			Label: "Replacement mode"
-			Tooltip: "By biome: the natural enemies are shared out again between the biomes; each one keeps its number of spawn places, rare enemies stay rare and hardmode enemies come with hardmode. Per type: each enemy is always replaced by the same other enemy in a world. Per spawn: every spawn picks a new replacement."
+			Label: Replacement mode
+			Tooltip: By biome: the natural enemies are shared out again between the biomes; each one keeps its number of spawn places, rare enemies stay rare and hardmode enemies come with hardmode. Per type: each enemy is always replaced by the same other enemy in a world. Per spawn: every spawn picks a new replacement.
 		}
 
 		EnemySwapChance: {
-			Label: "Replacement chance (%)"
-			Tooltip: "Per type and per spawn modes: share of enemies (per type) or of spawns (per spawn) that are replaced. The by-biome mode uses the vanilla enemy chance instead."
+			Label: Replacement chance (%)
+			Tooltip: Per type and per spawn modes: share of enemies (per type) or of spawns (per spawn) that are replaced. The by-biome mode uses the vanilla enemy chance instead.
 		}
 
 		BiomeVanillaChance: {
-			Label: "Vanilla enemy chance (%)"
-			Tooltip: "By biome: chance that a spawn stays the enemy vanilla would have spawned. 0 = every spawn follows the biome's new list."
+			Label: Vanilla enemy chance (%)
+			Tooltip: By biome: chance that a spawn stays the enemy vanilla would have spawned. 0 = every spawn follows the biome's new list.
 		}
 
 		BiomeExtraEnemies: {
-			Label: "Unusual guests (%)"
-			Tooltip: "By biome: share of the spawn places shared with enemies that normally only come with an event (Blood Moon, eclipse, goblins, pirates...): there, each spawn is that guest half of the time, so the usual enemy of the place comes half as often. No enemy loses a place."
+			Label: Unusual guests (%)
+			Tooltip: By biome: share of the spawn places shared with enemies that normally only come with an event (Blood Moon, eclipse, goblins, pirates...): there, each spawn is that guest half of the time, so the usual enemy of the place comes half as often. No enemy loses a place.
 		}
 
 		SwapCritters: {
@@ -1329,8 +1329,8 @@ Configs: {
 		}
 
 		SwapModdedEnemies: {
-			Label: "Include enemies from other mods"
-			Tooltip: "Their enemies are redistributed too, including in their own biomes."
+			Label: Include enemies from other mods
+			Tooltip: Their enemies are redistributed too, including in their own biomes.
 		}
 	}
 
@@ -1375,8 +1375,11 @@ Configs: {
 
 	ClientConfig: {
 		DisplayName: 8. Client
-		Headers.Debug: Debug tools
-		Headers.Messages: Messages
+
+		Headers: {
+			Debug: Debug tools
+			Messages: Messages
+		}
 
 		DebugTools: {
 			Label: Debug tools (K key)

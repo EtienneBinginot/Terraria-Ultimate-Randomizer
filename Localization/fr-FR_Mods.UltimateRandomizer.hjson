@@ -27,9 +27,9 @@ Debug: {
 	GuaranteedOn: Drop garanti de : {0}
 	GuaranteedTag: (garanti)
 	Individual: "{0} : vie x{1}, dégâts x{2}, défense x{3}, taille x{4} ; bonus de loot x{5}"
-	Adaptive: "Puissance adaptative : vie x{0}, dégâts x{1} (compris ci-dessus)"
+	Adaptive: Puissance adaptative : vie x{0}, dégâts x{1} (compris ci-dessus)
 	Power: Puissance adaptative
-	PowerStats: "puissance {0}, écart {1} tiers : ennemis vie x{2} dégâts x{3}, boss vie x{4} dégâts x{5}"
+	PowerStats: puissance {0}, écart {1} tiers : ennemis vie x{2} dégâts x{3}, boss vie x{4} dégâts x{5}
 	KindNormal: Normal
 	KindGiant: Géant
 	KindMini: Mini
@@ -221,8 +221,8 @@ Chat: {
 	ConfigHostOnly: Seul l'hôte peut modifier les réglages d'Ultimate Randomizer.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer est aussi activé : le loot est randomisé deux fois. N'active qu'un seul des deux randomizers dans Manage Mods."
 	StartingKit: Ultimate Randomizer : tu as reçu un kit de départ aléatoire pour ce monde !
-	PowerUp: "Ton équipement a de l'avance sur le monde : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts."
-	PowerDown: "Le monde rattrape ton équipement : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts."
+	PowerUp: Ton équipement a de l'avance sur le monde : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts.
+	PowerDown: Le monde rattrape ton équipement : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts.
 	PowerCaughtUp: Le monde a rattrapé ton équipement : les nouveaux ennemis redeviennent normaux.
 }
 
@@ -246,8 +246,8 @@ Commands: {
 		Biome: "{0} : {1} lieux ({2} ennemis), {3} changés, {4} partagés avec des invités inattendus"
 		BiomesLogged: La liste complète de chaque biome a été écrite dans client.log.
 		BiomesOff: Les ennemis ne sont pas redistribués par biome dans ce monde (mode ou réglage) : voici la carte qui serait utilisée.
-		Codex: "Codex (version {0}) : {1} ennemis tués parmi {2} sortes, {3} objets lâchés par {4} sortes d'ennemis, {5} recettes, {6} sortes d'objets vues, {7} ennemis aperçus dans {8} biomes, {9} coffres ouverts, {10} sacs ouverts"
-		CodexSources: "Autres sources (sortes d'objets reçues) : {0}"
+		Codex: Codex (version {0}) : {1} ennemis tués parmi {2} sortes, {3} objets lâchés par {4} sortes d'ennemis, {5} recettes, {6} sortes d'objets vues, {7} ennemis aperçus dans {8} biomes, {9} coffres ouverts, {10} sacs ouverts
+		CodexSources: Autres sources (sortes d'objets reçues) : {0}
 	}
 
 	Chests: {
@@ -428,7 +428,7 @@ Configs: {
 			Protection: Objets de progression protégés
 			Tiers: Tiers
 			Guarantees: Sources garanties
-			AdaptivePower: "Puissance adaptative"
+			AdaptivePower: Puissance adaptative
 		}
 
 		TierGating: {
@@ -441,8 +441,8 @@ Configs: {
 		}
 
 		TierAllowance: {
-			Label: "Tiers autorisés au-dessus de ta progression"
-			Tooltip: "0 = seulement les tiers déjà débloqués. 3 = trois tiers d'avance (par défaut), etc. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde."
+			Label: Tiers autorisés au-dessus de ta progression
+			Tooltip: 0 = seulement les tiers déjà débloqués. 3 = trois tiers d'avance (par défaut), etc. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde.
 		}
 
 		JackpotTierChance: {
@@ -456,13 +456,13 @@ Configs: {
 		}
 
 		WildDropChance: {
-			Label: "Folie : drops au-delà de la limite (%)"
-			Tooltip: "Part des drops aléatoires des ennemis et des sacs qui dépassent la limite de progression, à tout moment. Chaque palier plus haut est plus rare (voir le réglage suivant) : un Zénith en début de partie est possible, mais rarissime. Les ennemis s'adaptent ensuite à votre équipement (puissance adaptative). 0 = progression classique."
+			Label: Folie : drops au-delà de la limite (%)
+			Tooltip: Part des drops aléatoires des ennemis et des sacs qui dépassent la limite de progression, à tout moment. Chaque palier plus haut est plus rare (voir le réglage suivant) : un Zénith en début de partie est possible, mais rarissime. Les ennemis s'adaptent ensuite à votre équipement (puissance adaptative). 0 = progression classique.
 		}
 
 		WildTierDecay: {
-			Label: "Folie : rareté par palier en plus"
-			Tooltip: "À quel point chaque palier au-delà de la limite est plus rare pour les drops de folie : 3 = un palier au-dessus est 3 fois plus fréquent que deux paliers au-dessus. Plus haut = la folie reste plus près de la limite."
+			Label: Folie : rareté par palier en plus
+			Tooltip: À quel point chaque palier au-delà de la limite est plus rare pour les drops de folie : 3 = un palier au-dessus est 3 fois plus fréquent que deux paliers au-dessus. Plus haut = la folie reste plus près de la limite.
 		}
 
 		MechTierRequiresAllThree: {
@@ -476,38 +476,38 @@ Configs: {
 		}
 
 		AdaptivePower: {
-			Label: "Les ennemis s'adaptent à ton équipement"
-			Tooltip: "Les objets puissants peuvent arriver tôt, mais les ennemis et les boss deviennent alors plus forts : chaque tier de puissance au-dessus de la progression du monde multiplie leur vie et leurs dégâts à leur apparition (les boss sont remesurés pendant le combat). Les ennemis ne s'affaiblissent jamais. Puissance = meilleure arme portée sur toi, inventaire et coffre du néant (50 %), armure (25 %) et 3 meilleurs accessoires (25 %), les meilleurs entre l'équipement porté et les configurations d'équipement."
+			Label: Les ennemis s'adaptent à ton équipement
+			Tooltip: Les objets puissants peuvent arriver tôt, mais les ennemis et les boss deviennent alors plus forts : chaque tier de puissance au-dessus de la progression du monde multiplie leur vie et leurs dégâts à leur apparition (les boss sont remesurés pendant le combat). Les ennemis ne s'affaiblissent jamais. Puissance = meilleure arme portée sur toi, inventaire et coffre du néant (50 %), armure (25 %) et 3 meilleurs accessoires (25 %), les meilleurs entre l'équipement porté et les configurations d'équipement.
 		}
 
 		AdaptiveGrace: {
-			Label: "Tiers de puissance gratuits"
-			Tooltip: "Tiers de puissance au-dessus de ta progression qui ne renforcent pas encore les ennemis."
+			Label: Tiers de puissance gratuits
+			Tooltip: Tiers de puissance au-dessus de ta progression qui ne renforcent pas encore les ennemis.
 		}
 
 		LifeGrowthPerTier: {
-			Label: "Vie des ennemis par tier de puissance"
-			Tooltip: "Multiplicateur de vie des ennemis pour chaque tier de puissance en trop (cumulé à chaque tier)."
+			Label: Vie des ennemis par tier de puissance
+			Tooltip: Multiplicateur de vie des ennemis pour chaque tier de puissance en trop (cumulé à chaque tier).
 		}
 
 		DamageGrowthPerTier: {
-			Label: "Dégâts des ennemis par tier de puissance"
-			Tooltip: "Multiplicateur de dégâts des ennemis pour chaque tier de puissance en trop (cumulé à chaque tier)."
+			Label: Dégâts des ennemis par tier de puissance
+			Tooltip: Multiplicateur de dégâts des ennemis pour chaque tier de puissance en trop (cumulé à chaque tier).
 		}
 
 		BossLifeGrowthPerTier: {
-			Label: "Vie des boss par tier de puissance"
-			Tooltip: "Pareil pour les boss et leurs parties, qui répondent au joueur le plus fort."
+			Label: Vie des boss par tier de puissance
+			Tooltip: Pareil pour les boss et leurs parties, qui répondent au joueur le plus fort.
 		}
 
 		BossDamageGrowthPerTier: {
-			Label: "Dégâts des boss par tier de puissance"
-			Tooltip: "Pareil pour les dégâts des boss, de leurs parties et de leurs projectiles."
+			Label: Dégâts des boss par tier de puissance
+			Tooltip: Pareil pour les dégâts des boss, de leurs parties et de leurs projectiles.
 		}
 
 		AdaptiveCap: {
-			Label: "Multiplicateur maximum"
-			Tooltip: "La puissance adaptative ne multiplie jamais la vie et les dégâts des ennemis par plus que ça."
+			Label: Multiplicateur maximum
+			Tooltip: La puissance adaptative ne multiplie jamais la vie et les dégâts des ennemis par plus que ça.
 		}
 
 		ProtectedItems: {
@@ -531,8 +531,8 @@ Configs: {
 		}
 
 		ProtectPickaxeProgression: {
-			Label: "Protéger la progression du minage"
-			Tooltip: "Activé : les recettes de pioches et de lingots ne sont jamais randomisées. Désactivé : elles le sont, et une pioche assez puissante pour chaque nouveau minerai est garantie sur des ennemis communs quand les recettes n'en donnent pas à temps. Les minerais minés ne deviennent que d'autres minerais du même tier."
+			Label: Protéger la progression du minage
+			Tooltip: Activé : les recettes de pioches et de lingots ne sont jamais randomisées. Désactivé : elles le sont, et une pioche assez puissante pour chaque nouveau minerai est garantie sur des ennemis communs quand les recettes n'en donnent pas à temps. Les minerais minés ne deviennent que d'autres minerais du même tier.
 		}
 
 		GuaranteedDropMultiplier: {
@@ -601,13 +601,13 @@ Configs: {
 		}
 
 		CrittersCanDrop: {
-			Label: "Les critters reçoivent des drops"
-			Tooltip: "Lapins, oiseaux, papillons, insectes... reçoivent jusqu'à 2 drops aléatoires (plus avec l'abondance du butin) et une part du petit drop fréquent."
+			Label: Les critters reçoivent des drops
+			Tooltip: Lapins, oiseaux, papillons, insectes... reçoivent jusqu'à 2 drops aléatoires (plus avec l'abondance du butin) et une part du petit drop fréquent.
 		}
 
 		CritterDropFactor: {
-			Label: "Part du drop fréquent des critters"
-			Tooltip: "Part du petit drop fréquent (matériau, potion, munitions...) que reçoivent les critters par rapport aux autres ennemis. Ils arrivent en nuées et meurent en un coup : 0,5 = deux fois moins souvent, 0 = jamais."
+			Label: Part du drop fréquent des critters
+			Tooltip: Part du petit drop fréquent (matériau, potion, munitions...) que reçoivent les critters par rapport aux autres ennemis. Ils arrivent en nuées et meurent en un coup : 0,5 = deux fois moins souvent, 0 = jamais.
 		}
 
 		DropRateMultiplier: {
@@ -631,13 +631,13 @@ Configs: {
 		}
 
 		CommonDropChance: {
-			Label: "Petit drop fréquent (%)"
-			Tooltip: "Chaque ennemi a aussi un petit drop fixe pour le monde (matériau, potion, munitions, nourriture, bloc ou minerai), avec cette chance. La plupart des kills donnent alors quelque chose."
+			Label: Petit drop fréquent (%)
+			Tooltip: Chaque ennemi a aussi un petit drop fixe pour le monde (matériau, potion, munitions, nourriture, bloc ou minerai), avec cette chance. La plupart des kills donnent alors quelque chose.
 		}
 
 		LootAbundance: {
-			Label: "Abondance du butin"
-			Tooltip: "Multiplie les drops aléatoires des ennemis : plus de drops supplémentaires, plus souvent, et plus de petits drops fréquents (au-delà de 100 %, des drops en plus). 2 = environ deux fois plus d'objets par kill qu'à 1 ; la valeur par défaut, 3, en donne environ trois fois plus. Les drops garantis (stations, objets de progression) ne changent pas."
+			Label: Abondance du butin
+			Tooltip: Multiplie les drops aléatoires des ennemis : plus de drops supplémentaires, plus souvent, et plus de petits drops fréquents (au-delà de 100 %, des drops en plus). 2 = environ deux fois plus d'objets par kill qu'à 1 ; la valeur par défaut, 3, en donne environ trois fois plus. Les drops garantis (stations, objets de progression) ne changent pas.
 		}
 
 		BossDropSlotsMin: {
@@ -1043,18 +1043,18 @@ Configs: {
 		}
 
 		LimitRecipeValue: {
-			Label: "Limiter la valeur des résultats"
-			Tooltip: "Désactivé : une recette randomisée peut donner n'importe quel objet de la catégorie et du tier de l'original, quel que soit son prix. Activé : le résultat vaut au plus « Garde-fou de valeur » fois ses ingrédients."
+			Label: Limiter la valeur des résultats
+			Tooltip: Désactivé : une recette randomisée peut donner n'importe quel objet de la catégorie et du tier de l'original, quel que soit son prix. Activé : le résultat vaut au plus « Garde-fou de valeur » fois ses ingrédients.
 		}
 
 		RecipeValueGuard: {
-			Label: "Garde-fou de valeur"
-			Tooltip: "Quand « Limiter la valeur des résultats » est activé : un résultat vaut au plus ce nombre de fois ses ingrédients."
+			Label: Garde-fou de valeur
+			Tooltip: Quand « Limiter la valeur des résultats » est activé : un résultat vaut au plus ce nombre de fois ses ingrédients.
 		}
 
 		CraftedValueFromIngredients: {
-			Label: "Les objets fabriqués valent leurs ingrédients"
-			Tooltip: "Un objet fabriqué avec une recette randomisée se revend au prix de ses ingrédients (jamais plus que son prix normal) : impossible de s'enrichir en fabriquant."
+			Label: Les objets fabriqués valent leurs ingrédients
+			Tooltip: Un objet fabriqué avec une recette randomisée se revend au prix de ses ingrédients (jamais plus que son prix normal) : impossible de s'enrichir en fabriquant.
 		}
 
 		DisableDecraftOfRandomizedResults: {
@@ -1068,8 +1068,8 @@ Configs: {
 		}
 
 		FurnitureSurpriseChance: {
-			Label: "Chance de surprise des meubles (%)"
-			Tooltip: "Comme la chance de surprise des recettes, pour les recettes de meubles, de blocs ou de murs (la plupart des recettes vanilla) : la chance qu'elles donnent un objet de n'importe quelle catégorie (poids du loot) au lieu d'encore un meuble."
+			Label: Chance de surprise des meubles (%)
+			Tooltip: Comme la chance de surprise des recettes, pour les recettes de meubles, de blocs ou de murs (la plupart des recettes vanilla) : la chance qu'elles donnent un objet de n'importe quelle catégorie (poids du loot) au lieu d'encore un meuble.
 		}
 
 		IngredientMode: {
@@ -1122,7 +1122,7 @@ Configs: {
 		}
 
 		ByBiome: {
-			Label: "Par biome"
+			Label: Par biome
 			Tooltip: ""
 		}
 	}
@@ -1294,28 +1294,28 @@ Configs: {
 		}
 
 		RandomizeEnemySpawns: {
-			Label: "Randomiser les apparitions d'ennemis"
-			Tooltip: "Les ennemis qui apparaissent naturellement deviennent un autre ennemi du même tier qui se déplace pareil (sol, vol, eau). Les boss et les vers ne changent jamais."
+			Label: Randomiser les apparitions d'ennemis
+			Tooltip: Les ennemis qui apparaissent naturellement deviennent un autre ennemi du même tier qui se déplace pareil (sol, vol, eau). Les boss et les vers ne changent jamais.
 		}
 
 		EnemySwapMode: {
-			Label: "Mode de remplacement"
-			Tooltip: "Par biome : les ennemis naturels sont redistribués entre les biomes ; chacun garde son nombre de lieux d'apparition, les ennemis rares restent rares et ceux du mode difficile arrivent avec lui. Par type : chaque ennemi est toujours remplacé par le même autre ennemi dans un monde. À chaque apparition : chaque apparition tire un nouveau remplaçant."
+			Label: Mode de remplacement
+			Tooltip: Par biome : les ennemis naturels sont redistribués entre les biomes ; chacun garde son nombre de lieux d'apparition, les ennemis rares restent rares et ceux du mode difficile arrivent avec lui. Par type : chaque ennemi est toujours remplacé par le même autre ennemi dans un monde. À chaque apparition : chaque apparition tire un nouveau remplaçant.
 		}
 
 		EnemySwapChance: {
-			Label: "Chance de remplacement (%)"
-			Tooltip: "Modes par type et à chaque apparition : part des ennemis (par type) ou des apparitions (à chaque apparition) qui sont remplacés. Le mode par biome utilise plutôt la chance de garder l'ennemi d'origine."
+			Label: Chance de remplacement (%)
+			Tooltip: Modes par type et à chaque apparition : part des ennemis (par type) ou des apparitions (à chaque apparition) qui sont remplacés. Le mode par biome utilise plutôt la chance de garder l'ennemi d'origine.
 		}
 
 		BiomeVanillaChance: {
-			Label: "Chance de garder l'ennemi d'origine (%)"
-			Tooltip: "Par biome : chance qu'une apparition reste l'ennemi prévu par le jeu de base. 0 = toutes les apparitions suivent la nouvelle liste du biome."
+			Label: Chance de garder l'ennemi d'origine (%)
+			Tooltip: Par biome : chance qu'une apparition reste l'ennemi prévu par le jeu de base. 0 = toutes les apparitions suivent la nouvelle liste du biome.
 		}
 
 		BiomeExtraEnemies: {
-			Label: "Invités inattendus (%)"
-			Tooltip: "Par biome : part des lieux d'apparition partagés avec des ennemis qui ne viennent d'habitude qu'avec un événement (Lune de sang, éclipse, gobelins, pirates...) : là, une apparition sur deux est cet invité, l'ennemi habituel du lieu y vient donc deux fois moins. Aucun ennemi ne perd de lieu."
+			Label: Invités inattendus (%)
+			Tooltip: Par biome : part des lieux d'apparition partagés avec des ennemis qui ne viennent d'habitude qu'avec un événement (Lune de sang, éclipse, gobelins, pirates...) : là, une apparition sur deux est cet invité, l'ennemi habituel du lieu y vient donc deux fois moins. Aucun ennemi ne perd de lieu.
 		}
 
 		SwapCritters: {
@@ -1329,8 +1329,8 @@ Configs: {
 		}
 
 		SwapModdedEnemies: {
-			Label: "Inclure les ennemis des autres mods"
-			Tooltip: "Leurs ennemis sont redistribués aussi, y compris dans leurs propres biomes."
+			Label: Inclure les ennemis des autres mods
+			Tooltip: Leurs ennemis sont redistribués aussi, y compris dans leurs propres biomes.
 		}
 	}
 
@@ -1375,8 +1375,11 @@ Configs: {
 
 	ClientConfig: {
 		DisplayName: 8. Client
-		Headers.Debug: Outils de débogage
-		Headers.Messages: Messages
+
+		Headers: {
+			Debug: Outils de débogage
+			Messages: Messages
+		}
 
 		DebugTools: {
 			Label: Outils de débogage (touche K)

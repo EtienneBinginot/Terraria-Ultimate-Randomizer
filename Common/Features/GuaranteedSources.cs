@@ -27,7 +27,7 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		public const int HostsPerItem = 2;
-		public const float CriticalStationChance = 1 / 15f;
+		public const float CriticalStationChance = 1 / 28f;
 		public const float StationChance = 1 / 40f;
 		public const float MaterialChance = 1 / 6f;
 		public const int MaxPerHost = 6;
