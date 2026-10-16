@@ -39,6 +39,8 @@ namespace UltimateRandomizer.Common.Core
 		public bool IgnoreGating;
 		// The progression lock never goes below this tier (a boss can always drop items of its own level)
 		public int MinLimit;
+		// Category weights of the Weighted policy (null = loot weights)
+		public WeightTable Weights;
 	}
 
 	// Every randomizable item sorted by category and tier. All features pick their items here.
@@ -116,9 +118,14 @@ namespace UltimateRandomizer.Common.Core
 			buckets = null;
 			categoryHasItems = null;
 			shuffleMap = null;
+			OreMap.Reset();
 		}
 
-		public static void OnSeedChanged() => shuffleMap = null;
+		public static void OnSeedChanged()
+		{
+			shuffleMap = null;
+			OreMap.Reset();
+		}
 
 		public static bool IsValid(int type) => type > 0 && type < Info.Length;
 
@@ -159,8 +166,9 @@ namespace UltimateRandomizer.Common.Core
 			{
 				CategoryPolicy.SameAsOriginal when hasOriginal => Info[request.OriginalItem].Category,
 				CategoryPolicy.Any => AnyCategory(rng),
-				_ => WeightedCategory(rng, LootConfig.Instance.DropCategoryWeights)
+				_ => WeightedCategory(rng, request.Weights ?? LootConfig.Instance.DropCategoryWeights)
 			};
+			int window = LootConfig.Instance.TierWindow;
 			bool gated = !request.IgnoreGating && progression.TierGating;
 			int limit = gated ? Tiers.Clamp(Math.Max(ProgressionSystem.UnlockedTier + progression.TierAllowance, request.MinLimit)) : Tiers.Max;
 			// Some categories have nothing in the early tiers (dyes, summon weapons...): rather than changing the category,
@@ -168,7 +176,7 @@ namespace UltimateRandomizer.Common.Core
 			int categoryLimit = hasOriginal && category == Info[request.OriginalItem].Category ? Math.Max(limit, Info[request.OriginalItem].Tier) : limit;
 			if (target <= limit)
 			{
-				int intended = PickFromBucket(category, target, rng, categoryLimit);
+				int intended = PickFromBucket(category, target, rng, categoryLimit, window);
 				rolledTier = TierOf(intended);
 				return intended;
 			}
@@ -178,19 +186,60 @@ namespace UltimateRandomizer.Common.Core
 			request.Keys.CopyTo(fallbackKeys, 0);
 			fallbackKeys[^2] = RollKey.Fallback;
 			fallbackKeys[^1] = limit;
-			int fallback = PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), categoryLimit);
+			int fallback = PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), categoryLimit, window);
 			rolledTier = TierOf(fallback);
 			return fallback;
 		}
 
 		public static int TierOf(int type) => IsValid(type) ? Info[type].Tier : 0;
 
-		// Looks for an item in the wanted tier, then the tiers below, then above; then in other categories
-		public static int PickFromBucket(ItemCategory category, int tier, Random rng, int maxTier = Tiers.Max)
+		// Rolls the replacement of an existing item. With surpriseChance (%), the category is not kept: the item is
+		// rolled with the loot weights instead. Bags, boss summons and critters always keep their category.
+		public static int RollReplacement(RollRequest request, float surpriseChance, Random surpriseRng)
+		{
+			if (IsSurprise(request.OriginalItem, surpriseChance, surpriseRng))
+			{
+				int[] keys = new int[request.Keys.Length + 2];
+				request.Keys.CopyTo(keys, 0);
+				keys[^2] = RollKey.Surprise;
+				keys[^1] = surpriseRng.Next();
+				request.Keys = keys;
+				request.Policy = CategoryPolicy.Weighted;
+				request.Weights = null;
+			}
+			return Roll(request);
+		}
+
+		public static bool IsSurprise(int originalItem, float surpriseChance, Random surpriseRng)
+		{
+			if (surpriseRng == null || surpriseChance <= 0 || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) return false;
+			if (!IsRandomizable(originalItem)) return false;
+			if (Info[originalItem].Category is ItemCategory.Bag or ItemCategory.BossSummon or ItemCategory.Critter) return false;
+			return surpriseRng.NextDouble() * 100 < surpriseChance;
+		}
+
+		// Looks for an item in the wanted tier (and up to `window` tiers below, for variety), then the tiers below,
+		// then above; then in other categories
+		public static int PickFromBucket(ItemCategory category, int tier, Random rng, int maxTier = Tiers.Max, int window = 0)
 		{
 			if (buckets == null) return ItemID.DirtBlock;
 			if (!categoryHasItems[(int)category]) category = categoryHasItems[(int)ItemCategory.Material] ? ItemCategory.Material : ItemCategory.Misc;
 			int[][] tiers = buckets[(int)category];
+			if (window > 0)
+			{
+				int low = Math.Max(0, tier - window);
+				int total = 0;
+				for (int t = low; t <= tier; t++) total += tiers[t].Length;
+				if (total > 0)
+				{
+					int index = rng.Next(total);
+					for (int t = low; t <= tier; t++)
+					{
+						if (index < tiers[t].Length) return tiers[t][index];
+						index -= tiers[t].Length;
+					}
+				}
+			}
 			for (int t = tier; t >= 0; t--)
 			{
 				if (tiers[t].Length > 0) return tiers[t][rng.Next(tiers[t].Length)];
@@ -200,10 +249,10 @@ namespace UltimateRandomizer.Common.Core
 			{
 				if (tiers[t].Length > 0) return tiers[t][rng.Next(tiers[t].Length)];
 			}
-			return category is ItemCategory.Material or ItemCategory.Misc ? ItemID.Gel : PickFromBucket(ItemCategory.Material, tier, rng, maxTier);
+			return category is ItemCategory.Material or ItemCategory.Misc ? ItemID.Gel : PickFromBucket(ItemCategory.Material, tier, rng, maxTier, window);
 		}
 
-		public static ItemCategory WeightedCategory(Random rng, CategoryWeights weights)
+		public static ItemCategory WeightedCategory(Random rng, WeightTable weights)
 		{
 			int total = 0;
 			for (int c = 0; c < ItemCategories.Count; c++)

@@ -4,6 +4,19 @@ using Terraria.ModLoader.Config;
 
 namespace UltimateRandomizer.Common.Configs
 {
+	// "Ingredient" weights: relative chance of each category when a recipe ingredient is replaced (0 = never)
+	public class IngredientWeights : WeightTable
+	{
+		[Range(0, 100)] [DefaultValue(50)] public int Material = 50;
+		[Range(0, 100)] [DefaultValue(25)] public int OreBar = 25;
+		[Range(0, 100)] [DefaultValue(3)] public int Potion = 3;
+		[Range(0, 100)] [DefaultValue(2)] public int Food = 2;
+		[Range(0, 100)] [DefaultValue(1)] public int Ammo = 1;
+		[Range(0, 100)] [DefaultValue(12)] public int Block = 12;
+		[Range(0, 100)] [DefaultValue(3)] public int Critter = 3;
+		[Range(0, 100)] [DefaultValue(2)] public int Misc = 2;
+	}
+
 	public class CraftingConfig : RandomizerConfig
 	{
 		public static CraftingConfig Instance => ModContent.GetInstance<CraftingConfig>();
@@ -20,6 +33,14 @@ namespace UltimateRandomizer.Common.Configs
 
 		[DefaultValue(true)]
 		public bool DisableDecraftOfRandomizedResults;
+
+		// Chance that a recipe gives an item of any category (loot weights) instead of the original's category
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(15f)]
+		public float RecipeSurpriseChance;
+
+		public IngredientWeights IngredientWeights = new();
 
 		[Header("Shimmer")]
 		[DefaultValue(true)]

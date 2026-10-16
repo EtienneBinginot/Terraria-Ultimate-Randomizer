@@ -5,65 +5,30 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Configs
 {
-	// Relative chance of each category when a random drop is rolled (0 = never)
-	public class CategoryWeights
+	// "Loot" weights: relative chance of each category when something gives a random item (0 = never)
+	public class CategoryWeights : WeightTable
 	{
-		[Range(0, 100)] [DefaultValue(20)] public int Material = 20;
-		[Range(0, 100)] [DefaultValue(8)] public int OreBar = 8;
-		[Range(0, 100)] [DefaultValue(10)] public int Potion = 10;
-		[Range(0, 100)] [DefaultValue(4)] public int Food = 4;
-		[Range(0, 100)] [DefaultValue(5)] public int Ammo = 5;
-		[Range(0, 100)] [DefaultValue(6)] public int WeaponMelee = 6;
-		[Range(0, 100)] [DefaultValue(6)] public int WeaponRanged = 6;
-		[Range(0, 100)] [DefaultValue(6)] public int WeaponMagic = 6;
-		[Range(0, 100)] [DefaultValue(6)] public int WeaponSummon = 6;
-		[Range(0, 100)] [DefaultValue(2)] public int WeaponOther = 2;
-		[Range(0, 100)] [DefaultValue(7)] public int Armor = 7;
-		[Range(0, 100)] [DefaultValue(10)] public int Accessory = 10;
-		[Range(0, 100)] [DefaultValue(5)] public int Tool = 5;
-		[Range(0, 100)] [DefaultValue(3)] public int Block = 3;
+		[Range(0, 100)] [DefaultValue(6)] public int Material = 6;
+		[Range(0, 100)] [DefaultValue(4)] public int OreBar = 4;
+		[Range(0, 100)] [DefaultValue(8)] public int Potion = 8;
+		[Range(0, 100)] [DefaultValue(2)] public int Food = 2;
+		[Range(0, 100)] [DefaultValue(3)] public int Ammo = 3;
+		[Range(0, 100)] [DefaultValue(10)] public int WeaponMelee = 10;
+		[Range(0, 100)] [DefaultValue(10)] public int WeaponRanged = 10;
+		[Range(0, 100)] [DefaultValue(10)] public int WeaponMagic = 10;
+		[Range(0, 100)] [DefaultValue(8)] public int WeaponSummon = 8;
+		[Range(0, 100)] [DefaultValue(3)] public int WeaponOther = 3;
+		[Range(0, 100)] [DefaultValue(10)] public int Armor = 10;
+		[Range(0, 100)] [DefaultValue(14)] public int Accessory = 14;
+		[Range(0, 100)] [DefaultValue(6)] public int Tool = 6;
+		[Range(0, 100)] [DefaultValue(1)] public int Block = 1;
 		[Range(0, 100)] [DefaultValue(3)] public int Furniture = 3;
 		[Range(0, 100)] [DefaultValue(4)] public int MountPet = 4;
 		[Range(0, 100)] [DefaultValue(3)] public int Vanity = 3;
-		[Range(0, 100)] [DefaultValue(2)] public int Dye = 2;
+		[Range(0, 100)] [DefaultValue(1)] public int Dye = 1;
 		[Range(0, 100)] [DefaultValue(1)] public int Critter = 1;
-		[Range(0, 100)] [DefaultValue(3)] public int Bag = 3;
+		[Range(0, 100)] [DefaultValue(2)] public int Bag = 2;
 		[Range(0, 100)] [DefaultValue(1)] public int Misc = 1;
-
-		public int Get(ItemCategory category) => category switch
-		{
-			ItemCategory.Material => Material,
-			ItemCategory.OreBar => OreBar,
-			ItemCategory.Potion => Potion,
-			ItemCategory.Food => Food,
-			ItemCategory.Ammo => Ammo,
-			ItemCategory.WeaponMelee => WeaponMelee,
-			ItemCategory.WeaponRanged => WeaponRanged,
-			ItemCategory.WeaponMagic => WeaponMagic,
-			ItemCategory.WeaponSummon => WeaponSummon,
-			ItemCategory.WeaponOther => WeaponOther,
-			ItemCategory.Armor => Armor,
-			ItemCategory.Accessory => Accessory,
-			ItemCategory.Tool => Tool,
-			ItemCategory.Block => Block,
-			ItemCategory.Furniture => Furniture,
-			ItemCategory.MountPet => MountPet,
-			ItemCategory.Vanity => Vanity,
-			ItemCategory.Dye => Dye,
-			ItemCategory.Critter => Critter,
-			ItemCategory.Bag => Bag,
-			ItemCategory.Misc => Misc,
-			_ => 0 // Boss summons are never rolled at random
-		};
-
-		public override bool Equals(object obj) => obj is CategoryWeights other && GetHashCode() == other.GetHashCode();
-
-		public override int GetHashCode()
-		{
-			int hash = 17;
-			for (int i = 0; i < ItemCategories.Count; i++) hash = hash * 31 + Get((ItemCategory)i);
-			return hash;
-		}
 	}
 
 	public enum DropTableStyle
@@ -79,6 +44,20 @@ namespace UltimateRandomizer.Common.Configs
 	public class LootConfig : RandomizerConfig
 	{
 		public static LootConfig Instance => ModContent.GetInstance<LootConfig>();
+
+		[Header("Variety")]
+		// Chance that a replaced item (drop, chest, pot, bag, fish...) is rolled with the loot weights instead of keeping its category
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(10f)]
+		public float SurpriseChance;
+
+		// Items are picked among this many tiers below the target too: more variety early on
+		[Range(0, 2)]
+		[DefaultValue(1)]
+		public int TierWindow;
+
+		public CategoryWeights DropCategoryWeights = new();
 
 		[Header("Mobs")]
 		[DefaultValue(true)]
@@ -119,8 +98,6 @@ namespace UltimateRandomizer.Common.Configs
 		[Range(0, 30)]
 		[DefaultValue(8)]
 		public int BossDropSlotsMax;
-
-		public CategoryWeights DropCategoryWeights = new();
 
 		[Header("Bags")]
 		[DefaultValue(true)]

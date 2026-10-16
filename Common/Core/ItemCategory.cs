@@ -30,5 +30,10 @@ namespace UltimateRandomizer.Common.Core
 	public static class ItemCategories
 	{
 		public const int Count = (int)ItemCategory.Material + 1;
+
+		// Equipment: what makes a "good find" (weapons, armor, accessories, tools, mounts and pets)
+		public static bool IsGear(ItemCategory category) => category is ItemCategory.WeaponMelee or ItemCategory.WeaponRanged
+			or ItemCategory.WeaponMagic or ItemCategory.WeaponSummon or ItemCategory.WeaponOther or ItemCategory.Armor
+			or ItemCategory.Accessory or ItemCategory.Tool or ItemCategory.MountPet;
 	}
 }

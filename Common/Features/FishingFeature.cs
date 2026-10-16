@@ -28,7 +28,7 @@ namespace UltimateRandomizer.Common.Features
 				TierJitterUp = 1,
 				AllowJackpot = true
 			};
-			itemDrop = ItemPool.Roll(request);
+			itemDrop = ItemPool.RollReplacement(request, cfg.SurpriseChance, new System.Random(Main.rand.Next()));
 		}
 	}
 }

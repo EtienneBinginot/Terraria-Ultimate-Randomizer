@@ -92,6 +92,13 @@ Tests: {
 	CritterPoolSafe: No gold critter, Prismatic Lacewing, Truffle Worm or lava critter can appear in place of another
 	CritterHabitat: Water, flying and ground critters stay in their habitat
 	SwapStatsCount: Natural spawns are counted, statue spawns are left alone
+	SurpriseZero: With 0% surprise, replaced items keep their category
+	SurpriseHundred: With 100% surprise, categories follow the loot weights
+	SurpriseGatedAndProtected: Surprises respect progression and protected items
+	RecipeSurpriseRate: The share of recipes changing category matches the setting
+	WeightTablesSeparated: Loot weights favor equipment, ingredient weights never pick it
+	TierWindowVariety: Early random rolls give many different items
+	OreMappingBijective: Each ore still exists, as the drop of exactly one other ore
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
 	RecipesSafe: Recipes: no self-ingredient, value guard respected
@@ -406,6 +413,7 @@ Configs: {
 			Mobs: Enemies and bosses
 			Bags: Bags and crates
 			World: World: chests, fishing, mining
+			Variety: "Variety"
 		}
 
 		RandomizeMobDrops: {
@@ -459,8 +467,8 @@ Configs: {
 		}
 
 		DropCategoryWeights: {
-			Label: Category weights of random drops
-			Tooltip: Relative chance of each kind of item. 0 = never. Lower dyes and vanity to get more useful items.
+			Label: "Loot weights"
+			Tooltip: "Relative chance of each kind of item for everything that gives random items (extra drops, surprises). 0 = never. Ingredients of recipes use their own weights."
 		}
 
 		RandomizeBossBags: {
@@ -506,6 +514,16 @@ Configs: {
 		RandomizePotDrops: {
 			Label: Randomize pot loot
 			Tooltip: Items from pots are replaced by items of the same category. Coins and hearts are unchanged.
+		}
+
+		SurpriseChance: {
+			Label: "Surprise chance (%)"
+			Tooltip: "Chance that a replaced item (enemy drop, chest, pot, bag, fish...) becomes an item of any category, rolled with the loot weights, instead of keeping its kind. 0 = always the same kind, 100 = anything."
+		}
+
+		TierWindow: {
+			Label: "Tier window"
+			Tooltip: "Random items are also picked among this many tiers below the target. More variety, especially early in the game."
 		}
 	}
 
@@ -609,6 +627,50 @@ Configs: {
 
 		Bag: {
 			Label: Bags and crates
+			Tooltip: ""
+		}
+
+		Misc: {
+			Label: Miscellaneous
+			Tooltip: ""
+		}
+	}
+
+	IngredientWeights: {
+		Tooltip: ""
+
+		Material: {
+			Label: Materials
+			Tooltip: ""
+		}
+
+		OreBar: {
+			Label: Ores and bars
+			Tooltip: ""
+		}
+
+		Potion: {
+			Label: Potions
+			Tooltip: ""
+		}
+
+		Food: {
+			Label: Food
+			Tooltip: ""
+		}
+
+		Ammo: {
+			Label: Ammo
+			Tooltip: ""
+		}
+
+		Block: {
+			Label: Blocks and walls
+			Tooltip: ""
+		}
+
+		Critter: {
+			Label: Critters
 			Tooltip: ""
 		}
 
@@ -767,6 +829,16 @@ Configs: {
 		DisableDecraftOfRandomizedResults: {
 			Label: No shimmer decrafting of random results
 			Tooltip: Prevents duplicating items by crafting a random result then decrafting it in shimmer.
+		}
+
+		RecipeSurpriseChance: {
+			Label: "Recipe surprise chance (%)"
+			Tooltip: "Chance that a recipe gives an item of any category (loot weights) instead of an item of the same kind as the original result."
+		}
+
+		IngredientWeights: {
+			Label: "Ingredient weights"
+			Tooltip: "Relative chance of each kind of item when a recipe ingredient is replaced. 0 = never."
 		}
 
 		RandomizeShimmer: {

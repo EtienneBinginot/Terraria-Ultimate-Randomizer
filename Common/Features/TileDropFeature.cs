@@ -8,7 +8,8 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// Mined ores give another ore of the same tier (1 for 1); pots give items of the same kind as their usual loot
+	// Mined ores give another ore of the same tier (1 for 1, each ore still exists); pots give items of the same kind
+	// as their usual loot, or a surprise
 	public class TileDropItem : GlobalItem
 	{
 		// Vanilla removes the pot tile before spawning its loot: this flag tells us the loot comes from a pot
@@ -39,14 +40,11 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (cfg.RandomizePotDrops) ReplacePotItem(item);
 			}
-			else if (cfg.RandomizeOreDrops && IsOre(item.type))
+			else if (cfg.RandomizeOreDrops && OreMap.IsOre(item.type))
 			{
-				ReplaceOre(item);
+				DropHelper.ChangeSpawnedItem(item, OreMap.Get(item.type), item.stack);
 			}
 		}
-
-		private static bool IsOre(int type) =>
-			ContentSamples.ItemsByType.TryGetValue(type, out Item sample) && sample.createTile >= TileID.Dirt && TileID.Sets.Ore[sample.createTile];
 
 		private static void ReplacePotItem(Item item)
 		{
@@ -61,33 +59,8 @@ namespace UltimateRandomizer.Common.Features
 				TierJitterUp = 0,
 				AllowJackpot = false
 			};
-			int replacement = ItemPool.Roll(request);
+			int replacement = ItemPool.RollReplacement(request, LootConfig.Instance.SurpriseChance, new Random(Main.rand.Next()));
 			DropHelper.ChangeSpawnedItem(item, replacement, StackRules.Scaled(original, item.stack, replacement));
-		}
-
-		// Always the same ore for a given ore in a world, and only ores: mining placed ore can't create value
-		private static void ReplaceOre(Item item)
-		{
-			int original = item.type;
-			for (int attempt = 0; attempt < 10; attempt++)
-			{
-				RollRequest request = new()
-				{
-					Keys = new[] { RollKey.TileDrop, 2, DetRandom.ItemKey(original), attempt },
-					SourceTier = ItemPool.Info[original].Tier,
-					OriginalItem = original,
-					Policy = CategoryPolicy.SameAsOriginal,
-					TierJitterDown = 0,
-					TierJitterUp = 0,
-					AllowJackpot = false
-				};
-				int replacement = ItemPool.Roll(request);
-				if (IsOre(replacement) && ItemPool.TierOf(replacement) == ItemPool.TierOf(original))
-				{
-					DropHelper.ChangeSpawnedItem(item, replacement, item.stack);
-					return;
-				}
-			}
 		}
 	}
 }

@@ -125,6 +125,7 @@ namespace UltimateRandomizer.Common.Features
 			// Value guard: crafting must not turn cheap ingredients into a fortune (1 silver of tolerance)
 			long maxValue = (long)(Math.Max(ingredientValues[i], originalValue) * cfg.RecipeValueGuard) + Item.silver;
 			int ingredientCount = recipe.requiredItem.Sum(ingredient => ingredient.stack);
+			bool surprise = ItemPool.IsSurprise(original, cfg.RecipeSurpriseChance, DetRandom.Get(RollKey.Recipe, recipeKeys[i], RollKey.Surprise));
 			for (int attempt = 0; attempt < 8; attempt++)
 			{
 				RollRequest request = new()
@@ -132,7 +133,7 @@ namespace UltimateRandomizer.Common.Features
 					Keys = new[] { RollKey.Recipe, recipeKeys[i], attempt },
 					SourceTier = ItemPool.Info[original].Tier,
 					OriginalItem = original,
-					Policy = CategoryPolicy.SameAsOriginal,
+					Policy = surprise ? CategoryPolicy.Weighted : CategoryPolicy.SameAsOriginal,
 					TierJitterDown = 0,
 					TierJitterUp = 0,
 					AllowJackpot = false

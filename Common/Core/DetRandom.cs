@@ -27,6 +27,17 @@ namespace UltimateRandomizer.Common.Core
 		public const int EnemySwap = 18;
 		public const int TownNpc = 19;
 		public const int Price = 20;
+		public const int Surprise = 21;
+		public const int OreShuffle = 22;
+		public const int RecipeIngredient = 23;
+		public const int Station = 24;
+		public const int Guaranteed = 25;
+		public const int Herb = 26;
+		public const int TreeShake = 27;
+		public const int Extractinator = 28;
+		public const int Angler = 29;
+		public const int IndividualStats = 30;
+		public const int GiantMini = 31;
 		public const int Fallback = 0xFA11;
 	}
 

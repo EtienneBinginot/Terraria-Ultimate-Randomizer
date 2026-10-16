@@ -92,6 +92,13 @@ Tests: {
 	CritterPoolSafe: Aucun critter doré, Chrysope prismatique, Ver truffe ou critter de lave ne peut en remplacer un autre
 	CritterHabitat: Les critters aquatiques, volants et terrestres restent dans leur habitat
 	SwapStatsCount: Les apparitions naturelles sont comptées, celles des statues ignorées
+	SurpriseZero: Avec 0 % de surprise, les objets remplacés gardent leur catégorie
+	SurpriseHundred: Avec 100 % de surprise, les catégories suivent les poids du loot
+	SurpriseGatedAndProtected: Les surprises respectent la progression et les objets protégés
+	RecipeSurpriseRate: La part de recettes qui changent de catégorie suit le réglage
+	WeightTablesSeparated: Les poids du loot favorisent l'équipement, ceux des ingrédients jamais
+	TierWindowVariety: Les tirages de début de partie donnent beaucoup d'objets différents
+	OreMappingBijective: Chaque minerai existe encore, comme drop d'un seul autre minerai
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
@@ -406,6 +413,7 @@ Configs: {
 			Mobs: Ennemis et boss
 			Bags: Sacs et caisses
 			World: Monde : coffres, pêche, minage
+			Variety: "Variété"
 		}
 
 		RandomizeMobDrops: {
@@ -459,8 +467,8 @@ Configs: {
 		}
 
 		DropCategoryWeights: {
-			Label: Poids des catégories des drops aléatoires
-			Tooltip: Chance relative de chaque type d'objet. 0 = jamais. Baisse les teintures et la vanité pour avoir plus d'objets utiles.
+			Label: "Poids du loot"
+			Tooltip: "Chance relative de chaque type d'objet pour tout ce qui donne des objets aléatoires (drops bonus, surprises). 0 = jamais. Les ingrédients des recettes ont leurs propres poids."
 		}
 
 		RandomizeBossBags: {
@@ -506,6 +514,16 @@ Configs: {
 		RandomizePotDrops: {
 			Label: Randomiser le contenu des pots
 			Tooltip: Les objets des pots sont remplacés par des objets de même catégorie. Les pièces et les coeurs ne changent pas.
+		}
+
+		SurpriseChance: {
+			Label: "Chance de surprise (%)"
+			Tooltip: "Chance qu'un objet remplacé (drop, coffre, pot, sac, poisson...) devienne un objet de n'importe quelle catégorie, tiré avec les poids du loot, au lieu de garder son type. 0 = toujours le même type, 100 = n'importe quoi."
+		}
+
+		TierWindow: {
+			Label: "Fenêtre de tiers"
+			Tooltip: "Les objets aléatoires sont aussi choisis parmi ce nombre de tiers en dessous de la cible. Plus de variété, surtout en début de partie."
 		}
 	}
 
@@ -609,6 +627,50 @@ Configs: {
 
 		Bag: {
 			Label: Sacs et caisses
+			Tooltip: ""
+		}
+
+		Misc: {
+			Label: Divers
+			Tooltip: ""
+		}
+	}
+
+	IngredientWeights: {
+		Tooltip: ""
+
+		Material: {
+			Label: Matériaux
+			Tooltip: ""
+		}
+
+		OreBar: {
+			Label: Minerais et lingots
+			Tooltip: ""
+		}
+
+		Potion: {
+			Label: Potions
+			Tooltip: ""
+		}
+
+		Food: {
+			Label: Nourriture
+			Tooltip: ""
+		}
+
+		Ammo: {
+			Label: Munitions
+			Tooltip: ""
+		}
+
+		Block: {
+			Label: Blocs et murs
+			Tooltip: ""
+		}
+
+		Critter: {
+			Label: Critters
 			Tooltip: ""
 		}
 
@@ -767,6 +829,16 @@ Configs: {
 		DisableDecraftOfRandomizedResults: {
 			Label: Pas de décraft Shimmer des résultats aléatoires
 			Tooltip: Empêche de dupliquer des objets en craftant un résultat aléatoire puis en le décraftant dans le Shimmer.
+		}
+
+		RecipeSurpriseChance: {
+			Label: "Chance de surprise des recettes (%)"
+			Tooltip: "Chance qu'une recette donne un objet de n'importe quelle catégorie (poids du loot) au lieu d'un objet du même type que le résultat d'origine."
+		}
+
+		IngredientWeights: {
+			Label: "Poids des ingrédients"
+			Tooltip: "Chance relative de chaque type d'objet quand un ingrédient de recette est remplacé. 0 = jamais."
 		}
 
 		RandomizeShimmer: {

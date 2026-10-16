@@ -54,7 +54,7 @@ namespace UltimateRandomizer.Common.Features
 						// The world does not exist yet: progression can't lock chest content
 						IgnoreGating = true
 					};
-					int replacement = ItemPool.Roll(request);
+					int replacement = ItemPool.RollReplacement(request, LootConfig.Instance.SurpriseChance, DetRandom.Get(RollKey.Chest, chest.x, chest.y, slot, RollKey.Surprise));
 					int stack = StackRules.Scaled(original, item.stack, replacement);
 					item.SetDefaults(replacement);
 					item.stack = stack;

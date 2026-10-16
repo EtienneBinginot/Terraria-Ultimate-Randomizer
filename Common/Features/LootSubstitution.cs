@@ -22,14 +22,14 @@ namespace UltimateRandomizer.Common.Features
 					int owner = BossParts.Owner(npc.type);
 					bool isBoss = RandomNpcDropRule.IsBossType(owner);
 					int replacement = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(owner), item.type,
-						NpcTiers.EffectiveTier(owner), isBoss ? NpcTiers.BaseTier(owner) : 0, DropHelper.RollLucky());
+						NpcTiers.EffectiveTier(owner), isBoss ? NpcTiers.BaseTier(owner) : 0, DropHelper.RollLucky(), new System.Random(Main.rand.Next()));
 					DropHelper.ChangeSpawnedItem(item, replacement, StackRules.Scaled(item.type, item.stack, replacement));
 					break;
 
 				case EntitySource_ItemOpen open when IsBag(open.ItemType) && BagEnabled(open.ItemType, cfg):
 					int bagTier = LootSnapshot.BagTier(open.ItemType);
 					int bagReplacement = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(open.ItemType), item.type,
-						bagTier, ItemID.Sets.BossBag[open.ItemType] ? bagTier : 0, DropHelper.RollLucky());
+						bagTier, ItemID.Sets.BossBag[open.ItemType] ? bagTier : 0, DropHelper.RollLucky(), new System.Random(Main.rand.Next()));
 					DropHelper.ChangeSpawnedItem(item, bagReplacement, StackRules.Scaled(item.type, item.stack, bagReplacement));
 					break;
 			}

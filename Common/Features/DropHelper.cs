@@ -15,8 +15,9 @@ namespace UltimateRandomizer.Common.Features
 		public static bool KeepOriginal(int itemType) =>
 			!ItemPool.IsRandomizable(itemType) || ItemPool.Info[itemType].Category == ItemCategory.Bag;
 
-		// The item replacing an original drop of a source (enemy or bag), the same every time in a world
-		public static int Replacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky)
+		// The item replacing an original drop of a source (enemy or bag): the same every time in a world, unless a
+		// surprise happens (surpriseRng null = never, for the journal and the tests)
+		public static int Replacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky, Random surpriseRng = null)
 		{
 			if (KeepOriginal(originalItem)) return originalItem;
 			RollRequest request = new()
@@ -31,7 +32,7 @@ namespace UltimateRandomizer.Common.Features
 				IgnoreGating = lucky,
 				MinLimit = minLimit
 			};
-			return ItemPool.Roll(request);
+			return ItemPool.RollReplacement(request, LootConfig.Instance.SurpriseChance, surpriseRng);
 		}
 
 		public static bool RollLucky() => Main.rand.NextFloat() * 100 < ProgressionConfig.Instance.RuntimeJackpotChance;

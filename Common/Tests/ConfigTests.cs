@@ -21,7 +21,7 @@ namespace UltimateRandomizer.Common.Tests
 		private static readonly Type[] ConfigTypes =
 		{
 			typeof(GeneralConfig), typeof(ProgressionConfig), typeof(LootConfig), typeof(EconomyConfig), typeof(CraftingConfig),
-			typeof(EnemiesConfig), typeof(ExtrasConfig), typeof(ClientConfig), typeof(CategoryWeights), typeof(StackCaps), typeof(TierOverride)
+			typeof(EnemiesConfig), typeof(ExtrasConfig), typeof(ClientConfig), typeof(CategoryWeights), typeof(IngredientWeights), typeof(StackCaps), typeof(TierOverride)
 		};
 
 		private const string Prefix = "Mods.UltimateRandomizer.Configs.";
