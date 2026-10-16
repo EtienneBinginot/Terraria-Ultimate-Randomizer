@@ -1,0 +1,16 @@
+using System; using System.Linq; using Mono.Cecil; using Mono.Cecil.Cil;
+var asm = AssemblyDefinition.ReadAssembly(@"D:\Jeux\Jeux Steam\steamapps\common\tModLoader\tModLoader.dll");
+string Op(Instruction i) => i.Operand switch { Instruction x => "IL_" + x.Offset.ToString("X4"), MethodReference r => r.DeclaringType.Name + "::" + r.Name, FieldReference f => f.DeclaringType.Name + "::" + f.Name, _ => i.Operand?.ToString() };
+if (args[0] == "blob") { var f = asm.MainModule.GetTypes().First(t => t.Name == "<PrivateImplementationDetails>").Fields.First(x => x.Name == args[1]); var b = f.InitialValue; for (int k = 0; k < b.Length; k += 4) Console.Write(BitConverter.ToInt32(b, k) + " "); Console.WriteLine(); return; }
+if (args[0] == "const") { foreach (var f in asm.MainModule.GetTypes().First(t => t.FullName == args[1]).Fields) if (f.HasConstant && f.Constant?.ToString() == args[2]) Console.WriteLine(f.Name); return; }
+if (args[0] == "callers") {
+  foreach (var t in asm.MainModule.GetTypes()) foreach (var m in t.Methods) if (m.HasBody)
+    foreach (var i in m.Body.Instructions) if (i.Operand is MethodReference r && (r.DeclaringType.Name + "::" + r.Name) == args[1]) Console.WriteLine(m.FullName + " @" + i.Offset.ToString("X4"));
+  return;
+}
+var type = asm.MainModule.GetTypes().First(t => t.FullName == args[0]);
+foreach (var m in type.Methods.Where(m => m.Name == args[1])) {
+  Console.WriteLine("== " + m.FullName);
+  if (!m.HasBody) continue;
+  foreach (var i in m.Body.Instructions) Console.WriteLine($"  {i.Offset:X4} {i.OpCode} {Op(i)}");
+}

@@ -4,4 +4,9 @@
     <AssemblyName>UltimateRandomizer</AssemblyName>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+  <!-- Development tools (IL dump, scripts) are not part of the mod -->
+  <ItemGroup>
+    <Compile Remove="tools/**" />
+    <None Remove="tools/**" />
+  </ItemGroup>
 </Project>
