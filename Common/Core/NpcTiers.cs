@@ -53,6 +53,8 @@ namespace UltimateRandomizer.Common.Core
 
 		private static readonly Dictionary<int, int> cache = new();
 
+		public static IEnumerable<int> BossTypes => BossTiers.Keys;
+
 		public static int BaseTier(int npcType)
 		{
 			if (cache.TryGetValue(npcType, out int tier)) return tier;

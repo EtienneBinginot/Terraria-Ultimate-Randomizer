@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -28,6 +29,12 @@ namespace UltimateRandomizer.Common.Features
 			finally
 			{
 				inPotDrop = false;
+			}
+			if (SeedSystem.WorldReady && ItemPool.Ready && Main.netMode != NetmodeID.MultiplayerClient
+				&& Main.rand.NextFloat() * 100 < ProgressionConfig.Instance.PotGuaranteeChance)
+			{
+				List<int> items = GuaranteedSources.PotItems(ProgressionSystem.UnlockedTier);
+				if (items.Count > 0) Item.NewItem(new EntitySource_TileBreak(i, j), i * 16, j * 16, 16, 16, items[Main.rand.Next(items.Count)]);
 			}
 		}
 

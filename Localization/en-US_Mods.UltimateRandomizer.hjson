@@ -107,6 +107,14 @@ Tests: {
 	PacingExpected: 15 to 25 pieces of random equipment per early hour (default settings; the value is written to client.log)
 	PacingSimulation: The pacing simulation is stable and regular
 	PacingVariety: At least 10 different pieces of equipment per early hour
+	BasicStationsUnprotected: Basic stations (work bench, furnace, anvil...) are left to the randomizer
+	ProgressionStationsProtected: Progression stations (Hellforge, hardmode anvils and forges...) stay protected
+	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
+	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier
+	GuaranteedLoadBalanced: No enemy carries too many guaranteed items
+	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
+	FindabilityDeterminism: Findability of items is the same after a rebuild
+	WorldMaterialsFindable: Wood, stone, gems and early ores are findable from the start
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
 	RecipesSafe: Recipes: no self-ingredient, value guard respected
@@ -333,6 +341,7 @@ Configs: {
 			TierGating: Unlocking items with progression
 			Protection: Protected progression items
 			Tiers: Tiers
+			Guarantees: "Guaranteed sources"
 		}
 
 		TierGating: {
@@ -384,14 +393,34 @@ Configs: {
 			Tooltip: Also protects boss summoning items from other mods.
 		}
 
-		ProtectCraftingStations: {
-			Label: Protect crafting stations
-			Tooltip: Work benches, anvils, furnaces... any item placing a tile that some recipe requires.
+		StationProtection: {
+			Label: "Crafting station protection"
+			Tooltip: "Progression only: basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are no longer protected; they are found in the world (common enemies, pots, wooden chests). Progression stations (Hellforge, hardmode anvils and forges...) keep their recipe."
 		}
 
 		ProtectPickaxeProgression: {
 			Label: Protect the mining progression
 			Tooltip: Pickaxe and bar recipes are never randomized, and mined ores only turn into other ores of the same tier: you can always reach the next ore.
+		}
+
+		GuaranteedDropMultiplier: {
+			Label: "Guaranteed drop chance multiplier"
+			Tooltip: "Basic stations (and vanilla ingredients, if chosen) are placed on two common enemies of their tier. Raise this to find them sooner."
+		}
+
+		PotGuaranteeChance: {
+			Label: "Guaranteed items in pots (%)"
+			Tooltip: "Chance that a pot also gives one of the guaranteed items already unlocked."
+		}
+
+		ChestStationGuarantee: {
+			Label: "Basic stations in wooden chests"
+			Tooltip: "Copies of each basic station hidden in wooden chests when the world is created (or when /rchests is used)."
+		}
+
+		MinFindableChance: {
+			Label: "Minimum chance to count as findable (%)"
+			Tooltip: "A drop counts as a way to find an item (to choose recipe ingredients) when its chance is at least this."
 		}
 
 		TierOverrides: {
@@ -1065,6 +1094,24 @@ Configs: {
 		DebugTools: {
 			Label: Debug tools (K key)
 			Tooltip: Shows the debug panel with the K key: state of the randomizer, inspector, testing tools and automated tests.
+		}
+	}
+
+	StationProtection: {
+
+		AllStations: {
+			Label: "All stations"
+			Tooltip: ""
+		}
+
+		ProgressionOnly: {
+			Label: "Progression stations only"
+			Tooltip: ""
+		}
+
+		None: {
+			Label: "None"
+			Tooltip: ""
 		}
 	}
 }

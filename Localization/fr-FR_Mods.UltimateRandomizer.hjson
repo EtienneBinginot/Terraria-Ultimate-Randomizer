@@ -107,6 +107,14 @@ Tests: {
 	PacingExpected: 15 à 25 pièces d'équipement aléatoires par heure en début de partie (réglages par défaut ; valeur écrite dans client.log)
 	PacingSimulation: La simulation du rythme est stable et régulière
 	PacingVariety: Au moins 10 pièces d'équipement différentes par heure en début de partie
+	BasicStationsUnprotected: Les stations de base (établi, fourneau, enclume...) sont confiées au randomizer
+	ProgressionStationsProtected: Les stations de progression (Hellforge, enclumes et forges hardmode...) restent protégées
+	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
+	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
+	GuaranteedLoadBalanced: Aucun ennemi ne porte trop d'objets garantis
+	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
+	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
+	WorldMaterialsFindable: Bois, pierre, gemmes et premiers minerais se trouvent dès le début
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
@@ -333,6 +341,7 @@ Configs: {
 			TierGating: Déblocage des objets avec la progression
 			Protection: Objets de progression protégés
 			Tiers: Tiers
+			Guarantees: "Sources garanties"
 		}
 
 		TierGating: {
@@ -384,14 +393,34 @@ Configs: {
 			Tooltip: Protège aussi les invocations de boss des autres mods.
 		}
 
-		ProtectCraftingStations: {
-			Label: Protéger les stations de craft
-			Tooltip: Établis, enclumes, fourneaux... tout objet qui pose un bloc demandé par une recette.
+		StationProtection: {
+			Label: "Protection des stations de craft"
+			Tooltip: "Progression seulement : les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) ne sont plus protégées ; on les trouve dans le monde (ennemis courants, pots, coffres en bois). Les stations de progression (Hellforge, enclumes et forges hardmode...) gardent leur recette."
 		}
 
 		ProtectPickaxeProgression: {
 			Label: Protéger la progression du minage
 			Tooltip: Les recettes de pioches et de lingots ne sont jamais randomisées, et les minerais minés ne deviennent que d'autres minerais du même tier : tu peux toujours atteindre le minerai suivant.
+		}
+
+		GuaranteedDropMultiplier: {
+			Label: "Multiplicateur des drops garantis"
+			Tooltip: "Les stations de base (et les ingrédients vanilla, si choisis) sont placés sur deux ennemis courants de leur tier. Augmente pour les trouver plus vite."
+		}
+
+		PotGuaranteeChance: {
+			Label: "Objets garantis dans les pots (%)"
+			Tooltip: "Chance qu'un pot donne aussi un des objets garantis déjà débloqués."
+		}
+
+		ChestStationGuarantee: {
+			Label: "Stations de base dans les coffres en bois"
+			Tooltip: "Exemplaires de chaque station de base cachés dans des coffres en bois à la création du monde (ou avec /rchests)."
+		}
+
+		MinFindableChance: {
+			Label: "Chance minimale pour être trouvable (%)"
+			Tooltip: "Un drop compte comme moyen de trouver un objet (pour choisir les ingrédients des recettes) si sa chance est au moins celle-ci."
 		}
 
 		TierOverrides: {
@@ -1065,6 +1094,24 @@ Configs: {
 		DebugTools: {
 			Label: Outils de débogage (touche K)
 			Tooltip: Affiche le panneau de débogage avec la touche K : état du randomizer, inspecteur, outils de test et tests automatiques.
+		}
+	}
+
+	StationProtection: {
+
+		AllStations: {
+			Label: "Toutes les stations"
+			Tooltip: ""
+		}
+
+		ProgressionOnly: {
+			Label: "Stations de progression seulement"
+			Tooltip: ""
+		}
+
+		None: {
+			Label: "Aucune"
+			Tooltip: ""
 		}
 	}
 }

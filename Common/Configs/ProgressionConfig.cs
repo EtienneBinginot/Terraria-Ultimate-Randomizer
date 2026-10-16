@@ -19,6 +19,16 @@ namespace UltimateRandomizer.Common.Configs
 		public override int GetHashCode() => (Item?.GetHashCode() ?? 0) * 31 + (int)Tier;
 	}
 
+	public enum StationProtection
+	{
+		// Every crafting station keeps its vanilla recipe and is never given at random
+		AllStations,
+		// Only progression stations are protected; basic ones (work bench, furnace, anvil...) are found in the world
+		ProgressionOnly,
+		// No station is protected
+		None
+	}
+
 	public class ProgressionConfig : RandomizerConfig
 	{
 		public static ProgressionConfig Instance => ModContent.GetInstance<ProgressionConfig>();
@@ -69,13 +79,38 @@ namespace UltimateRandomizer.Common.Configs
 		[ReloadRequired]
 		public bool AutoProtectBossSummons;
 
-		[DefaultValue(true)]
+		[DefaultValue(StationProtection.ProgressionOnly)]
+		[DrawTicks]
 		[ReloadRequired]
-		public bool ProtectCraftingStations;
+		public StationProtection StationProtection;
 
 		[DefaultValue(true)]
 		[ReloadRequired]
 		public bool ProtectPickaxeProgression;
+
+		[Header("Guarantees")]
+		// Chance multiplier of the drops placed on common enemies so that unprotected stations can be found
+		[Range(0.25f, 4f)]
+		[Increment(0.25f)]
+		[DefaultValue(1f)]
+		public float GuaranteedDropMultiplier;
+
+		// Chance that a pot also gives one of the guaranteed items (basic stations...) already unlocked
+		[Range(0f, 20f)]
+		[Increment(0.5f)]
+		[DefaultValue(3f)]
+		public float PotGuaranteeChance;
+
+		// Copies of each basic station hidden in wooden chests when the world is created
+		[Range(0, 5)]
+		[DefaultValue(2)]
+		public int ChestStationGuarantee;
+
+		// A drop counts as a way to find an item (recipe ingredients...) when its chance is at least this (%)
+		[Range(0.1f, 20f)]
+		[Increment(0.1f)]
+		[DefaultValue(2f)]
+		public float MinFindableChance;
 
 		[Header("Tiers")]
 		[ReloadRequired]

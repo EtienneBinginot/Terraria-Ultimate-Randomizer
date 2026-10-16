@@ -23,7 +23,7 @@ namespace UltimateRandomizer.Common.Features
 	public static class BagPlan
 	{
 		// The content of a bag in this world
-		public static List<PlannedDrop> Plan(int bagType)
+		public static List<PlannedDrop> Plan(int bagType, bool lucky = false)
 		{
 			List<PlannedDrop> drops = new();
 			bool enabled = LootSubstitutionItem.BagEnabled(bagType, LootConfig.Instance);
@@ -35,7 +35,7 @@ namespace UltimateRandomizer.Common.Features
 				int max = entry.stackMax;
 				if (enabled)
 				{
-					item = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), entry.itemId, bagTier, ItemID.Sets.BossBag[bagType] ? bagTier : 0, false);
+					item = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), entry.itemId, bagTier, ItemID.Sets.BossBag[bagType] ? bagTier : 0, lucky);
 					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);
 				}
 				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions });

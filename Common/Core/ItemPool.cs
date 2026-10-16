@@ -125,6 +125,7 @@ namespace UltimateRandomizer.Common.Core
 		{
 			shuffleMap = null;
 			OreMap.Reset();
+			WorldCaches.ResetAll();
 		}
 
 		public static bool IsValid(int type) => type > 0 && type < Info.Length;
@@ -328,6 +329,15 @@ namespace UltimateRandomizer.Common.Core
 			}
 			return map;
 		}
+	}
+
+	// Results computed once per world from the seed and settings (guaranteed sources, findability, recipe plans...):
+	// cleared whenever the seed or the settings change
+	public static class WorldCaches
+	{
+		public static event Action Reset;
+
+		public static void ResetAll() => Reset?.Invoke();
 	}
 
 	public class ItemPoolSystem : ModSystem

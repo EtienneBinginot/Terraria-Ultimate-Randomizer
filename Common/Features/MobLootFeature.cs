@@ -31,6 +31,8 @@ namespace UltimateRandomizer.Common.Features
 		public float Chance;
 		public List<IItemDropRuleCondition> Conditions;
 		public bool Extra;
+		// Placed so that an item is findable (basic stations, vanilla ingredients)
+		public bool Guaranteed;
 	}
 
 	// Extra random drops, on top of the (replaced) original drops: a random number per enemy type, vanilla-like rates
@@ -54,7 +56,8 @@ namespace UltimateRandomizer.Common.Features
 			{
 				return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			}
-			foreach (PlannedDrop drop in ExtraDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky()))
+			IEnumerable<PlannedDrop> drops = ExtraDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky()).Concat(GuaranteedSources.For(npc.type));
+			foreach (PlannedDrop drop in drops)
 			{
 				if (info.rng.NextFloat() >= drop.Chance) continue;
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
@@ -77,8 +80,9 @@ namespace UltimateRandomizer.Common.Features
 		public static bool IsBossType(int type) =>
 			type > 0 && (NPCID.Sets.ShouldBeCountedAsBoss[type] || (ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample) && sample.boss));
 
-		// Everything an enemy can drop in this world: the replaced original drops, then the extra ones
-		public static List<PlannedDrop> Plan(int netId, bool expert)
+		// Everything an enemy can drop in this world: the replaced original drops, then the extra ones and the guaranteed ones.
+		// lucky: ignores the progression lock (what the enemy gives once everything is unlocked)
+		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true)
 		{
 			List<PlannedDrop> drops = new();
 			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
@@ -90,12 +94,13 @@ namespace UltimateRandomizer.Common.Features
 				int max = entry.stackMax;
 				if (LootConfig.Instance.RandomizeMobDrops)
 				{
-					item = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(type), entry.itemId, NpcTiers.EffectiveTier(type), isBoss ? NpcTiers.BaseTier(type) : 0, false);
+					item = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(type), entry.itemId, NpcTiers.EffectiveTier(type), isBoss ? NpcTiers.BaseTier(type) : 0, lucky);
 					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);
 				}
 				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions });
 			}
-			drops.AddRange(ExtraDrops(netId, type, expert, false));
+			drops.AddRange(ExtraDrops(netId, type, expert, lucky));
+			if (guaranteed) drops.AddRange(GuaranteedSources.For(type));
 			return drops;
 		}
 
