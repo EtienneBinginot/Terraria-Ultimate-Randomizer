@@ -121,7 +121,8 @@ namespace UltimateRandomizer.Common.Features
 					SetResult(recipe.createItem, original, originalStacks[i]);
 					continue;
 				}
-				(int replacement, int stack) = RollResult(i, recipe.requiredItem.Select(item => item.type).ToList(), recipe.requiredItem.Sum(item => item.stack), lucky: false);
+				long currentValue = recipe.requiredItem.Sum(item => (long)Math.Max(StackRules.ValueOf(item.type), 1) * item.stack);
+				(int replacement, int stack) = RollResult(i, recipe.requiredItem.Select(item => item.type).ToList(), recipe.requiredItem.Sum(item => item.stack), lucky: false, Math.Min(currentValue, ingredientValues[i]));
 				SetResult(recipe.createItem, replacement, stack);
 				if (replacement != original || stack != originalStacks[i])
 				{
@@ -146,14 +147,15 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// The result of a randomized recipe. lucky: ignores the progression lock (what the recipe gives once unlocked)
-		public static (int type, int stack) RollResult(int i, IList<int> ingredientTypes, int ingredientCount, bool lucky)
+		public static (int type, int stack) RollResult(int i, IList<int> ingredientTypes, int ingredientCount, bool lucky, long ingredientValue = -1)
 		{
+			if (ingredientValue < 0) ingredientValue = ingredientValues[i];
 			CraftingConfig cfg = CraftingConfig.Instance;
 			int original = originalTypes[i];
 			int originalStack = originalStacks[i];
 			long originalValue = (long)Math.Max(StackRules.ValueOf(original), 0) * originalStack;
 			// Value guard: crafting must not turn cheap ingredients into a fortune (1 silver of tolerance)
-			long maxValue = (long)(Math.Max(ingredientValues[i], originalValue) * cfg.RecipeValueGuard) + Item.silver;
+			long maxValue = (long)(Math.Max(ingredientValue, originalValue) * cfg.RecipeValueGuard) + Item.silver;
 			bool surprise = ItemPool.IsSurprise(original, cfg.RecipeSurpriseChance, DetRandom.Get(RollKey.Recipe, recipeKeys[i], RollKey.Surprise));
 			for (int attempt = 0; attempt < 8; attempt++)
 			{

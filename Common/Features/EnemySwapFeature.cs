@@ -337,6 +337,8 @@ namespace UltimateRandomizer.Common.Features
 				if (NPCID.Sets.CountsAsCritter[target]) Stats.SwappedCritters++;
 				else Stats.SwappedEnemies++;
 				npc.Transform(target);
+				// Transform gives the NPC new globals: its individual stats (giant, mini...) are rolled again
+				EnemyIndividualNPC.RollAndApply(npc);
 			}
 		}
 

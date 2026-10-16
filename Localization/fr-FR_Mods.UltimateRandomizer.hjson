@@ -130,6 +130,16 @@ Tests: {
 	StationTierRespected: Les recettes ne demandent jamais de station au-dessus de leur niveau, ni de station thématique
 	HandCraftKept: Les recettes à la main restent à la main
 	StationsVaried: Une bonne part des recettes a changé de station
+	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
+	BellCurveBounds: Les stats tirées restent toujours dans leur plage
+	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares
+	GiantMiniFrequency: Géants et minis apparaissent aussi souvent que réglé
+	GiantMiniBounds: Les tailles des géants et minis restent dans leur plage
+	GiantHitboxCap: Les géants ne dépassent jamais la taille maximale autorisée
+	IndividualSyncRoundTrip: Les stats individuelles (géant, mini...) arrivent intactes chez les clients en multijoueur
+	TransformRerollsIndividual: Les ennemis remplacés reçoivent leurs propres stats individuelles
+	LootBonusCap: Le bonus de loot augmente avec la force et reste sous son plafond
+	LootBonusApplied: Les ennemis plus forts reçoivent un bonus de loot
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
@@ -982,6 +992,8 @@ Configs: {
 			Bosses: Boss
 			Enemies: Ennemis normaux
 			EnemySwap: Ennemis aléatoires
+			GiantsAndMinis: "Géants et minis"
+			LootBonus: "Loot des ennemis forts"
 		}
 
 		RandomizeBossHealth: {
@@ -1012,6 +1024,21 @@ Configs: {
 		BossDamageMax: {
 			Label: Dégâts des boss : multiplicateur maximum
 			Tooltip: ""
+		}
+
+		BossStatExtremeness: {
+			Label: "Rareté des valeurs extrêmes (boss)"
+			Tooltip: "1 = toutes les valeurs de la plage sont aussi probables. Plus haut : les valeurs éloignées de la normale sont plus rares."
+		}
+
+		BossIndividualVariation: {
+			Label: "Variation des boss entre combats (%)"
+			Tooltip: "Chaque combat de boss varie un peu autour des valeurs du boss dans ce monde."
+		}
+
+		BossGiantChance: {
+			Label: "Chance de boss géant (%)"
+			Tooltip: "Chance qu'un boss soit géant (plus grand, beaucoup plus résistant). Certains boss peuvent se comporter bizarrement en géant."
 		}
 
 		RandomizeEnemyStats: {
@@ -1057,6 +1084,71 @@ Configs: {
 		EnemyScaleMax: {
 			Label: Taille : multiplicateur maximum
 			Tooltip: ""
+		}
+
+		StatExtremeness: {
+			Label: "Rareté des valeurs extrêmes"
+			Tooltip: "1 = toutes les valeurs des plages sont aussi probables. Plus haut : les valeurs éloignées de la normale sont plus rares, mais restent possibles."
+		}
+
+		ScaleFollowsLife: {
+			Label: "La taille suit la vie"
+			Tooltip: "0 = taille et vie indépendantes. 1 = les types d'ennemis plus résistants sont plus grands."
+		}
+
+		IndividualVariation: {
+			Label: "Variation entre individus (%)"
+			Tooltip: "Chaque ennemi varie un peu autour des valeurs de son type dans ce monde (vie, dégâts, défense, taille)."
+		}
+
+		GiantChance: {
+			Label: "Chance de géant (%)"
+			Tooltip: "Chance qu'un ennemi soit géant : bien plus grand, résistant et dangereux, avec un meilleur loot."
+		}
+
+		GiantSizeMin: {
+			Label: "Taille des géants (minimum)"
+			Tooltip: "Multiplicateur de taille des géants. Les grandes tailles sont plus rares."
+		}
+
+		GiantSizeMax: {
+			Label: "Taille des géants (maximum)"
+			Tooltip: ""
+		}
+
+		MiniChance: {
+			Label: "Chance de mini (%)"
+			Tooltip: "Chance qu'un ennemi soit mini : minuscule, plus faible, difficile à toucher."
+		}
+
+		MiniSizeMin: {
+			Label: "Taille des minis (minimum)"
+			Tooltip: "Multiplicateur de taille des minis. Les plus petites tailles sont plus rares."
+		}
+
+		MiniSizeMax: {
+			Label: "Taille des minis (maximum)"
+			Tooltip: ""
+		}
+
+		MaxGiantPixels: {
+			Label: "Plus grand géant (pixels)"
+			Tooltip: "Un géant n'est jamais plus large ou haut que ça (une tuile fait 16 pixels), pour qu'il puisse encore se déplacer."
+		}
+
+		LootBonusStrength: {
+			Label: "Force du bonus de loot"
+			Tooltip: "Les ennemis plus forts (vie x dégâts au-dessus de la normale) ont de meilleures chances de drops bonus. 0 = pas de bonus."
+		}
+
+		LootBonusCap: {
+			Label: "Plafond du bonus de loot"
+			Tooltip: "Plus grand multiplicateur des chances de drops bonus."
+		}
+
+		GiantBonusDrop: {
+			Label: "Les géants donnent un objet de plus"
+			Tooltip: "Un géant donne toujours un objet aléatoire de plus, de son niveau."
 		}
 
 		RandomizeEnemySpawns: {

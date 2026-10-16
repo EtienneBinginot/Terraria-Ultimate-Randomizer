@@ -130,6 +130,16 @@ Tests: {
 	StationTierRespected: Recipes never need a station above their level, nor a themed one
 	HandCraftKept: Recipes made by hand stay made by hand
 	StationsVaried: A good share of recipes changed station
+	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
+	BellCurveBounds: Rolled stats always stay inside their range
+	ExtremenessEffect: The rarity setting makes extreme values rarer
+	GiantMiniFrequency: Giants and minis appear as often as set
+	GiantMiniBounds: Giant and mini sizes stay inside their range
+	GiantHitboxCap: Giants never exceed the largest allowed size
+	IndividualSyncRoundTrip: Individual stats (giant, mini...) reach multiplayer clients intact
+	TransformRerollsIndividual: Swapped enemies get their own individual stats
+	LootBonusCap: The loot bonus grows with strength and stays under its cap
+	LootBonusApplied: Stronger enemies get a loot bonus
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
 	RecipesSafe: Recipes: no self-ingredient, value guard respected
@@ -982,6 +992,8 @@ Configs: {
 			Bosses: Bosses
 			Enemies: Normal enemies
 			EnemySwap: Random enemies
+			GiantsAndMinis: "Giants and minis"
+			LootBonus: "Loot of strong enemies"
 		}
 
 		RandomizeBossHealth: {
@@ -1012,6 +1024,21 @@ Configs: {
 		BossDamageMax: {
 			Label: Boss damage: maximum multiplier
 			Tooltip: ""
+		}
+
+		BossStatExtremeness: {
+			Label: "Boss extreme values rarity"
+			Tooltip: "1 = every value in the range is as likely. Higher: values far from normal are rarer."
+		}
+
+		BossIndividualVariation: {
+			Label: "Boss variation between fights (%)"
+			Tooltip: "Each boss fight varies a little around the boss's values of this world."
+		}
+
+		BossGiantChance: {
+			Label: "Giant boss chance (%)"
+			Tooltip: "Chance that a boss is a giant (bigger, much tougher). Some bosses may behave oddly when giant."
 		}
 
 		RandomizeEnemyStats: {
@@ -1057,6 +1084,71 @@ Configs: {
 		EnemyScaleMax: {
 			Label: Size: maximum multiplier
 			Tooltip: ""
+		}
+
+		StatExtremeness: {
+			Label: "Extreme values rarity"
+			Tooltip: "1 = every value in the ranges is as likely. Higher: values far from normal are rarer, but still possible."
+		}
+
+		ScaleFollowsLife: {
+			Label: "Size follows health"
+			Tooltip: "0 = size and health are unrelated. 1 = tougher enemy types are bigger."
+		}
+
+		IndividualVariation: {
+			Label: "Variation between individuals (%)"
+			Tooltip: "Each enemy varies a little around the values of its type in this world (health, damage, defense, size)."
+		}
+
+		GiantChance: {
+			Label: "Giant chance (%)"
+			Tooltip: "Chance that an enemy is a giant: much bigger, tougher and more dangerous, with better loot."
+		}
+
+		GiantSizeMin: {
+			Label: "Giant size (minimum)"
+			Tooltip: "Size multiplier of giants. Big sizes are rarer."
+		}
+
+		GiantSizeMax: {
+			Label: "Giant size (maximum)"
+			Tooltip: ""
+		}
+
+		MiniChance: {
+			Label: "Mini chance (%)"
+			Tooltip: "Chance that an enemy is a mini: tiny, weaker, hard to hit."
+		}
+
+		MiniSizeMin: {
+			Label: "Mini size (minimum)"
+			Tooltip: "Size multiplier of minis. The smallest sizes are rarer."
+		}
+
+		MiniSizeMax: {
+			Label: "Mini size (maximum)"
+			Tooltip: ""
+		}
+
+		MaxGiantPixels: {
+			Label: "Largest giant (pixels)"
+			Tooltip: "A giant is never wider or taller than this (a tile is 16 pixels), so it can still move around."
+		}
+
+		LootBonusStrength: {
+			Label: "Loot bonus strength"
+			Tooltip: "Stronger enemies (health x damage above normal) have better extra drop chances. 0 = no bonus."
+		}
+
+		LootBonusCap: {
+			Label: "Loot bonus cap"
+			Tooltip: "Largest multiplier of the extra drop chances."
+		}
+
+		GiantBonusDrop: {
+			Label: "Giants drop one more item"
+			Tooltip: "A giant always drops one more random item of its level."
 		}
 
 		RandomizeEnemySpawns: {

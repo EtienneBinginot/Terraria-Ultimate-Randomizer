@@ -1,0 +1,215 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Terraria;
+using Terraria.DataStructures;
+using Terraria.ID;
+using Terraria.ModLoader.IO;
+using UltimateRandomizer.Common.Configs;
+using UltimateRandomizer.Common.Core;
+using UltimateRandomizer.Common.Features;
+
+namespace UltimateRandomizer.Common.Tests
+{
+	// Bell-shaped enemy stats, giants and minis, individual variation and its network sync, loot bonus
+	public static class StatTests
+	{
+		public static void Register()
+		{
+			TestRunner.Register("BellCurveShape", BellCurveShape);
+			TestRunner.Register("BellCurveBounds", BellCurveBounds);
+			TestRunner.Register("ExtremenessEffect", ExtremenessEffect);
+			TestRunner.Register("GiantMiniFrequency", GiantMiniFrequency);
+			TestRunner.Register("GiantMiniBounds", GiantMiniBounds);
+			TestRunner.Register("GiantHitboxCap", GiantHitboxCap);
+			TestRunner.Register("IndividualSyncRoundTrip", IndividualSyncRoundTrip);
+			TestRunner.Register("TransformRerollsIndividual", TransformRerollsIndividual);
+			TestRunner.Register("LootBonusCap", LootBonusCap);
+			TestRunner.Register("LootBonusApplied", LootBonusApplied);
+		}
+
+		private static double Share(float[] samples, Func<float, bool> predicate) => samples.Count(predicate) / (double)samples.Length;
+
+		private static float[] Samples(float min, float max, double extremeness, int count = 20000, int seed = 1)
+		{
+			Random rng = new(seed);
+			return Enumerable.Range(0, count).Select(_ => StatCurve.Sample(rng, min, max, extremeness)).ToArray();
+		}
+
+		private static void BellCurveShape()
+		{
+			float[] samples = Samples(0.5f, 3f, 2.2);
+			float[] sorted = samples.OrderBy(x => x).ToArray();
+			float median = sorted[sorted.Length / 2];
+			Check.That(Math.Abs(median - 1) < 0.05, $"median x{median:0.00} instead of x1");
+			double near = Share(samples, x => x >= 1 / 1.1f && x <= 1.1f);
+			double far = Share(samples, x => x >= 2f);
+			Check.That(near > 0.25, $"only {near:P0} of the values near normal");
+			Check.That(far > 0.03 && far < 0.15, $"{far:P1} of the values at x2 or more (expected a few %)");
+			Check.That(near > far * 2, "extreme values are as common as normal ones");
+		}
+
+		private static void BellCurveBounds()
+		{
+			Random rng = new(5);
+			List<string> failures = new();
+			for (int i = 0; i < 200; i++)
+			{
+				float min = (float)(0.1 + rng.NextDouble() * 1.5);
+				float max = min + (float)(rng.NextDouble() * 5);
+				foreach (float x in Samples(min, max, 1 + rng.NextDouble() * 3, 200, i))
+				{
+					if (x < min - 0.0001f || x > max + 0.0001f) failures.Add($"x{x:0.000} outside [{min:0.00}, {max:0.00}]");
+				}
+			}
+			Check.All(failures, "Values outside the range");
+		}
+
+		private static void ExtremenessEffect()
+		{
+			double flat = Share(Samples(0.5f, 3f, 1), x => x >= 2f);
+			double steep = Share(Samples(0.5f, 3f, 3), x => x >= 2f);
+			Check.That(flat > steep * 1.5, $"extreme values: {flat:P1} at rarity 1, {steep:P1} at rarity 3");
+		}
+
+		private static NPC Sample(int type)
+		{
+			NPC npc = new();
+			npc.SetDefaults(type);
+			return npc;
+		}
+
+		private static void GiantMiniFrequency()
+		{
+			EnemiesConfig cfg = EnemiesConfig.Instance;
+			NPC npc = Sample(NPCID.Zombie);
+			Check.That(npc.TryGetGlobalNPC(out EnemyIndividualNPC individual), "no individual data");
+			Random rng = new(9);
+			int giants = 0, minis = 0;
+			const int Rolls = 10000;
+			for (int i = 0; i < Rolls; i++)
+			{
+				individual.Roll(npc, rng);
+				if (individual.Kind == EnemyKind.Giant) giants++;
+				else if (individual.Kind == EnemyKind.Mini) minis++;
+			}
+			double giantShare = giants * 100.0 / Rolls;
+			double miniShare = minis * 100.0 / Rolls;
+			Check.That(Math.Abs(giantShare - cfg.GiantChance) <= 1, $"{giantShare:0.0}% giants, setting {cfg.GiantChance}%");
+			Check.That(Math.Abs(miniShare - cfg.MiniChance) <= 1, $"{miniShare:0.0}% minis, setting {cfg.MiniChance}%");
+		}
+
+		private static void GiantMiniBounds()
+		{
+			EnemiesConfig cfg = EnemiesConfig.Instance;
+			float variation = 1 + (cfg.RandomizeEnemyStats ? cfg.IndividualVariation / 100f : 0);
+			NPC npc = Sample(NPCID.Zombie);
+			npc.TryGetGlobalNPC(out EnemyIndividualNPC individual);
+			Random rng = new(10);
+			List<string> failures = new();
+			for (int i = 0; i < 5000; i++)
+			{
+				individual.Roll(npc, rng);
+				if (individual.Kind == EnemyKind.Giant && (individual.Size < cfg.GiantSizeMin / variation - 0.01f || individual.Size > cfg.GiantSizeMax * variation + 0.01f)) failures.Add($"giant x{individual.Size:0.00}");
+				if (individual.Kind == EnemyKind.Mini && (individual.Size < cfg.MiniSizeMin / variation - 0.01f || individual.Size > cfg.MiniSizeMax * variation + 0.01f)) failures.Add($"mini x{individual.Size:0.00}");
+			}
+			Check.All(failures, "Giant or mini sizes outside their range");
+		}
+
+		private static void GiantHitboxCap()
+		{
+			int cap = EnemiesConfig.Instance.MaxGiantPixels;
+			Random rng = new(11);
+			foreach (int type in new[] { NPCID.Zombie, NPCID.BlueSlime, NPCID.GiantTortoise, NPCID.Mothron })
+			{
+				for (int i = 0; i < 300; i++)
+				{
+					NPC npc = Sample(type);
+					npc.TryGetGlobalNPC(out EnemyIndividualNPC individual);
+					individual.Roll(npc, rng);
+					if (individual.Kind != EnemyKind.Giant) continue;
+					individual.Apply(npc);
+					Check.That(npc.width <= cap + 1 && npc.height <= cap + 1, $"{npc.TypeName} giant is {npc.width}x{npc.height} pixels (limit {cap})");
+				}
+			}
+		}
+
+		private static void IndividualSyncRoundTrip()
+		{
+			NPC server = Sample(NPCID.Zombie);
+			server.TryGetGlobalNPC(out EnemyIndividualNPC sent);
+			Random rng = new(12);
+			for (int i = 0; i < 200 && sent.Kind != EnemyKind.Giant; i++) sent.Roll(server, rng);
+			using MemoryStream extra = new();
+			using BinaryWriter extraWriter = new(extra);
+			BitWriter bits = new();
+			sent.SendExtraAI(server, bits, extraWriter);
+			extraWriter.Flush();
+			using MemoryStream packet = new();
+			using BinaryWriter packetWriter = new(packet);
+			bits.Flush(packetWriter);
+			packetWriter.Write(extra.ToArray());
+			packetWriter.Flush();
+			packet.Position = 0;
+			using BinaryReader reader = new(packet);
+			NPC client = Sample(NPCID.Zombie);
+			client.TryGetGlobalNPC(out EnemyIndividualNPC received);
+			received.ReceiveExtraAI(client, new BitReader(reader), reader);
+			Check.Equal(sent.Kind, received.Kind, "kind");
+			Check.That(Math.Abs(sent.Life - received.Life) < 0.0001f && Math.Abs(sent.Damage - received.Damage) < 0.0001f, "health or damage multiplier");
+			Check.That(Math.Abs(sent.Defense - received.Defense) < 0.0001f, "defense multiplier");
+			Check.That(Math.Abs(client.scale - Sample(NPCID.Zombie).scale * received.Size) < 0.01f, $"size x{client.scale} on the client");
+		}
+
+		private static void TransformRerollsIndividual()
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
+			if (!EnemiesConfig.Instance.RandomizeEnemySpawns) Check.Skip("enemy spawns are not randomized");
+			Player player = Main.LocalPlayer;
+			for (int attempt = 0; attempt < 10; attempt++)
+			{
+				int index = NPC.NewNPC(new EntitySource_SpawnNPC(), (int)player.Center.X + 1200, (int)player.Center.Y - 200, NPCID.BlueSlime);
+				Check.That(index >= 0 && index < Main.maxNPCs, "could not spawn a slime");
+				NPC npc = Main.npc[index];
+				try
+				{
+					EnemySwapSystem.ProcessPending(100);
+					if (npc.type == NPCID.BlueSlime) continue;
+					Check.That(npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Rolled, $"{npc.TypeName} has no individual stats after the swap");
+					return;
+				}
+				finally
+				{
+					EnemySwapSystem.Pending[index] = false;
+					npc.active = false;
+				}
+			}
+			Check.That(false, "the slime was never swapped");
+		}
+
+		private static void LootBonusCap()
+		{
+			float previous = 1;
+			for (float factor = 0.2f; factor < 30; factor *= 1.3f)
+			{
+				float bonus = EnemyIndividualNPC.Bonus(factor, 0.5f, 3f);
+				Check.That(bonus >= previous - 0.0001f, "the bonus is not increasing");
+				Check.That(bonus <= 3.0001f, $"bonus x{bonus} above the cap");
+				if (factor <= 1) Check.That(Math.Abs(bonus - 1) < 0.0001f, $"bonus x{bonus} for a weak enemy");
+				previous = bonus;
+			}
+		}
+
+		private static void LootBonusApplied()
+		{
+			if (EnemiesConfig.Instance.LootBonusStrength <= 0) Check.Skip("no loot bonus");
+			NPC npc = Sample(NPCID.Zombie);
+			npc.TryGetGlobalNPC(out EnemyIndividualNPC individual);
+			float normal = EnemyIndividualNPC.LootBonus(npc);
+			individual.Life = 4;
+			individual.Damage = 2;
+			Check.That(EnemyIndividualNPC.LootBonus(npc) > normal, "a strong enemy gets no loot bonus");
+		}
+	}
+}

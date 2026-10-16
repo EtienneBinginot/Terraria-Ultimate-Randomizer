@@ -78,6 +78,7 @@ namespace UltimateRandomizer.Common.Tests
 			PacingTests.Register();
 			GuaranteeTests.Register();
 			RecipeTests.Register();
+			StatTests.Register();
 		}
 
 		public static List<TestResult> RunAll()

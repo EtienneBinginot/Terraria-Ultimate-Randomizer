@@ -57,13 +57,37 @@ namespace UltimateRandomizer.Common.Features
 				return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			}
 			IEnumerable<PlannedDrop> drops = ExtraDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky()).Concat(GuaranteedSources.For(npc.type));
+			// Stronger enemies (type and individual) drop more often
+			float bonus = EnemyIndividualNPC.LootBonus(npc);
 			foreach (PlannedDrop drop in drops)
 			{
-				if (info.rng.NextFloat() >= drop.Chance) continue;
+				if (info.rng.NextFloat() >= Math.Min(1f, drop.Chance * bonus)) continue;
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
 				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), drop.Item, stack, false);
 			}
+			// A giant always gives one more random item, a bit above its level
+			if (EnemiesConfig.Instance.GiantBonusDrop && LootConfig.Instance.RandomizeMobDrops && npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Kind == EnemyKind.Giant)
+			{
+				int item = GiantDrop(npc, info.rng.Next());
+				int stack = info.rng.Next(StackRules.Range(item).min, StackRules.Range(item).max + 1);
+				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), item, Math.Max(1, stack), false);
+			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
+		}
+
+		public static int GiantDrop(NPC npc, int key)
+		{
+			RollRequest request = new()
+			{
+				Keys = new[] { RollKey.GiantMini, key },
+				SourceTier = NpcTiers.EffectiveTier(BossParts.Owner(npc.type)),
+				OriginalItem = -1,
+				Policy = CategoryPolicy.Weighted,
+				TierJitterUp = 1,
+				AllowJackpot = true,
+				IgnoreGating = DropHelper.RollLucky()
+			};
+			return ItemPool.Roll(request);
 		}
 
 		// Multi-part bosses drop their loot once: the last Eater of Worlds segment (vanilla makes it a boss as it dies,

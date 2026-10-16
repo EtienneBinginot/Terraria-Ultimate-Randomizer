@@ -22,7 +22,7 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.75f)]
+		[DefaultValue(0.7f)]
 		public float BossHealthMin;
 
 		[Range(0.05f, 20f)]
@@ -40,8 +40,26 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.5f)]
+		[DefaultValue(1.6f)]
 		public float BossDamageMax;
+
+		// How rare values far from normal are for bosses (1 = as likely as normal ones)
+		[Range(1f, 5f)]
+		[Increment(0.1f)]
+		[DefaultValue(2.5f)]
+		public float BossStatExtremeness;
+
+		// Small variation between two fights of the same boss (%)
+		[Range(0f, 50f)]
+		[Increment(1f)]
+		[DefaultValue(0f)]
+		public float BossIndividualVariation;
+
+		// Chance that a boss is a giant (%)
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(0f)]
+		public float BossGiantChance;
 
 		[Header("Enemies")]
 		[DefaultValue(true)]
@@ -49,43 +67,115 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.8f)]
+		[DefaultValue(0.5f)]
 		public float EnemyHealthMin;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.3f)]
+		[DefaultValue(3f)]
 		public float EnemyHealthMax;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.8f)]
+		[DefaultValue(0.5f)]
 		public float EnemyDamageMin;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.3f)]
+		[DefaultValue(2.5f)]
 		public float EnemyDamageMax;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.8f)]
+		[DefaultValue(0.6f)]
 		public float EnemyDefenseMin;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.3f)]
+		[DefaultValue(2f)]
 		public float EnemyDefenseMax;
 
-		[Range(0.5f, 2f)]
+		[Range(0.3f, 3f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.85f)]
+		[DefaultValue(0.7f)]
 		public float EnemyScaleMin;
 
-		[Range(0.5f, 2f)]
+		[Range(0.3f, 3f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.2f)]
+		[DefaultValue(1.4f)]
 		public float EnemyScaleMax;
+
+		// How rare values far from normal are (1 = every value as likely; higher = extremes rarer)
+		[Range(1f, 5f)]
+		[Increment(0.1f)]
+		[DefaultValue(2.2f)]
+		public float StatExtremeness;
+
+		// How much a tougher enemy type is also bigger (0 = unrelated, 1 = size follows health)
+		[Range(0f, 1f)]
+		[Increment(0.1f)]
+		[DefaultValue(0.5f)]
+		public float ScaleFollowsLife;
+
+		// Variation between two enemies of the same type (%)
+		[Range(0f, 50f)]
+		[Increment(1f)]
+		[DefaultValue(15f)]
+		public float IndividualVariation;
+
+		[Header("GiantsAndMinis")]
+		// Chance that an enemy is a giant (%)
+		[Range(0f, 100f)]
+		[Increment(0.5f)]
+		[DefaultValue(4f)]
+		public float GiantChance;
+
+		[Range(1f, 6f)]
+		[Increment(0.1f)]
+		[DefaultValue(2f)]
+		public float GiantSizeMin;
+
+		[Range(1f, 6f)]
+		[Increment(0.1f)]
+		[DefaultValue(4f)]
+		public float GiantSizeMax;
+
+		// Chance that an enemy is a mini (%)
+		[Range(0f, 100f)]
+		[Increment(0.5f)]
+		[DefaultValue(4f)]
+		public float MiniChance;
+
+		[Range(0.1f, 1f)]
+		[Increment(0.05f)]
+		[DefaultValue(0.25f)]
+		public float MiniSizeMin;
+
+		[Range(0.1f, 1f)]
+		[Increment(0.05f)]
+		[DefaultValue(0.5f)]
+		public float MiniSizeMax;
+
+		// Largest width or height of a giant, in pixels (a tile is 16)
+		[Range(100, 2000)]
+		[DefaultValue(600)]
+		public int MaxGiantPixels;
+
+		[Header("LootBonus")]
+		// Stronger enemies (health x damage) drop more: extra drop chances x (1 + strength x (factor - 1))
+		[Range(0f, 2f)]
+		[Increment(0.1f)]
+		[DefaultValue(0.5f)]
+		public float LootBonusStrength;
+
+		[Range(1f, 5f)]
+		[Increment(0.1f)]
+		[DefaultValue(3f)]
+		public float LootBonusCap;
+
+		// Giants always drop one more random item
+		[DefaultValue(true)]
+		public bool GiantBonusDrop;
 
 		[Header("EnemySwap")]
 		[DefaultValue(true)]
