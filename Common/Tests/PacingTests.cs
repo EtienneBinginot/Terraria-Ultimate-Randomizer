@@ -9,11 +9,14 @@ using UltimateRandomizer.Common.Features;
 
 namespace UltimateRandomizer.Common.Tests
 {
-	// How often random equipment is found in an early hour of play (target with the default settings: 15 to 25)
+	// How often random equipment is found in an early hour of play. With the default settings (LootAbundance 2) the model
+	// expects about 25 pieces per hour (about 22 at abundance 1): target 19 to 32, and about 2.2 items per kill
 	public static class PacingTests
 	{
-		public const double MinGearPerHour = 15;
-		public const double MaxGearPerHour = 25;
+		public const double MinGearPerHour = 19;
+		public const double MaxGearPerHour = 32;
+		// Half the expected 2.2 items per kill
+		public const double MinItemsPerKill = 1.1;
 
 		public static void Register()
 		{
@@ -42,7 +45,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			LootConfig loot = LootConfig.Instance;
 			EnemiesConfig enemies = EnemiesConfig.Instance;
-			string[] lootFields = { "SurpriseChance", "DropRateMultiplier", "DropSlotsMin", "DropSlotsMax", "DropTableStyle", "RandomizeMobDrops", "RandomizePotDrops", "RandomizeChests", "TierWindow" };
+			string[] lootFields = { "SurpriseChance", "DropRateMultiplier", "LootAbundance", "DropSlotsMin", "DropSlotsMax", "DropTableStyle", "RandomizeMobDrops", "RandomizePotDrops", "RandomizeChests", "TierWindow" };
 			foreach (string field in lootFields)
 			{
 				if (!IsDefault(loot, field)) Check.Skip($"{field} is not at its default value");
@@ -57,7 +60,7 @@ namespace UltimateRandomizer.Common.Tests
 			Log($"Pacing: {result.GearPerHour:0.0} pieces of equipment per hour (deviation {result.StandardDeviation:0.0}), {result.DistinctPerHour:0.0} different");
 			RequireDefaults();
 			Check.That(result.GearPerHour >= MinGearPerHour && result.GearPerHour <= MaxGearPerHour,
-				$"{result.GearPerHour:0.0} pieces of equipment per hour, expected {MinGearPerHour} to {MaxGearPerHour}");
+				$"{result.GearPerHour:0.0} pieces of equipment per hour, expected {MinGearPerHour} to {MaxGearPerHour} (about 25 with LootAbundance 2)");
 		}
 
 		private static void PacingSimulation()
@@ -76,10 +79,10 @@ namespace UltimateRandomizer.Common.Tests
 			Log($"Drops: {result.ItemsPerKill:0.00} items per kill");
 			RequireDefaults();
 			if (!IsDefault(LootConfig.Instance, "CommonDropChance")) Check.Skip("CommonDropChance is not at its default value");
-			Check.That(result.ItemsPerKill >= 0.6, $"only {result.ItemsPerKill:0.00} items per kill");
+			Check.That(result.ItemsPerKill >= MinItemsPerKill, $"only {result.ItemsPerKill:0.00} items per kill, expected at least {MinItemsPerKill} (about 2.2 with LootAbundance 2)");
 		}
 
-		// The first work bench is a small quest: 15 to 30 minutes on average
+		// The first work bench is a small quest: 15 to 30 minutes on average (guaranteed drops: LootAbundance does not change it)
 		private static void WorkBenchPacing()
 		{
 			if (!GuaranteedSources.StationRequirements().Any(r => r.Item == ItemID.WorkBench)) Check.Skip("the work bench is protected");

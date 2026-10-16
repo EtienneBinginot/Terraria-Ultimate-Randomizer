@@ -94,6 +94,7 @@ Tests: {
 	DropRates: Les taux de drop sont valides
 	SnapshotsCaptured: Les tables de loot d'origine ont été lues
 	MobPlansValid: Toutes les tables de loot des ennemis sont valides
+	LootAbundanceScales: L'abondance du butin multiplie les drops des ennemis, pas les drops garantis
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés
@@ -599,6 +600,11 @@ Configs: {
 		CommonDropChance: {
 			Label: "Petit drop fréquent (%)"
 			Tooltip: "Chaque ennemi a aussi un petit drop fixe pour le monde (matériau, potion, munitions, nourriture, bloc ou minerai), avec cette chance. La plupart des kills donnent alors quelque chose."
+		}
+
+		LootAbundance: {
+			Label: "Abondance du butin"
+			Tooltip: "Multiplie les drops aléatoires des ennemis : plus de drops supplémentaires, plus souvent, et plus de petits drops fréquents (au-delà de 100 %, des drops en plus). 2 = environ deux fois plus d'objets par kill. Les drops garantis (stations, objets de progression) ne changent pas."
 		}
 
 		BossDropSlotsMin: {

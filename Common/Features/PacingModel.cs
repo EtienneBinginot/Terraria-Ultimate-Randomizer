@@ -20,7 +20,8 @@ namespace UltimateRandomizer.Common.Features
 	}
 
 	// Simulates an hour of early game with the current world and settings, to check that random equipment comes
-	// often enough (and not too often): kills, pots, chests, shaken trees and herbs.
+	// often enough (and not too often): kills, pots, chests, shaken trees and herbs. Kills use the real drop plans,
+	// so LootAbundance (extra slots, their chances, small frequent drops) is modelled as it is applied in game.
 	public static class PacingModel
 	{
 		// A typical early hour: the enemies killed, before the random enemy swap

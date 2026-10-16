@@ -98,6 +98,14 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(50f)]
 		public float CommonDropChance;
 
+		// Scales the random enemy drops: slots and their chances by its square root each (about x abundance items),
+		// the small frequent drop by the full factor (above 100 %: more of them). Guaranteed drops are not scaled.
+		// 2: about 25 pieces of equipment per early hour and 2.2 items per kill (PacingModel, targets 19-32 and at least 1.1)
+		[Range(0.5f, 5f)]
+		[Increment(0.25f)]
+		[DefaultValue(2f)]
+		public float LootAbundance;
+
 		[Range(0, 30)]
 		[DefaultValue(3)]
 		public int BossDropSlotsMin;

@@ -129,7 +129,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// Everything an enemy can drop in this world: the replaced original drops, then the extra ones and the guaranteed ones.
 		// lucky: ignores the progression lock (what the enemy gives once everything is unlocked)
-		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true)
+		// abundance: LootConfig.LootAbundance when null (tests pass an explicit value)
+		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true, float? abundance = null)
 		{
 			List<PlannedDrop> drops = new();
 			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
@@ -146,15 +147,18 @@ namespace UltimateRandomizer.Common.Features
 				}
 				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions });
 			}
-			drops.AddRange(ExtraDrops(netId, type, expert, lucky));
+			drops.AddRange(ExtraDrops(netId, type, expert, lucky, abundance));
 			if (guaranteed) drops.AddRange(GuaranteedSources.For(type));
 			return drops;
 		}
 
-		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, bool lucky)
+		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, bool lucky, float? abundance = null)
 		{
 			List<PlannedDrop> drops = new();
 			LootConfig cfg = LootConfig.Instance;
+			float abundanceFactor = Math.Max(0f, abundance ?? cfg.LootAbundance);
+			// Split between the number of slots and their chances, so that the expected item count follows the factor
+			float slotFactor = (float)Math.Sqrt(abundanceFactor);
 			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal) return drops;
 			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) return drops;
 			List<DropRateInfo> original = LootSnapshot.ForNpc(netId);
@@ -173,6 +177,9 @@ namespace UltimateRandomizer.Common.Features
 			// Skewed towards few drops for normal enemies: most drop little, a few drop a lot
 			double skew = isBoss || cfg.DropTableStyle == DropTableStyle.Simple ? 1.0 : 1.8;
 			int slots = Math.Min(maxSlots, minSlots + (int)Math.Floor((maxSlots - minSlots + 1) * Math.Pow(slotRng.NextDouble(), skew)));
+			// Abundance: rounded up or down from the same per-type roll, so the plan stays fixed for the world
+			double scaledSlots = slots * slotFactor;
+			slots = (int)Math.Floor(scaledSlots) + (slotRng.NextDouble() < scaledSlots - Math.Floor(scaledSlots) ? 1 : 0);
 
 			for (int slot = 0; slot < slots; slot++)
 			{
@@ -192,24 +199,26 @@ namespace UltimateRandomizer.Common.Features
 				float chance;
 				if (cfg.DropTableStyle == DropTableStyle.Simple)
 				{
-					chance = isBoss ? 1f : cfg.DropChance / 100f / (1 + Math.Max(0, tier - sourceTier));
+					chance = isBoss ? 1f : Math.Min(1f, cfg.DropChance / 100f / (1 + Math.Max(0, tier - sourceTier)) * slotFactor);
 				}
 				else
 				{
 					// A boss always drops its first extra slot
 					int denominator = isBoss && slot == 0 ? 1 : DropRates.Denominator(item, tier, sourceTier, isBoss, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item, 7));
-					chance = Math.Min(1f, cfg.DropRateMultiplier / denominator);
+					chance = Math.Min(1f, cfg.DropRateMultiplier * slotFactor / denominator);
 				}
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
 				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true });
 			}
 
-			// A small frequent drop (material, potion, ammo...), so that most kills give something
-			if (!isBoss && !critter && cfg.CommonDropChance > 0)
+			// Small frequent drops (material, potion, ammo...), so that most kills give something. Abundance scales the
+			// chance: every full 100 % is one sure drop, the rest the chance of one more (each a different item)
+			float commonTotal = cfg.CommonDropChance / 100f * abundanceFactor;
+			for (int c = 0; !isBoss && !critter && commonTotal > 0.0001f && c < 20; c++, commonTotal -= 1f)
 			{
 				RollRequest common = new()
 				{
-					Keys = new[] { RollKey.MobDrop, npcKey, 2000 },
+					Keys = new[] { RollKey.MobDrop, npcKey, 2000 + c },
 					SourceTier = sourceTier,
 					OriginalItem = -1,
 					Policy = CategoryPolicy.Weighted,
@@ -218,8 +227,8 @@ namespace UltimateRandomizer.Common.Features
 					IgnoreGating = lucky
 				};
 				int item = ItemPool.Roll(common);
-				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000, item));
-				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = cfg.CommonDropChance / 100f, Extra = true });
+				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000 + c, item));
+				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = Math.Min(1f, commonTotal), Extra = true });
 			}
 			return drops;
 		}

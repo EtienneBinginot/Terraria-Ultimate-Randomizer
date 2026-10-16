@@ -16,6 +16,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			TestRunner.Register("SnapshotsCaptured", SnapshotsCaptured);
 			TestRunner.Register("MobPlansValid", MobPlansValid);
+			TestRunner.Register("LootAbundanceScales", LootAbundanceScales);
 			TestRunner.Register("ProtectedDropsKept", ProtectedDropsKept);
 			TestRunner.Register("NoMinionFarms", NoMinionFarms);
 			TestRunner.Register("EventItemsKept", EventItemsKept);
@@ -52,6 +53,41 @@ namespace UltimateRandomizer.Common.Tests
 				ValidatePlan(NpcName(netId), RandomNpcDropRule.Plan(netId, Main.expertMode), failures);
 			}
 			Check.All(failures, "Invalid enemy drop tables");
+		}
+
+		// Explicit abundance values (not the config): more random items per kill, chances at most 100 %, guaranteed drops unchanged
+		private static void LootAbundanceScales()
+		{
+			LootConfig cfg = LootConfig.Instance;
+			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal) Check.Skip("random enemy drops are off");
+			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) Check.Skip("shuffle mode has no extra drops");
+			int[] enemies = { NPCID.BlueSlime, NPCID.Zombie, NPCID.DemonEye, NPCID.CaveBat, NPCID.Skeleton, NPCID.Vulture, NPCID.Antlion, NPCID.Harpy, NPCID.GoblinScout, NPCID.Piranha };
+			float[] factors = { 1f, 2f, 4f };
+			double[] expected = new double[factors.Length];
+			List<string> failures = new();
+			foreach (int npc in enemies)
+			{
+				string guaranteedAt1 = null;
+				for (int f = 0; f < factors.Length; f++)
+				{
+					List<PlannedDrop> plan = RandomNpcDropRule.Plan(npc, Main.expertMode, abundance: factors[f]);
+					foreach (PlannedDrop drop in plan)
+					{
+						if (drop.Chance > 1.0001f) failures.Add($"{NpcName(npc)} x{factors[f]}: {Lang.GetItemNameValue(drop.Item)} at {drop.Chance * 100:0} %");
+						if (drop.Extra) expected[f] += drop.Chance;
+					}
+					string guaranteed = string.Join(";", plan.Where(d => d.Guaranteed).Select(d => $"{d.Item}:{d.Chance:0.0000}"));
+					if (f == 0) guaranteedAt1 = guaranteed;
+					else if (guaranteed != guaranteedAt1) failures.Add($"{NpcName(npc)} x{factors[f]}: guaranteed drops changed");
+				}
+			}
+			if (expected[0] <= 0) Check.Skip("these enemies have no random drops with the current settings");
+			double ratio2 = expected[1] / expected[0];
+			double ratio4 = expected[2] / expected[1];
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Abundance: {expected[0] / enemies.Length:0.00} / {expected[1] / enemies.Length:0.00} / {expected[2] / enemies.Length:0.00} random items per kill at x1 / x2 / x4");
+			if (ratio2 < 1.4 || ratio2 > 2.6) failures.Add($"x2 gives {ratio2:0.00} times the random items of x1, expected about 2");
+			if (ratio4 < 1.4 || ratio4 > 2.6) failures.Add($"x4 gives {ratio4:0.00} times the random items of x2, expected about 2");
+			Check.All(failures, "Loot abundance");
 		}
 
 		private static void ProtectedDropsKept()

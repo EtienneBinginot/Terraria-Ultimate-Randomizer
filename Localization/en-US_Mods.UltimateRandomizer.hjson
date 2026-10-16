@@ -94,6 +94,7 @@ Tests: {
 	DropRates: Drop rates are valid
 	SnapshotsCaptured: Original drop tables were read
 	MobPlansValid: Every enemy drop table is valid
+	LootAbundanceScales: Loot abundance scales enemy drops, not guaranteed ones
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled
@@ -599,6 +600,11 @@ Configs: {
 		CommonDropChance: {
 			Label: "Small frequent drop (%)"
 			Tooltip: "Every enemy also has one small drop fixed for the world (material, potion, ammo, food, block or ore), with this chance. Most kills then give something."
+		}
+
+		LootAbundance: {
+			Label: "Loot abundance"
+			Tooltip: "Scales the random drops of enemies: more extra drops, more often, and more small frequent drops (above 100 %, extra ones). 2 = about twice as many items per kill. Guaranteed drops (stations, progression items) are not affected."
 		}
 
 		BossDropSlotsMin: {
