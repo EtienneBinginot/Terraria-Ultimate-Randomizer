@@ -34,7 +34,7 @@ Debug: {
 	KindGiant: Géant
 	KindMini: Mini
 	Swaps: Remplacements
-	SwapStats: "{0} repérés : {1} ennemis et {2} critters remplacés ; {3} non remplaçables, {4} gardés par le hasard, {5} sans remplaçant"
+	SwapStats: "{0} repérés : {1} ennemis et {2} critters remplacés ; {3} non remplaçables, {4} gardés par le hasard, {5} sans remplaçant, {6} dans des lieux pas encore ouverts"
 	Recipes: Recettes
 	Shimmer: Shimmer
 	Chests: Coffres
@@ -103,6 +103,12 @@ Tests: {
 	CritterPoolSafe: Aucun critter doré, Chrysope prismatique, Ver truffe ou critter de lave ne peut en remplacer un autre
 	CritterHabitat: Les critters aquatiques, volants et terrestres restent dans leur habitat
 	SwapStatsCount: Les apparitions naturelles sont comptées, celles des statues ignorées
+	BiomeSlotsReachable: Par biome : chaque lieu d'apparition d'un ennemi qui en a plusieurs peut être atteint
+	NegativeNetIdSwap: Le remplacement par une couleur de slime (Pinky) fonctionne et garde le type Slime bleu
+	BiomeRedistributionComplete: Par biome : chaque ennemi naturel garde son nombre de lieux d'apparition, dans sa classe et jamais à un tier inférieur (20 graines)
+	BiomeSlotsRespectDaylight: Par biome : aucun ennemi qui fuit ou meurt au soleil (Gnome) dans un lieu de surface de jour
+	BiomeExtrasShare: Par biome : 8 % des lieux d'apparition sont partagés avec des ennemis d'événement
+	CriticalHostsInForest: Par biome : les stations de base tombent d'ennemis de la Forêt du début
 	SurpriseZero: Avec 0 % de surprise, les objets remplacés gardent leur catégorie
 	SurpriseHundred: Avec 100 % de surprise, les catégories suivent les poids du loot
 	SurpriseGatedAndProtected: Les surprises respectent la progression et les objets protégés
@@ -233,6 +239,9 @@ Commands: {
 		PoolLogged: La répartition des objets a été écrite dans client.log.
 		RecipesOff: Les recettes ne sont pas randomisées dans ce monde.
 		NoDrops: Cet ennemi ne donne rien dans ce monde.
+		Biome: "{0} : {1} lieux ({2} ennemis), {3} changés, {4} partagés avec des invités inattendus"
+		BiomesLogged: La liste complète de chaque biome a été écrite dans client.log.
+		BiomesOff: Les ennemis ne sont pas redistribués par biome dans ce monde (mode ou réglage) : voici la carte qui serait utilisée.
 	}
 
 	Chests: {
@@ -1105,6 +1114,11 @@ Configs: {
 			Label: À chaque apparition
 			Tooltip: ""
 		}
+
+		ByBiome: {
+			Label: "Par biome"
+			Tooltip: ""
+		}
 	}
 
 	EnemiesConfig: {
@@ -1274,18 +1288,28 @@ Configs: {
 		}
 
 		RandomizeEnemySpawns: {
-			Label: Randomiser les apparitions d'ennemis
-			Tooltip: Les ennemis qui apparaissent naturellement deviennent un autre ennemi du même tier qui se déplace pareil (sol, vol, eau). Les boss et les vers ne changent jamais.
+			Label: "Randomiser les apparitions d'ennemis"
+			Tooltip: "Les ennemis qui apparaissent naturellement deviennent un autre ennemi du même tier qui se déplace pareil (sol, vol, eau). Les boss et les vers ne changent jamais."
 		}
 
 		EnemySwapMode: {
-			Label: Mode de remplacement
-			Tooltip: Par type : chaque ennemi est toujours remplacé par le même autre ennemi dans un monde. À chaque apparition : chaque apparition tire un nouveau remplaçant.
+			Label: "Mode de remplacement"
+			Tooltip: "Par biome : les ennemis naturels sont redistribués entre les biomes ; chacun garde son nombre de lieux d'apparition, les ennemis rares restent rares et ceux du mode difficile arrivent avec lui. Par type : chaque ennemi est toujours remplacé par le même autre ennemi dans un monde. À chaque apparition : chaque apparition tire un nouveau remplaçant."
 		}
 
 		EnemySwapChance: {
-			Label: Chance de remplacement (%)
-			Tooltip: Part des ennemis (par type) ou des apparitions (à chaque apparition) qui sont remplacés.
+			Label: "Chance de remplacement (%)"
+			Tooltip: "Modes par type et à chaque apparition : part des ennemis (par type) ou des apparitions (à chaque apparition) qui sont remplacés. Le mode par biome utilise plutôt la chance de garder l'ennemi d'origine."
+		}
+
+		BiomeVanillaChance: {
+			Label: "Chance de garder l'ennemi d'origine (%)"
+			Tooltip: "Par biome : chance qu'une apparition reste l'ennemi prévu par le jeu de base. 0 = toutes les apparitions suivent la nouvelle liste du biome."
+		}
+
+		BiomeExtraEnemies: {
+			Label: "Invités inattendus (%)"
+			Tooltip: "Par biome : part des lieux d'apparition partagés avec des ennemis qui ne viennent d'habitude qu'avec un événement (Lune de sang, éclipse, gobelins, pirates...) : là, une apparition sur deux est cet invité, l'ennemi habituel du lieu y vient donc deux fois moins. Aucun ennemi ne perd de lieu."
 		}
 
 		SwapCritters: {
@@ -1299,8 +1323,8 @@ Configs: {
 		}
 
 		SwapModdedEnemies: {
-			Label: Inclure les ennemis des autres mods
-			Tooltip: ""
+			Label: "Inclure les ennemis des autres mods"
+			Tooltip: "Leurs ennemis sont redistribués aussi, y compris dans leurs propres biomes."
 		}
 	}
 

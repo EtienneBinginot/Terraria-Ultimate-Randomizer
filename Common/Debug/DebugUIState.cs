@@ -123,7 +123,7 @@ namespace UltimateRandomizer.Common.Debug
 			(float life, float damage) boss = AdaptivePower.Multipliers(gap, true);
 			Text($"[c/FFD966:{T("Power")}] {OnOff(AdaptivePower.Enabled)}   {T("PowerStats", power.ToString("0.00"), gap.ToString("0.00"), normal.life.ToString("0.00"), normal.damage.ToString("0.00"), boss.life.ToString("0.00"), boss.damage.ToString("0.00"))}");
 			SwapStats swaps = EnemySwapSystem.Stats;
-			Text($"[c/FFD966:{T("Swaps")}] {T("SwapStats", swaps.Flagged, swaps.SwappedEnemies, swaps.SwappedCritters, swaps.NotInPool, swaps.ChanceFailed, swaps.NoTarget)}");
+			Text($"[c/FFD966:{T("Swaps")}] {T("SwapStats", swaps.Flagged, swaps.SwappedEnemies, swaps.SwappedCritters, swaps.NotInPool, swaps.ChanceFailed, swaps.NoTarget, swaps.Inactive)}");
 			Text($"[c/FFD966:{T("SetTier")}]");
 			Buttons(Enumerable.Range(0, 5).Select(t => ($"{t}", (Action)(() => DebugTools.SetTier(t)))).ToArray());
 			Buttons(Enumerable.Range(5, 5).Select(t => ($"{t}", (Action)(() => DebugTools.SetTier(t)))).ToArray());

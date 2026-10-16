@@ -34,7 +34,7 @@ Debug: {
 	KindGiant: Giant
 	KindMini: Mini
 	Swaps: Swaps
-	SwapStats: "{0} flagged: {1} enemies and {2} critters swapped; {3} not swappable, {4} kept by chance, {5} without a replacement"
+	SwapStats: "{0} flagged: {1} enemies and {2} critters swapped; {3} not swappable, {4} kept by chance, {5} without a replacement, {6} in slots not open yet"
 	Recipes: Recipes
 	Shimmer: Shimmer
 	Chests: Chests
@@ -103,6 +103,12 @@ Tests: {
 	CritterPoolSafe: No gold critter, Prismatic Lacewing, Truffle Worm or lava critter can appear in place of another
 	CritterHabitat: Water, flying and ground critters stay in their habitat
 	SwapStatsCount: Natural spawns are counted, statue spawns are left alone
+	BiomeSlotsReachable: By biome: every spawn place of an enemy with several places can be reached
+	NegativeNetIdSwap: Swapping into a slime colour (Pinky) works and keeps the Blue Slime type
+	BiomeRedistributionComplete: By biome: every natural enemy keeps its number of spawn places, inside its class and never in a lower tier (20 seeds)
+	BiomeSlotsRespectDaylight: By biome: no enemy that flees or dies in daylight (Gnome) in a day surface place
+	BiomeExtrasShare: By biome: 8% of the spawn places are shared with event enemies
+	CriticalHostsInForest: By biome: the basic stations drop from enemies of the early Forest
 	SurpriseZero: With 0% surprise, replaced items keep their category
 	SurpriseHundred: With 100% surprise, categories follow the loot weights
 	SurpriseGatedAndProtected: Surprises respect progression and protected items
@@ -233,6 +239,9 @@ Commands: {
 		PoolLogged: The item pool was written to client.log.
 		RecipesOff: Recipes are not randomized in this world.
 		NoDrops: This enemy drops nothing in this world.
+		Biome: "{0}: {1} places ({2} enemies), {3} changed, {4} shared with unusual guests"
+		BiomesLogged: The full list of each biome was written to client.log.
+		BiomesOff: Enemies are not redistributed by biome in this world (mode or setting): this is the map it would use.
 	}
 
 	Chests: {
@@ -1105,6 +1114,11 @@ Configs: {
 			Label: Per spawn
 			Tooltip: ""
 		}
+
+		ByBiome: {
+			Label: "By biome"
+			Tooltip: ""
+		}
 	}
 
 	EnemiesConfig: {
@@ -1274,18 +1288,28 @@ Configs: {
 		}
 
 		RandomizeEnemySpawns: {
-			Label: Randomize enemy spawns
-			Tooltip: Naturally spawning enemies become another enemy of the same tier that moves the same way (ground, flying, water). Bosses and worms are never changed.
+			Label: "Randomize enemy spawns"
+			Tooltip: "Naturally spawning enemies become another enemy of the same tier that moves the same way (ground, flying, water). Bosses and worms are never changed."
 		}
 
 		EnemySwapMode: {
-			Label: Replacement mode
-			Tooltip: Per type: each enemy is always replaced by the same other enemy in a world. Per spawn: every spawn picks a new replacement.
+			Label: "Replacement mode"
+			Tooltip: "By biome: the natural enemies are shared out again between the biomes; each one keeps its number of spawn places, rare enemies stay rare and hardmode enemies come with hardmode. Per type: each enemy is always replaced by the same other enemy in a world. Per spawn: every spawn picks a new replacement."
 		}
 
 		EnemySwapChance: {
-			Label: Replacement chance (%)
-			Tooltip: Share of enemies (per type) or of spawns (per spawn) that are replaced.
+			Label: "Replacement chance (%)"
+			Tooltip: "Per type and per spawn modes: share of enemies (per type) or of spawns (per spawn) that are replaced. The by-biome mode uses the vanilla enemy chance instead."
+		}
+
+		BiomeVanillaChance: {
+			Label: "Vanilla enemy chance (%)"
+			Tooltip: "By biome: chance that a spawn stays the enemy vanilla would have spawned. 0 = every spawn follows the biome's new list."
+		}
+
+		BiomeExtraEnemies: {
+			Label: "Unusual guests (%)"
+			Tooltip: "By biome: share of the spawn places shared with enemies that normally only come with an event (Blood Moon, eclipse, goblins, pirates...): there, each spawn is that guest half of the time, so the usual enemy of the place comes half as often. No enemy loses a place."
 		}
 
 		SwapCritters: {
@@ -1299,8 +1323,8 @@ Configs: {
 		}
 
 		SwapModdedEnemies: {
-			Label: Include enemies from other mods
-			Tooltip: ""
+			Label: "Include enemies from other mods"
+			Tooltip: "Their enemies are redistributed too, including in their own biomes."
 		}
 	}
 

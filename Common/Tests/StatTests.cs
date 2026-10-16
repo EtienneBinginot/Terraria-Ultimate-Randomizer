@@ -269,6 +269,10 @@ namespace UltimateRandomizer.Common.Tests
 				NPC npc = Main.npc[index];
 				try
 				{
+					if (EnemiesConfig.Instance.EnemySwapMode == EnemySwapMode.ByBiome && BiomeSlots.TypeOf(EnemySwapPool.BiomeTarget(npc)) == NPCID.BlueSlime)
+					{
+						Check.Skip("the slime's slot keeps a slime here in this world");
+					}
 					EnemySwapSystem.ProcessSlot(index, 100);
 					if (npc.type == NPCID.BlueSlime) continue;
 					Check.That(npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Rolled, $"{npc.TypeName} has no individual stats after the swap");

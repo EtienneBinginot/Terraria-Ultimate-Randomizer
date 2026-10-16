@@ -52,7 +52,11 @@ namespace UltimateRandomizer.Common.Tests
 				if (!IsDefault(loot, field)) Check.Skip($"{field} is not at its default value");
 			}
 			if (!loot.DropCategoryWeights.Equals(new CategoryWeights())) Check.Skip("the loot weights are not the default ones");
-			if (!IsDefault(enemies, "EnemySwapChance") || !IsDefault(GeneralConfig.Instance, "RandomizerMode")) Check.Skip("settings are not the default ones");
+			if (!IsDefault(enemies, "EnemySwapChance") || !IsDefault(enemies, "EnemySwapMode") || !IsDefault(enemies, "BiomeVanillaChance") || !IsDefault(enemies, "BiomeExtraEnemies")
+				|| !IsDefault(GeneralConfig.Instance, "RandomizerMode"))
+			{
+				Check.Skip("settings are not the default ones");
+			}
 		}
 
 		private static void PacingExpected()

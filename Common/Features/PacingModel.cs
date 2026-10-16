@@ -24,12 +24,34 @@ namespace UltimateRandomizer.Common.Features
 	// so LootAbundance (extra slots, their chances, small frequent drops) is modelled as it is applied in game.
 	public static class PacingModel
 	{
-		// A typical early hour: the enemies killed, before the random enemy swap
-		private static readonly (int npc, int count)[] EarlyKills =
+		// A typical early hour: the enemies killed, before the random enemy swap, and where they spawn
+		private static readonly (int npc, int count, SpawnBiome biome)[] EarlyKills =
 		{
-			(NPCID.GreenSlime, 25), (NPCID.BlueSlime, 25), (NPCID.Zombie, 30), (NPCID.DemonEye, 25), (NPCID.CaveBat, 15),
-			(NPCID.Skeleton, 10), (NPCID.RedSlime, 5), (NPCID.YellowSlime, 5), (NPCID.Vulture, 5), (NPCID.Antlion, 5)
+			(NPCID.GreenSlime, 25, SpawnBiome.Forest), (NPCID.BlueSlime, 25, SpawnBiome.Forest), (NPCID.Zombie, 30, SpawnBiome.Forest),
+			(NPCID.DemonEye, 25, SpawnBiome.Forest), (NPCID.CaveBat, 15, SpawnBiome.Caverns), (NPCID.Skeleton, 10, SpawnBiome.Caverns),
+			(NPCID.RedSlime, 5, SpawnBiome.Underground), (NPCID.YellowSlime, 5, SpawnBiome.Underground), (NPCID.Vulture, 5, SpawnBiome.Desert),
+			(NPCID.Antlion, 5, SpawnBiome.Desert)
 		};
+
+		// The enemy really killed: by biome, the owner of the original's slot (pre-hardmode slots are always open);
+		// otherwise a random natural enemy of the first tier
+		private static int Killed(int npc, SpawnBiome biome, Random rng, float swapChance, List<int> pool)
+		{
+			if (rng.NextDouble() >= swapChance) return npc;
+			if (BiomeSlots.Active)
+			{
+				BiomeSlot slot = BiomeSlots.SlotIn(BiomeSlots.Current, (int)biome, npc);
+				return slot != null && BiomeSlots.SlotActive(slot) ? BiomeSlots.Pick(slot, rng.NextDouble()) : npc;
+			}
+			return pool.Count > 0 ? pool[rng.Next(pool.Count)] : npc;
+		}
+
+		private static float SwapChance()
+		{
+			EnemiesConfig enemies = EnemiesConfig.Instance;
+			if (!enemies.RandomizeEnemySpawns) return 0f;
+			return BiomeSlots.Active ? 1f - enemies.BiomeVanillaChance / 100f : enemies.EnemySwapChance / 100f;
+		}
 
 		public const int Pots = 60;
 		public const float ItemsPerPot = 1.2f;
@@ -44,10 +66,9 @@ namespace UltimateRandomizer.Common.Features
 		public static double MinutesToFirstWorkBench(int runs, int seed)
 		{
 			Random rng = new(seed);
-			EnemiesConfig enemies = EnemiesConfig.Instance;
-			float swapChance = enemies.RandomizeEnemySpawns ? enemies.EnemySwapChance / 100f : 0f;
+			float swapChance = SwapChance();
 			List<int> pool = EnemySwapPool.NaturalEnemies(0);
-			List<(int npc, int count)> kills = new(EarlyKills);
+			List<(int npc, int count, SpawnBiome biome)> kills = new(EarlyKills);
 			int totalKills = kills.Sum(k => k.count);
 			Dictionary<int, float> benchChance = new();
 			float ChanceOn(int npc)
@@ -74,16 +95,18 @@ namespace UltimateRandomizer.Common.Features
 						if (k >= 3 && rng.NextDouble() < 0.5) continue;
 						int roll = rng.Next(totalKills);
 						int npc = kills[0].npc;
-						foreach ((int type, int count) in kills)
+						SpawnBiome biome = kills[0].biome;
+						foreach ((int type, int count, SpawnBiome where) in kills)
 						{
 							if (roll < count)
 							{
 								npc = type;
+								biome = where;
 								break;
 							}
 							roll -= count;
 						}
-						if (pool.Count > 0 && rng.NextDouble() < swapChance) npc = pool[rng.Next(pool.Count)];
+						npc = Killed(npc, biome, rng, swapChance, pool);
 						found = rng.NextDouble() < ChanceOn(npc);
 					}
 					if (!found) found = rng.NextDouble() < potChance;
@@ -115,9 +138,8 @@ namespace UltimateRandomizer.Common.Features
 		{
 			Random rng = new(seed);
 			LootConfig loot = LootConfig.Instance;
-			EnemiesConfig enemies = EnemiesConfig.Instance;
 			float surprise = GeneralConfig.Instance.RandomizerMode == RandomizerMode.Coherent ? loot.SurpriseChance / 100f : 0f;
-			float swapChance = enemies.RandomizeEnemySpawns ? enemies.EnemySwapChance / 100f : 0f;
+			float swapChance = SwapChance();
 			List<int> pool = EnemySwapPool.NaturalEnemies(0);
 			Dictionary<int, List<PlannedDrop>> plans = new();
 			List<double> perHour = new();
@@ -140,11 +162,11 @@ namespace UltimateRandomizer.Common.Features
 				});
 
 				// Kills
-				foreach ((int npc, int count) in EarlyKills)
+				foreach ((int npc, int count, SpawnBiome biome) in EarlyKills)
 				{
 					for (int k = 0; k < count; k++)
 					{
-						int killed = pool.Count > 0 && rng.NextDouble() < swapChance ? pool[rng.Next(pool.Count)] : npc;
+						int killed = Killed(npc, biome, rng, swapChance, pool);
 						if (!plans.TryGetValue(killed, out List<PlannedDrop> plan))
 						{
 							plan = loot.RandomizeMobDrops ? RandomNpcDropRule.Plan(killed, Main.expertMode) : new List<PlannedDrop>();

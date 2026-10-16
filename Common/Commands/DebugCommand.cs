@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Microsoft.Xna.Framework;
 using Terraria;
@@ -17,13 +18,14 @@ namespace UltimateRandomizer.Common.Commands
 	// /rdebug pool                writes the number of items per category and tier to the log
 	// /rdebug swaps               what the enemy and critter swaps did since the world was loaded
 	// /rdebug recipes             share of the vanilla recipes changed, and why the others keep their result (also logged)
+	// /rdebug biomes              the enemies of each biome (by-biome redistribution): a summary, the full list in the log
 	public class DebugCommand : ModCommand
 	{
 		public override CommandType Type => CommandType.Chat;
 
 		public override string Command => "rdebug";
 
-		public override string Usage => "/rdebug item <name|id> | npc <name|id> | tier | pool | swaps | recipes";
+		public override string Usage => "/rdebug item <name|id> | npc <name|id> | tier | pool | swaps | recipes | biomes";
 
 		public override string Description => Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.Description");
 
@@ -62,7 +64,10 @@ namespace UltimateRandomizer.Common.Commands
 					break;
 				case "swaps":
 					SwapStats s = EnemySwapSystem.Stats;
-					caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Debug.SwapStats", s.Flagged, s.SwappedEnemies, s.SwappedCritters, s.NotInPool, s.ChanceFailed, s.NoTarget), Color.Yellow);
+					caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Debug.SwapStats", s.Flagged, s.SwappedEnemies, s.SwappedCritters, s.NotInPool, s.ChanceFailed, s.NoTarget, s.Inactive), Color.Yellow);
+					break;
+				case "biomes":
+					ShowBiomes(caller);
 					break;
 				default:
 					caller.Reply(Usage, Color.Yellow);
@@ -107,6 +112,37 @@ namespace UltimateRandomizer.Common.Commands
 				string conditions = drop.Conditions == null || drop.Conditions.Count == 0 ? "" : " *";
 				caller.Reply($"  {Lang.GetItemNameValue(drop.Item)} x{stack} : {chance}{conditions}", Color.White);
 			}
+		}
+
+		private static void ShowBiomes(CommandCaller caller)
+		{
+			if (!SeedSystem.WorldReady)
+			{
+				caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Debug.NeedWorld"), Color.OrangeRed);
+				return;
+			}
+			if (!BiomeSlots.Active) caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.BiomesOff"), Color.Yellow);
+			BiomeSlotMap map = BiomeSlots.Current;
+			string Name(int id) => Lang.GetNPCNameValue(id);
+			StringBuilder sb = new($"Enemies by biome (seed {SeedSystem.WorldSeed}): {map.Slots.Count} slots, {map.Classes} classes ({map.ClassesKeptVanilla} kept vanilla), {map.Slots.Count(s => s.Extra != 0)}/{map.ExtraTarget} shared with extras\n");
+			foreach (IGrouping<int, BiomeSlot> biome in map.Slots.GroupBy(s => s.Biome).OrderBy(g => g.Key))
+			{
+				int enemies = biome.Count(s => !s.Critter);
+				int changed = biome.Count(s => s.Owner != s.Original);
+				int extras = biome.Count(s => s.Extra != 0);
+				caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.Biome", BiomeSlots.BiomeName(biome.Key), biome.Count(), enemies, changed, extras), Color.Yellow);
+				sb.Append($"  {BiomeSlots.BiomeName(biome.Key)} ({biome.Count()} slots):\n");
+				foreach (BiomeSlot slot in biome)
+				{
+					string band = slot.Band switch { 0 => "", 1 => " [hardmode]", _ => " [post-Plantera]" };
+					string tags = $" tier {slot.Tier}" + (slot.Merged ? " merged" : "") + (slot.Rare ? " rare" : "") + (slot.Conditional ? " conditional" : "") + (slot.Critter ? " critter" : "")
+						+ (slot.Time != SlotTime.Any ? " " + slot.Time.ToString().ToLowerInvariant() : "") + (slot.DaySurface ? " day-surface" : "");
+					string shared = slot.Extra != 0 ? $" + {Name(slot.Extra)} (shared, {BiomeSlots.ExtraShare:P0})" : "";
+					sb.Append($"    {Name(slot.Original)} -> {Name(slot.Owner)}{shared}{band}{tags}\n");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info(sb.ToString());
+			caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.BiomesLogged"), Color.Yellow);
 		}
 
 		private static int FindItem(string name)

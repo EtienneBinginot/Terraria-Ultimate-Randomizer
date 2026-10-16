@@ -9,7 +9,9 @@ namespace UltimateRandomizer.Common.Configs
 		// Each enemy type is always replaced by the same other type in a world
 		PerType,
 		// Every spawn picks a new replacement
-		PerSpawn
+		PerSpawn,
+		// Natural enemies are redistributed between the biomes: each one keeps its number of spawn places, elsewhere
+		ByBiome
 	}
 
 	public class EnemiesConfig : RandomizerConfig
@@ -181,14 +183,27 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool RandomizeEnemySpawns;
 
-		[DefaultValue(EnemySwapMode.PerSpawn)]
+		[DefaultValue(EnemySwapMode.ByBiome)]
 		[DrawTicks]
 		public EnemySwapMode EnemySwapMode;
 
+		// Per type and per spawn modes only
 		[Range(0f, 100f)]
 		[Increment(5f)]
 		[DefaultValue(75f)]
 		public float EnemySwapChance;
+
+		// By biome: chance that a spawn stays the vanilla enemy (%)
+		[Range(0f, 100f)]
+		[Increment(5f)]
+		[DefaultValue(0f)]
+		public float BiomeVanillaChance;
+
+		// By biome: share of the spawn places given to enemies that normally only come with an event (%)
+		[Range(0f, 30f)]
+		[Increment(1f)]
+		[DefaultValue(8f)]
+		public float BiomeExtraEnemies;
 
 		[DefaultValue(true)]
 		[ReloadRequired]

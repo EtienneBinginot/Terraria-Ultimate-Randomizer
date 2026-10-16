@@ -162,7 +162,7 @@ namespace UltimateRandomizer.Common.Tests
 				EnemySwapPool.Reset();
 				foreach (int type in EnemySwapPool.DaylightEnemies())
 				{
-					if (ContentSamples.NpcsByNetId.TryGetValue(type, out NPC npc) && EnemySwapPool.FleesDaylight(npc)) failures.Add($"{npc.TypeName} in the day pool");
+					if (ContentSamples.NpcsByNetId.TryGetValue(type, out NPC npc) && EnemySwapPool.DaylightIntolerant(type)) failures.Add($"{npc.TypeName} in the day pool");
 				}
 				Check.That(EnemySwapPool.DaylightEnemies().Any(), "the day pool is empty");
 			}
@@ -180,7 +180,7 @@ namespace UltimateRandomizer.Common.Tests
 				{
 					int target = EnemySwapPool.Replacement(slime);
 					if (!ContentSamples.NpcsByNetId.TryGetValue(target, out NPC sample)) continue;
-					if (EnemySwapPool.FleesDaylight(sample)) failures.Add($"{sample.TypeName} by day");
+					if (EnemySwapPool.DaylightIntolerant(target)) failures.Add($"{sample.TypeName} by day");
 					if (mode == EnemySwapMode.PerType) break;
 				}
 			}

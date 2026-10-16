@@ -74,6 +74,7 @@ namespace UltimateRandomizer.Common.Tests
 			WorldTests.Register();
 			ConfigTests.Register();
 			EnemyTests.Register();
+			BiomeTests.Register();
 			VarietyTests.Register();
 			SourceTests.Register();
 			PacingTests.Register();

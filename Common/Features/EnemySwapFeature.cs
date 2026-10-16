@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.GameContent.Events;
@@ -52,11 +53,13 @@ namespace UltimateRandomizer.Common.Features
 		public int NotInPool;
 		public int ChanceFailed;
 		public int NoTarget;
+		// By biome: hardmode slots before hardmode
+		public int Inactive;
 	}
 
 	public static class EnemySwapPool
 	{
-		private enum Movement { Ground, Flying, Water, CritterGround, CritterFlying, CritterWater }
+		internal enum Movement { Ground, Flying, Water, CritterGround, CritterFlying, CritterWater }
 
 		private const int MovementCount = 6;
 
@@ -75,11 +78,18 @@ namespace UltimateRandomizer.Common.Features
 			// Frost Moon
 			NPCID.ZombieElf, NPCID.ZombieElfBeard, NPCID.ZombieElfGirl, NPCID.PresentMimic, NPCID.GingerbreadMan, NPCID.ElfArcher,
 			NPCID.Nutcracker, NPCID.NutcrackerSpinning, NPCID.Yeti, NPCID.ElfCopter, NPCID.Krampus, NPCID.Flocko,
-			// Solar eclipse
-			NPCID.Eyezor, NPCID.Frankenstein, NPCID.SwampThing, NPCID.Vampire, NPCID.VampireBat, NPCID.Butcher, NPCID.CreatureFromTheDeep,
-			NPCID.Fritz, NPCID.Nailhead, NPCID.Psycho, NPCID.DeadlySphere, NPCID.DrManFly, NPCID.ThePossessed, NPCID.Reaper,
 			NPCID.Mothron, NPCID.MothronSpawn, NPCID.MothronEgg
 		};
+
+		// Solar eclipse: not natural, but they work outside the eclipse (extras of the by-biome mode)
+		private static readonly HashSet<int> EclipseEnemies = new()
+		{
+			NPCID.Eyezor, NPCID.Frankenstein, NPCID.SwampThing, NPCID.Vampire, NPCID.VampireBat, NPCID.Butcher, NPCID.CreatureFromTheDeep,
+			NPCID.Fritz, NPCID.Nailhead, NPCID.Psycho, NPCID.DeadlySphere, NPCID.DrManFly, NPCID.ThePossessed, NPCID.Reaper
+		};
+
+		// Enemies that don't flee daylight but die or are useless in it: the Gnome turns to stone in the sun
+		private static readonly HashSet<int> ExcludedFromDaySurface = new() { NPCID.Gnome };
 
 		// Critters that must never take another one's place: worth money (gold), summon a boss (Prismatic Lacewing,
 		// Truffle Worm), live in lava, or are rare collectibles (gem critters)
@@ -99,16 +109,18 @@ namespace UltimateRandomizer.Common.Features
 		private static Dictionary<int, Movement> movements;
 
 		// forceChance: swap chance to use instead of the setting (tests); stats: counters to update
+		// Returns the NPC's own net ID when it stays as it is
 		public static int Replacement(NPC npc, float? forceChance = null, SwapStats stats = null)
 		{
+			EnemiesConfig cfg = EnemiesConfig.Instance;
+			if (cfg.EnemySwapMode == EnemySwapMode.ByBiome) return BiomeReplacement(npc, forceChance, stats);
 			Build();
 			int npcType = npc.type;
 			if (!movements.TryGetValue(npcType, out Movement movement))
 			{
 				if (stats != null) stats.NotInPool++;
-				return npcType;
+				return npc.netID;
 			}
-			EnemiesConfig cfg = EnemiesConfig.Instance;
 			float chance = forceChance ?? cfg.EnemySwapChance;
 			Random rng;
 			if (cfg.EnemySwapMode == EnemySwapMode.PerType && forceChance == null)
@@ -117,7 +129,7 @@ namespace UltimateRandomizer.Common.Features
 				if (rng.NextDouble() * 100 >= chance)
 				{
 					if (stats != null) stats.ChanceFailed++;
-					return npcType;
+					return npc.netID;
 				}
 			}
 			else
@@ -125,7 +137,7 @@ namespace UltimateRandomizer.Common.Features
 				if (Main.rand.NextFloat() * 100 >= chance)
 				{
 					if (stats != null) stats.ChanceFailed++;
-					return npcType;
+					return npc.netID;
 				}
 				rng = new Random(Main.rand.Next());
 			}
@@ -135,14 +147,59 @@ namespace UltimateRandomizer.Common.Features
 			int tier = NpcTiers.BaseTier(npcType);
 			for (int t = tier; t >= 0; t--)
 			{
-				if (buckets[(int)movement, t].Count > 0) return Pick(buckets[(int)movement, t], rng);
+				if (buckets[(int)movement, t].Count > 0) return Own(Pick(buckets[(int)movement, t], rng));
 			}
 			for (int t = tier + 1; t < Tiers.Count; t++)
 			{
-				if (buckets[(int)movement, t].Count > 0) return Pick(buckets[(int)movement, t], rng);
+				if (buckets[(int)movement, t].Count > 0) return Own(Pick(buckets[(int)movement, t], rng));
 			}
 			if (stats != null) stats.NoTarget++;
-			return npcType;
+			return npc.netID;
+
+			// Picking its own type keeps the NPC as it is (a Pinky stays a Pinky)
+			int Own(int pick) => pick == npcType ? npc.netID : pick;
+		}
+
+		// By biome: the owner of the slot this spawn fills (BiomeSlots); forceChance replaces 100 - BiomeVanillaChance
+		private static int BiomeReplacement(NPC npc, float? forceChance, SwapStats stats)
+		{
+			BiomeSlotMap map = BiomeSlots.Current;
+			int original = BiomeSlots.OriginalOf(map, npc);
+			BiomeSlot slot = BiomeSlots.SlotFor(map, npc, original);
+			if (slot == null)
+			{
+				if (stats != null) stats.NotInPool++;
+				return npc.netID;
+			}
+			float keep = forceChance.HasValue ? 100 - forceChance.Value : EnemiesConfig.Instance.BiomeVanillaChance;
+			if (keep > 0 && Main.rand.NextFloat() * 100 < keep)
+			{
+				if (stats != null) stats.ChanceFailed++;
+				return npc.netID;
+			}
+			// Hardmode slots stay vanilla before hardmode (and post-Plantera ones before Plantera)
+			if (!BiomeSlots.SlotActive(slot))
+			{
+				if (stats != null) stats.Inactive++;
+				return npc.netID;
+			}
+			int owner = BiomeSlots.Pick(slot, Main.rand.NextDouble());
+			// A spawn outside its usual place (an original met in the sun): never send it a daylight-intolerant owner
+			bool daylight = Main.dayTime && npc.position.Y < Main.worldSurface * 16;
+			if (daylight && DaylightIntolerant(owner))
+			{
+				if (stats != null) stats.NoTarget++;
+				return npc.netID;
+			}
+			return owner;
+		}
+
+		// What a spawn becomes by biome without the vanilla chance and the extra, for the tests (its own net ID if it stays)
+		public static int BiomeTarget(NPC npc)
+		{
+			BiomeSlotMap map = BiomeSlots.Current;
+			BiomeSlot slot = BiomeSlots.SlotFor(map, npc, BiomeSlots.OriginalOf(map, npc));
+			return slot == null || !BiomeSlots.SlotActive(slot) ? npc.netID : slot.Owner;
 		}
 
 		// Rare enemies and critters (bestiary stars) are picked less often
@@ -168,6 +225,13 @@ namespace UltimateRandomizer.Common.Features
 		// Natural enemies of a tier (night list: every one of them), for the debug tools
 		public static List<int> NaturalEnemies(int tier)
 		{
+			// By biome: the enemies that really spawn somewhere (types: slime colours are Blue Slimes), at the tier from which
+			// they do (never below their own tier, nor below the tier of the slots they spawn in: hardmode-only places stay hardmode)
+			if (BiomeSlots.Active)
+			{
+				return BiomeSlots.Current.SpawnTier.Where(pair => !NPCID.Sets.CountsAsCritter[pair.Key] && Tiers.Clamp(pair.Value) == Tiers.Clamp(tier))
+					.Select(pair => pair.Key).OrderBy(t => t).ToList();
+			}
 			Build();
 			List<int> result = new();
 			for (int m = 0; m < MovementCount; m++)
@@ -208,7 +272,7 @@ namespace UltimateRandomizer.Common.Features
 				movements[type] = movement.Value;
 				int tier = NpcTiers.BaseTier(type);
 				nightBuckets[(int)movement.Value, tier].Add(type);
-				if (!FleesDaylight(npc)) dayBuckets[(int)movement.Value, tier].Add(type);
+				if (!DaylightIntolerant(type)) dayBuckets[(int)movement.Value, tier].Add(type);
 			}
 		}
 
@@ -222,19 +286,40 @@ namespace UltimateRandomizer.Common.Features
 			return buckets;
 		}
 
+		// Movement of a natural enemy that owns biome slots (net IDs: slime colours), null if it is never swapped
+		internal static int? SlotMovement(int type, NPC sample, EnemiesConfig cfg) => (int?)Classify(type, sample, cfg);
+
+		// Movement of an event enemy that may take a biome slot as an extra (no critters; scripted invasions excluded)
+		internal static int? ExtraMovement(int type, NPC npc, EnemiesConfig cfg)
+		{
+			if (Excluded.Contains(type) || NPCID.Sets.CountsAsCritter[type]) return null;
+			if (NPCID.Sets.BelongsToInvasionOldOnesArmy[type] || NPCID.Sets.BelongsToInvasionMartianMadness[type]) return null;
+			if (!Swappable(type, npc, cfg)) return null;
+			return (int)MovementOf(npc);
+		}
+
 		private static Movement? Classify(int type, NPC npc, EnemiesConfig cfg)
 		{
+			if (Excluded.Contains(type) || EclipseEnemies.Contains(type)) return null;
 			if (npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[type] || npc.townNPC || NPCID.Sets.ActsLikeTownNPC[type] || NPCID.Sets.IsTownPet[type]) return null;
-			if (Excluded.Contains(type) || ExcludedAiStyles.Contains(npc.aiStyle) || NPCID.Sets.ProjectileNPC[type]) return null;
+			if (ExcludedAiStyles.Contains(npc.aiStyle) || NPCID.Sets.ProjectileNPC[type]) return null;
 			if (npc.ModNPC != null && !cfg.SwapModdedEnemies) return null;
 			if (IsEventEnemy(type)) return cfg.SwapEventEnemies ? MovementOf(npc) : null;
 			if (NPCID.Sets.CountsAsCritter[type]) return cfg.SwapCritters ? CritterMovement(type, npc) : null;
-			if (npc.lifeMax <= 5 || npc.dontTakeDamage || npc.immortal || npc.friendly) return null;
+			return Swappable(type, npc, cfg) ? MovementOf(npc) : null;
+		}
+
+		// An enemy (not a critter) that can be transformed safely
+		private static bool Swappable(int type, NPC npc, EnemiesConfig cfg)
+		{
+			if (npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[type] || npc.townNPC || NPCID.Sets.ActsLikeTownNPC[type] || NPCID.Sets.IsTownPet[type]) return false;
+			if (ExcludedAiStyles.Contains(npc.aiStyle) || NPCID.Sets.ProjectileNPC[type]) return false;
+			if (npc.ModNPC != null && !cfg.SwapModdedEnemies) return false;
+			if (npc.lifeMax <= 5 || npc.dontTakeDamage || npc.immortal || npc.friendly) return false;
 			// Worms and multi-part enemies can't be transformed safely
-			if (npc.aiStyle == NPCAIStyleID.Worm) return null;
+			if (npc.aiStyle == NPCAIStyleID.Worm) return false;
 			// Natural enemies have a banner; boss minions and parts don't
-			if (Item.NPCtoBanner(npc.BannerID()) <= 0) return null;
-			return MovementOf(npc);
+			return Item.NPCtoBanner(npc.BannerID()) > 0;
 		}
 
 		private static Movement? CritterMovement(int type, NPC npc)
@@ -278,6 +363,17 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
+		private static readonly Dictionary<int, bool> intolerance = new();
+
+		// Flees daylight or dies in it (net IDs accepted; cached: FleesDaylight changes globals for a moment)
+		public static bool DaylightIntolerant(int id)
+		{
+			if (intolerance.TryGetValue(id, out bool cached)) return cached;
+			bool result = ContentSamples.NpcsByNetId.TryGetValue(id, out NPC sample) && (ExcludedFromDaySurface.Contains(sample.type) || FleesDaylight(sample));
+			intolerance[id] = result;
+			return result;
+		}
+
 		// Enemies that may replace a surface spawn by day, for the tests
 		public static IEnumerable<int> DaylightEnemies()
 		{
@@ -301,6 +397,7 @@ namespace UltimateRandomizer.Common.Features
 
 		public static void Reset()
 		{
+			intolerance.Clear();
 			dayBuckets = null;
 			nightBuckets = null;
 			movements = null;
@@ -314,11 +411,16 @@ namespace UltimateRandomizer.Common.Features
 		public static SwapStats Stats { get; private set; } = new();
 
 		// The guaranteed hosts come from the pool: rebuilt with the other world caches (its swap settings may have changed)
-		public override void Load() => WorldCaches.Reset += EnemySwapPool.Reset;
+		public override void Load()
+		{
+			WorldCaches.Reset += EnemySwapPool.Reset;
+			WorldCaches.Reset += BiomeSlots.Reset;
+		}
 
 		public override void OnWorldLoad()
 		{
 			EnemySwapPool.Reset();
+			BiomeSlots.Reset();
 			Array.Clear(Pending);
 			Stats = new SwapStats();
 		}
@@ -339,14 +441,26 @@ namespace UltimateRandomizer.Common.Features
 			NPC npc = Main.npc[i];
 			if (!npc.active) return;
 			int target = EnemySwapPool.Replacement(npc, forceChance, Stats);
-			if (target <= 0 || target == npc.type) return;
-			if (NPCID.Sets.CountsAsCritter[target]) Stats.SwappedCritters++;
+			// Net IDs: a slot may hold a slime colour (Pinky...)
+			if (target == 0 || target == npc.netID || !ContentSamples.NpcsByNetId.ContainsKey(target)) return;
+			ApplySwap(npc, target);
+		}
+
+		// target is a net ID: sets are indexed by its type (slime colours are Blue Slimes)
+		public static void ApplySwap(NPC npc, int target)
+		{
+			if (!ContentSamples.NpcsByNetId.TryGetValue(target, out NPC sample)) return;
+			if (NPCID.Sets.CountsAsCritter[sample.type]) Stats.SwappedCritters++;
 			else Stats.SwappedEnemies++;
 			npc.Transform(target);
 			// Transform gives the NPC new globals: its individual stats (giant, mini...) are rolled again
 			EnemyIndividualNPC.RollAndApply(npc);
 		}
 
-		public override void Unload() => EnemySwapPool.Reset();
+		public override void Unload()
+		{
+			EnemySwapPool.Reset();
+			BiomeSlots.Unload();
+		}
 	}
 }

@@ -35,6 +35,8 @@ namespace UltimateRandomizer.Common.Tests
 			npc.active = false;
 		}
 
+		private static bool BiomeMode => EnemiesConfig.Instance.EnemySwapMode == EnemySwapMode.ByBiome;
+
 		private static void RequireLiveSpawns()
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
@@ -58,6 +60,8 @@ namespace UltimateRandomizer.Common.Tests
 				{
 					npc.SetDefaults(NPCID.Pinky);
 					Check.That(EnemySwapSystem.Pending[npc.whoAmI], "the pending swap was lost by SetDefaults");
+					// By biome, Pinky always becomes the owner of its slot, which may be Pinky itself
+					if (BiomeMode && EnemySwapPool.BiomeTarget(npc) == NPCID.Pinky) Check.Skip("Pinky keeps its own slot in this world");
 					EnemySwapSystem.ProcessSlot(npc.whoAmI, 100);
 					swapped = npc.netID != NPCID.Pinky;
 				}
@@ -82,6 +86,7 @@ namespace UltimateRandomizer.Common.Tests
 				try
 				{
 					string habitat = EnemySwapPool.HabitatOf(npc.type);
+					if (BiomeMode && EnemySwapPool.BiomeTarget(npc) == NPCID.Bunny) Check.Skip("the bunny keeps its own slot here in this world");
 					EnemySwapSystem.ProcessSlot(npc.whoAmI, 100);
 					if (npc.type == NPCID.Bunny) continue;
 					changed++;

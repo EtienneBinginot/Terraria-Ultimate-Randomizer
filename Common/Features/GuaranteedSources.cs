@@ -110,8 +110,8 @@ namespace UltimateRandomizer.Common.Features
 				for (int h = 0; h < HostsPerItem; h++)
 				{
 					int host;
-					List<int> common = requirement.Critical && h < CriticalHosts.Length
-						? CriticalHosts[h].Where(n => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost && IsNaturalHost(n, requirement.Tier)).ToList()
+					List<int> common = requirement.Critical && h < CriticalHostSets
+						? CriticalHosts(h).Where(n => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost && IsNaturalHost(n, requirement.Tier)).ToList()
 						: null;
 					if (common != null && common.Count > 0) host = common[rng.Next(common.Count)];
 					else
@@ -144,7 +144,13 @@ namespace UltimateRandomizer.Common.Features
 		// slimes by day (every colour shares the Blue Slime's type), then zombies or demon eyes by night. Other hosts are
 		// common by bestiary rarity only, and may be enemies seldom met at first (first work bench after 15 to 30 minutes,
 		// see PacingTests)
-		private static readonly int[][] CriticalHosts = { new int[] { NPCID.BlueSlime }, new int[] { NPCID.Zombie, NPCID.DemonEye } };
+		private static readonly int[][] VanillaCriticalHosts = { new int[] { NPCID.BlueSlime }, new int[] { NPCID.Zombie, NPCID.DemonEye } };
+
+		private const int CriticalHostSets = 2;
+
+		// Enemies redistributed by biome: the enemies that now spawn in the Forest slots of the slimes (day) and of the
+		// zombies and demon eyes (night)
+		public static int[] CriticalHosts(int set) => BiomeSlots.Active ? BiomeSlots.CriticalHosts(set == 0).ToArray() : VanillaCriticalHosts[set];
 
 		private static bool IsNaturalHost(int npc, int tier)
 		{
