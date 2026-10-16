@@ -22,6 +22,9 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		public const int HostsPerItem = 2;
+		public const float CriticalStationChance = 1 / 15f;
+		public const float StationChance = 1 / 40f;
+		public const float MaterialChance = 1 / 6f;
 		public const int MaxPerHost = 6;
 
 		// Extra requirements (vanilla recipe ingredients), added by the recipe planner
@@ -109,7 +112,8 @@ namespace UltimateRandomizer.Common.Features
 					int host = best[rng.Next(best.Count)];
 					chosen.Add(host);
 					load[host] = load.GetValueOrDefault(host) + 1;
-					float chance = requirement.Station ? (requirement.Critical ? 0.1f : 0.04f) : 0.25f;
+					// Rare enough to be a small quest (first work bench in 15 to 30 minutes, see PacingTests)
+					float chance = requirement.Station ? (requirement.Critical ? CriticalStationChance : StationChance) : MaterialChance;
 					(int min, int max) = requirement.Station ? (1, 1) : StackRules.Range(requirement.Item);
 					if (!result.TryGetValue(host, out List<PlannedDrop> drops)) result[host] = drops = new List<PlannedDrop>();
 					drops.Add(new PlannedDrop { Item = requirement.Item, StackMin = min, StackMax = Math.Max(min, max), Chance = Math.Min(1f, chance * multiplier), Extra = true, Guaranteed = true });

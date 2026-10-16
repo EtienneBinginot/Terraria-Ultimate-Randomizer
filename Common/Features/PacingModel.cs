@@ -15,6 +15,8 @@ namespace UltimateRandomizer.Common.Features
 		public double StandardDeviation;
 		// Different pieces of equipment per hour, on average
 		public double DistinctPerHour;
+		// Items of any kind per kill, on average
+		public double ItemsPerKill;
 	}
 
 	// Simulates an hour of early game with the current world and settings, to check that random equipment comes
@@ -36,6 +38,76 @@ namespace UltimateRandomizer.Common.Features
 		public const float ItemsPerTree = 0.35f;
 		public const int Herbs = 15;
 
+		// Minutes until the first work bench, averaged over many simulated starts: kills (2.5 per minute), pots
+		// (1 per minute) and a wooden chest every 12 minutes, which holds a work bench with the world's real odds
+		public static double MinutesToFirstWorkBench(int runs, int seed)
+		{
+			Random rng = new(seed);
+			EnemiesConfig enemies = EnemiesConfig.Instance;
+			float swapChance = enemies.RandomizeEnemySpawns ? enemies.EnemySwapChance / 100f : 0f;
+			List<int> pool = EnemySwapPool.NaturalEnemies(0);
+			List<(int npc, int count)> kills = new(EarlyKills);
+			int totalKills = kills.Sum(k => k.count);
+			Dictionary<int, float> benchChance = new();
+			float ChanceOn(int npc)
+			{
+				if (benchChance.TryGetValue(npc, out float chance)) return chance;
+				chance = GuaranteedSources.For(npc).Where(d => d.Item == ItemID.WorkBench).Sum(d => d.Chance);
+				benchChance[npc] = chance;
+				return chance;
+			}
+			int potItems = GuaranteedSources.PotItems(0).Count;
+			float potChance = potItems == 0 ? 0 : ProgressionConfig.Instance.PotGuaranteeChance / 100f / potItems;
+			(int benches, int wooden) = WoodenChestsWithWorkBench();
+			double total = 0;
+			for (int run = 0; run < runs; run++)
+			{
+				int minute = 0;
+				for (; minute < 240; minute++)
+				{
+					bool found = false;
+					for (int k = 0; k < 5 && !found; k++)
+					{
+						if (k >= 3 && rng.NextDouble() < 0.5) continue;
+						int roll = rng.Next(totalKills);
+						int npc = kills[0].npc;
+						foreach ((int type, int count) in kills)
+						{
+							if (roll < count)
+							{
+								npc = type;
+								break;
+							}
+							roll -= count;
+						}
+						if (pool.Count > 0 && rng.NextDouble() < swapChance) npc = pool[rng.Next(pool.Count)];
+						found = rng.NextDouble() < ChanceOn(npc);
+					}
+					if (!found) found = rng.NextDouble() < potChance;
+					if (!found && minute % 12 == 11 && wooden > 0) found = rng.NextDouble() < benches / (double)wooden;
+					if (found) break;
+				}
+				total += minute + 1;
+			}
+			return total / runs;
+		}
+
+		// In this world (single player: chests are only known there)
+		private static (int benches, int wooden) WoodenChestsWithWorkBench()
+		{
+			int benches = 0, wooden = 0;
+			for (int c = 0; c < Main.maxChests; c++)
+			{
+				Chest chest = Main.chest[c];
+				if (chest == null || !WorldGen.InWorld(chest.x, chest.y)) continue;
+				Tile tile = Main.tile[chest.x, chest.y];
+				if (!tile.HasTile || tile.TileType != TileID.Containers || tile.TileFrameX / 36 != 0) continue;
+				wooden++;
+				if (chest.item.Any(item => item != null && item.type == ItemID.WorkBench)) benches++;
+			}
+			return (benches, wooden);
+		}
+
 		public static PacingResult Simulate(int hours, int seed)
 		{
 			Random rng = new(seed);
@@ -47,6 +119,8 @@ namespace UltimateRandomizer.Common.Features
 			Dictionary<int, List<PlannedDrop>> plans = new();
 			List<double> perHour = new();
 			double distinctTotal = 0;
+			long kills = 0;
+			long items = 0;
 			for (int hour = 0; hour < hours; hour++)
 			{
 				int found = 0;
@@ -73,9 +147,11 @@ namespace UltimateRandomizer.Common.Features
 							plan = loot.RandomizeMobDrops ? RandomNpcDropRule.Plan(killed, Main.expertMode) : new List<PlannedDrop>();
 							plans[killed] = plan;
 						}
+						kills++;
 						foreach (PlannedDrop drop in plan)
 						{
 							if (rng.NextDouble() >= drop.Chance) continue;
+							items++;
 							if (!drop.Extra && rng.NextDouble() < surprise) Found(SurpriseItem(NpcTiers.EffectiveTier(killed)));
 							else Found(drop.Item);
 						}
@@ -103,7 +179,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 			double mean = perHour.Average();
 			double deviation = Math.Sqrt(perHour.Sum(x => (x - mean) * (x - mean)) / Math.Max(1, perHour.Count - 1));
-			return new PacingResult { GearPerHour = mean, StandardDeviation = deviation, DistinctPerHour = distinctTotal / hours };
+			return new PacingResult { GearPerHour = mean, StandardDeviation = deviation, DistinctPerHour = distinctTotal / hours, ItemsPerKill = kills == 0 ? 0 : items / (double)kills };
 		}
 	}
 }

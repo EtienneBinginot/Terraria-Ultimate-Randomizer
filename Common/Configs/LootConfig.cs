@@ -91,6 +91,12 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(40f)]
 		public float DropChance;
 
+		// Chance of the small frequent drop (material, potion, ammo...) of every enemy
+		[Range(0f, 100f)]
+		[Increment(5f)]
+		[DefaultValue(50f)]
+		public float CommonDropChance;
+
 		[Range(0, 30)]
 		[DefaultValue(3)]
 		public int BossDropSlotsMin;

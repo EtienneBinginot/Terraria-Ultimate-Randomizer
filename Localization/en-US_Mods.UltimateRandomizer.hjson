@@ -23,9 +23,9 @@ Debug: {
 	Gating: Lock
 	Pool: Items randomizable / protected / excluded
 	Snapshots: Drop tables enemies / bags
-	Findable: "Found from tier {0}, obtainable (with crafting) from tier {1}"
-	GuaranteedOn: "Guaranteed drop of: {0}"
-	GuaranteedTag: "(guaranteed)"
+	Findable: Found from tier {0}, obtainable (with crafting) from tier {1}
+	GuaranteedOn: Guaranteed drop of: {0}
+	GuaranteedTag: (guaranteed)
 	Individual: "{0}: health x{1}, damage x{2}, defense x{3}, size x{4}; loot bonus x{5}"
 	KindNormal: Normal
 	KindGiant: Giant
@@ -114,6 +114,8 @@ Tests: {
 	PacingExpected: 15 to 25 pieces of random equipment per early hour (default settings; the value is written to client.log)
 	PacingSimulation: The pacing simulation is stable and regular
 	PacingVariety: At least 10 different pieces of equipment per early hour
+	DropFrequency: Most kills give something (at least 0.6 items per kill; the value is written to client.log)
+	WorkBenchPacing: The first work bench comes after 15 to 30 minutes on average (written to client.log)
 	BasicStationsUnprotected: Basic stations (work bench, furnace, anvil...) are left to the randomizer
 	ProgressionStationsProtected: Progression stations (Hellforge, hardmode anvils and forges...) stay protected
 	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
@@ -373,7 +375,7 @@ Configs: {
 			TierGating: Unlocking items with progression
 			Protection: Protected progression items
 			Tiers: Tiers
-			Guarantees: "Guaranteed sources"
+			Guarantees: Guaranteed sources
 		}
 
 		TierGating: {
@@ -426,8 +428,8 @@ Configs: {
 		}
 
 		StationProtection: {
-			Label: "Crafting station protection"
-			Tooltip: "Progression only: basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are no longer protected; they are found in the world (common enemies, pots, wooden chests). Progression stations (Hellforge, hardmode anvils and forges...) keep their recipe."
+			Label: Crafting station protection
+			Tooltip: Progression only: basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are no longer protected; they are found in the world (common enemies, pots, wooden chests). Progression stations (Hellforge, hardmode anvils and forges...) keep their recipe.
 		}
 
 		ProtectPickaxeProgression: {
@@ -436,23 +438,23 @@ Configs: {
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: "Guaranteed drop chance multiplier"
-			Tooltip: "Basic stations (and vanilla ingredients, if chosen) are placed on two common enemies of their tier. Raise this to find them sooner."
+			Label: Guaranteed drop chance multiplier
+			Tooltip: Basic stations (and vanilla ingredients, if chosen) are placed on two common enemies of their tier. Raise this to find them sooner.
 		}
 
 		PotGuaranteeChance: {
-			Label: "Guaranteed items in pots (%)"
-			Tooltip: "Chance that a pot also gives one of the guaranteed items already unlocked."
+			Label: Guaranteed items in pots (%)
+			Tooltip: Chance that a pot also gives one of the guaranteed items already unlocked.
 		}
 
 		ChestStationGuarantee: {
-			Label: "Basic stations in wooden chests"
-			Tooltip: "Copies of each basic station hidden in wooden chests when the world is created (or when /rchests is used)."
+			Label: Basic stations in wooden chests
+			Tooltip: Copies of each basic station hidden in wooden chests when the world is created (or when /rchests is used).
 		}
 
 		MinFindableChance: {
-			Label: "Minimum chance to count as findable (%)"
-			Tooltip: "A drop counts as a way to find an item (to choose recipe ingredients) when its chance is at least this."
+			Label: Minimum chance to count as findable (%)
+			Tooltip: A drop counts as a way to find an item (to choose recipe ingredients) when its chance is at least this.
 		}
 
 		TierOverrides: {
@@ -482,7 +484,7 @@ Configs: {
 			Mobs: Enemies and bosses
 			Bags: Bags and crates
 			World: World: chests, fishing, mining
-			Variety: "Variety"
+			Variety: Variety
 		}
 
 		RandomizeMobDrops: {
@@ -525,6 +527,11 @@ Configs: {
 			Tooltip: Only used by the Simple style. Items above the enemy's level are rarer.
 		}
 
+		CommonDropChance: {
+			Label: "Small frequent drop (%)"
+			Tooltip: "Every enemy also has one small drop fixed for the world (material, potion, ammo, food, block or ore), with this chance. Most kills then give something."
+		}
+
 		BossDropSlotsMin: {
 			Label: Boss extra drops (minimum)
 			Tooltip: In expert and master mode, bosses with a treasure bag get no extra drops: their bag content is randomized instead.
@@ -536,8 +543,8 @@ Configs: {
 		}
 
 		DropCategoryWeights: {
-			Label: "Loot weights"
-			Tooltip: "Relative chance of each kind of item for everything that gives random items (extra drops, surprises). 0 = never. Ingredients of recipes use their own weights."
+			Label: Loot weights
+			Tooltip: Relative chance of each kind of item for everything that gives random items (extra drops, surprises). 0 = never. Ingredients of recipes use their own weights.
 		}
 
 		RandomizeBossBags: {
@@ -586,48 +593,48 @@ Configs: {
 		}
 
 		RandomizeTreeShaking: {
-			Label: "Randomize shaken trees"
-			Tooltip: "Fruits and items falling from shaken trees are replaced (same kind, or a surprise)."
+			Label: Randomize shaken trees
+			Tooltip: Fruits and items falling from shaken trees are replaced (same kind, or a surprise).
 		}
 
 		KeepAcorns: {
-			Label: "Keep acorns"
-			Tooltip: "Shaken trees still give acorns, so trees can be replanted."
+			Label: Keep acorns
+			Tooltip: Shaken trees still give acorns, so trees can be replanted.
 		}
 
 		RandomizeHerbs: {
-			Label: "Randomize herbs and plants"
-			Tooltip: "Herbs, mushrooms, jungle spores and other plants give other materials of their tier. Seeds are kept."
+			Label: Randomize herbs and plants
+			Tooltip: Herbs, mushrooms, jungle spores and other plants give other materials of their tier. Seeds are kept.
 		}
 
 		HerbKeepChance: {
-			Label: "Herbs kept (%)"
-			Tooltip: "Chance that a herb or plant still gives its usual item."
+			Label: Herbs kept (%)
+			Tooltip: Chance that a herb or plant still gives its usual item.
 		}
 
 		HerbVariety: {
-			Label: "Items per herb"
-			Tooltip: "Number of different items each herb or plant can turn into in a world."
+			Label: Items per herb
+			Tooltip: Number of different items each herb or plant can turn into in a world.
 		}
 
 		RandomizeExtractinator: {
-			Label: "Randomize the Extractinator"
-			Tooltip: "Items from the Extractinator are replaced (ores by other ores of the same tier). Coins are kept."
+			Label: Randomize the Extractinator
+			Tooltip: Items from the Extractinator are replaced (ores by other ores of the same tier). Coins are kept.
 		}
 
 		RandomizeAnglerRewards: {
-			Label: "Randomize Angler rewards"
-			Tooltip: "Rewards of the Angler's fishing quests are replaced. Coins and bait are kept."
+			Label: Randomize Angler rewards
+			Tooltip: Rewards of the Angler's fishing quests are replaced. Coins and bait are kept.
 		}
 
 		SurpriseChance: {
-			Label: "Surprise chance (%)"
-			Tooltip: "Chance that a replaced item (enemy drop, chest, pot, bag, fish...) becomes an item of any category, rolled with the loot weights, instead of keeping its kind. 0 = always the same kind, 100 = anything."
+			Label: Surprise chance (%)
+			Tooltip: Chance that a replaced item (enemy drop, chest, pot, bag, fish...) becomes an item of any category, rolled with the loot weights, instead of keeping its kind. 0 = always the same kind, 100 = anything.
 		}
 
 		TierWindow: {
-			Label: "Tier window"
-			Tooltip: "Random items are also picked among this many tiers below the target. More variety, especially early in the game."
+			Label: Tier window
+			Tooltip: Random items are also picked among this many tiers below the target. More variety, especially early in the game.
 		}
 	}
 
@@ -918,8 +925,8 @@ Configs: {
 		Headers: {
 			Recipes: Recipes
 			Shimmer: Shimmer
-			Ingredients: "Recipe ingredients"
-			Stations: "Crafting stations of recipes"
+			Ingredients: Recipe ingredients
+			Stations: Crafting stations of recipes
 		}
 
 		RandomizeRecipes: {
@@ -938,38 +945,38 @@ Configs: {
 		}
 
 		RecipeSurpriseChance: {
-			Label: "Recipe surprise chance (%)"
-			Tooltip: "Chance that a recipe gives an item of any category (loot weights) instead of an item of the same kind as the original result."
+			Label: Recipe surprise chance (%)
+			Tooltip: Chance that a recipe gives an item of any category (loot weights) instead of an item of the same kind as the original result.
 		}
 
 		IngredientMode: {
-			Label: "Ingredients"
-			Tooltip: "Randomized: ingredients that can't be found at the recipe's level (specific drops...) are replaced by materials you can find (world, drops of this world). Vanilla: ingredients are kept and each one is placed on enemies of the recipe's level."
+			Label: Ingredients
+			Tooltip: Randomized: ingredients that can't be found at the recipe's level (specific drops...) are replaced by materials you can find (world, drops of this world). Vanilla: ingredients are kept and each one is placed on enemies of the recipe's level.
 		}
 
 		IngredientWeights: {
-			Label: "Ingredient weights"
-			Tooltip: "Relative chance of each kind of item when a recipe ingredient is replaced. 0 = never."
+			Label: Ingredient weights
+			Tooltip: Relative chance of each kind of item when a recipe ingredient is replaced. 0 = never.
 		}
 
 		IngredientVarietyChance: {
-			Label: "Ingredient variety (%)"
-			Tooltip: "Chance that a specific ingredient is replaced even when it can be found, for more varied recipes. Materials gathered in the world (wood, stone, ores...) are never replaced this way."
+			Label: Ingredient variety (%)
+			Tooltip: Chance that a specific ingredient is replaced even when it can be found, for more varied recipes. Materials gathered in the world (wood, stone, ores...) are never replaced this way.
 		}
 
 		IngredientStackCap: {
-			Label: "Maximum amount of a replaced ingredient"
-			Tooltip: "The amount is adjusted to keep about the same value as the original ingredient, up to this limit."
+			Label: Maximum amount of a replaced ingredient
+			Tooltip: The amount is adjusted to keep about the same value as the original ingredient, up to this limit.
 		}
 
 		RandomizeStations: {
-			Label: "Randomize crafting stations"
-			Tooltip: "Recipes may require another station of the same or a lower level. Recipes made by hand stay by hand, progression recipes keep theirs."
+			Label: Randomize crafting stations
+			Tooltip: Recipes may require another station of the same or a lower level. Recipes made by hand stay by hand, progression recipes keep theirs.
 		}
 
 		StationKeepChance: {
-			Label: "Station kept (%)"
-			Tooltip: "Chance that a recipe keeps its own station."
+			Label: Station kept (%)
+			Tooltip: Chance that a recipe keeps its own station.
 		}
 
 		RandomizeShimmer: {
@@ -999,8 +1006,8 @@ Configs: {
 			Bosses: Bosses
 			Enemies: Normal enemies
 			EnemySwap: Random enemies
-			GiantsAndMinis: "Giants and minis"
-			LootBonus: "Loot of strong enemies"
+			GiantsAndMinis: Giants and minis
+			LootBonus: Loot of strong enemies
 		}
 
 		RandomizeBossHealth: {
@@ -1034,18 +1041,18 @@ Configs: {
 		}
 
 		BossStatExtremeness: {
-			Label: "Boss extreme values rarity"
-			Tooltip: "1 = every value in the range is as likely. Higher: values far from normal are rarer."
+			Label: Boss extreme values rarity
+			Tooltip: 1 = every value in the range is as likely. Higher: values far from normal are rarer.
 		}
 
 		BossIndividualVariation: {
-			Label: "Boss variation between fights (%)"
-			Tooltip: "Each boss fight varies a little around the boss's values of this world."
+			Label: Boss variation between fights (%)
+			Tooltip: Each boss fight varies a little around the boss's values of this world.
 		}
 
 		BossGiantChance: {
-			Label: "Giant boss chance (%)"
-			Tooltip: "Chance that a boss is a giant (bigger, much tougher). Some bosses may behave oddly when giant."
+			Label: Giant boss chance (%)
+			Tooltip: Chance that a boss is a giant (bigger, much tougher). Some bosses may behave oddly when giant.
 		}
 
 		RandomizeEnemyStats: {
@@ -1094,68 +1101,68 @@ Configs: {
 		}
 
 		StatExtremeness: {
-			Label: "Extreme values rarity"
-			Tooltip: "1 = every value in the ranges is as likely. Higher: values far from normal are rarer, but still possible."
+			Label: Extreme values rarity
+			Tooltip: 1 = every value in the ranges is as likely. Higher: values far from normal are rarer, but still possible.
 		}
 
 		ScaleFollowsLife: {
-			Label: "Size follows health"
-			Tooltip: "0 = size and health are unrelated. 1 = tougher enemy types are bigger."
+			Label: Size follows health
+			Tooltip: 0 = size and health are unrelated. 1 = tougher enemy types are bigger.
 		}
 
 		IndividualVariation: {
-			Label: "Variation between individuals (%)"
-			Tooltip: "Each enemy varies a little around the values of its type in this world (health, damage, defense, size)."
+			Label: Variation between individuals (%)
+			Tooltip: Each enemy varies a little around the values of its type in this world (health, damage, defense, size).
 		}
 
 		GiantChance: {
-			Label: "Giant chance (%)"
-			Tooltip: "Chance that an enemy is a giant: much bigger, tougher and more dangerous, with better loot."
+			Label: Giant chance (%)
+			Tooltip: Chance that an enemy is a giant: much bigger, tougher and more dangerous, with better loot.
 		}
 
 		GiantSizeMin: {
-			Label: "Giant size (minimum)"
-			Tooltip: "Size multiplier of giants. Big sizes are rarer."
+			Label: Giant size (minimum)
+			Tooltip: Size multiplier of giants. Big sizes are rarer.
 		}
 
 		GiantSizeMax: {
-			Label: "Giant size (maximum)"
+			Label: Giant size (maximum)
 			Tooltip: ""
 		}
 
 		MiniChance: {
-			Label: "Mini chance (%)"
-			Tooltip: "Chance that an enemy is a mini: tiny, weaker, hard to hit."
+			Label: Mini chance (%)
+			Tooltip: Chance that an enemy is a mini: tiny, weaker, hard to hit.
 		}
 
 		MiniSizeMin: {
-			Label: "Mini size (minimum)"
-			Tooltip: "Size multiplier of minis. The smallest sizes are rarer."
+			Label: Mini size (minimum)
+			Tooltip: Size multiplier of minis. The smallest sizes are rarer.
 		}
 
 		MiniSizeMax: {
-			Label: "Mini size (maximum)"
+			Label: Mini size (maximum)
 			Tooltip: ""
 		}
 
 		MaxGiantPixels: {
-			Label: "Largest giant (pixels)"
-			Tooltip: "A giant is never wider or taller than this (a tile is 16 pixels), so it can still move around."
+			Label: Largest giant (pixels)
+			Tooltip: A giant is never wider or taller than this (a tile is 16 pixels), so it can still move around.
 		}
 
 		LootBonusStrength: {
-			Label: "Loot bonus strength"
-			Tooltip: "Stronger enemies (health x damage above normal) have better extra drop chances. 0 = no bonus."
+			Label: Loot bonus strength
+			Tooltip: Stronger enemies (health x damage above normal) have better extra drop chances. 0 = no bonus.
 		}
 
 		LootBonusCap: {
-			Label: "Loot bonus cap"
-			Tooltip: "Largest multiplier of the extra drop chances."
+			Label: Loot bonus cap
+			Tooltip: Largest multiplier of the extra drop chances.
 		}
 
 		GiantBonusDrop: {
-			Label: "Giants drop one more item"
-			Tooltip: "A giant always drops one more random item of its level."
+			Label: Giants drop one more item
+			Tooltip: A giant always drops one more random item of its level.
 		}
 
 		RandomizeEnemySpawns: {
@@ -1239,33 +1246,35 @@ Configs: {
 	}
 
 	StationProtection: {
-
 		AllStations: {
-			Label: "All stations"
+			Label: All stations
 			Tooltip: ""
 		}
 
 		ProgressionOnly: {
-			Label: "Progression stations only"
+			Label: Progression stations only
 			Tooltip: ""
 		}
 
 		None: {
-			Label: "None"
+			Label: None
 			Tooltip: ""
 		}
+
+		Tooltip: ""
 	}
 
 	IngredientMode: {
-
 		Randomized: {
-			Label: "Randomized"
+			Label: Randomized
 			Tooltip: ""
 		}
 
 		Vanilla: {
-			Label: "Vanilla (guaranteed)"
+			Label: Vanilla (guaranteed)
 			Tooltip: ""
 		}
+
+		Tooltip: ""
 	}
 }

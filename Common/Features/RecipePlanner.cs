@@ -93,7 +93,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				// Tiles without an item (Demon Altar...) are part of the world
 				if (!itemsByTile.TryGetValue(tile, out List<int> placers)) return 0;
-				int best = Never;
+				int best = ProtectedStationTier(tile);
 				foreach (int placer in placers)
 				{
 					if (placer < avail.Length) best = Math.Min(best, avail[placer]);
@@ -184,6 +184,13 @@ namespace UltimateRandomizer.Common.Features
 
 		// ---------------------------------------------------------------- Stations
 
+		// Progression stations keep their vanilla way to be obtained (crafted, bought from a town NPC...): usable from their tier
+		private static int ProtectedStationTier(int tile)
+		{
+			Stations.StationInfo info = Stations.Info(tile);
+			return info.Kind == StationKind.Progression && ProgressionConfig.Instance.StationProtection != StationProtection.None ? info.Tier : Never;
+		}
+
 		// Stations a recipe may be given: basic and progression ones (not the Demon Altar, not themed or modded ones)
 		private static bool Assignable(int tile)
 		{
@@ -194,7 +201,9 @@ namespace UltimateRandomizer.Common.Features
 		private static void PlanStations(RecipePlan result, int[] results, int[] avail, int[] recipeTiers)
 		{
 			Dictionary<int, List<int>> itemsByTile = ItemsByTile();
-			int TileAvail(int tile) => itemsByTile.TryGetValue(tile, out List<int> placers) ? placers.Where(p => p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Never).Min() : 0;
+			int TileAvail(int tile) => itemsByTile.TryGetValue(tile, out List<int> placers)
+				? Math.Min(ProtectedStationTier(tile), placers.Where(p => p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Never).Min())
+				: 0;
 			// A fixed order of the stations: a recipe making a station only ever requires stations placed before it,
 			// so no station can end up needing itself
 			List<int> order = Stations.RequiredTiles().Where(Assignable)
@@ -219,7 +228,10 @@ namespace UltimateRandomizer.Common.Features
 					if (Assignable(tile))
 					{
 						int limit = TileAvail(tile);
-						List<int> allowed = order.Where(s => TileAvail(s) <= limit && position[s] < bound).ToList();
+						int recipeTier = RecipeTier(i);
+						// Never a progression station above the recipe's level (it may also be unavailable: bought, or modded)
+						List<int> allowed = order.Where(s => TileAvail(s) <= limit && position[s] < bound
+							&& (Stations.Info(s).Kind != StationKind.Progression || Stations.Info(s).Tier <= recipeTier)).ToList();
 						bool keepOwn = allowed.Contains(tile) && rng.NextDouble() < keep;
 						if (!keepOwn && allowed.Count > 0) chosen = allowed[rng.Next(allowed.Count)];
 					}

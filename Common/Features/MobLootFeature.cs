@@ -35,6 +35,19 @@ namespace UltimateRandomizer.Common.Features
 		public bool Guaranteed;
 	}
 
+	// Categories of the frequent small drop of every enemy
+	public class CommonDropWeights : WeightTable
+	{
+		public static readonly CommonDropWeights Instance = new();
+
+		public int Material = 30;
+		public int Potion = 25;
+		public int Ammo = 15;
+		public int Food = 10;
+		public int Block = 10;
+		public int OreBar = 10;
+	}
+
 	// Extra random drops, on top of the (replaced) original drops: a random number per enemy type, vanilla-like rates
 	public class RandomNpcDropRule : IItemDropRule
 	{
@@ -179,6 +192,24 @@ namespace UltimateRandomizer.Common.Features
 				}
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
 				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true });
+			}
+
+			// A small frequent drop (material, potion, ammo...), so that most kills give something
+			if (!isBoss && !critter && cfg.CommonDropChance > 0)
+			{
+				RollRequest common = new()
+				{
+					Keys = new[] { RollKey.MobDrop, npcKey, 2000 },
+					SourceTier = sourceTier,
+					OriginalItem = -1,
+					Policy = CategoryPolicy.Weighted,
+					Weights = CommonDropWeights.Instance,
+					TierJitterDown = 1,
+					IgnoreGating = lucky
+				};
+				int item = ItemPool.Roll(common);
+				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000, item));
+				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = cfg.CommonDropChance / 100f, Extra = true });
 			}
 			return drops;
 		}

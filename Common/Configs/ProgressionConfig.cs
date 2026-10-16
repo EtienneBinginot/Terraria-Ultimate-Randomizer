@@ -98,12 +98,12 @@ namespace UltimateRandomizer.Common.Configs
 		// Chance that a pot also gives one of the guaranteed items (basic stations...) already unlocked
 		[Range(0f, 20f)]
 		[Increment(0.5f)]
-		[DefaultValue(3f)]
+		[DefaultValue(1f)]
 		public float PotGuaranteeChance;
 
 		// Copies of each basic station hidden in wooden chests when the world is created
 		[Range(0, 5)]
-		[DefaultValue(2)]
+		[DefaultValue(1)]
 		public int ChestStationGuarantee;
 
 		// A drop counts as a way to find an item (recipe ingredients...) when its chance is at least this (%)

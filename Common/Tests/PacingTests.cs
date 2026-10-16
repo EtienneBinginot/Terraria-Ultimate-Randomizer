@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Terraria.ID;
 using System.ComponentModel;
 using System.Reflection;
 using Terraria.ModLoader;
@@ -18,6 +20,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("PacingExpected", PacingExpected);
 			TestRunner.Register("PacingSimulation", PacingSimulation);
 			TestRunner.Register("PacingVariety", PacingVariety);
+			TestRunner.Register("DropFrequency", DropFrequency);
+			TestRunner.Register("WorkBenchPacing", WorkBenchPacing);
 		}
 
 		private static void Log(string text) => ModContent.GetInstance<UltimateRandomizer>().Logger.Info(text);
@@ -63,6 +67,28 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(Math.Abs(a.GearPerHour - b.GearPerHour) < 0.001, "the simulation is not deterministic");
 			Check.That(a.GearPerHour > 0, "no equipment at all");
 			Check.That(a.StandardDeviation <= a.GearPerHour, $"too irregular: {a.GearPerHour:0.0} ± {a.StandardDeviation:0.0} per hour");
+		}
+
+		// Most kills give something (with the default settings)
+		private static void DropFrequency()
+		{
+			PacingResult result = PacingModel.Simulate(5, 44);
+			Log($"Drops: {result.ItemsPerKill:0.00} items per kill");
+			RequireDefaults();
+			if (!IsDefault(LootConfig.Instance, "CommonDropChance")) Check.Skip("CommonDropChance is not at its default value");
+			Check.That(result.ItemsPerKill >= 0.6, $"only {result.ItemsPerKill:0.00} items per kill");
+		}
+
+		// The first work bench is a small quest: 15 to 30 minutes on average
+		private static void WorkBenchPacing()
+		{
+			if (!GuaranteedSources.StationRequirements().Any(r => r.Item == ItemID.WorkBench)) Check.Skip("the work bench is protected");
+			double minutes = PacingModel.MinutesToFirstWorkBench(400, 45);
+			Log($"First work bench: {minutes:0} minutes on average");
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			if (!IsDefault(progression, "GuaranteedDropMultiplier") || !IsDefault(progression, "PotGuaranteeChance")) Check.Skip("guarantee settings are not the default ones");
+			RequireDefaults();
+			Check.That(minutes >= 15 && minutes <= 30, $"first work bench after {minutes:0} minutes on average, expected 15 to 30");
 		}
 
 		private static void PacingVariety()
