@@ -34,14 +34,21 @@ namespace UltimateRandomizer.Common.Features
 
 		private static RecipePlan plan;
 
+		// Results rolled from the original recipes, shared by the plan and the requirement providers
+		private static (int type, int stack)[] originalResults;
+
 		static RecipePlanner()
 		{
-			WorldCaches.Reset += () => plan = null;
+			WorldCaches.Reset += Reset;
 		}
 
 		public static RecipePlan Get() => plan ??= Build();
 
-		public static void Reset() => plan = null;
+		public static void Reset()
+		{
+			plan = null;
+			originalResults = null;
+		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
 
@@ -159,7 +166,9 @@ namespace UltimateRandomizer.Common.Features
 			return avail;
 		}
 
-		// Results once everything is unlocked (the plan must not depend on progression)
+		// Results once everything is unlocked, from the original recipes (the plan must not depend on progression)
+		private static (int type, int stack)[] UnlockedResults() => originalResults ??= UnlockedResults(OriginalIngredients());
+
 		private static (int type, int stack)[] UnlockedResults((int type, int stack)[][] ingredients)
 		{
 			int count = Count;
@@ -197,7 +206,7 @@ namespace UltimateRandomizer.Common.Features
 				Ingredients = new (int, int)[count][],
 				IngredientValues = new long[count],
 				Tiles = new int[count][],
-				Results = UnlockedResults(ingredients)
+				Results = ((int, int)[])UnlockedResults().Clone()
 			};
 			int[] results = Types(result.Results);
 			result.ResultTiers = ResultTiers(results);
@@ -217,7 +226,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			// Tiles without an item (Demon Altar...) are part of the world
 			if (!itemsByTile.TryGetValue(tile, out List<int> placers)) return 0;
-			int best = ProtectedStationTier(tile);
+			int best = placers.Any(Obtainability.RecipeResults.Contains) ? Never : ProtectedStationTier(tile);
 			foreach (int placer in placers)
 			{
 				if (placer < avail.Length) best = Math.Min(best, avail[placer]);
@@ -225,8 +234,10 @@ namespace UltimateRandomizer.Common.Features
 			return best;
 		}
 
-		// Progression stations keep their vanilla way to be obtained (crafted, bought from a town NPC...): usable from their tier
-		private static int ProtectedStationTier(int tile)
+		// Progression stations no recipe makes (bought from a town NPC, found in the world) keep their vanilla way to be
+		// obtained: usable from their tier. A crafted one (Mythril Anvil, Adamantite Forge...) is available once its recipe
+		// is doable, like any item: its protected recipe keeps its result, but its ingredients are planned
+		public static int ProtectedStationTier(int tile)
 		{
 			Stations.StationInfo info = Stations.Info(tile);
 			return info.Kind == StationKind.Progression ? info.Tier : Never;
@@ -307,8 +318,9 @@ namespace UltimateRandomizer.Common.Features
 			HashSet<int> stationItems = Stations.Basic().Select(s => s.info.Item).ToHashSet();
 			for (int item = 1; item < ItemPool.Info.Length; item++)
 			{
-				// Hardmode pair ores: present or not depending on the altars, the ingredient plan must not depend on them
-				if (!ItemPool.IsRandomizable(item) || stationItems.Contains(item) || OreMap.IsHardmodePairOre(item)) continue;
+				// Hardmode pair ores: present or not depending on the altars, the ingredient plan must not depend on them. Ores
+				// that need a strong pickaxe (and Obsidian): a pickaxe chain could otherwise need its own ore
+				if (!ItemPool.IsRandomizable(item) || stationItems.Contains(item) || OreMap.IsHardmodePairOre(item) || MiningOres.Contains(item)) continue;
 				ItemCategory category = ItemPool.Info[item].Category;
 				if (Unusable.Contains(category)) continue;
 				int tier = Findability.Tier(item);
@@ -324,7 +336,8 @@ namespace UltimateRandomizer.Common.Features
 			HashSet<int> worldMaterials = Findability.WorldMaterialSet();
 			for (int i = 0; i < Count; i++)
 			{
-				if (!RecipeSystem.Touchable(i)) continue;
+				// Protected results (boss summons, progression stations...) are planned too: only their result and stations stay
+				if (!RecipeSystem.IngredientsTouchable(i)) continue;
 				Recipe recipe = Main.recipe[i];
 				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
 				int rt = RecipeTier(i);
@@ -339,30 +352,43 @@ namespace UltimateRandomizer.Common.Features
 					bool variety = rng.NextDouble() * 100 < cfg.IngredientVarietyChance;
 					bool keep = InGroup(recipe, g, out _) || !ItemPool.IsRandomizable(g) || Unusable.Contains(ItemPool.Info[g].Category)
 						|| (g < avail.Length && avail[g] <= cap && (worldMaterials.Contains(g) || !variety));
-					int x = keep ? g : PickIngredient(buckets, cap, rng, i, results[i], planned, original, g);
+					long value = (long)Math.Max(StackRules.ValueOf(g), 1) * n;
+					// With the value cap, the result was rolled against the original ingredients' value: a replacement held by
+					// the stack cap must not make the recipe cheaper than that
+					long minValue = cfg.LimitRecipeValue ? value : 0;
+					int x = keep ? g : PickIngredient(buckets, cap, rng, i, results[i], planned, original, g, value, minValue);
 					if (x == g)
 					{
 						planned.Add((g, n));
 						continue;
 					}
 					changed = true;
-					long value = (long)Math.Max(StackRules.ValueOf(g), 1) * n;
-					int stack = (int)Math.Clamp((value + Math.Max(StackRules.ValueOf(x), 1) - 1) / Math.Max(StackRules.ValueOf(x), 1), 1, Math.Min(StackRules.MaxStackOf(x), cfg.IngredientStackCap));
-					planned.Add((x, stack));
+					planned.Add((x, ReplacementStack(value, x)));
 				}
 				if (!changed) continue;
 				// Two slots may now ask for the same item
 				(int type, int stack)[] merged = planned.GroupBy(p => p.type).Select(grp => (grp.Key, Math.Min(StackRules.MaxStackOf(grp.Key), grp.Sum(p => p.stack)))).ToArray();
+				long plannedValue = merged.Sum(p => (long)Math.Max(StackRules.ValueOf(p.Item1), 1) * p.Item2);
+				// Merging may still lose value: the original ingredients then stay, so the cap holds
+				if (cfg.LimitRecipeValue && (long)StackRules.ValueOf(result.Results[i].type) * result.Results[i].stack > RecipeSystem.MaxResultValue(i, plannedValue, cfg.RecipeValueGuard)) continue;
 				result.Ingredients[i] = merged;
-				result.IngredientValues[i] = merged.Sum(p => (long)Math.Max(StackRules.ValueOf(p.Item1), 1) * p.Item2);
+				result.IngredientValues[i] = plannedValue;
 			}
 		}
 
-		private static int PickIngredient(List<int>[,] buckets, int cap, Random rng, int recipe, int luckyResult, List<(int type, int stack)> planned, (int type, int stack)[] original, int current)
+		// Stack of a replacement worth the replaced slot (rounded up), within the stack caps
+		private static int ReplacementStack(long value, int x)
+		{
+			long unit = Math.Max(StackRules.ValueOf(x), 1);
+			return (int)Math.Clamp((value + unit - 1) / unit, 1, Math.Min(StackRules.MaxStackOf(x), CraftingConfig.Instance.IngredientStackCap));
+		}
+
+		private static int PickIngredient(List<int>[,] buckets, int cap, Random rng, int recipe, int luckyResult, List<(int type, int stack)> planned, (int type, int stack)[] original, int current, long slotValue, long minValue)
 		{
 			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
 			int originalResult = RecipeSystem.OriginalResult(recipe);
-			bool Usable(int x) => x != originalResult && x != luckyResult && !planned.Any(p => p.type == x) && !original.Any(o => o.type == x);
+			bool Usable(int x) => x != originalResult && x != luckyResult && !planned.Any(p => p.type == x) && !original.Any(o => o.type == x)
+				&& (minValue <= 0 || (long)Math.Max(StackRules.ValueOf(x), 1) * ReplacementStack(slotValue, x) >= minValue);
 			for (int attempt = 0; attempt < 12; attempt++)
 			{
 				// Categories that have something findable at or below the cap
@@ -415,12 +441,12 @@ namespace UltimateRandomizer.Common.Features
 			CraftingConfig cfg = CraftingConfig.Instance;
 			if (!cfg.RandomizeRecipes || cfg.IngredientMode != IngredientMode.Vanilla || RecipeSystem.RecipeCount == 0) yield break;
 			(int, int)[][] ingredients = OriginalIngredients();
-			int[] results = Types(UnlockedResults(ingredients));
+			int[] results = Types(UnlockedResults());
 			int[] avail = Availability(Findability.BaseTier, results, ResultTiers(results), ingredients, OriginalTiles(), out _);
 			Dictionary<int, int> needed = new();
 			for (int i = 0; i < Count; i++)
 			{
-				if (!RecipeSystem.Touchable(i)) continue;
+				if (!RecipeSystem.IngredientsTouchable(i)) continue;
 				Recipe recipe = Main.recipe[i];
 				int rt = RecipeTier(i);
 				foreach ((int g, _) in RecipeSystem.OriginalIngredients(i))
@@ -432,6 +458,96 @@ namespace UltimateRandomizer.Common.Features
 				}
 			}
 			foreach ((int item, int tier) in needed) yield return new GuaranteedSources.Requirement { Item = item, Tier = tier };
+		}
+
+		// ---------------------------------------------------------------- Mining
+
+		// Pick power needed by the ores of each level (Player.GetPickaxeDamage): meteorite 50, demonite and crimtane 55
+		// (below the surface), hellstone 65, cobalt/palladium 100, mythril/orichalcum 110, adamantite/titanium 150,
+		// chlorophyte 200. Luminite has no check there (and is dropped by the Moon Lord).
+		public static readonly (int pick, int[] ores)[] MiningLevels =
+		{
+			(50, new int[] { ItemID.Meteorite }),
+			(55, new int[] { ItemID.DemoniteOre, ItemID.CrimtaneOre }),
+			(65, new int[] { ItemID.Hellstone }),
+			(100, new int[] { ItemID.CobaltOre, ItemID.PalladiumOre }),
+			(110, new int[] { ItemID.MythrilOre, ItemID.OrichalcumOre }),
+			(150, new int[] { ItemID.AdamantiteOre, ItemID.TitaniumOre }),
+			(200, new int[] { ItemID.ChlorophyteOre })
+		};
+
+		public static int PickPower(int item) => ContentSamples.ItemsByType.TryGetValue(item, out Item sample) ? sample.pick : 0;
+
+		// The tier at which the ores of a level are mined (-1: none of them in this world)
+		public static int MiningTier((int pick, int[] ores) level)
+		{
+			int tier = int.MaxValue;
+			foreach (int ore in level.ores)
+			{
+				if (ItemPool.IsValid(ore) && OreMap.IsFindable(ore)) tier = Math.Min(tier, ItemPool.TierOf(ore));
+			}
+			return tier == int.MaxValue ? -1 : tier;
+		}
+
+		// Ores that need at least this pick power: not mined before such a pickaxe exists. Randomized ores are a permutation
+		// inside each tier (OreMap: the Cobalt item may come from the Adamantite tile), so then every ore of such a tier counts
+		public static HashSet<int> OresFrom(int pick)
+		{
+			HashSet<int> ores = MiningLevels.Where(l => l.pick >= pick).SelectMany(l => l.ores).ToHashSet();
+			if (pick <= 55) ores.Add(ItemID.Obsidian);
+			if (LootConfig.Instance.RandomizeOreDrops)
+			{
+				HashSet<int> tiers = ores.Where(ItemPool.IsValid).Select(ItemPool.TierOf).ToHashSet();
+				for (int type = 1; type < ItemPool.Info.Length; type++)
+				{
+					if (OreMap.IsOre(type) && tiers.Contains(ItemPool.TierOf(type))) ores.Add(type);
+				}
+			}
+			return ores;
+		}
+
+		// Every ore of a mining level, and Obsidian (55): never a new ingredient
+		private static readonly HashSet<int> MiningOres = MiningLevels.SelectMany(l => l.ores).Append(ItemID.Obsidian).ToHashSet();
+
+		// A pickaxe (or drill) strong enough for each mining level, by the tier of its ores: when the recipes (results rolled
+		// from the original recipes) and the raw sources don't give one in time, the cheapest vanilla one of that level is
+		// placed on common enemies. Computed from Findability.BaseTier and the basic stations' requirements, never from
+		// RecipePlanner.Get() (the plan depends on the guaranteed sources). The ores of the level and above count as not
+		// found at all (not even dropped): conservative, a spare pickaxe is harmless.
+		public static IEnumerable<GuaranteedSources.Requirement> MiningRequirements()
+		{
+			if (RecipeSystem.RecipeCount == 0 || !ItemPool.Ready) yield break;
+			(int, int)[][] ingredients = OriginalIngredients();
+			int[][] tiles = OriginalTiles();
+			int[] results = Types(UnlockedResults());
+			int[] resultTiers = ResultTiers(results);
+			Dictionary<int, int> stations = new();
+			foreach (GuaranteedSources.Requirement station in GuaranteedSources.StationRequirements()) stations[station.Item] = Math.Min(stations.GetValueOrDefault(station.Item, station.Tier), station.Tier);
+			List<int> pickaxes = ContentSamples.ItemsByType.Where(pair => pair.Value.pick > 0 && ItemPool.IsValid(pair.Key) && !ItemPool.Info[pair.Key].Excluded).Select(pair => pair.Key).OrderBy(t => t).ToList();
+			Dictionary<int, int> guaranteed = new();
+			foreach ((int pick, int[] ores) level in MiningLevels)
+			{
+				int oreTier = MiningTier(level);
+				if (oreTier < 0) continue;
+				HashSet<int> unmined = OresFrom(level.pick);
+				int Found(int item)
+				{
+					if (unmined.Contains(item)) return Never;
+					int tier = Findability.BaseTier(item);
+					if (stations.TryGetValue(item, out int s)) tier = Math.Min(tier, s);
+					if (guaranteed.TryGetValue(item, out int g)) tier = Math.Min(tier, g);
+					return tier;
+				}
+				int[] avail = Availability(Found, results, resultTiers, ingredients, tiles, out _);
+				int best = pickaxes.Where(p => PickPower(p) >= level.pick).Select(p => p < avail.Length ? avail[p] : Never).DefaultIfEmpty(Never).Min();
+				if (best <= oreTier) continue;
+				// The weakest vanilla pickaxe of that level, then the cheapest
+				int chosen = pickaxes.Where(p => p < ItemID.Count && PickPower(p) >= level.pick)
+					.OrderBy(PickPower).ThenBy(StackRules.ValueOf).ThenBy(p => p).DefaultIfEmpty(0).First();
+				if (chosen <= 0) continue;
+				guaranteed[chosen] = oreTier;
+				yield return new GuaranteedSources.Requirement { Item = chosen, Tier = oreTier, Tool = true };
+			}
 		}
 	}
 }

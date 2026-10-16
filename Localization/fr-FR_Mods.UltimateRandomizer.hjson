@@ -148,6 +148,12 @@ Tests: {
 	AppliedResultsMatchPlan: Les recettes donnent les résultats prévus par le planificateur, et sa disponibilité correspond aux recettes en jeu
 	StationPlanFromOriginals: Le choix des stations ne dépend que des recettes d'origine, pas de celles déjà randomisées
 	RealCrafting: Le menu d'artisanat propose une recette avec ses nouveaux ingrédients, et plus avec les anciens
+	PickaxePerMiningLevel: Chaque niveau de minage a une pioche au tier de ses minerais (fabriquée, trouvée ou garantie)
+	RecipeRandomizationShare: La plupart des recettes vanilla changent de résultat (85 %), ou de résultat ou d'ingrédients (95 %) ; les raisons sont journalisées
+	RecipeValueFallback: Le repli de valeur donne un objet de la catégorie et du tier de l'original, abordable, sinon le moins cher
+	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement
+	FurnitureSurprise: Les recettes de meubles, de blocs et de murs donnent autre chose selon la chance de surprise des meubles
+	ProtectedRecipesDoable: Les recettes des stations de progression et des objets protégés sont faisables à leur niveau
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares
@@ -210,6 +216,7 @@ Commands: {
 		Npc: "{0} : tier {1} (utilisé pour les tirages : {2})"
 		Tier: Tier débloqué : {0} ({1})
 		PoolLogged: La répartition des objets a été écrite dans client.log.
+		RecipesOff: Les recettes ne sont pas randomisées dans ce monde.
 		NoDrops: Cet ennemi ne donne rien dans ce monde.
 	}
 
@@ -448,8 +455,8 @@ Configs: {
 		}
 
 		ProtectPickaxeProgression: {
-			Label: Protéger la progression du minage
-			Tooltip: Les recettes de pioches et de lingots ne sont jamais randomisées, et les minerais minés ne deviennent que d'autres minerais du même tier : tu peux toujours atteindre le minerai suivant.
+			Label: "Protéger la progression du minage"
+			Tooltip: "Activé : les recettes de pioches et de lingots ne sont jamais randomisées. Désactivé : elles le sont, et une pioche assez puissante pour chaque nouveau minerai est garantie sur des ennemis communs quand les recettes n'en donnent pas à temps. Les minerais minés ne deviennent que d'autres minerais du même tier."
 		}
 
 		GuaranteedDropMultiplier: {
@@ -949,9 +956,19 @@ Configs: {
 			Tooltip: Chaque recette donne un objet de même catégorie et de même tier que l'original. Les recettes redeviennent normales quand tu quittes le monde.
 		}
 
+		LimitRecipeValue: {
+			Label: "Limiter la valeur des résultats"
+			Tooltip: "Désactivé : une recette randomisée peut donner n'importe quel objet de la catégorie et du tier de l'original, quel que soit son prix. Activé : le résultat vaut au plus « Garde-fou de valeur » fois ses ingrédients."
+		}
+
 		RecipeValueGuard: {
-			Label: Garde-fou de valeur
-			Tooltip: Un résultat peut valoir au maximum ce nombre de fois ses ingrédients. Empêche de transformer des ingrédients bon marché en fortune.
+			Label: "Garde-fou de valeur"
+			Tooltip: "Quand « Limiter la valeur des résultats » est activé : un résultat vaut au plus ce nombre de fois ses ingrédients."
+		}
+
+		CraftedValueFromIngredients: {
+			Label: "Les objets fabriqués valent leurs ingrédients"
+			Tooltip: "Un objet fabriqué avec une recette randomisée se revend au prix de ses ingrédients (jamais plus que son prix normal) : impossible de s'enrichir en fabriquant."
 		}
 
 		DisableDecraftOfRandomizedResults: {
@@ -962,6 +979,11 @@ Configs: {
 		RecipeSurpriseChance: {
 			Label: Chance de surprise des recettes (%)
 			Tooltip: Chance qu'une recette donne un objet de n'importe quelle catégorie (poids du loot) au lieu d'un objet du même type que le résultat d'origine.
+		}
+
+		FurnitureSurpriseChance: {
+			Label: "Chance de surprise des meubles (%)"
+			Tooltip: "Comme la chance de surprise des recettes, pour les recettes de meubles, de blocs ou de murs (la plupart des recettes vanilla) : la chance qu'elles donnent un objet de n'importe quelle catégorie (poids du loot) au lieu d'encore un meuble."
 		}
 
 		IngredientMode: {

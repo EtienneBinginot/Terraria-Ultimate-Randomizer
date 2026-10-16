@@ -148,6 +148,12 @@ Tests: {
 	AppliedResultsMatchPlan: Recipes give the results the planner was built around, and its availability matches the live recipes
 	StationPlanFromOriginals: The station plan depends only on the original recipes, not on the already randomized ones
 	RealCrafting: The crafting menu offers a recipe with its new ingredients, and no longer with its old ones
+	PickaxePerMiningLevel: Each mining level has a pickaxe by the tier of its ores (crafted, found or guaranteed)
+	RecipeRandomizationShare: Most vanilla recipes change their result (85%) or their result or ingredients (95%); logs the reasons
+	RecipeValueFallback: The value fallback gives an item of the original's category and tier, affordable or else the cheapest
+	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks
+	FurnitureSurprise: Furniture, block and wall recipes give something else with the furniture surprise chance
+	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
@@ -210,6 +216,7 @@ Commands: {
 		Npc: "{0}: tier {1} (used for rolls: {2})"
 		Tier: Unlocked tier: {0} ({1})
 		PoolLogged: The item pool was written to client.log.
+		RecipesOff: Recipes are not randomized in this world.
 		NoDrops: This enemy drops nothing in this world.
 	}
 
@@ -448,8 +455,8 @@ Configs: {
 		}
 
 		ProtectPickaxeProgression: {
-			Label: Protect the mining progression
-			Tooltip: Pickaxe and bar recipes are never randomized, and mined ores only turn into other ores of the same tier: you can always reach the next ore.
+			Label: "Protect the mining progression"
+			Tooltip: "On: pickaxe and bar recipes are never randomized. Off: they are, and a pickaxe strong enough for each new ore is guaranteed on common enemies when the recipes don't give one in time. Mined ores only turn into other ores of the same tier."
 		}
 
 		GuaranteedDropMultiplier: {
@@ -949,9 +956,19 @@ Configs: {
 			Tooltip: Each recipe gives an item of the same category and tier as the original. Recipes go back to normal when you leave the world.
 		}
 
+		LimitRecipeValue: {
+			Label: "Limit the value of results"
+			Tooltip: "Off: a randomized recipe can give any item of its original's category and tier, whatever its price. On: the result is worth at most 'Value guard' times its ingredients."
+		}
+
 		RecipeValueGuard: {
-			Label: Value guard
-			Tooltip: A result can be worth at most this many times its ingredients. Prevents turning cheap ingredients into a fortune.
+			Label: "Value guard"
+			Tooltip: "When 'Limit the value of results' is on: a result can be worth at most this many times its ingredients."
+		}
+
+		CraftedValueFromIngredients: {
+			Label: "Crafted items sell for their ingredients"
+			Tooltip: "An item made through a randomized recipe sells for what its ingredients were worth (never more than its normal price), so crafting can't be used to make money."
 		}
 
 		DisableDecraftOfRandomizedResults: {
@@ -962,6 +979,11 @@ Configs: {
 		RecipeSurpriseChance: {
 			Label: Recipe surprise chance (%)
 			Tooltip: Chance that a recipe gives an item of any category (loot weights) instead of an item of the same kind as the original result.
+		}
+
+		FurnitureSurpriseChance: {
+			Label: "Furniture surprise chance (%)"
+			Tooltip: "Like the recipe surprise chance, for recipes making furniture, blocks or walls (most vanilla recipes): the chance they give an item of any category (loot weights) instead of more furniture."
 		}
 
 		IngredientMode: {

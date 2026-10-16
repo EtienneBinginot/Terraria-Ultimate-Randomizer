@@ -33,11 +33,19 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool RandomizeRecipes;
 
-		// The result may be worth at most this many times the ingredients
+		// Caps the value of randomized results (RecipeValueGuard); off: any result of the original's category and tier
+		[DefaultValue(false)]
+		public bool LimitRecipeValue;
+
+		// The result may be worth at most this many times the ingredients (when LimitRecipeValue is on)
 		[Range(1f, 20f)]
 		[Increment(0.5f)]
 		[DefaultValue(3f)]
 		public float RecipeValueGuard;
+
+		// An item crafted through a randomized recipe sells for what its ingredients were worth (at most its own value)
+		[DefaultValue(true)]
+		public bool CraftedValueFromIngredients;
 
 		[DefaultValue(true)]
 		public bool DisableDecraftOfRandomizedResults;
@@ -47,6 +55,12 @@ namespace UltimateRandomizer.Common.Configs
 		[Increment(1f)]
 		[DefaultValue(15f)]
 		public float RecipeSurpriseChance;
+
+		// The same for recipes making furniture, blocks and walls (most vanilla recipes): otherwise furniture gives furniture
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(60f)]
+		public float FurnitureSurpriseChance;
 
 		[Header("Ingredients")]
 		[DefaultValue(IngredientMode.Randomized)]

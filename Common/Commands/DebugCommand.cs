@@ -16,13 +16,14 @@ namespace UltimateRandomizer.Common.Commands
 	// /rdebug tier                tier unlocked in this world
 	// /rdebug pool                writes the number of items per category and tier to the log
 	// /rdebug swaps               what the enemy and critter swaps did since the world was loaded
+	// /rdebug recipes             share of the vanilla recipes changed, and why the others keep their result (also logged)
 	public class DebugCommand : ModCommand
 	{
 		public override CommandType Type => CommandType.Chat;
 
 		public override string Command => "rdebug";
 
-		public override string Usage => "/rdebug item <name|id> | npc <name|id> | tier | pool | swaps";
+		public override string Usage => "/rdebug item <name|id> | npc <name|id> | tier | pool | swaps | recipes";
 
 		public override string Description => Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.Description");
 
@@ -48,6 +49,16 @@ namespace UltimateRandomizer.Common.Commands
 				case "pool":
 					LogPool();
 					caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.PoolLogged"), Color.Yellow);
+					break;
+				case "recipes":
+					if (!RecipeSystem.Applied)
+					{
+						caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.RecipesOff"), Color.Yellow);
+						break;
+					}
+					string summary = RecipeStats.Compute().Summary();
+					ModContent.GetInstance<UltimateRandomizer>().Logger.Info(summary);
+					caller.Reply(summary, Color.Yellow);
 					break;
 				case "swaps":
 					SwapStats s = EnemySwapSystem.Stats;

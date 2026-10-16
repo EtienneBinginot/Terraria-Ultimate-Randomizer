@@ -62,13 +62,14 @@ namespace UltimateRandomizer.Common.Configs
 		[ReloadRequired]
 		public List<ItemDefinition> ProtectedItems = new()
 		{
-			new(ItemID.GuideVoodooDoll), new(ItemID.ClothierVoodooDoll), new(ItemID.Pwnhammer), new(ItemID.TempleKey),
-			new(ItemID.LihzahrdPowerCell), new(ItemID.SoulofLight), new(ItemID.SoulofNight), new(ItemID.GoldenKey),
-			new(ItemID.ShadowKey), new(ItemID.MechanicalEye), new(ItemID.MechanicalWorm), new(ItemID.MechanicalSkull),
-			new(ItemID.SuspiciousLookingEye), new(ItemID.WormFood), new(ItemID.BloodySpine), new(ItemID.SlimeCrown),
-			new(ItemID.Abeemination), new(ItemID.DeerThing), new(ItemID.QueenSlimeCrystal), new(ItemID.TruffleWorm),
-			new(ItemID.CelestialSigil), new(ItemID.GoblinBattleStandard), new(ItemID.PirateMap), new(ItemID.SnowGlobe),
-			new(ItemID.PumpkinMoonMedallion), new(ItemID.NaughtyPresent), new(ItemID.SolarTablet), new(ItemID.LihzahrdAltar)
+			// Boss summons, the hardmode ore chain (Pwnhammer) and keys. The ingredients of protected results that can't be
+			// found in time are replaced by findable ones (or guaranteed in Vanilla mode), so their materials (souls of light and
+			// night...) need no protection; event summons are optional (the Goblin army and eclipses also come by themselves)
+			new(ItemID.GuideVoodooDoll), new(ItemID.Pwnhammer), new(ItemID.TempleKey), new(ItemID.LihzahrdPowerCell),
+			new(ItemID.GoldenKey), new(ItemID.ShadowKey), new(ItemID.MechanicalEye), new(ItemID.MechanicalWorm),
+			new(ItemID.MechanicalSkull), new(ItemID.SuspiciousLookingEye), new(ItemID.WormFood), new(ItemID.BloodySpine),
+			new(ItemID.SlimeCrown), new(ItemID.Abeemination), new(ItemID.DeerThing), new(ItemID.QueenSlimeCrystal),
+			new(ItemID.TruffleWorm), new(ItemID.CelestialSigil), new(ItemID.LihzahrdAltar)
 		};
 
 		[DefaultValue(true)]
@@ -84,7 +85,9 @@ namespace UltimateRandomizer.Common.Configs
 		[ReloadRequired]
 		public StationProtection StationProtection;
 
-		[DefaultValue(true)]
+		// Off: pickaxe and bar recipes are randomized like the others, and the recipe planner guarantees a pickaxe for each
+		// mining level instead (RecipePlanner.MiningRequirements)
+		[DefaultValue(false)]
 		[ReloadRequired]
 		public bool ProtectPickaxeProgression;
 

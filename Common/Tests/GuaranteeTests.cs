@@ -255,12 +255,36 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				failures.AddRange(bossBags.Except(counted).Select(b => $"{Name(b)} doesn't count in expert mode"));
 			}
-			// In Classic a treasure bag only comes from a random extra drop, if ever
-			else if (counted.Count > System.Math.Max(2, bossBags.Count / 4))
+			// In Classic a treasure bag may still come from a random drop of another source, but never through an entry the
+			// world rejects (its boss's expert-only drop): each counted bag needs a drop allowed in this world
+			else
 			{
-				failures.Add($"{counted.Count} of {bossBags.Count} treasure bags count as sources in Classic (e.g. {string.Join(", ", counted.Take(3).Select(Name))})");
+				HashSet<int> allowed = AllowedDrops();
+				failures.AddRange(counted.Where(b => !allowed.Contains(b)).Select(b => $"{Name(b)} counts in Classic without an allowed source"));
 			}
 			Check.All(failures, "Bag contents");
+		}
+
+		// Items some source counted by Findability drops with an allowed condition and a findable chance: natural non-event
+		// enemies, bosses and bags (lucky plans, as Findability reads them)
+		private static HashSet<int> AllowedDrops()
+		{
+			float minChance = ProgressionConfig.Instance.MinFindableChance / 100f;
+			HashSet<int> items = new();
+			void Add(List<PlannedDrop> plan)
+			{
+				foreach (PlannedDrop drop in plan)
+				{
+					if (drop.Chance >= minChance && Findability.WorldAllows(drop.Conditions)) items.Add(drop.Item);
+				}
+			}
+			for (int t = 0; t < Tiers.Count; t++)
+			{
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) Add(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false));
+			}
+			foreach (int boss in NpcTiers.BossTypes) Add(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false));
+			foreach (int bag in LootSnapshot.Items.Keys.Where(b => !Findability.SeasonalBags.Contains(b))) Add(BagPlan.Plan(bag, lucky: true));
+			return items;
 		}
 
 		private static void WorldMaterialsFindable()

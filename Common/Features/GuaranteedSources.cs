@@ -22,6 +22,8 @@ namespace UltimateRandomizer.Common.Features
 			public int Tier;
 			public bool Station;
 			public bool Critical;
+			// A tool (pickaxe of a mining level): dropped one at a time, as rarely as a station
+			public bool Tool;
 		}
 
 		public const int HostsPerItem = 2;
@@ -30,8 +32,8 @@ namespace UltimateRandomizer.Common.Features
 		public const float MaterialChance = 1 / 6f;
 		public const int MaxPerHost = 6;
 
-		// Extra requirements (vanilla recipe ingredients), added by the recipe planner
-		public static Func<IEnumerable<Requirement>> ExtraRequirements;
+		// Extra requirement providers (vanilla recipe ingredients, a pickaxe per mining level), added by the recipe system
+		public static readonly List<Func<IEnumerable<Requirement>>> ExtraRequirements = new();
 
 		private static Dictionary<int, List<PlannedDrop>> byNpc;
 		private static List<Requirement> requirements;
@@ -83,15 +85,19 @@ namespace UltimateRandomizer.Common.Features
 
 		// Items a pot may also give, among those already unlocked
 		public static List<int> PotItems(int unlockedTier) =>
-			Requirements.Where(r => r.Tier <= unlockedTier && (r.Station || r.Tier == 0)).Select(r => r.Item).ToList();
+			Requirements.Where(r => r.Tier <= unlockedTier && (r.Station || r.Tool || r.Tier == 0)).Select(r => r.Item).ToList();
 
 		private static void Build()
 		{
 			if (byNpc != null) return;
 			Dictionary<int, List<PlannedDrop>> result = new();
 			List<Requirement> all = StationRequirements().ToList();
-			if (ExtraRequirements != null) all.AddRange(ExtraRequirements());
-			all = all.GroupBy(r => r.Item).Select(g => g.OrderBy(r => r.Tier).First()).OrderBy(r => r.Tier).ThenBy(r => DetRandom.ItemKey(r.Item)).ToList();
+			foreach (Func<IEnumerable<Requirement>> provider in ExtraRequirements) all.AddRange(provider());
+			// One requirement per item: the earliest tier, keeping every flag (a pickaxe also needed as an ingredient stays a tool)
+			all = all.GroupBy(r => r.Item).Select(g => new Requirement
+			{
+				Item = g.Key, Tier = g.Min(r => r.Tier), Station = g.Any(r => r.Station), Critical = g.Any(r => r.Critical), Tool = g.Any(r => r.Tool)
+			}).OrderBy(r => r.Tier).ThenBy(r => DetRandom.ItemKey(r.Item)).ToList();
 
 			List<int>[] hosts = new List<int>[Tiers.Count];
 			for (int t = 0; t < Tiers.Count; t++) hosts[t] = Hosts(t);
@@ -103,27 +109,51 @@ namespace UltimateRandomizer.Common.Features
 				HashSet<int> chosen = new();
 				for (int h = 0; h < HostsPerItem; h++)
 				{
-					List<int> candidates = null;
-					for (int t = Tiers.Clamp(requirement.Tier); t >= 0; t--)
+					int host;
+					List<int> common = requirement.Critical && h < CriticalHosts.Length
+						? CriticalHosts[h].Where(n => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost && IsNaturalHost(n, requirement.Tier)).ToList()
+						: null;
+					if (common != null && common.Count > 0) host = common[rng.Next(common.Count)];
+					else
 					{
-						candidates = hosts[t].Where(n => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost).ToList();
-						if (candidates.Count > 0) break;
+						List<int> candidates = null;
+						for (int t = Tiers.Clamp(requirement.Tier); t >= 0; t--)
+						{
+							candidates = hosts[t].Where(n => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost).ToList();
+							if (candidates.Count > 0) break;
+						}
+						if (candidates == null || candidates.Count == 0) break;
+						// Spread the load: among the least used hosts
+						List<int> best = candidates.OrderBy(n => load.GetValueOrDefault(n)).ThenBy(DetRandom.NpcKey).Take(3).ToList();
+						host = best[rng.Next(best.Count)];
 					}
-					if (candidates == null || candidates.Count == 0) break;
-					// Spread the load: among the least used hosts
-					List<int> best = candidates.OrderBy(n => load.GetValueOrDefault(n)).ThenBy(DetRandom.NpcKey).Take(3).ToList();
-					int host = best[rng.Next(best.Count)];
 					chosen.Add(host);
 					load[host] = load.GetValueOrDefault(host) + 1;
 					// Rare enough to be a small quest (first work bench in 15 to 30 minutes, see PacingTests)
-					float chance = requirement.Station ? (requirement.Critical ? CriticalStationChance : StationChance) : MaterialChance;
-					(int min, int max) = requirement.Station ? (1, 1) : StackRules.Range(requirement.Item);
+					float chance = requirement.Station ? (requirement.Critical ? CriticalStationChance : StationChance) : requirement.Tool ? StationChance : MaterialChance;
+					(int min, int max) = requirement.Station || requirement.Tool ? (1, 1) : StackRules.Range(requirement.Item);
 					if (!result.TryGetValue(host, out List<PlannedDrop> drops)) result[host] = drops = new List<PlannedDrop>();
 					drops.Add(new PlannedDrop { Item = requirement.Item, StackMin = min, StackMax = Math.Max(min, max), Chance = Math.Min(1f, chance * multiplier), Extra = true, Guaranteed = true });
 				}
 			}
 			requirements = all;
 			byNpc = result;
+		}
+
+		// Critical stations (work bench, furnace, anvil, table, chair) are carried by the enemies met most in the first hour:
+		// slimes by day (every colour shares the Blue Slime's type), then zombies or demon eyes by night. Other hosts are
+		// common by bestiary rarity only, and may be enemies seldom met at first (first work bench after 15 to 30 minutes,
+		// see PacingTests)
+		private static readonly int[][] CriticalHosts = { new int[] { NPCID.BlueSlime }, new int[] { NPCID.Zombie, NPCID.DemonEye } };
+
+		private static bool IsNaturalHost(int npc, int tier)
+		{
+			if (NPCID.Sets.CountsAsCritter[npc] || IsEventEnemy(npc)) return false;
+			for (int t = 0; t <= Tiers.Clamp(tier); t++)
+			{
+				if (EnemySwapPool.NaturalEnemies(t).Contains(npc)) return true;
+			}
+			return false;
 		}
 
 		// Common natural enemies of a tier (bestiary rarity 1, else 2, else any)

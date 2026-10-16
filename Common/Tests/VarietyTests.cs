@@ -106,7 +106,7 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Surprise rolls ignore progression or protection");
 		}
 
-		// The share of recipes that change category stays close to the setting
+		// The share of recipes that change category stays close to the setting (furniture, blocks and walls have their own)
 		private static void RecipeSurpriseRate()
 		{
 			RequireCoherent();
@@ -118,7 +118,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				int original = RecipeSystem.OriginalResult(r);
 				int result = Main.recipe[r].createItem.type;
-				if (result == original || !ItemPool.IsValid(result) || !ItemPool.IsValid(original)) continue;
+				if (result == original || !ItemPool.IsValid(result) || !ItemPool.IsValid(original) || RecipeSystem.IsFurnitureLike(original)) continue;
 				randomized++;
 				if (ItemPool.Info[result].Category != ItemPool.Info[original].Category) changedCategory++;
 			}

@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using Terraria;
+using Terraria.DataStructures;
 using Terraria.ID;
+using Terraria.ModLoader;
+using Terraria.ModLoader.IO;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
@@ -33,6 +37,12 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("AppliedResultsMatchPlan", AppliedResultsMatchPlan);
 			TestRunner.Register("StationPlanFromOriginals", StationPlanFromOriginals);
 			TestRunner.Register("RealCrafting", RealCrafting);
+			TestRunner.Register("PickaxePerMiningLevel", PickaxePerMiningLevel);
+			TestRunner.Register("RecipeRandomizationShare", RecipeRandomizationShare);
+			TestRunner.Register("RecipeValueFallback", RecipeValueFallback);
+			TestRunner.Register("CraftedValueFromIngredients", CraftedValueFromIngredients);
+			TestRunner.Register("FurnitureSurprise", FurnitureSurprise);
+			TestRunner.Register("ProtectedRecipesDoable", ProtectedRecipesDoable);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -110,13 +120,14 @@ namespace UltimateRandomizer.Common.Tests
 			return placers;
 		}
 
-		// A station is usable from its cheapest placing item; progression stations from their tier (protected, bought...);
+		// A station is usable from its cheapest placing item; progression stations no recipe makes from their tier (bought...);
 		// tiles no item places (Demon Altar) are part of the world
 		private static int StationTier(int tile, Dictionary<int, List<int>> placers, int[] avail)
 		{
 			if (!placers.TryGetValue(tile, out List<int> items)) return 0;
 			Stations.StationInfo info = Stations.Info(tile);
-			int best = info.Kind == StationKind.Progression ? info.Tier : Findability.Never;
+			// A progression station no recipe makes (bought, found) is usable from its tier; a crafted one through its recipe
+			int best = info.Kind == StationKind.Progression && !items.Any(Obtainability.RecipeResults.Contains) ? info.Tier : Findability.Never;
 			foreach (int item in items)
 			{
 				if (item < avail.Length) best = Math.Min(best, avail[item]);
@@ -291,7 +302,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.Equal(first.GetHashCode(), Describe(RecipePlanner.Get()).GetHashCode(), "recipe plan after a rebuild");
 		}
 
-		// Protected recipes (mining chain, protected results, modded recipes) keep their ingredients and stations
+		// Protected recipes (mining chain, protected results, modded recipes) keep their stations; modded recipes and
+		// non-randomizable results keep their ingredients too (protected results get new ones)
 		private static void UntouchedRecipesIntact()
 		{
 			RequireApplied();
@@ -300,7 +312,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (RecipeSystem.Touchable(i)) continue;
 				Recipe recipe = Main.recipe[i];
-				if (!recipe.requiredItem.Select(item => (item.type, item.stack)).SequenceEqual(RecipeSystem.OriginalIngredients(i))) failures.Add($"{Name(recipe.createItem.type)} ingredients");
+				if (!RecipeSystem.IngredientsTouchable(i) && !recipe.requiredItem.Select(item => (item.type, item.stack)).SequenceEqual(RecipeSystem.OriginalIngredients(i))) failures.Add($"{Name(recipe.createItem.type)} ingredients");
 				if (!recipe.requiredTile.SequenceEqual(RecipeSystem.OriginalTiles(i))) failures.Add($"{Name(recipe.createItem.type)} stations");
 			}
 			Check.All(failures, "Protected recipes changed");
@@ -543,6 +555,203 @@ namespace UltimateRandomizer.Common.Tests
 				Array.Copy(adjTile, player.adjTile, adjTile.Length);
 				Recipe.FindRecipes(false);
 			}
+		}
+
+		// Every mining level has a pickaxe by the tier of its ores, with the live plan and the guaranteed sources, without
+		// counting the ores of that level and above as found (they need that pickaxe)
+		private static void PickaxePerMiningLevel()
+		{
+			if (!ItemPool.Ready || RecipeSystem.RecipeCount == 0) Check.Skip("no recipes");
+			RecipePlan plan = RecipePlanner.Get();
+			int[] results = plan.Results.Select(r => r.type).ToArray();
+			(int type, int stack)[][] ingredients = Enumerable.Range(0, Count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
+			int[][] tiles = Enumerable.Range(0, Count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
+			List<int> pickaxes = ContentSamples.ItemsByType.Where(pair => pair.Value.pick > 0).Select(pair => pair.Key).ToList();
+			List<string> failures = new();
+			int levels = 0;
+			foreach ((int pick, int[] ores) level in RecipePlanner.MiningLevels)
+			{
+				int oreTier = RecipePlanner.MiningTier(level);
+				if (oreTier < 0) continue;
+				levels++;
+				HashSet<int> unmined = RecipePlanner.OresFrom(level.pick);
+				int[] avail = RecipePlanner.Availability(item => unmined.Contains(item) ? Findability.Never : Findability.Tier(item), results, plan.ResultTiers, ingredients, tiles, out _);
+				int best = pickaxes.Where(p => RecipePlanner.PickPower(p) >= level.pick && p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Findability.Never).Min();
+				if (best > oreTier) failures.Add($"pick power {level.pick} ({string.Join("/", level.ores.Select(Name))}, tier {oreTier}): first pickaxe at {Show(best)}");
+			}
+			Check.That(levels > 0, "no mining level in this world");
+			Check.All(failures, "Mining levels without a pickaxe in time");
+		}
+
+		// Share of the vanilla recipes the plan changes, and why the others keep their result (values logged even when passing)
+		private static void RecipeRandomizationShare()
+		{
+			if (!CraftingConfig.Instance.RandomizeRecipes || !RecipeSystem.Applied) Check.Skip("recipes are not randomized");
+			RecipeShare share = RecipeStats.Compute();
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info(share.Summary());
+			Check.That(share.Total > 0, "no vanilla recipe");
+			Check.That(share.ResultShare >= 0.85, $"only {share.ResultShare:P1} of the recipes change their result");
+			if (CraftingConfig.Instance.IngredientMode == IngredientMode.Randomized) Check.That(share.AnyShare >= 0.95, $"only {share.AnyShare:P1} of the recipes change their result or ingredients");
+		}
+
+		// The value fallback (explicit limits, whatever the settings): an item of the original's category and tier, never an
+		// ingredient, affordable when one is, else the cheapest; deterministic
+		private static void RecipeValueFallback()
+		{
+			if (!RecipeSystem.Applied) Check.Skip("recipes are not randomized");
+			List<string> failures = new();
+			int tested = 0;
+			for (int i = 0; i < Count && tested < 60; i++)
+			{
+				int original = RecipeSystem.OriginalResult(i);
+				if (!RecipeSystem.Touchable(i) || !ItemPool.IsRandomizable(original)) continue;
+				List<int> types = RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToList();
+				int count = RecipeSystem.OriginalIngredients(i).Sum(x => x.stack);
+				int tier = ItemPool.TierOf(original);
+				List<(int type, int stack, long value)> candidates = RecipeSystem.FallbackCandidates(i, types, count, tier);
+				if (candidates.Count < 2) continue;
+				tested++;
+				string name = Name(original);
+				(int type, int stack) any = RecipeSystem.ValueFallback(i, types, count, long.MaxValue, tier);
+				if (!candidates.Any(c => c.type == any.type && c.stack == any.stack)) failures.Add($"{name}: {Name(any.type)} is not a candidate");
+				if (ItemPool.Info[any.type].Category != ItemPool.Info[original].Category) failures.Add($"{name}: {Name(any.type)} changes category");
+				if (types.Contains(any.type) || RecipeSystem.InAcceptedGroup(i, any.type) || any.type == original) failures.Add($"{name}: gives {Name(any.type)}, an ingredient or the original");
+				if (RecipeSystem.ValueFallback(i, types, count, long.MaxValue, tier) != any) failures.Add($"{name}: not deterministic");
+				(int type, int stack) none = RecipeSystem.ValueFallback(i, types, count, -1, tier);
+				long cheapest = candidates.Min(c => c.value);
+				if ((long)StackRules.ValueOf(none.type) * none.stack != cheapest) failures.Add($"{name}: nothing affordable gives {Name(none.type)}, not the cheapest");
+				long median = candidates.Select(c => c.value).OrderBy(v => v).ElementAt(candidates.Count / 2);
+				(int type, int stack) mid = RecipeSystem.ValueFallback(i, types, count, median, tier);
+				if ((long)StackRules.ValueOf(mid.type) * mid.stack > median) failures.Add($"{name}: {Name(mid.type)} x{mid.stack} above the limit {median}");
+			}
+			if (tested == 0) Check.Skip("no recipe with fallback candidates");
+			Check.All(failures, "Value fallback");
+		}
+
+		// An item made through a randomized recipe sells for at most its ingredients' value, and keeps that value through
+		// a save/load, a network round trip, a split and a stack
+		private static void CraftedValueFromIngredients()
+		{
+			if (!CraftingConfig.Instance.CraftedValueFromIngredients) Check.Skip("crafted items keep their vanilla value");
+			if (!RecipeSystem.Applied) Check.Skip("recipes are not randomized");
+			int index = -1;
+			long consumedValue = 0;
+			for (int i = 0; i < Count && index < 0; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe.Disabled || !RecipeSystem.IsRandomized(i)) continue;
+				long value = recipe.requiredItem.Sum(item => (long)Math.Max(item.value, 0) * item.stack);
+				if (value > 0 && (long)CraftedValueItem.VanillaValue(recipe.createItem.type) * recipe.createItem.stack > value)
+				{
+					index = i;
+					consumedValue = value;
+				}
+			}
+			if (index < 0) Check.Skip("no randomized recipe gives more than its ingredients are worth");
+			Recipe target = Main.recipe[index];
+			List<Item> consumed = target.requiredItem.Select(item => new Item(item.type, item.stack)).ToList();
+			Item made = target.createItem.Clone();
+			made.OnCreated(new RecipeItemCreationContext(target, consumed, new Item()));
+			string name = Name(made.type);
+			Check.That((long)made.value * made.stack <= consumedValue, $"{name} x{made.stack} worth {(long)made.value * made.stack} > ingredients {consumedValue}");
+			Check.That(CraftedValueItem.UnitValueOf(made) >= 0, $"{name} has no crafted value");
+			Check.Equal(made.value, ItemIO.Load(ItemIO.Save(made)).value, $"{name} value after a save/load");
+			Check.Equal(made.value, NetRoundTrip(made).value, $"{name} value after a network round trip");
+
+			// Stacking and splitting, on a stackable item
+			int type = ItemID.LesserHealingPotion;
+			int vanilla = CraftedValueItem.VanillaValue(type);
+			Check.That(vanilla >= 3, "the test potion has no value");
+			int unit = vanilla / 3;
+			Item a = new(type, 10);
+			CraftedValueItem.SetUnitValue(a, unit);
+			Check.Equal(unit, a.value, "unit value once set");
+			Item b = a.Clone();
+			ItemLoader.SplitStack(b, a, 4);
+			Check.Equal(4, b.stack, "split stack");
+			Check.Equal(unit, b.value, "value of the split part");
+			Check.Equal(unit, CraftedValueItem.UnitValueOf(b), "crafted value of the split part");
+			Item c = new(type, 6);
+			ItemLoader.StackItems(a, c, out _, false, null);
+			int expected = (unit * 6 + vanilla * 6) / 12;
+			Check.Equal(12, a.stack, "stacked count");
+			Check.Equal(expected, a.value, "weighted value after stacking");
+			Check.Equal(expected, ItemIO.Load(ItemIO.Save(a)).value, "stacked value after a save/load");
+			Item d = new(type, 5);
+			Check.Equal(vanilla, d.value, "an uncrafted copy keeps its vanilla value");
+		}
+
+		// Recipes making furniture, blocks or walls give something else with the furniture surprise chance (explicit chances,
+		// results rolled as the plan rolls them)
+		private static void FurnitureSurprise()
+		{
+			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("surprises only exist in the Coherent mode");
+			if (RecipeSystem.RecipeCount == 0) Check.Skip("no recipes");
+			List<int> recipes = Enumerable.Range(0, Count).Where(i => RecipeSystem.Touchable(i) && RecipeSystem.IsFurnitureLike(RecipeSystem.OriginalResult(i))).ToList();
+			if (recipes.Count < 50) Check.Skip($"only {recipes.Count} furniture recipes");
+			double SameCategory(float chance)
+			{
+				int same = 0;
+				foreach (int i in recipes)
+				{
+					(int type, int stack)[] ingredients = RecipeSystem.OriginalIngredients(i);
+					int result = RecipeSystem.RollResult(i, ingredients.Select(x => x.type).ToList(), ingredients.Sum(x => x.stack), lucky: true,
+						RecipeSystem.OriginalIngredientValue(i), limitValue: false, surpriseChance: chance).type;
+					if (ItemPool.IsValid(result) && ItemPool.Info[result].Category == ItemPool.Info[RecipeSystem.OriginalResult(i)].Category) same++;
+				}
+				return same / (double)recipes.Count;
+			}
+			double none = SameCategory(0), sixty = SameCategory(60), all = SameCategory(100);
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Furniture recipes: {recipes.Count}, same category {none:P0} at 0%, {sixty:P0} at 60%, {all:P0} at 100%");
+			Check.That(none >= 0.9, $"only {none:P0} of the furniture recipes keep their category without surprise");
+			Check.That(sixty <= none - 0.4, $"{sixty:P0} of the furniture recipes keep their category at 60% (vs {none:P0} at 0%)");
+			Check.That(all <= sixty, $"more furniture at 100% ({all:P0}) than at 60% ({sixty:P0})");
+		}
+
+		// Recipes making a progression station or a protected item can be made at their level with the plan: their
+		// randomizable ingredients and their stations (the station a recipe makes counts only through its own recipe).
+		// Protected ingredients keep their vanilla sources and are not checked here.
+		private static void ProtectedRecipesDoable()
+		{
+			RequireApplied();
+			RecipePlan plan = RecipePlanner.Get();
+			Dictionary<int, List<int>> placers = Placers();
+			List<string> failures = new();
+			int checkedCount = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				int original = RecipeSystem.OriginalResult(i);
+				if (recipe.Disabled || !RecipeSystem.IngredientsTouchable(i)) continue;
+				bool station = Stations.PlacedTile(original, out int made) && Stations.Info(made).Kind == StationKind.Progression;
+				if (!station && ItemPool.IsRandomizable(original)) continue;
+				checkedCount++;
+				int rt = RecipePlanner.RecipeTier(i);
+				foreach (Item item in recipe.requiredItem)
+				{
+					if (!ItemPool.IsRandomizable(item.type)) continue;
+					if (item.type >= plan.Availability.Length || (plan.Availability[item.type] > rt && !GroupAvailable(recipe, item.type, plan, rt)))
+					{
+						failures.Add($"{Name(original)}: {Name(item.type)} at {Show(item.type < plan.Availability.Length ? plan.Availability[item.type] : Findability.Never)} > {rt}");
+					}
+				}
+				foreach (int tile in recipe.requiredTile)
+				{
+					int at = StationTier(tile, placers, plan.Availability);
+					if (at > rt) failures.Add($"{Name(original)}: needs {TileID.Search.GetName(tile)} at {Show(at)} > {rt}");
+				}
+			}
+			Check.That(checkedCount > 0, "no protected recipe");
+			Check.All(failures, "Protected recipes not doable at their level");
+		}
+
+		private static Item NetRoundTrip(Item item)
+		{
+			using MemoryStream stream = new();
+			using (BinaryWriter writer = new(stream, System.Text.Encoding.UTF8, true)) ItemIO.Send(item, writer, true, false);
+			stream.Position = 0;
+			using BinaryReader reader = new(stream);
+			return ItemIO.Receive(reader, true, false);
 		}
 	}
 }

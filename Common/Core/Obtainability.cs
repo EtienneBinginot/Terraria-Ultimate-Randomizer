@@ -3,7 +3,7 @@ using Terraria.GameContent.ItemDropRules;
 
 namespace UltimateRandomizer.Common.Core
 {
-	// Items that have at least one source in the base game (drop, bag, recipe, shop, or placeable from the world)
+	// Items that have at least one source in the base game (drop, bag, recipe, shop, or gathered in the world)
 	public static class Obtainability
 	{
 		public static readonly HashSet<int> ShopItems = new();
@@ -18,7 +18,8 @@ namespace UltimateRandomizer.Common.Core
 			for (int type = 1; type < ItemPool.Info.Length; type++)
 			{
 				ItemCategory category = ItemPool.Info[type].Category;
-				if (category is ItemCategory.Block or ItemCategory.OreBar or ItemCategory.Critter) set.Add(type);
+				// Ores are mined; bars only count when a recipe makes them or something drops them (above)
+				if (category is ItemCategory.Block or ItemCategory.Critter || OreMap.IsOre(type)) set.Add(type);
 			}
 			return set;
 		}

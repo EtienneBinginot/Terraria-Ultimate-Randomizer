@@ -135,6 +135,9 @@ namespace UltimateRandomizer.Common.Core
 
 		public static int BucketSize(ItemCategory category, int tier) => buckets == null ? 0 : buckets[(int)category][tier].Length;
 
+		// The items of a category and tier, in the same order on every machine (do not modify)
+		public static int[] Bucket(ItemCategory category, int tier) => buckets == null ? Array.Empty<int>() : buckets[(int)category][Tiers.Clamp(tier)];
+
 		public static int Roll(in RollRequest request) => Roll(request, out _);
 
 		public static int Roll(in RollRequest request, out int rolledTier)

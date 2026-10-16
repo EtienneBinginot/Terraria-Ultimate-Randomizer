@@ -52,7 +52,9 @@ namespace UltimateRandomizer.Common.Features
 			float ChanceOn(int npc)
 			{
 				if (benchChance.TryGetValue(npc, out float chance)) return chance;
-				chance = GuaranteedSources.For(npc).Where(d => d.Item == ItemID.WorkBench).Sum(d => d.Chance);
+				// Guaranteed drops are per type: a Green Slime (net ID) is a Blue Slime
+				int type = ContentSamples.NpcsByNetId.TryGetValue(npc, out NPC sample) ? sample.type : npc;
+				chance = GuaranteedSources.For(type).Where(d => d.Item == ItemID.WorkBench).Sum(d => d.Chance);
 				benchChance[npc] = chance;
 				return chance;
 			}
