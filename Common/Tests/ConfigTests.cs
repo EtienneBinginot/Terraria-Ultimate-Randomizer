@@ -94,7 +94,7 @@ namespace UltimateRandomizer.Common.Tests
 			string[] keys =
 			{
 				"Chat.OldRandomizerEnabled", "Chat.StartingKit", "Chat.ConfigHostOnly", "Commands.Seed.Show", "Commands.Seed.Changed", "Commands.Seed.NotAllowed",
-				"Commands.Chests.Warning", "Commands.Chests.Done", "Journal.Title", "Journal.Monsters", "Journal.Bags", "Journal.Empty", "Keybinds.Journal.DisplayName",
+				"Commands.Chests.Warning", "Commands.Chests.Done", "Codex.Title", "Codex.Empty", "Journal.Description", "Keybinds.Journal.DisplayName",
 				"Keybinds.Debug.DisplayName", "Debug.Title", "Debug.NeedWorld", "Debug.TabOverview", "Debug.TabInspector", "Debug.TabTools", "Debug.TabTests"
 			};
 			List<string> missing = keys.Where(k => !Language.Exists("Mods.UltimateRandomizer." + k)).ToList();

@@ -212,6 +212,36 @@ namespace UltimateRandomizer.Common.Features
 			return index < moddedBiomes.Count ? moddedBiomes[index].FullName : "Modded" + index;
 		}
 
+		// The bestiary element of a biome named by BiomeName (its filter icon and display name), or null
+		public static IBestiaryInfoElement BestiaryElement(string biomeName)
+		{
+			if (string.IsNullOrEmpty(biomeName)) return null;
+			EnsureTags();
+			if (!biomeName.Contains('/') && Enum.TryParse(biomeName, out SpawnBiome biome))
+			{
+				// The first tag of a biome is its main one (Surface for the Forest, Snow before the ice variants...)
+				foreach ((IBestiaryInfoElement element, SpawnBiome value) in biomeTags)
+				{
+					if (value == biome) return element;
+				}
+				return null;
+			}
+			return moddedBiomes.FirstOrDefault(b => b.FullName == biomeName)?.ModBiomeBestiaryInfoElement;
+		}
+
+		public static string BiomeDisplayName(string biomeName)
+		{
+			if (string.IsNullOrEmpty(biomeName)) return "";
+			EnsureTags();
+			ModBiome modded = biomeName.Contains('/') ? moddedBiomes.FirstOrDefault(b => b.FullName == biomeName) : null;
+			if (modded != null) return modded.DisplayName.Value;
+			if (BestiaryElement(biomeName) is IFilterInfoProvider filter && Terraria.Localization.Language.Exists(filter.GetDisplayNameKey()))
+			{
+				return Terraria.Localization.Language.GetTextValue(filter.GetDisplayNameKey());
+			}
+			return biomeName;
+		}
+
 		// The type of an owner (slime colours are Blue Slimes)
 		public static int TypeOf(int id) => id < 0 && ContentSamples.NpcsByNetId.TryGetValue(id, out NPC sample) ? sample.type : id;
 

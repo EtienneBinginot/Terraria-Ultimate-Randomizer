@@ -1,6 +1,6 @@
 Keybinds: {
 	Debug.DisplayName: Ouvrir le panneau de débogage du randomizer
-	Journal.DisplayName: Ouvrir le journal du randomizer
+	Journal.DisplayName: Ouvrir le codex du randomizer
 }
 
 Debug: {
@@ -73,7 +73,7 @@ Debug: {
 	KillHostiles: Tuer les ennemis à l'écran
 	ToggleDay: Jour/nuit
 	GiveBags: Tous les sacs de boss
-	OpenJournal: Journal
+	OpenJournal: Codex
 	ToolsHelp: Astuce : onglet Inspecteur + souris sur un ennemi = son loot ; tue-le pour comparer. Les ennemis invoqués apparaissent comme des naturels (les ennemis aléatoires s'appliquent).
 	RunTests: Lancer tous les tests
 	TestsHelp: Lance tous les tests automatiques dans le monde actuel. Les résultats vont aussi dans client.log.
@@ -107,6 +107,8 @@ Tests: {
 	CodexRecipesFromGuide: Le Guide fait découvrir les recettes qui utilisent l'objet et celles qui le donnent
 	CodexSaveLoad: Le codex est sauvegardé et rechargé avec le monde sans rien perdre
 	CodexSyncRoundTrip: Les découvertes du codex passent le format réseau intactes (différences et synchro complète)
+	CodexUiBuilds: "Interface du codex : chaque onglet et chaque fiche d'objet, d'ennemi et d'arbre d'artisanat se construit"
+	CodexHidesUndiscovered: "Interface du codex : recettes, ennemis, objets et sacs non découverts restent cachés"
 	BiomeSlotsReachable: Par biome : chaque lieu d'apparition d'un ennemi qui en a plusieurs peut être atteint
 	NegativeNetIdSwap: Le remplacement par une couleur de slime (Pinky) fonctionne et garde le type Slime bleu
 	BiomeRedistributionComplete: Par biome : chaque ennemi naturel garde son nombre de lieux d'apparition, dans sa classe et jamais à un tier inférieur (20 graines)
@@ -209,12 +211,86 @@ Tests: {
 }
 
 Journal: {
-	Title: Journal du randomizer
-	Monsters: Monstres
-	Bags: Sacs
-	Empty: Rien de découvert pour l'instant : tue des monstres et ouvre des sacs !
-	Tier: tier {0}
-	Description: Ouvre le journal du randomizer (aussi avec la touche J)
+	Description: Ouvre le codex du randomizer (aussi avec la touche J)
+}
+
+Codex: {
+	Title: Codex du randomizer
+	TabEnemies: Ennemis
+	TabItems: Objets
+	TabCrafts: Arbre d'artisanat
+	TabBags: Sacs
+	TabBiomes: Biomes
+	Search: Rechercher...
+	Empty: "Rien de découvert ici pour l'instant : tue des ennemis, ouvre des coffres et des sacs, regarde les recettes !"
+	NoMatch: Rien ne correspond à la recherche.
+	Error: Impossible d'afficher cette page (voir client.log).
+	EnemiesCount: "Ennemis vaincus : {0}"
+	Kills: "Vaincus : {0}"
+	Tier: "Palier {0}"
+	Life: "Vie de base : {0}"
+	SeenIn: "Vu dans :"
+	DropsFound: Butin trouvé
+	NoDrops: Rien obtenu pour l'instant.
+	ToFind: "Butin encore à trouver : {0}"
+	UnknownDrop: "Butin inconnu : continue la chasse !"
+	FilterCategory: "Catégorie : {0}"
+	FilterTier: "Palier : {0}"
+	ItemsCount: "{0} / {1} objets"
+	CraftedWith: Fabriqué avec
+	UsedIn: Sert à fabriquer
+	DroppedBy: Lâché par
+	OtherSources: Autres sources
+	BagContents: Obtenu dans ce sac
+	NoSource: Aucune source trouvée pour l'instant.
+	More: "... et {0} de plus"
+	OpenTree: Arbre d'artisanat
+	ItemPage: Fiche de l'objet
+	At: sur
+	PickItem: Choisis un objet pour voir comment le fabriquer (recettes découvertes uniquement).
+	TreeOf: "Fabriquer : {0}"
+	Cycle: "(déjà plus haut)"
+	TooDeep: "(trop profond)"
+	TreeTooBig: "L'arbre est trop grand : replie quelques branches."
+	NothingReceived: Rien obtenu pour l'instant.
+	SeenCount: "{0} ennemis vus"
+
+	Source: {
+		Chest: Coffres
+		Pot: Pots
+		Tile: Blocs cassés
+		Tree: Arbres
+		Bag: Sacs
+		Fishing: Pêche
+		Extractinator: Extractinateur
+		Shimmer: Chatoiement
+	}
+
+	Category: {
+		All: Tout
+		Misc: Divers
+		BossSummon: Invocations de boss
+		Bag: Sacs
+		Critter: Bestioles
+		Dye: Teintures
+		Vanity: Apparence
+		Accessory: Accessoires
+		Armor: Armures
+		Tool: Outils
+		WeaponMelee: Armes de mêlée
+		WeaponRanged: Armes à distance
+		WeaponMagic: Armes magiques
+		WeaponSummon: Armes d'invocation
+		WeaponOther: Autres armes
+		Ammo: Munitions
+		MountPet: Montures et familiers
+		Potion: Potions
+		Food: Nourriture
+		OreBar: Minerais et lingots
+		Block: Blocs
+		Furniture: Meubles
+		Material: Matériaux
+	}
 }
 
 Chat: {

@@ -9,7 +9,7 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Journal
 {
-	// Journal hotkey. Bags opened are now in the world codex: the per-character lists of older versions are moved there
+	// Codex hotkey. Bags opened are now in the world codex: the per-character lists of older versions are moved there
 	// when the character enters the matching world (the lists of other worlds are kept until then).
 	public class JournalPlayer : ModPlayer
 	{
@@ -19,6 +19,8 @@ namespace UltimateRandomizer.Common.Journal
 
 		public override void ProcessTriggers(TriggersSet triggersSet)
 		{
+			// J typed in the codex search is text, not the hotkey
+			if (JournalSystem.State != null && JournalSystem.IsOpen && JournalSystem.State.IsTyping) return;
 			if (JournalSystem.ToggleKeybind != null && JournalSystem.ToggleKeybind.JustPressed) JournalSystem.Toggle();
 		}
 

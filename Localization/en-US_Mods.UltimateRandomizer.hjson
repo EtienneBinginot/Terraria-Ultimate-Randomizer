@@ -1,6 +1,6 @@
 Keybinds: {
 	Debug.DisplayName: Open the randomizer debug panel
-	Journal.DisplayName: Open the randomizer journal
+	Journal.DisplayName: Open the randomizer codex
 }
 
 Debug: {
@@ -73,7 +73,7 @@ Debug: {
 	KillHostiles: Kill enemies on screen
 	ToggleDay: Day/night
 	GiveBags: All boss bags
-	OpenJournal: Journal
+	OpenJournal: Codex
 	ToolsHelp: Tip: Inspector tab + mouse over an enemy shows its drops; kill it to compare. Spawned enemies spawn like natural ones (random enemies apply).
 	RunTests: Run all tests
 	TestsHelp: Runs every automated test in the current world. Results also go to client.log.
@@ -107,6 +107,8 @@ Tests: {
 	CodexRecipesFromGuide: The Guide discovers the recipes using the item and those giving it
 	CodexSaveLoad: The codex is saved and loaded with the world without loss
 	CodexSyncRoundTrip: Codex discoveries survive the network format (delta and full sync)
+	CodexUiBuilds: "Codex interface: every tab, item, enemy and craft tree page builds"
+	CodexHidesUndiscovered: "Codex interface: undiscovered recipes, enemies, items and bags stay hidden"
 	BiomeSlotsReachable: By biome: every spawn place of an enemy with several places can be reached
 	NegativeNetIdSwap: Swapping into a slime colour (Pinky) works and keeps the Blue Slime type
 	BiomeRedistributionComplete: By biome: every natural enemy keeps its number of spawn places, inside its class and never in a lower tier (20 seeds)
@@ -209,12 +211,86 @@ Tests: {
 }
 
 Journal: {
-	Title: Randomizer journal
-	Monsters: Monsters
-	Bags: Bags
-	Empty: Nothing discovered yet: kill monsters and open bags!
-	Tier: tier {0}
-	Description: Opens the randomizer journal (also the J key)
+	Description: Opens the randomizer codex (also the J key)
+}
+
+Codex: {
+	Title: Randomizer codex
+	TabEnemies: Enemies
+	TabItems: Items
+	TabCrafts: Craft tree
+	TabBags: Bags
+	TabBiomes: Biomes
+	Search: Search...
+	Empty: "Nothing discovered here yet: kill enemies, open chests and bags, look at recipes!"
+	NoMatch: Nothing matches the search.
+	Error: This page could not be built (see client.log).
+	EnemiesCount: "Enemies killed: {0}"
+	Kills: "Kills: {0}"
+	Tier: "Tier {0}"
+	Life: "Base life: {0}"
+	SeenIn: "Seen in:"
+	DropsFound: Drops found
+	NoDrops: Nothing dropped yet.
+	ToFind: "Drops still to find: {0}"
+	UnknownDrop: "Undiscovered drop: keep hunting!"
+	FilterCategory: "Category: {0}"
+	FilterTier: "Tier: {0}"
+	ItemsCount: "{0} / {1} items"
+	CraftedWith: Crafted with
+	UsedIn: Used in
+	DroppedBy: Dropped by
+	OtherSources: Other sources
+	BagContents: Received from this bag
+	NoSource: No source found yet.
+	More: "... and {0} more"
+	OpenTree: Craft tree
+	ItemPage: Item page
+	At: at
+	PickItem: Pick an item to see how to craft it (discovered recipes only).
+	TreeOf: "How to craft {0}"
+	Cycle: "(already above)"
+	TooDeep: "(too deep)"
+	TreeTooBig: "The tree is too big: collapse some branches."
+	NothingReceived: Nothing received yet.
+	SeenCount: "{0} enemies seen"
+
+	Source: {
+		Chest: Chests
+		Pot: Pots
+		Tile: Broken blocks
+		Tree: Trees
+		Bag: Bags
+		Fishing: Fishing
+		Extractinator: Extractinator
+		Shimmer: Shimmer
+	}
+
+	Category: {
+		All: All
+		Misc: Miscellaneous
+		BossSummon: Boss summons
+		Bag: Bags
+		Critter: Critters
+		Dye: Dyes
+		Vanity: Vanity
+		Accessory: Accessories
+		Armor: Armor
+		Tool: Tools
+		WeaponMelee: Melee weapons
+		WeaponRanged: Ranged weapons
+		WeaponMagic: Magic weapons
+		WeaponSummon: Summon weapons
+		WeaponOther: Other weapons
+		Ammo: Ammo
+		MountPet: Mounts and pets
+		Potion: Potions
+		Food: Food
+		OreBar: Ores and bars
+		Block: Blocks
+		Furniture: Furniture
+		Material: Materials
+	}
 }
 
 Chat: {
