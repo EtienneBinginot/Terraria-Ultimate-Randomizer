@@ -79,13 +79,21 @@ namespace UltimateRandomizer.Common.Features
 				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), drop.Item, stack, false);
 			}
 			// A giant always gives one more random item, a bit above its level
-			if (EnemiesConfig.Instance.GiantBonusDrop && LootConfig.Instance.RandomizeMobDrops && npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Kind == EnemyKind.Giant)
+			if (EnemiesConfig.Instance.GiantBonusDrop && LootConfig.Instance.RandomizeMobDrops && npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Kind == EnemyKind.Giant
+				&& GiantBonusAllowed(netId, npc.type))
 			{
 				int item = GiantDrop(npc, info.rng.Next());
 				int stack = info.rng.Next(StackRules.Range(item).min, StackRules.Range(item).max + 1);
 				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), item, Math.Max(1, stack), false);
 			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
+		}
+
+		// Same anti-farm protection as the extra drops: a giant boss minion (or a town NPC...) gives nothing more
+		public static bool GiantBonusAllowed(int netId, int npcType)
+		{
+			int owner = BossParts.Owner(npcType);
+			return !BossParts.IsMinion(npcType) && !BossParts.IsMinion(owner) && CanHaveExtraDrops(owner, IsBossType(owner), LootSnapshot.ForNpc(netId));
 		}
 
 		public static int GiantDrop(NPC npc, int key)

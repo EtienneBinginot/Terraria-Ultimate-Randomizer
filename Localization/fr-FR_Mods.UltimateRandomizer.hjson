@@ -146,6 +146,8 @@ Tests: {
 	GiantMiniBounds: Les tailles des géants et minis restent dans leur plage
 	GiantHitboxCap: Les géants ne dépassent jamais la taille maximale autorisée
 	IndividualSyncRoundTrip: Les stats individuelles (géant, mini...) arrivent intactes chez les clients en multijoueur
+	ClientIndividualLife: Les géants et les minis ont la bonne vie maximale chez les clients en multijoueur, sans écraser leur vie synchronisée
+	NoGiantMinions: Les minions de boss ne sont jamais géants ni minis et ne donnent jamais le drop bonus des géants
 	TransformRerollsIndividual: Les ennemis remplacés reçoivent leurs propres stats individuelles
 	LootBonusCap: Le bonus de loot augmente avec la force et reste sous son plafond
 	LootBonusApplied: Les ennemis plus forts reçoivent un bonus de loot

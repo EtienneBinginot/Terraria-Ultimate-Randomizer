@@ -146,6 +146,8 @@ Tests: {
 	GiantMiniBounds: Giant and mini sizes stay inside their range
 	GiantHitboxCap: Giants never exceed the largest allowed size
 	IndividualSyncRoundTrip: Individual stats (giant, mini...) reach multiplayer clients intact
+	ClientIndividualLife: Giants and minis have the right maximum health on multiplayer clients, without resetting their synced health
+	NoGiantMinions: Boss minions are never giants or minis and never give the giant bonus drop
 	TransformRerollsIndividual: Swapped enemies get their own individual stats
 	LootBonusCap: The loot bonus grows with strength and stays under its cap
 	LootBonusApplied: Stronger enemies get a loot bonus

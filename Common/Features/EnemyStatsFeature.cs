@@ -76,8 +76,9 @@ namespace UltimateRandomizer.Common.Features
 			SeedSystem.WorldReady && !npc.townNPC && !npc.friendly && !NPCID.Sets.CountsAsCritter[npc.type] && !NPCID.Sets.ProjectileNPC[npc.type]
 			&& npc.lifeMax > 5 && !BossParts.IsPart(npc.type);
 
-		// Worms (segments would come apart) and boss parts keep their size
-		public static bool Scalable(NPC npc) => Eligible(npc) && npc.aiStyle != NPCAIStyleID.Worm;
+		// Worms (segments would come apart) and boss parts keep their size; boss minions are never giants or minis
+		// (swarms of giant creepers or bees, and no giant loot from them)
+		public static bool Scalable(NPC npc) => Eligible(npc) && npc.aiStyle != NPCAIStyleID.Worm && !BossParts.IsMinion(npc.type);
 
 		public void Roll(NPC npc, Random rng)
 		{
@@ -124,15 +125,22 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		public void Apply(NPC npc)
+		public void Apply(NPC npc) => Apply(npc, false, true);
+
+		// asClient: applied from ReceiveExtraAI on a multiplayer client (explicit so tests can simulate it);
+		// serverFull: the NPC was at full health on the server when it was sent
+		public void Apply(NPC npc, bool asClient, bool serverFull)
 		{
 			if (applied) return;
 			applied = true;
-			// Health is synced by vanilla: only the server (or single player) changes it
-			if (Main.netMode != NetmodeID.MultiplayerClient && Life != 1)
+			if (Life != 1)
 			{
+				// Packet 23 syncs life but not lifeMax: clients scale lifeMax themselves. For a full-health NPC vanilla sets
+				// life to the client's unscaled lifeMax, otherwise the synced life is the server's real value and is kept.
+				// The server sends its own "full" flag: comparing on the client cannot tell full from damaged to base health
+				bool full = !asClient || serverFull;
 				npc.lifeMax = Math.Max(1, (int)(npc.lifeMax * Life));
-				npc.life = npc.lifeMax;
+				npc.life = full ? npc.lifeMax : Math.Min(npc.life, npc.lifeMax);
 			}
 			npc.damage = (int)(npc.damage * Damage);
 			npc.defDamage = npc.damage;
@@ -148,13 +156,15 @@ namespace UltimateRandomizer.Common.Features
 			npc.scale *= size;
 			npc.width = Math.Max(2, (int)(npc.width * size));
 			npc.height = Math.Max(2, (int)(npc.height * size));
-			npc.Bottom = bottom;
+			// Clients already got the server's (resized) position before ReceiveExtraAI
+			if (!asClient) npc.Bottom = bottom;
 		}
 
 		public override void SendExtraAI(NPC npc, BitWriter bitWriter, BinaryWriter binaryWriter)
 		{
 			bitWriter.WriteBit(rolled);
 			if (!rolled) return;
+			bitWriter.WriteBit(npc.life >= npc.lifeMax);
 			binaryWriter.Write(Life);
 			binaryWriter.Write(Damage);
 			binaryWriter.Write(Defense);
@@ -165,6 +175,7 @@ namespace UltimateRandomizer.Common.Features
 		public override void ReceiveExtraAI(NPC npc, BitReader bitReader, BinaryReader binaryReader)
 		{
 			if (!bitReader.ReadBit()) return;
+			bool full = bitReader.ReadBit();
 			float life = binaryReader.ReadSingle();
 			float damage = binaryReader.ReadSingle();
 			float defense = binaryReader.ReadSingle();
@@ -177,7 +188,7 @@ namespace UltimateRandomizer.Common.Features
 			Size = size;
 			Kind = kind;
 			rolled = true;
-			Apply(npc);
+			Apply(npc, true, full);
 		}
 
 		// Extra drop chance multiplier of a strong enemy (type and individual health x damage above normal)

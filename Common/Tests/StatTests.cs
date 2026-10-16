@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -24,6 +25,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("GiantMiniBounds", GiantMiniBounds);
 			TestRunner.Register("GiantHitboxCap", GiantHitboxCap);
 			TestRunner.Register("IndividualSyncRoundTrip", IndividualSyncRoundTrip);
+			TestRunner.Register("ClientIndividualLife", ClientIndividualLife);
+			TestRunner.Register("NoGiantMinions", NoGiantMinions);
 			TestRunner.Register("TransformRerollsIndividual", TransformRerollsIndividual);
 			TestRunner.Register("LootBonusCap", LootBonusCap);
 			TestRunner.Register("LootBonusApplied", LootBonusApplied);
@@ -160,6 +163,91 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(Math.Abs(sent.Life - received.Life) < 0.0001f && Math.Abs(sent.Damage - received.Damage) < 0.0001f, "health or damage multiplier");
 			Check.That(Math.Abs(sent.Defense - received.Defense) < 0.0001f, "defense multiplier");
 			Check.That(Math.Abs(client.scale - Sample(NPCID.Zombie).scale * received.Size) < 0.01f, $"size x{client.scale} on the client");
+		}
+
+		// A zombie rolled with a seed that gives the wanted kind (same seed = same roll on every copy)
+		private static int SeedFor(EnemyKind kind)
+		{
+			NPC npc = Sample(NPCID.Zombie);
+			npc.TryGetGlobalNPC(out EnemyIndividualNPC individual);
+			for (int seed = 0; seed < 5000; seed++)
+			{
+				individual.Roll(npc, new Random(seed));
+				// Giants above x1 health so that a damaged giant can have more life than the unscaled lifeMax
+				if (individual.Kind == kind && (kind == EnemyKind.Giant ? individual.Life > 1.05f : Math.Abs(individual.Life - 1) > 0.05f)) return seed;
+			}
+			return -1;
+		}
+
+		private static (NPC npc, EnemyIndividualNPC individual) Rolled(int seed)
+		{
+			NPC npc = Sample(NPCID.Zombie);
+			npc.TryGetGlobalNPC(out EnemyIndividualNPC individual);
+			individual.Roll(npc, new Random(seed));
+			return (npc, individual);
+		}
+
+		// Packet 23 does not sync lifeMax: clients must scale it themselves, without overwriting the synced life
+		private static void ClientIndividualLife()
+		{
+			EnemiesConfig cfg = EnemiesConfig.Instance;
+			if (cfg.GiantChance <= 0 && cfg.MiniChance <= 0) Check.Skip("no giants nor minis");
+			List<string> failures = new();
+			int baseLife = Sample(NPCID.Zombie).lifeMax;
+			int tested = 0;
+			foreach (EnemyKind kind in new[] { EnemyKind.Giant, EnemyKind.Mini })
+			{
+				int seed = SeedFor(kind);
+				if (seed < 0) continue;
+				tested++;
+				(NPC server, EnemyIndividualNPC serverStats) = Rolled(seed);
+				Vector2 serverBottom = server.Bottom;
+				serverStats.Apply(server, false, true);
+				int expected = Math.Max(1, (int)(baseLife * serverStats.Life));
+				if (server.lifeMax != expected || server.life != server.lifeMax) failures.Add($"{kind} server: {server.life}/{server.lifeMax}, expected {expected}/{expected}");
+				if (Vector2.Distance(server.Bottom, serverBottom) > 1) failures.Add($"{kind} server: feet moved from {serverBottom} to {server.Bottom}");
+
+				// Full health: vanilla set life to the client's unscaled lifeMax before ReceiveExtraAI
+				(NPC full, EnemyIndividualNPC fullStats) = Rolled(seed);
+				fullStats.Apply(full, true, true);
+				if (full.lifeMax != server.lifeMax || full.life != full.lifeMax) failures.Add($"{kind} full client: {full.life}/{full.lifeMax}, server {server.lifeMax}");
+
+				// Damaged: the synced life (from the server) must stay, even when it equals the unscaled lifeMax (giant)
+				int synced = kind == EnemyKind.Giant ? Math.Min(server.lifeMax - 1, baseLife) : Math.Max(1, server.lifeMax / 2);
+				(NPC damaged, EnemyIndividualNPC damagedStats) = Rolled(seed);
+				damaged.life = synced;
+				Vector2 position = damaged.position;
+				damagedStats.Apply(damaged, true, false);
+				if (damaged.lifeMax != server.lifeMax || damaged.life != synced) failures.Add($"{kind} damaged client: {damaged.life}/{damaged.lifeMax}, expected {synced}/{server.lifeMax}");
+				if (damaged.position != position) failures.Add($"{kind} client: synced position moved from {position} to {damaged.position}");
+			}
+			if (tested == 0) Check.Skip("no giant nor mini roll found");
+			Check.All(failures, "Individual health wrong on clients");
+		}
+
+		// Boss minions are never giants or minis, and never give the giant bonus drop
+		private static void NoGiantMinions()
+		{
+			int[] minions = { NPCID.Creeper, NPCID.ServantofCthulhu, NPCID.TheHungry, NPCID.Bee, NPCID.Probe, NPCID.QueenSlimeMinionBlue, NPCID.MoonLordFreeEye };
+			List<string> failures = new();
+			Random rng = new(13);
+			foreach (int type in minions)
+			{
+				if (RandomNpcDropRule.GiantBonusAllowed(type, type)) failures.Add($"{Lang.GetNPCNameValue(type)} can give the giant bonus drop");
+				NPC npc = Sample(type);
+				if (EnemyIndividualNPC.Scalable(npc)) failures.Add($"{npc.TypeName} can be scaled");
+				npc.TryGetGlobalNPC(out EnemyIndividualNPC individual);
+				for (int i = 0; i < 300; i++)
+				{
+					individual.Roll(npc, rng);
+					if (individual.Kind == EnemyKind.Normal) continue;
+					failures.Add($"{npc.TypeName} rolled {individual.Kind}");
+					break;
+				}
+			}
+			// Control: an ordinary enemy keeps its giant bonus
+			if (!RandomNpcDropRule.GiantBonusAllowed(NPCID.Zombie, NPCID.Zombie)) failures.Add("a zombie cannot give the giant bonus drop");
+			Check.All(failures, "Boss minions can be giants or give giant loot");
 		}
 
 		private static void TransformRerollsIndividual()
