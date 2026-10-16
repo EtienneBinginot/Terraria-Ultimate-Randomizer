@@ -13,19 +13,24 @@ namespace UltimateRandomizer.Common.Features
 	// Naturally spawning enemies are turned into another natural enemy of the same tier that moves the same way.
 	// The swap happens after the NPC update loop: vanilla still adjusts the NPC right after it spawns (variants, plant anchors),
 	// and changing its type inside a hook would hand the other mods' hooks of that tick a stale NPC.
+	// The pending swap is kept by NPC slot, not on the NPC: every SetDefaults (variants, blood moon conversions) recreates its globals.
 	public class EnemySwapNPC : GlobalNPC
 	{
-		public bool PendingSwap;
-
-		public override bool InstancePerEntity => true;
-
 		public override void OnSpawn(NPC npc, IEntitySource source)
 		{
-			if (source is not EntitySource_SpawnNPC || Main.netMode == NetmodeID.MultiplayerClient) return;
-			if (!EnemiesConfig.Instance.RandomizeEnemySpawns || !SeedSystem.WorldReady || npc.SpawnedFromStatue) return;
+			if (Main.netMode == NetmodeID.MultiplayerClient || npc.whoAmI < 0 || npc.whoAmI >= Main.maxNPCs) return;
+			bool swap = ShouldSwap(npc, source);
+			EnemySwapSystem.Pending[npc.whoAmI] = swap;
+			if (swap) EnemySwapSystem.Stats.Flagged++;
+		}
+
+		private static bool ShouldSwap(NPC npc, IEntitySource source)
+		{
+			if (!EnemiesConfig.Instance.RandomizeEnemySpawns || !SeedSystem.WorldReady || npc.SpawnedFromStatue) return false;
+			// Critters also come out of shaken trees
+			bool natural = source is EntitySource_SpawnNPC || (source is EntitySource_ShakeTree && NPCID.Sets.CountsAsCritter[npc.type]);
 			// Events count their own enemies (pillar shields, moon waves, invasions): never touch their spawns
-			if (EventInProgress(npc)) return;
-			PendingSwap = true;
+			return natural && !EventInProgress(npc);
 		}
 
 		private static bool EventInProgress(NPC npc)
@@ -38,11 +43,22 @@ namespace UltimateRandomizer.Common.Features
 		}
 	}
 
+	// What the swaps did since the world was loaded, for the debug tools
+	public class SwapStats
+	{
+		public int Flagged;
+		public int SwappedEnemies;
+		public int SwappedCritters;
+		public int NotInPool;
+		public int ChanceFailed;
+		public int NoTarget;
+	}
+
 	public static class EnemySwapPool
 	{
-		private enum Movement { Ground, Flying, Water, Critter }
+		private enum Movement { Ground, Flying, Water, CritterGround, CritterFlying, CritterWater }
 
-		private const int MovementCount = 4;
+		private const int MovementCount = 6;
 
 		// Enemies that only exist during an event or a boss fight, or that would break things elsewhere
 		private static readonly HashSet<int> Excluded = new()
@@ -65,6 +81,16 @@ namespace UltimateRandomizer.Common.Features
 			NPCID.Mothron, NPCID.MothronSpawn, NPCID.MothronEgg
 		};
 
+		// Critters that must never take another one's place: worth money (gold), summon a boss (Prismatic Lacewing,
+		// Truffle Worm), live in lava, or are rare collectibles (gem critters)
+		private static readonly HashSet<int> CritterExcluded = new()
+		{
+			NPCID.EmpressButterfly, NPCID.TruffleWorm, NPCID.TruffleWormDigger, NPCID.HellButterfly, NPCID.Lavafly, NPCID.MagmaSnail,
+			NPCID.GemSquirrelAmethyst, NPCID.GemSquirrelTopaz, NPCID.GemSquirrelSapphire, NPCID.GemSquirrelEmerald, NPCID.GemSquirrelRuby,
+			NPCID.GemSquirrelDiamond, NPCID.GemSquirrelAmber, NPCID.GemBunnyAmethyst, NPCID.GemBunnyTopaz, NPCID.GemBunnySapphire,
+			NPCID.GemBunnyEmerald, NPCID.GemBunnyRuby, NPCID.GemBunnyDiamond, NPCID.GemBunnyAmber
+		};
+
 		// AI styles that depend on a parent, an anchor tile or a boss: plants, boss hands, the Hungry, Creepers...
 		private static readonly HashSet<int> ExcludedAiStyles = new() { 12, 13, 28, 29, 47, 55 };
 
@@ -72,21 +98,35 @@ namespace UltimateRandomizer.Common.Features
 		private static List<int>[,] nightBuckets;
 		private static Dictionary<int, Movement> movements;
 
-		public static int Replacement(NPC npc)
+		// forceChance: swap chance to use instead of the setting (tests); stats: counters to update
+		public static int Replacement(NPC npc, float? forceChance = null, SwapStats stats = null)
 		{
 			Build();
 			int npcType = npc.type;
-			if (!movements.TryGetValue(npcType, out Movement movement)) return npcType;
+			if (!movements.TryGetValue(npcType, out Movement movement))
+			{
+				if (stats != null) stats.NotInPool++;
+				return npcType;
+			}
 			EnemiesConfig cfg = EnemiesConfig.Instance;
+			float chance = forceChance ?? cfg.EnemySwapChance;
 			Random rng;
-			if (cfg.EnemySwapMode == EnemySwapMode.PerType)
+			if (cfg.EnemySwapMode == EnemySwapMode.PerType && forceChance == null)
 			{
 				rng = DetRandom.Get(RollKey.EnemySwap, DetRandom.NpcKey(npcType));
-				if (rng.NextDouble() * 100 >= cfg.EnemySwapChance) return npcType;
+				if (rng.NextDouble() * 100 >= chance)
+				{
+					if (stats != null) stats.ChanceFailed++;
+					return npcType;
+				}
 			}
 			else
 			{
-				if (Main.rand.NextFloat() * 100 >= cfg.EnemySwapChance) return npcType;
+				if (Main.rand.NextFloat() * 100 >= chance)
+				{
+					if (stats != null) stats.ChanceFailed++;
+					return npcType;
+				}
 				rng = new Random(Main.rand.Next());
 			}
 			// On the surface by day, enemies that flee daylight (zombies, demon eyes...) would vanish at once
@@ -95,13 +135,34 @@ namespace UltimateRandomizer.Common.Features
 			int tier = NpcTiers.BaseTier(npcType);
 			for (int t = tier; t >= 0; t--)
 			{
-				if (buckets[(int)movement, t].Count > 0) return buckets[(int)movement, t][rng.Next(buckets[(int)movement, t].Count)];
+				if (buckets[(int)movement, t].Count > 0) return Pick(buckets[(int)movement, t], rng);
 			}
 			for (int t = tier + 1; t < Tiers.Count; t++)
 			{
-				if (buckets[(int)movement, t].Count > 0) return buckets[(int)movement, t][rng.Next(buckets[(int)movement, t].Count)];
+				if (buckets[(int)movement, t].Count > 0) return Pick(buckets[(int)movement, t], rng);
 			}
+			if (stats != null) stats.NoTarget++;
 			return npcType;
+		}
+
+		// Rare enemies and critters (bestiary stars) are picked less often
+		private static int Pick(List<int> bucket, Random rng)
+		{
+			int total = 0;
+			foreach (int type in bucket) total += Weight(type);
+			int roll = rng.Next(total);
+			foreach (int type in bucket)
+			{
+				roll -= Weight(type);
+				if (roll < 0) return type;
+			}
+			return bucket[^1];
+		}
+
+		private static int Weight(int type)
+		{
+			int stars = ContentSamples.NpcBestiaryRarityStars.TryGetValue(type, out int s) ? s : 1;
+			return Math.Max(1, 6 - stars);
 		}
 
 		// Natural enemies of a tier (night list: every one of them), for the debug tools
@@ -111,7 +172,7 @@ namespace UltimateRandomizer.Common.Features
 			List<int> result = new();
 			for (int m = 0; m < MovementCount; m++)
 			{
-				if (m == (int)Movement.Critter) continue;
+				if (m >= (int)Movement.CritterGround) continue;
 				result.AddRange(nightBuckets[m, Tiers.Clamp(tier)]);
 			}
 			return result;
@@ -121,6 +182,13 @@ namespace UltimateRandomizer.Common.Features
 		{
 			Build();
 			return movements.ContainsKey(npcType);
+		}
+
+		// Habitat of a swappable type ("Ground", "CritterWater"...), null if it is never swapped
+		public static string HabitatOf(int npcType)
+		{
+			Build();
+			return movements.TryGetValue(npcType, out Movement m) ? m.ToString() : null;
 		}
 
 		private static void Build()
@@ -160,13 +228,20 @@ namespace UltimateRandomizer.Common.Features
 			if (Excluded.Contains(type) || ExcludedAiStyles.Contains(npc.aiStyle) || NPCID.Sets.ProjectileNPC[type]) return null;
 			if (npc.ModNPC != null && !cfg.SwapModdedEnemies) return null;
 			if (IsEventEnemy(type)) return cfg.SwapEventEnemies ? MovementOf(npc) : null;
-			if (NPCID.Sets.CountsAsCritter[type]) return cfg.SwapCritters ? Movement.Critter : null;
+			if (NPCID.Sets.CountsAsCritter[type]) return cfg.SwapCritters ? CritterMovement(type, npc) : null;
 			if (npc.lifeMax <= 5 || npc.dontTakeDamage || npc.immortal || npc.friendly) return null;
 			// Worms and multi-part enemies can't be transformed safely
 			if (npc.aiStyle == NPCAIStyleID.Worm) return null;
 			// Natural enemies have a banner; boss minions and parts don't
 			if (Item.NPCtoBanner(npc.BannerID()) <= 0) return null;
 			return MovementOf(npc);
+		}
+
+		private static Movement? CritterMovement(int type, NPC npc)
+		{
+			if (CritterExcluded.Contains(type) || NPCID.Sets.GoldCrittersCollection.Contains(type) || npc.lavaImmune || npc.ModNPC != null) return null;
+			if (npc.aiStyle == NPCAIStyleID.Piranha) return Movement.CritterWater;
+			return npc.noGravity ? Movement.CritterFlying : Movement.CritterGround;
 		}
 
 		private static Movement MovementOf(NPC npc)
@@ -213,6 +288,13 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
+		// Every type that can take another one's place, for the tests
+		public static IEnumerable<int> Targets()
+		{
+			Build();
+			return movements.Keys;
+		}
+
 		private static bool IsEventEnemy(int type) =>
 			NPCID.Sets.BelongsToInvasionOldOnesArmy[type] || NPCID.Sets.BelongsToInvasionGoblinArmy[type] || NPCID.Sets.BelongsToInvasionFrostLegion[type]
 			|| NPCID.Sets.BelongsToInvasionPirate[type] || NPCID.Sets.BelongsToInvasionMartianMadness[type];
@@ -227,18 +309,34 @@ namespace UltimateRandomizer.Common.Features
 
 	public class EnemySwapSystem : ModSystem
 	{
-		public override void OnWorldLoad() => EnemySwapPool.Reset();
+		public static readonly bool[] Pending = new bool[Main.maxNPCs + 1];
 
-		public override void PostUpdateNPCs()
+		public static SwapStats Stats { get; private set; } = new();
+
+		public override void OnWorldLoad()
+		{
+			EnemySwapPool.Reset();
+			Array.Clear(Pending);
+			Stats = new SwapStats();
+		}
+
+		public override void PostUpdateNPCs() => ProcessPending(null);
+
+		// forceChance: used by the tests to swap whatever the settings say
+		public static void ProcessPending(float? forceChance)
 		{
 			if (Main.netMode == NetmodeID.MultiplayerClient) return;
 			for (int i = 0; i < Main.maxNPCs; i++)
 			{
+				if (!Pending[i]) continue;
+				Pending[i] = false;
 				NPC npc = Main.npc[i];
-				if (!npc.active || !npc.TryGetGlobalNPC(out EnemySwapNPC swap) || !swap.PendingSwap) continue;
-				swap.PendingSwap = false;
-				int target = EnemySwapPool.Replacement(npc);
-				if (target > 0 && target != npc.type) npc.Transform(target);
+				if (!npc.active) continue;
+				int target = EnemySwapPool.Replacement(npc, forceChance, Stats);
+				if (target <= 0 || target == npc.type) continue;
+				if (NPCID.Sets.CountsAsCritter[target]) Stats.SwappedCritters++;
+				else Stats.SwappedEnemies++;
+				npc.Transform(target);
 			}
 		}
 

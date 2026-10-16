@@ -72,6 +72,7 @@ namespace UltimateRandomizer.Common.Tests
 			LootTests.Register();
 			WorldTests.Register();
 			ConfigTests.Register();
+			EnemyTests.Register();
 		}
 
 		public static List<TestResult> RunAll()

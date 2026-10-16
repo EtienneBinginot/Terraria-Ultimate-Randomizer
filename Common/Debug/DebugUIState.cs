@@ -116,6 +116,8 @@ namespace UltimateRandomizer.Common.Debug
 			Text($"[c/FFD966:{T("Tier")}] {unlocked} ({(Tier)unlocked})   [c/FFD966:{T("Limit")}] {limit}   [c/FFD966:{T("Gating")}] {OnOff(progression.TierGating)}");
 			Text($"[c/FFD966:{T("Pool")}] {randomizable} / {protectedCount} / {ItemPool.Info.Count(i => i.Excluded)}   [c/FFD966:{T("Snapshots")}] {LootSnapshot.Npcs.Count} / {LootSnapshot.Items.Count}");
 			Text($"[c/FFD966:{T("Recipes")}] {OnOff(RecipeSystem.Applied)}   [c/FFD966:{T("Shimmer")}] {OnOff(ShimmerSystem.Applied)}   [c/FFD966:{T("Chests")}] {OnOff(ChestSystem.ChestsRandomized)}");
+			SwapStats swaps = EnemySwapSystem.Stats;
+			Text($"[c/FFD966:{T("Swaps")}] {T("SwapStats", swaps.Flagged, swaps.SwappedEnemies, swaps.SwappedCritters, swaps.NotInPool, swaps.ChanceFailed, swaps.NoTarget)}");
 			Text($"[c/FFD966:{T("SetTier")}]");
 			Buttons(Enumerable.Range(0, 5).Select(t => ($"{t}", (Action)(() => DebugTools.SetTier(t)))).ToArray());
 			Buttons(Enumerable.Range(5, 5).Select(t => ($"{t}", (Action)(() => DebugTools.SetTier(t)))).ToArray());

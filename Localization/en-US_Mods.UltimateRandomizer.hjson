@@ -23,6 +23,8 @@ Debug: {
 	Gating: Lock
 	Pool: Items randomizable / protected / excluded
 	Snapshots: Drop tables enemies / bags
+	Swaps: Swaps
+	SwapStats: "{0} flagged: {1} enemies and {2} critters swapped; {3} not swappable, {4} kept by chance, {5} without a replacement"
 	Recipes: Recipes
 	Shimmer: Shimmer
 	Chests: Chests
@@ -85,6 +87,11 @@ Tests: {
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled
+	SwapSurvivesVariantSetDefaults: Enemy variants (Pinky, zombie variants) are still swapped
+	CritterSwapLive: Critters really get swapped, in the same habitat
+	CritterPoolSafe: No gold critter, Prismatic Lacewing, Truffle Worm or lava critter can appear in place of another
+	CritterHabitat: Water, flying and ground critters stay in their habitat
+	SwapStatsCount: Natural spawns are counted, statue spawns are left alone
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
 	RecipesSafe: Recipes: no self-ingredient, value guard respected

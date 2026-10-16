@@ -23,6 +23,8 @@ Debug: {
 	Gating: Blocage
 	Pool: Objets randomisables / protégés / exclus
 	Snapshots: Tables de loot ennemis / sacs
+	Swaps: Remplacements
+	SwapStats: "{0} repérés : {1} ennemis et {2} critters remplacés ; {3} non remplaçables, {4} gardés par le hasard, {5} sans remplaçant"
 	Recipes: Recettes
 	Shimmer: Shimmer
 	Chests: Coffres
@@ -85,6 +87,11 @@ Tests: {
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés
+	SwapSurvivesVariantSetDefaults: Les variantes d'ennemis (Pinky, zombies) sont bien remplacées
+	CritterSwapLive: Les critters sont vraiment remplacés, dans le même habitat
+	CritterPoolSafe: Aucun critter doré, Chrysope prismatique, Ver truffe ou critter de lave ne peut en remplacer un autre
+	CritterHabitat: Les critters aquatiques, volants et terrestres restent dans leur habitat
+	SwapStatsCount: Les apparitions naturelles sont comptées, celles des statues ignorées
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
