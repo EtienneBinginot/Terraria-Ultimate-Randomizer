@@ -128,5 +128,31 @@ namespace UltimateRandomizer.Common.Configs
 
 		[DefaultValue(true)]
 		public bool RandomizePotDrops;
+
+		[DefaultValue(true)]
+		public bool RandomizeTreeShaking;
+
+		[DefaultValue(true)]
+		public bool KeepAcorns;
+
+		[DefaultValue(true)]
+		public bool RandomizeHerbs;
+
+		// Chance that a herb or plant still gives its usual item
+		[Range(0f, 100f)]
+		[Increment(5f)]
+		[DefaultValue(40f)]
+		public float HerbKeepChance;
+
+		// Number of different items each herb can turn into in a world
+		[Range(1, 6)]
+		[DefaultValue(3)]
+		public int HerbVariety;
+
+		[DefaultValue(true)]
+		public bool RandomizeExtractinator;
+
+		[DefaultValue(true)]
+		public bool RandomizeAnglerRewards;
 	}
 }

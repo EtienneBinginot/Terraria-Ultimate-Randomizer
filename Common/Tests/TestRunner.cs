@@ -74,6 +74,7 @@ namespace UltimateRandomizer.Common.Tests
 			ConfigTests.Register();
 			EnemyTests.Register();
 			VarietyTests.Register();
+			SourceTests.Register();
 		}
 
 		public static List<TestResult> RunAll()

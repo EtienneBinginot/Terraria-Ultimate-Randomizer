@@ -99,6 +99,11 @@ Tests: {
 	WeightTablesSeparated: Les poids du loot favorisent l'équipement, ceux des ingrédients jamais
 	TierWindowVariety: Les tirages de début de partie donnent beaucoup d'objets différents
 	OreMappingBijective: Chaque minerai existe encore, comme drop d'un seul autre minerai
+	TreeShakeReplacement: Les arbres secoués donnent des objets aléatoires et gardent les glands
+	HerbReplacementTable: Chaque herbe a un ensemble fixe de remplaçants valides
+	ExtractinatorRules: L'Extractinator garde les pièces et échange les minerais contre des minerais
+	AnglerRewardsValid: Les récompenses du Pêcheur sont des objets valides, pièces conservées
+	TreeCritterSwap: Les critters qui tombent des arbres sont aussi remplacés
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
@@ -514,6 +519,41 @@ Configs: {
 		RandomizePotDrops: {
 			Label: Randomiser le contenu des pots
 			Tooltip: Les objets des pots sont remplacés par des objets de même catégorie. Les pièces et les coeurs ne changent pas.
+		}
+
+		RandomizeTreeShaking: {
+			Label: "Randomiser les arbres secoués"
+			Tooltip: "Les fruits et objets qui tombent des arbres secoués sont remplacés (même type, ou une surprise)."
+		}
+
+		KeepAcorns: {
+			Label: "Garder les glands"
+			Tooltip: "Les arbres secoués donnent toujours des glands, pour pouvoir replanter."
+		}
+
+		RandomizeHerbs: {
+			Label: "Randomiser les herbes et plantes"
+			Tooltip: "Les herbes, champignons, spores de la jungle et autres plantes donnent d'autres matériaux de leur tier. Les graines sont conservées."
+		}
+
+		HerbKeepChance: {
+			Label: "Herbes conservées (%)"
+			Tooltip: "Chance qu'une herbe ou plante donne quand même son objet habituel."
+		}
+
+		HerbVariety: {
+			Label: "Objets par herbe"
+			Tooltip: "Nombre d'objets différents que chaque herbe ou plante peut donner dans un monde."
+		}
+
+		RandomizeExtractinator: {
+			Label: "Randomiser l'Extractinator"
+			Tooltip: "Les objets de l'Extractinator sont remplacés (les minerais par d'autres minerais du même tier). Les pièces sont conservées."
+		}
+
+		RandomizeAnglerRewards: {
+			Label: "Randomiser les récompenses du Pêcheur"
+			Tooltip: "Les récompenses des quêtes de pêche du Pêcheur sont remplacées. Les pièces et appâts sont conservés."
 		}
 
 		SurpriseChance: {

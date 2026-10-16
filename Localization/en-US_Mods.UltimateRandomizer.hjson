@@ -99,6 +99,11 @@ Tests: {
 	WeightTablesSeparated: Loot weights favor equipment, ingredient weights never pick it
 	TierWindowVariety: Early random rolls give many different items
 	OreMappingBijective: Each ore still exists, as the drop of exactly one other ore
+	TreeShakeReplacement: Shaken trees give random items and keep acorns
+	HerbReplacementTable: Each herb has a fixed set of valid replacements
+	ExtractinatorRules: The Extractinator keeps coins and swaps ores for ores
+	AnglerRewardsValid: Angler rewards are replaced by valid items, coins kept
+	TreeCritterSwap: Critters falling from trees are swapped too
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
 	RecipesSafe: Recipes: no self-ingredient, value guard respected
@@ -514,6 +519,41 @@ Configs: {
 		RandomizePotDrops: {
 			Label: Randomize pot loot
 			Tooltip: Items from pots are replaced by items of the same category. Coins and hearts are unchanged.
+		}
+
+		RandomizeTreeShaking: {
+			Label: "Randomize shaken trees"
+			Tooltip: "Fruits and items falling from shaken trees are replaced (same kind, or a surprise)."
+		}
+
+		KeepAcorns: {
+			Label: "Keep acorns"
+			Tooltip: "Shaken trees still give acorns, so trees can be replanted."
+		}
+
+		RandomizeHerbs: {
+			Label: "Randomize herbs and plants"
+			Tooltip: "Herbs, mushrooms, jungle spores and other plants give other materials of their tier. Seeds are kept."
+		}
+
+		HerbKeepChance: {
+			Label: "Herbs kept (%)"
+			Tooltip: "Chance that a herb or plant still gives its usual item."
+		}
+
+		HerbVariety: {
+			Label: "Items per herb"
+			Tooltip: "Number of different items each herb or plant can turn into in a world."
+		}
+
+		RandomizeExtractinator: {
+			Label: "Randomize the Extractinator"
+			Tooltip: "Items from the Extractinator are replaced (ores by other ores of the same tier). Coins are kept."
+		}
+
+		RandomizeAnglerRewards: {
+			Label: "Randomize Angler rewards"
+			Tooltip: "Rewards of the Angler's fishing quests are replaced. Coins and bait are kept."
 		}
 
 		SurpriseChance: {
