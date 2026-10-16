@@ -7,6 +7,7 @@ using Terraria;
 using Terraria.ID;
 using Terraria.Localization;
 using Terraria.ModLoader;
+using UltimateRandomizer.Common.Codex;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
 
@@ -19,13 +20,14 @@ namespace UltimateRandomizer.Common.Commands
 	// /rdebug swaps               what the enemy and critter swaps did since the world was loaded
 	// /rdebug recipes             share of the vanilla recipes changed, and why the others keep their result (also logged)
 	// /rdebug biomes              the enemies of each biome (by-biome redistribution): a summary, the full list in the log
+	// /rdebug codex               what the codex of this world holds (kills, drops, sources, recipes, sightings)
 	public class DebugCommand : ModCommand
 	{
 		public override CommandType Type => CommandType.Chat;
 
 		public override string Command => "rdebug";
 
-		public override string Usage => "/rdebug item <name|id> | npc <name|id> | tier | pool | swaps | recipes | biomes";
+		public override string Usage => "/rdebug item <name|id> | npc <name|id> | tier | pool | swaps | recipes | biomes | codex";
 
 		public override string Description => Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.Description");
 
@@ -68,6 +70,9 @@ namespace UltimateRandomizer.Common.Commands
 					break;
 				case "biomes":
 					ShowBiomes(caller);
+					break;
+				case "codex":
+					ShowCodex(caller);
 					break;
 				default:
 					caller.Reply(Usage, Color.Yellow);
@@ -112,6 +117,16 @@ namespace UltimateRandomizer.Common.Commands
 				string conditions = drop.Conditions == null || drop.Conditions.Count == 0 ? "" : " *";
 				caller.Reply($"  {Lang.GetItemNameValue(drop.Item)} x{stack} : {chance}{conditions}", Color.White);
 			}
+		}
+
+		private static void ShowCodex(CommandCaller caller)
+		{
+			CodexData d = CodexSystem.Data;
+			int sightings = d.Sightings.Values.Sum(s => s.Count);
+			caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.Codex", d.Version, d.Kills.Values.Sum(), d.Kills.Count,
+				d.Drops.Values.Sum(t => t.Values.Sum()), d.Drops.Count, d.Recipes.Count, d.ItemsSeen.Count, sightings, d.Sightings.Count,
+				d.OpenedChests.Count, d.Sources[(int)CodexSource.Bag].Count), Color.Yellow);
+			caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.CodexSources", d.Summary()), Color.Yellow);
 		}
 
 		private static void ShowBiomes(CommandCaller caller)

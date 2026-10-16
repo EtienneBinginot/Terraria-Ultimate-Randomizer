@@ -12,6 +12,7 @@ using Terraria.ID;
 using Terraria.Localization;
 using Terraria.UI;
 using Terraria.UI.Chat;
+using UltimateRandomizer.Common.Codex;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
 
@@ -110,10 +111,9 @@ namespace UltimateRandomizer.Common.Journal
 		private static List<JournalRow> BagRows()
 		{
 			List<JournalRow> rows = new();
-			JournalPlayer journal = Main.LocalPlayer.GetModPlayer<JournalPlayer>();
 			foreach (int type in LootSnapshot.Items.Keys.OrderBy(t => Lang.GetItemNameValue(t)))
 			{
-				if (!journal.HasOpened(type)) continue;
+				if (!CodexSystem.HasOpenedBag(type)) continue;
 				rows.Add(new JournalRow($"[i:{type}] " + Header(Lang.GetItemNameValue(type), LootSnapshot.BagTier(type)) + "\n" + DropsText(BagPlan.Plan(type))));
 			}
 			return rows;

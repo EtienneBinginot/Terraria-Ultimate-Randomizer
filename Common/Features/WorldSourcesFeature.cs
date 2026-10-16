@@ -38,6 +38,8 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
+		public static bool IsPlantTile(int tileType) => PlantTiles.Contains(tileType);
+
 		// Vanilla spawns the drops before removing the tile: its type is still there
 		private static bool IsPlant(EntitySource_TileBreak source)
 		{

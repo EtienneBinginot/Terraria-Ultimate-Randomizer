@@ -103,6 +103,10 @@ Tests: {
 	CritterPoolSafe: Aucun critter doré, Chrysope prismatique, Ver truffe ou critter de lave ne peut en remplacer un autre
 	CritterHabitat: Les critters aquatiques, volants et terrestres restent dans leur habitat
 	SwapStatsCount: Les apparitions naturelles sont comptées, celles des statues ignorées
+	CodexRecordsLoot: Le codex enregistre l'ennemi tué et chaque objet lâché par un slime
+	CodexRecipesFromGuide: Le Guide fait découvrir les recettes qui utilisent l'objet et celles qui le donnent
+	CodexSaveLoad: Le codex est sauvegardé et rechargé avec le monde sans rien perdre
+	CodexSyncRoundTrip: Les découvertes du codex passent le format réseau intactes (différences et synchro complète)
 	BiomeSlotsReachable: Par biome : chaque lieu d'apparition d'un ennemi qui en a plusieurs peut être atteint
 	NegativeNetIdSwap: Le remplacement par une couleur de slime (Pinky) fonctionne et garde le type Slime bleu
 	BiomeRedistributionComplete: Par biome : chaque ennemi naturel garde son nombre de lieux d'apparition, dans sa classe et jamais à un tier inférieur (20 graines)
@@ -242,6 +246,8 @@ Commands: {
 		Biome: "{0} : {1} lieux ({2} ennemis), {3} changés, {4} partagés avec des invités inattendus"
 		BiomesLogged: La liste complète de chaque biome a été écrite dans client.log.
 		BiomesOff: Les ennemis ne sont pas redistribués par biome dans ce monde (mode ou réglage) : voici la carte qui serait utilisée.
+		Codex: "Codex (version {0}) : {1} ennemis tués parmi {2} sortes, {3} objets lâchés par {4} sortes d'ennemis, {5} recettes, {6} sortes d'objets vues, {7} ennemis aperçus dans {8} biomes, {9} coffres ouverts, {10} sacs ouverts"
+		CodexSources: "Autres sources (sortes d'objets reçues) : {0}"
 	}
 
 	Chests: {

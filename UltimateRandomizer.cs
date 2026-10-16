@@ -1,9 +1,29 @@
+using System.IO;
 using Terraria.ModLoader;
+using UltimateRandomizer.Common.Codex;
 
 namespace UltimateRandomizer
 {
+	public enum PacketType : byte { CodexRequestFull, CodexEntries, CodexReset }
+
 	public class UltimateRandomizer : Mod
 	{
+		public override void HandlePacket(BinaryReader reader, int whoAmI)
+		{
+			PacketType type = (PacketType)reader.ReadByte();
+			switch (type)
+			{
+				case PacketType.CodexRequestFull:
+				case PacketType.CodexEntries:
+				case PacketType.CodexReset:
+					CodexSystem.HandlePacket(type, reader, whoAmI);
+					break;
+				default:
+					Logger.Warn("Unknown packet " + (int)type);
+					break;
+			}
+		}
+
 		public override void Load()
 		{
 			if (ModLoader.HasMod("tRandomizer"))

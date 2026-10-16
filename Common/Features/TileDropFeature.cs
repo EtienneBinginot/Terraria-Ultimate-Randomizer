@@ -17,24 +17,38 @@ namespace UltimateRandomizer.Common.Features
 		[ThreadStatic]
 		private static bool inPotDrop;
 
+		// Everything a pot gives, its guaranteed item included (the codex records it as pot loot)
+		[ThreadStatic]
+		private static bool potLoot;
+
+		public static bool PotLoot => potLoot;
+
 		public override void Load() => On_WorldGen.SpawnThingsFromPot += MarkPotDrop;
 
 		private static void MarkPotDrop(On_WorldGen.orig_SpawnThingsFromPot orig, int i, int j, int x2, int y2, int style)
 		{
 			inPotDrop = true;
+			potLoot = true;
 			try
 			{
-				orig(i, j, x2, y2, style);
+				try
+				{
+					orig(i, j, x2, y2, style);
+				}
+				finally
+				{
+					inPotDrop = false;
+				}
+				if (SeedSystem.WorldReady && ItemPool.Ready && Main.netMode != NetmodeID.MultiplayerClient
+					&& Main.rand.NextFloat() * 100 < ProgressionConfig.Instance.PotGuaranteeChance)
+				{
+					List<int> items = GuaranteedSources.PotItems(ProgressionSystem.UnlockedTier);
+					if (items.Count > 0) Item.NewItem(new EntitySource_TileBreak(i, j), i * 16, j * 16, 16, 16, items[Main.rand.Next(items.Count)]);
+				}
 			}
 			finally
 			{
-				inPotDrop = false;
-			}
-			if (SeedSystem.WorldReady && ItemPool.Ready && Main.netMode != NetmodeID.MultiplayerClient
-				&& Main.rand.NextFloat() * 100 < ProgressionConfig.Instance.PotGuaranteeChance)
-			{
-				List<int> items = GuaranteedSources.PotItems(ProgressionSystem.UnlockedTier);
-				if (items.Count > 0) Item.NewItem(new EntitySource_TileBreak(i, j), i * 16, j * 16, 16, 16, items[Main.rand.Next(items.Count)]);
+				potLoot = false;
 			}
 		}
 

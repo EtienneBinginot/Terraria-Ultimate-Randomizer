@@ -39,7 +39,7 @@ namespace UltimateRandomizer.Common.Features
 
 		// The loot source is also used for things that are not drop tables: banners, the Big Mimic's item bursts (it is
 		// still alive), Old One's Army medals (dropped by the living crystal), the healing potions every boss leaves
-		private static bool IsDeathLoot(NPC npc, int itemType)
+		public static bool IsDeathLoot(NPC npc, int itemType)
 		{
 			if (npc.active && npc.life > 0) return false;
 			int banner = Item.NPCtoBanner(npc.BannerID());
@@ -49,7 +49,7 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Only real bags: other items also give things "from an opened item" (Minecart Upgrade Kit, starting bag of other mods)
-		private static bool IsBag(int itemType) =>
+		public static bool IsBag(int itemType) =>
 			ItemID.Sets.BossBag[itemType] || ItemID.Sets.IsFishingCrate[itemType] || ItemID.Sets.OpenableBag[itemType];
 
 		public static bool BagEnabled(int bagType, LootConfig cfg) =>

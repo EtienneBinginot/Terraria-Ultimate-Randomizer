@@ -103,6 +103,10 @@ Tests: {
 	CritterPoolSafe: No gold critter, Prismatic Lacewing, Truffle Worm or lava critter can appear in place of another
 	CritterHabitat: Water, flying and ground critters stay in their habitat
 	SwapStatsCount: Natural spawns are counted, statue spawns are left alone
+	CodexRecordsLoot: The codex records the kill and every item dropped by a slime
+	CodexRecipesFromGuide: The Guide discovers the recipes using the item and those giving it
+	CodexSaveLoad: The codex is saved and loaded with the world without loss
+	CodexSyncRoundTrip: Codex discoveries survive the network format (delta and full sync)
 	BiomeSlotsReachable: By biome: every spawn place of an enemy with several places can be reached
 	NegativeNetIdSwap: Swapping into a slime colour (Pinky) works and keeps the Blue Slime type
 	BiomeRedistributionComplete: By biome: every natural enemy keeps its number of spawn places, inside its class and never in a lower tier (20 seeds)
@@ -242,6 +246,8 @@ Commands: {
 		Biome: "{0}: {1} places ({2} enemies), {3} changed, {4} shared with unusual guests"
 		BiomesLogged: The full list of each biome was written to client.log.
 		BiomesOff: Enemies are not redistributed by biome in this world (mode or setting): this is the map it would use.
+		Codex: "Codex (version {0}): {1} kills of {2} enemies, {3} items dropped by {4} enemies, {5} recipes, {6} item types seen, {7} enemies seen in {8} biomes, {9} chests opened, {10} bags opened"
+		CodexSources: "Other sources (item types received): {0}"
 	}
 
 	Chests: {
