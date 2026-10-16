@@ -78,6 +78,21 @@ namespace UltimateRandomizer.Common.Tests
 			LootConfig loot = LootConfig.Instance;
 			if (loot.DropSlotsMin > loot.DropSlotsMax) failures.Add("drop slots: minimum above maximum (the maximum is raised to the minimum)");
 			if (loot.BossDropSlotsMin > loot.BossDropSlotsMax) failures.Add("boss drop slots: minimum above maximum");
+			EnemiesConfig enemies = EnemiesConfig.Instance;
+			(string name, float min, float max)[] ranges =
+			{
+				("enemy health", enemies.EnemyHealthMin, enemies.EnemyHealthMax), ("enemy damage", enemies.EnemyDamageMin, enemies.EnemyDamageMax),
+				("enemy defense", enemies.EnemyDefenseMin, enemies.EnemyDefenseMax), ("enemy size", enemies.EnemyScaleMin, enemies.EnemyScaleMax),
+				("boss health", enemies.BossHealthMin, enemies.BossHealthMax), ("boss damage", enemies.BossDamageMin, enemies.BossDamageMax)
+			};
+			foreach ((string name, float min, float max) in ranges)
+			{
+				if (min > max) failures.Add($"{name}: minimum above maximum");
+				else if (min > 1 || max < 1) failures.Add($"{name}: x{min}-x{max} does not include normal (x1), every value is pushed to one side");
+			}
+			if (enemies.GiantSizeMin > enemies.GiantSizeMax) failures.Add("giant size: minimum above maximum");
+			if (enemies.MiniSizeMin > enemies.MiniSizeMax) failures.Add("mini size: minimum above maximum");
+			if (enemies.GiantChance + enemies.MiniChance > 100) failures.Add("giant and mini chances add up to more than 100%");
 			Check.All(failures, "Settings");
 		}
 	}

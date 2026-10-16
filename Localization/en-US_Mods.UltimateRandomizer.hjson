@@ -23,6 +23,13 @@ Debug: {
 	Gating: Lock
 	Pool: Items randomizable / protected / excluded
 	Snapshots: Drop tables enemies / bags
+	Findable: "Found from tier {0}, obtainable (with crafting) from tier {1}"
+	GuaranteedOn: "Guaranteed drop of: {0}"
+	GuaranteedTag: "(guaranteed)"
+	Individual: "{0}: health x{1}, damage x{2}, defense x{3}, size x{4}; loot bonus x{5}"
+	KindNormal: Normal
+	KindGiant: Giant
+	KindMini: Mini
 	Swaps: Swaps
 	SwapStats: "{0} flagged: {1} enemies and {2} critters swapped; {3} not swappable, {4} kept by chance, {5} without a replacement"
 	Recipes: Recipes

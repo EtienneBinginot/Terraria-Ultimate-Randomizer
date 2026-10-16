@@ -146,6 +146,11 @@ namespace UltimateRandomizer.Common.Debug
 				Text($"[i:{item.type}] {Lang.GetItemNameValue(item.type)} (#{item.type}, {DetRandom.ItemName(item.type)})");
 				Text(T("ItemInfo", info.Category, info.Tier, (Tier)info.Tier, OnOff(info.Protected), OnOff(info.Excluded), min, max, StackRules.ValueOf(item.type)));
 				if (ItemPool.IsRandomizable(item.type)) Text(T("ShufflePartner", $"[i:{ItemPool.Shuffled(item.type)}]"));
+				int found = Findability.Tier(item.type);
+				int available = RecipeSystem.Applied && item.type < RecipePlanner.Get().Availability.Length ? RecipePlanner.Get().Availability[item.type] : found;
+				Text(T("Findable", found == Findability.Never ? "-" : found.ToString(), available == Findability.Never ? "-" : available.ToString()));
+				List<int> hosts = GuaranteedSources.HostsOf(item.type).ToList();
+				if (hosts.Count > 0) Text(T("GuaranteedOn", string.Join(", ", hosts.Select(h => ContentSamples.NpcsByNetId[h].TypeName))));
 			}
 
 			NPC npc = NearestNpc();
@@ -155,9 +160,13 @@ namespace UltimateRandomizer.Common.Debug
 				Text(T("NoNpc"));
 				return;
 			}
-			EnemyMultipliers m = EnemyStatCache.Get(npc.type, npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[npc.type]);
+			EnemyMultipliers m = EnemyStatCache.Get(BossParts.Owner(npc.type), EnemyStatsNPC.IsBossLike(npc));
 			Text($"{npc.TypeName} (#{npc.type}/{npc.netID})   {T("NpcTier", NpcTiers.BaseTier(npc.type), NpcTiers.EffectiveTier(npc.type))}   {npc.life}/{npc.lifeMax} HP, {npc.damage} dmg, {npc.defense} def");
 			Text(T("Multipliers", m.Life.ToString("0.00"), m.Damage.ToString("0.00"), m.Defense.ToString("0.00"), m.Scale.ToString("0.00")));
+			if (npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Rolled)
+			{
+				Text(T("Individual", T("Kind" + individual.Kind), individual.Life.ToString("0.00"), individual.Damage.ToString("0.00"), individual.Defense.ToString("0.00"), individual.Size.ToString("0.00"), EnemyIndividualNPC.LootBonus(npc).ToString("0.00")));
+			}
 			string swap = EnemySwapPool.IsSwappable(npc.type) ? T("Swappable") : T("NotSwappable");
 			Text(swap);
 			Text($"[c/FFD966:{T("Drops")}]");
@@ -167,7 +176,7 @@ namespace UltimateRandomizer.Common.Debug
 			{
 				string chance = drop.Chance >= 1f ? "100%" : $"1/{Math.Max(1, Math.Round(1 / drop.Chance))}";
 				string stack = drop.StackMin == drop.StackMax ? $"{drop.StackMin}" : $"{drop.StackMin}-{drop.StackMax}";
-				string tag = drop.Extra ? T("ExtraTag") : drop.Conditions != null && drop.Conditions.Count > 0 ? T("ConditionTag") : "";
+				string tag = drop.Guaranteed ? T("GuaranteedTag") : drop.Extra ? T("ExtraTag") : drop.Conditions != null && drop.Conditions.Count > 0 ? T("ConditionTag") : "";
 				Text($"[i:{drop.Item}] {Lang.GetItemNameValue(drop.Item)} x{stack}  {chance}  {tag}");
 			}
 		}

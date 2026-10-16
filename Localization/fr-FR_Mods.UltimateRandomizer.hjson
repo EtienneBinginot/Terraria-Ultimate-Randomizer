@@ -23,6 +23,13 @@ Debug: {
 	Gating: Blocage
 	Pool: Objets randomisables / protégés / exclus
 	Snapshots: Tables de loot ennemis / sacs
+	Findable: "Trouvable dès le tier {0}, obtenable (avec craft) dès le tier {1}"
+	GuaranteedOn: "Drop garanti de : {0}"
+	GuaranteedTag: "(garanti)"
+	Individual: "{0} : vie x{1}, dégâts x{2}, défense x{3}, taille x{4} ; bonus de loot x{5}"
+	KindNormal: Normal
+	KindGiant: Géant
+	KindMini: Mini
 	Swaps: Remplacements
 	SwapStats: "{0} repérés : {1} ennemis et {2} critters remplacés ; {3} non remplaçables, {4} gardés par le hasard, {5} sans remplaçant"
 	Recipes: Recettes
