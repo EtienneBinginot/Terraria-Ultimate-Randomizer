@@ -124,10 +124,10 @@ namespace UltimateRandomizer.Common.Configs
 		public float IndividualVariation;
 
 		[Header("GiantsAndMinis")]
-		// Chance that an enemy is a giant (%)
+		// Chance that an enemy is a giant (%): giants are strong, rare enough not to be in every fight
 		[Range(0f, 100f)]
 		[Increment(0.5f)]
-		[DefaultValue(4f)]
+		[DefaultValue(2f)]
 		public float GiantChance;
 
 		[Range(1f, 6f)]

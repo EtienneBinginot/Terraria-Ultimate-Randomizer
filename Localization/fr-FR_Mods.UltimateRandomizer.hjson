@@ -180,6 +180,9 @@ Tests: {
 	AdaptiveNotCompounded: Un ennemi transformé garde ses multiplicateurs adaptatifs sans les cumuler
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
+	CrittersDrop: Les critters reçoivent leur part du petit drop fréquent
+	WildTail: La queue de folie donne la part prévue au-delà de la limite, plus rare à chaque palier
+	PlansIgnoreWild: Les plans, la trouvabilité et les garanties ne dépendent pas de la queue de folie
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
 	MiningProtected: Les recettes de pioches et de lingots ne changent pas
 	DecraftSafe: Le décraft au Shimmer ne peut pas dupliquer d'objets
@@ -437,6 +440,16 @@ Configs: {
 			Tooltip: Chance, à chaque kill, d'ignorer le blocage par progression et d'obtenir directement le vrai objet.
 		}
 
+		WildDropChance: {
+			Label: "Folie : drops au-delà de la limite (%)"
+			Tooltip: "Part des drops aléatoires des ennemis et des sacs qui dépassent la limite de progression, à tout moment. Chaque palier plus haut est plus rare (voir le réglage suivant) : un Zénith en début de partie est possible, mais rarissime. Les ennemis s'adaptent ensuite à votre équipement (puissance adaptative). 0 = progression classique."
+		}
+
+		WildTierDecay: {
+			Label: "Folie : rareté par palier en plus"
+			Tooltip: "À quel point chaque palier au-delà de la limite est plus rare pour les drops de folie : 3 = un palier au-dessus est 3 fois plus fréquent que deux paliers au-dessus. Plus haut = la folie reste plus près de la limite."
+		}
+
 		MechTierRequiresAllThree: {
 			Label: Le tier mécanique demande les trois boss mécaniques
 			Tooltip: Désactivé : un seul boss mécanique suffit pour débloquer le tier.
@@ -573,8 +586,13 @@ Configs: {
 		}
 
 		CrittersCanDrop: {
-			Label: Les critters reçoivent des drops
-			Tooltip: Lapins, oiseaux, papillons, insectes... reçoivent jusqu'à 2 drops aléatoires.
+			Label: "Les critters reçoivent des drops"
+			Tooltip: "Lapins, oiseaux, papillons, insectes... reçoivent jusqu'à 2 drops aléatoires (plus avec l'abondance du butin) et une part du petit drop fréquent."
+		}
+
+		CritterDropFactor: {
+			Label: "Part du drop fréquent des critters"
+			Tooltip: "Part du petit drop fréquent (matériau, potion, munitions...) que reçoivent les critters par rapport aux autres ennemis. Ils arrivent en nuées et meurent en un coup : 0,5 = deux fois moins souvent, 0 = jamais."
 		}
 
 		DropRateMultiplier: {
@@ -604,7 +622,7 @@ Configs: {
 
 		LootAbundance: {
 			Label: "Abondance du butin"
-			Tooltip: "Multiplie les drops aléatoires des ennemis : plus de drops supplémentaires, plus souvent, et plus de petits drops fréquents (au-delà de 100 %, des drops en plus). 2 = environ deux fois plus d'objets par kill. Les drops garantis (stations, objets de progression) ne changent pas."
+			Tooltip: "Multiplie les drops aléatoires des ennemis : plus de drops supplémentaires, plus souvent, et plus de petits drops fréquents (au-delà de 100 %, des drops en plus). 2 = environ deux fois plus d'objets par kill qu'à 1 ; la valeur par défaut, 3, en donne environ trois fois plus. Les drops garantis (stations, objets de progression) ne changent pas."
 		}
 
 		BossDropSlotsMin: {

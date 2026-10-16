@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
@@ -22,6 +23,91 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("EventItemsKept", EventItemsKept);
 			TestRunner.Register("BagPlansValid", BagPlansValid);
 			TestRunner.Register("BagsKeepCoins", BagsKeepCoins);
+			TestRunner.Register("CrittersDrop", CrittersDrop);
+			TestRunner.Register("WildTail", WildTail);
+			TestRunner.Register("PlansIgnoreWild", PlansIgnoreWild);
+		}
+
+		// Critters get a share (CritterDropFactor) of the small frequent drop, here at abundance 3
+		private static void CrittersDrop()
+		{
+			LootConfig cfg = LootConfig.Instance;
+			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal || !cfg.CrittersCanDrop) Check.Skip("critters get no random drops");
+			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) Check.Skip("shuffle mode has no extra drops");
+			float first = Math.Min(1f, cfg.CommonDropChance / 100f * 3f * cfg.CritterDropFactor);
+			if (first <= 0.0001f) Check.Skip("critters get no small frequent drop with these settings");
+			List<string> failures = new();
+			foreach (int npc in new[] { NPCID.Bunny, NPCID.Mouse, NPCID.Butterfly })
+			{
+				List<PlannedDrop> plan = RandomNpcDropRule.Plan(npc, Main.expertMode, abundance: 3f);
+				if (!plan.Any(d => d.Extra && Math.Abs(d.Chance - first) < 0.001f)) failures.Add($"{NpcName(npc)}: no frequent drop at {first * 100:0} % ({plan.Count(d => d.Extra)} random drops)");
+			}
+			Check.All(failures, "Critters without their frequent drop");
+		}
+
+		// The madness tail, with explicit parameters: about `chance` % above the limit, each tier `decay` times rarer
+		private static void WildTail()
+		{
+			const int rolls = 100000;
+			const int limit = 2;
+			Random rng = new(1234);
+			int[] counts = new int[Tiers.Count];
+			int beyond = 0;
+			for (int i = 0; i < rolls; i++)
+			{
+				int tier = ItemPool.WildTier(limit, 8f, 3f, rng);
+				if (tier > Tiers.Max) beyond++;
+				else counts[tier]++;
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"WildTail: limit {limit}, tiers {string.Join(" / ", counts)} out of {rolls}");
+			List<string> failures = new();
+			int above = rolls - counts[limit] - beyond;
+			double share = above * 100.0 / rolls;
+			if (beyond > 0) failures.Add($"{beyond} rolls above tier {Tiers.Max}");
+			if (counts.Take(limit).Sum() > 0) failures.Add("rolls below the limit");
+			if (share < 7.3 || share > 8.7) failures.Add($"{share:0.00} % above the limit, expected about 8");
+			for (int t = limit + 1; t <= limit + 2; t++)
+			{
+				double ratio = counts[t + 1] == 0 ? double.MaxValue : counts[t] / (double)counts[t + 1];
+				if (ratio < 2.4 || ratio > 3.75) failures.Add($"tier {t} is {ratio:0.00} times as frequent as tier {t + 1}, expected about 3");
+			}
+			// Near the top, the tail stops at tier 9
+			for (int i = 0; i < 2000; i++)
+			{
+				if (ItemPool.WildTier(7, 50f, 1.5f, rng) > Tiers.Max) { failures.Add("a roll from tier 7 went above tier 9"); break; }
+			}
+			int none = 0;
+			for (int i = 0; i < 10000; i++) if (ItemPool.WildTier(limit, 0f, 3f, rng) != limit) none++;
+			if (none > 0) failures.Add($"{none} rolls above the limit with a chance of 0 %");
+			Check.All(failures, "Wild tier tail");
+		}
+
+		// Plans, findability and guarantees never use the madness tail: identical at 0 % and 50 %
+		private static void PlansIgnoreWild()
+		{
+			int[] npcs = LootSnapshot.Npcs.Keys.OrderBy(k => k).Where((_, i) => i % 8 == 0).ToArray();
+			string Snapshot(float chance)
+			{
+				ItemPool.WildChanceOverride = chance;
+				GuaranteedSources.Reset();
+				Findability.Reset();
+				IEnumerable<string> plans = npcs.Select(n => string.Join(",", RandomNpcDropRule.Plan(n, Main.expertMode).Select(d => $"{d.Item}:{d.Chance:0.0000}")));
+				IEnumerable<string> tiers = Enumerable.Range(1, ItemPool.Info.Length - 1).Select(t => Findability.Tier(t).ToString());
+				IEnumerable<string> hosts = GuaranteedSources.Requirements.Select(r => r.Item + ">" + string.Join(",", GuaranteedSources.HostsOf(r.Item).OrderBy(h => h)));
+				return string.Join("|", plans) + "#" + string.Join(",", tiers) + "#" + string.Join(";", hosts);
+			}
+			try
+			{
+				string calm = Snapshot(0f);
+				string wild = Snapshot(50f);
+				Check.That(calm == wild, "a plan, the findability or the guaranteed sources change with WildDropChance");
+			}
+			finally
+			{
+				ItemPool.WildChanceOverride = null;
+				GuaranteedSources.Reset();
+				Findability.Reset();
+			}
 		}
 
 		private static string NpcName(int netId) => ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.TypeName : netId.ToString();

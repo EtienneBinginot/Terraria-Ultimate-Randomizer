@@ -59,6 +59,18 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(4f)]
 		public float RuntimeJackpotChance;
 
+		// Madness: share of the random drops (at kill or bag opening) that go above the progression limit, each extra
+		// tier WildTierDecay times rarer. Never used by plans, findability or guarantees.
+		[Range(0f, 50f)]
+		[Increment(0.5f)]
+		[DefaultValue(8f)]
+		public float WildDropChance;
+
+		[Range(1.5f, 10f)]
+		[Increment(0.5f)]
+		[DefaultValue(3f)]
+		public float WildTierDecay;
+
 		[DefaultValue(false)]
 		public bool MechTierRequiresAllThree;
 

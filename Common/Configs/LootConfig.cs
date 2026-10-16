@@ -74,6 +74,12 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool CrittersCanDrop;
 
+		// Share of the small frequent drop critters get: they come in swarms and die in one hit
+		[Range(0f, 2f)]
+		[Increment(0.1f)]
+		[DefaultValue(0.5f)]
+		public float CritterDropFactor;
+
 		[Range(0, 20)]
 		[DefaultValue(1)]
 		public int DropSlotsMin;
@@ -100,10 +106,10 @@ namespace UltimateRandomizer.Common.Configs
 
 		// Scales the random enemy drops: slots and their chances by its square root each (about x abundance items),
 		// the small frequent drop by the full factor (above 100 %: more of them). Guaranteed drops are not scaled.
-		// 2: about 25 pieces of equipment per early hour and 2.2 items per kill (PacingModel, targets 19-32 and at least 1.1)
+		// 3: about 33 pieces of equipment per early hour and 2.85 items per kill (PacingModel, targets 25-42 and at least 1.4)
 		[Range(0.5f, 5f)]
 		[Increment(0.25f)]
-		[DefaultValue(2f)]
+		[DefaultValue(3f)]
 		public float LootAbundance;
 
 		[Range(0, 30)]

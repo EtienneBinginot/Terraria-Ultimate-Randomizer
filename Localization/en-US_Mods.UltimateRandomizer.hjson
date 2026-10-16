@@ -180,6 +180,9 @@ Tests: {
 	AdaptiveNotCompounded: A transformed enemy keeps its adaptive multipliers without stacking them
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
+	CrittersDrop: Critters get their share of the small frequent drop
+	WildTail: The madness tail gives the expected share above the limit, rarer for each tier
+	PlansIgnoreWild: Plans, findability and guarantees don't depend on the madness tail
 	RecipesSafe: Recipes: no self-ingredient, value guard respected
 	MiningProtected: Pickaxe and bar recipes are unchanged
 	DecraftSafe: Shimmer decrafting can't duplicate items
@@ -437,6 +440,16 @@ Configs: {
 			Tooltip: Chance, on each kill, to ignore the progression lock and get the real item right away.
 		}
 
+		WildDropChance: {
+			Label: "Madness: drops above the limit (%)"
+			Tooltip: "Share of the random drops of enemies and bags that go above the progression limit, at any time. Each tier further above is rarer (see the next setting): an early Zenith is possible, but extremely rare. Enemies then adapt to your equipment (adaptive power). 0 = classic progression."
+		}
+
+		WildTierDecay: {
+			Label: "Madness: rarity per extra tier"
+			Tooltip: "How much rarer each tier above the limit is for madness drops: 3 = one tier above is 3 times more frequent than two tiers above. Higher = madness stays closer to the limit."
+		}
+
 		MechTierRequiresAllThree: {
 			Label: Mechanical tier needs the three mechanical bosses
 			Tooltip: Off: one mechanical boss is enough to unlock the tier.
@@ -573,8 +586,13 @@ Configs: {
 		}
 
 		CrittersCanDrop: {
-			Label: Critters get extra drops
-			Tooltip: Bunnies, birds, butterflies, insects... get up to 2 extra random drops.
+			Label: "Critters get random drops"
+			Tooltip: "Bunnies, birds, butterflies, insects... get up to 2 extra random drops (more with loot abundance) and a share of the small frequent drop."
+		}
+
+		CritterDropFactor: {
+			Label: "Critter frequent drop share"
+			Tooltip: "Share of the small frequent drop (material, potion, ammo...) that critters get, compared with other enemies. They come in swarms and die in one hit: 0.5 = half as often, 0 = never."
 		}
 
 		DropRateMultiplier: {
@@ -604,7 +622,7 @@ Configs: {
 
 		LootAbundance: {
 			Label: "Loot abundance"
-			Tooltip: "Scales the random drops of enemies: more extra drops, more often, and more small frequent drops (above 100 %, extra ones). 2 = about twice as many items per kill. Guaranteed drops (stations, progression items) are not affected."
+			Tooltip: "Scales the random drops of enemies: more extra drops, more often, and more small frequent drops (above 100 %, extra ones). 2 = about twice as many items per kill as 1; the default 3 gives about three times as many. Guaranteed drops (stations, progression items) are not affected."
 		}
 
 		BossDropSlotsMin: {

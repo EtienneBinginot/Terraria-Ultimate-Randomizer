@@ -41,6 +41,10 @@ namespace UltimateRandomizer.Common.Core
 		public int MinLimit;
 		// Category weights of the Weighted policy (null = loot weights)
 		public WeightTable Weights;
+		// Madness (WildDropChance): the drop may go above the progression limit. Runtime drops only, with their own
+		// rng (WildRng, required): plans, findability and guarantees never set it, so they stay classic
+		public bool Wild;
+		public Random WildRng;
 	}
 
 	// Every randomizable item sorted by category and tier. All features pick their items here.
@@ -114,6 +118,7 @@ namespace UltimateRandomizer.Common.Core
 
 		public static void Unload()
 		{
+			WildChanceOverride = null;
 			Info = Array.Empty<ItemInfo>();
 			buckets = null;
 			categoryHasItems = null;
@@ -137,6 +142,9 @@ namespace UltimateRandomizer.Common.Core
 
 		// The items of a category and tier, in the same order on every machine (do not modify)
 		public static int[] Bucket(ItemCategory category, int tier) => buckets == null ? Array.Empty<int>() : buckets[(int)category][Tiers.Clamp(tier)];
+
+		// Tests only (restored in finally): replaces WildDropChance, to check that plans don't depend on it
+		public static float? WildChanceOverride;
 
 		public static int Roll(in RollRequest request) => Roll(request, out _);
 
@@ -178,6 +186,18 @@ namespace UltimateRandomizer.Common.Core
 			// Some categories have nothing in the early tiers (dyes, summon weapons...): rather than changing the category,
 			// a replacement may go up to the original item's own tier, which this source already gives in vanilla
 			int categoryLimit = hasOriginal && category == Info[request.OriginalItem].Category ? Math.Max(limit, Info[request.OriginalItem].Tier) : limit;
+			// Bags and summons stay at the limit: a wild boss bag would hand out its whole tier (Hallowed Bars before hardmode...)
+			if (request.Wild && request.WildRng != null && limit < Tiers.Max && category is not (ItemCategory.Bag or ItemCategory.BossSummon))
+			{
+				// Only the runtime rng is used here: without a wild roll, the result is the same as without the flag
+				int wildTier = WildTier(limit, WildChanceOverride ?? progression.WildDropChance, progression.WildTierDecay, request.WildRng);
+				if (wildTier > limit)
+				{
+					int wild = PickFromBucket(category, wildTier, request.WildRng, wildTier);
+					rolledTier = TierOf(wild);
+					return wild;
+				}
+			}
 			if (target <= limit)
 			{
 				int intended = PickFromBucket(category, target, rng, categoryLimit, window);
@@ -196,6 +216,26 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		public static int TierOf(int type) => IsValid(type) ? Info[type].Tier : 0;
+
+		// The wild tier tail: with chance (%), limit + k where P(k) is proportional to decay^-k, up to tier 9 (the
+		// weights are renormalized over the tiers that exist, so each step stays `decay` times rarer). Else the limit.
+		public static int WildTier(int limit, float chance, float decay, Random rng)
+		{
+			int steps = Tiers.Max - limit;
+			if (steps <= 0 || chance <= 0 || rng.NextDouble() * 100 >= chance) return Math.Min(limit, Tiers.Max);
+			double ratio = 1.0 / Math.Max(1.01, decay);
+			double total = 0, weight = 1;
+			for (int k = 1; k <= steps; k++) total += weight *= ratio;
+			double roll = rng.NextDouble() * total;
+			weight = 1;
+			for (int k = 1; k < steps; k++)
+			{
+				weight *= ratio;
+				if (roll < weight) return limit + k;
+				roll -= weight;
+			}
+			return Tiers.Max;
+		}
 
 		// Rolls the replacement of an existing item. With surpriseChance (%), the category is not kept: the item is
 		// rolled with the loot weights instead. Bags, boss summons and critters always keep their category.
