@@ -68,9 +68,14 @@ namespace UltimateRandomizer.Common.Core
 			return ContentSamples.ItemsByType[type].createTile == chosen;
 		}
 
-		// Counted by Findability: the ores of this world. Both hardmode ores of a pair count (hardmode crates give both),
-		// so the plans built on findability never change when an altar decides them.
-		public static bool IsFindable(int type) => PairOf(type) >= FirstHardmodePair || IsPresent(type);
+		// Counted by Findability: the ores that can be mined in this world. Both hardmode ores of a pair always count, so
+		// an altar smash never changes the world caches (CheckWorld only rebuilds them for the pairs decided at world
+		// generation). The one that will be absent is harmless: hardmode pair ores are never picked as new ingredients
+		// nor given guaranteed sources (IsHardmodePairOre), only their own bar recipes rely on them.
+		public static bool IsFindable(int type) => IsHardmodePairOre(type) || IsPresent(type);
+
+		// An ore of a pair decided by the altars: its presence changes during hardmode
+		public static bool IsHardmodePairOre(int type) => PairOf(type) >= FirstHardmodePair;
 
 		private static int Signature(int pairs)
 		{
@@ -91,11 +96,13 @@ namespace UltimateRandomizer.Common.Core
 			Dictionary<int, int> result = new();
 			for (int t = 0; t < Tiers.Count; t++)
 			{
-				// Slots of the tier, in a fixed order: a pair's ores of this tier, or a single ore
+				// Slots of the tier, in a fixed order: a pair's ores of this tier, or a single ore. Ordered by the items' full
+				// names, not their IDs, so that adding or removing a mod doesn't reshuffle the vanilla ores
 				List<int[]> slots = Enumerable.Range(1, ItemPool.Info.Length - 1)
 					.Where(type => ItemPool.IsRandomizable(type) && ItemPool.Info[type].Tier == t && IsOre(type))
 					.GroupBy(type => PairOf(type) >= 0 ? -1 - PairOf(type) : type)
-					.Select(g => g.OrderBy(x => x).ToArray()).OrderBy(s => s[0]).ToList();
+					.Select(g => g.OrderBy(DetRandom.ItemKey).ThenBy(x => x).ToArray())
+					.OrderBy(s => DetRandom.ItemKey(s[0])).ThenBy(s => s[0]).ToList();
 				int[] perm = Enumerable.Range(0, slots.Count).ToArray();
 				Random rng = DetRandom.Get(RollKey.OreShuffle, t);
 				for (int i = perm.Length - 1; i > 0; i--)
@@ -103,11 +110,32 @@ namespace UltimateRandomizer.Common.Core
 					int j = rng.Next(i + 1);
 					(perm[i], perm[j]) = (perm[j], perm[i]);
 				}
+				int[][] presentOres = slots.Select(slot => slot.Where(present).ToArray()).ToArray();
+				// One-to-one: a cycle of the permutation whose slots don't all have the same number of present ores (a pair
+				// with both ores present next to slots with one: drunk worlds, undecided hardmode pairs, modded ores) stays
+				// in place. Other cycles are untouched, so deciding a pair only changes the cycle it belongs to.
+				bool[] inPlace = new bool[slots.Count];
+				bool[] seen = new bool[slots.Count];
 				for (int s = 0; s < slots.Count; s++)
 				{
-					int[] from = slots[s].Where(present).ToArray();
-					int[] to = slots[perm[s]].Where(present).ToArray();
-					// While a pair is undecided, the ore it stands for is chosen by the seed; once decided, the chosen one
+					if (seen[s]) continue;
+					List<int> cycle = new();
+					for (int c = s; !seen[c]; c = perm[c])
+					{
+						seen[c] = true;
+						cycle.Add(c);
+					}
+					if (cycle.Any(c => presentOres[c].Length != presentOres[s].Length))
+					{
+						foreach (int c in cycle) inPlace[c] = true;
+					}
+				}
+				for (int s = 0; s < slots.Count; s++)
+				{
+					if (inPlace[s]) continue;
+					int[] from = presentOres[s];
+					int[] to = presentOres[perm[s]];
+					// Which ore of a pair stands for which ore of the other pair: chosen by the seed
 					int choice = DetRandom.Get(RollKey.OreShuffle, t, DetRandom.ItemKey(slots[perm[s]][0])).Next(2);
 					for (int k = 0; k < from.Length; k++)
 					{
@@ -115,7 +143,7 @@ namespace UltimateRandomizer.Common.Core
 						{
 							0 => from[k],
 							1 => to[0],
-							_ => to[(from.Length == 1 ? choice : k + choice) % to.Length]
+							_ => to[(k + choice) % to.Length]
 						};
 					}
 				}

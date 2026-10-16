@@ -81,8 +81,12 @@ namespace UltimateRandomizer.Common.Features
 			return false;
 		}
 
-		// Items placing each tile
-		private static Dictionary<int, List<int>> ItemsByTile()
+		private static Dictionary<int, List<int>> itemsByTile;
+
+		// Items placing each tile (content samples are fixed once loaded)
+		private static Dictionary<int, List<int>> ItemsByTile() => itemsByTile ??= BuildItemsByTile();
+
+		private static Dictionary<int, List<int>> BuildItemsByTile()
 		{
 			Dictionary<int, List<int>> result = new();
 			foreach ((int type, Item item) in ContentSamples.ItemsByType)
@@ -102,14 +106,17 @@ namespace UltimateRandomizer.Common.Features
 			int[] avail = new int[ItemPool.Info.Length];
 			for (int item = 1; item < avail.Length; item++) avail[item] = found(item);
 			Dictionary<int, List<int>> itemsByTile = ItemsByTile();
-			int TileAvail(int tile)
+			// Each station's availability, kept up to date as its placing items become available
+			Dictionary<int, int> tileAvail = new();
+			foreach (int tile in itemsByTile.Keys) tileAvail[tile] = TileAvailability(tile, itemsByTile, avail);
+			// Tiles without an item (Demon Altar...) are part of the world
+			int TileAvail(int tile) => tileAvail.TryGetValue(tile, out int a) ? a : 0;
+			int GroupAvail(RecipeGroup group)
 			{
-				// Tiles without an item (Demon Altar...) are part of the world
-				if (!itemsByTile.TryGetValue(tile, out List<int> placers)) return 0;
-				int best = ProtectedStationTier(tile);
-				foreach (int placer in placers)
+				int best = Never;
+				foreach (int v in group.ValidItems)
 				{
-					if (placer < avail.Length) best = Math.Min(best, avail[placer]);
+					if (v < avail.Length && avail[v] < best) best = avail[v];
 				}
 				return best;
 			}
@@ -127,7 +134,7 @@ namespace UltimateRandomizer.Common.Features
 					int tier = 0;
 					foreach ((int type, _) in ingredients[i])
 					{
-						int a = InGroup(recipe, type, out RecipeGroup group) ? group.ValidItems.Where(v => v < avail.Length).Select(v => avail[v]).DefaultIfEmpty(Never).Min() : (type < avail.Length ? avail[type] : Never);
+						int a = InGroup(recipe, type, out RecipeGroup group) ? GroupAvail(group) : (type < avail.Length ? avail[type] : Never);
 						tier = Math.Max(tier, a);
 						if (tier == Never) break;
 					}
@@ -144,6 +151,8 @@ namespace UltimateRandomizer.Common.Features
 					{
 						avail[result] = resultTier;
 						changed = true;
+						int placed = ContentSamples.ItemsByType.TryGetValue(result, out Item sample) ? sample.createTile : -1;
+						if (placed >= TileID.Dirt && tileAvail.TryGetValue(placed, out int current) && resultTier < current) tileAvail[placed] = resultTier;
 					}
 				}
 			}
@@ -203,11 +212,24 @@ namespace UltimateRandomizer.Common.Features
 
 		// ---------------------------------------------------------------- Stations
 
+		// Earliest tier a station can be placed: its cheapest placing item, or its protected tier
+		private static int TileAvailability(int tile, Dictionary<int, List<int>> itemsByTile, int[] avail)
+		{
+			// Tiles without an item (Demon Altar...) are part of the world
+			if (!itemsByTile.TryGetValue(tile, out List<int> placers)) return 0;
+			int best = ProtectedStationTier(tile);
+			foreach (int placer in placers)
+			{
+				if (placer < avail.Length) best = Math.Min(best, avail[placer]);
+			}
+			return best;
+		}
+
 		// Progression stations keep their vanilla way to be obtained (crafted, bought from a town NPC...): usable from their tier
 		private static int ProtectedStationTier(int tile)
 		{
 			Stations.StationInfo info = Stations.Info(tile);
-			return info.Kind == StationKind.Progression && ProgressionConfig.Instance.StationProtection != StationProtection.None ? info.Tier : Never;
+			return info.Kind == StationKind.Progression ? info.Tier : Never;
 		}
 
 		// Stations a recipe may be given: basic and progression ones (not the Demon Altar, not themed or modded ones)
@@ -219,10 +241,14 @@ namespace UltimateRandomizer.Common.Features
 
 		private static void PlanStations(RecipePlan result, int[] results, int[] avail, int[] recipeTiers)
 		{
+			// avail does not change while stations are planned: each station's availability is computed once
 			Dictionary<int, List<int>> itemsByTile = ItemsByTile();
-			int TileAvail(int tile) => itemsByTile.TryGetValue(tile, out List<int> placers)
-				? Math.Min(ProtectedStationTier(tile), placers.Where(p => p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Never).Min())
-				: 0;
+			Dictionary<int, int> tileAvail = new();
+			int TileAvail(int tile)
+			{
+				if (!tileAvail.TryGetValue(tile, out int a)) tileAvail[tile] = a = TileAvailability(tile, itemsByTile, avail);
+				return a;
+			}
 			// A fixed order of the stations: a recipe making a station only ever requires stations placed before it,
 			// so no station can end up needing itself
 			// From the original stations: the live ones are already randomized (the plan would depend on the previous one)
@@ -230,6 +256,8 @@ namespace UltimateRandomizer.Common.Features
 				.OrderBy(TileAvail).ThenBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(TileID.Search.GetName(t)))
 				.ToList();
 			Dictionary<int, int> position = order.Select((tile, index) => (tile, index)).ToDictionary(x => x.tile, x => x.index);
+			int[] orderAvail = order.Select(TileAvail).ToArray();
+			int[] orderTier = order.Select(s => Stations.Info(s).Kind == StationKind.Progression ? Stations.Info(s).Tier : -1).ToArray();
 			float keep = CraftingConfig.Instance.StationKeepChance / 100f;
 			for (int i = 0; i < Count; i++)
 			{
@@ -250,8 +278,11 @@ namespace UltimateRandomizer.Common.Features
 						int limit = TileAvail(tile);
 						int recipeTier = RecipeTier(i);
 						// Never a progression station above the recipe's level (it may also be unavailable: bought, or modded)
-						List<int> allowed = order.Where(s => TileAvail(s) <= limit && position[s] < bound
-							&& (Stations.Info(s).Kind != StationKind.Progression || Stations.Info(s).Tier <= recipeTier)).ToList();
+						List<int> allowed = new();
+						for (int k = 0; k < order.Count && k < bound; k++)
+						{
+							if (orderAvail[k] <= limit && orderTier[k] <= recipeTier) allowed.Add(order[k]);
+						}
 						bool keepOwn = allowed.Contains(tile) && rng.NextDouble() < keep;
 						if (!keepOwn && allowed.Count > 0) chosen = allowed[rng.Next(allowed.Count)];
 					}
@@ -276,7 +307,8 @@ namespace UltimateRandomizer.Common.Features
 			HashSet<int> stationItems = Stations.Basic().Select(s => s.info.Item).ToHashSet();
 			for (int item = 1; item < ItemPool.Info.Length; item++)
 			{
-				if (!ItemPool.IsRandomizable(item) || stationItems.Contains(item)) continue;
+				// Hardmode pair ores: present or not depending on the altars, the ingredient plan must not depend on them
+				if (!ItemPool.IsRandomizable(item) || stationItems.Contains(item) || OreMap.IsHardmodePairOre(item)) continue;
 				ItemCategory category = ItemPool.Info[item].Category;
 				if (Unusable.Contains(category)) continue;
 				int tier = Findability.Tier(item);
@@ -394,7 +426,8 @@ namespace UltimateRandomizer.Common.Features
 				foreach ((int g, _) in RecipeSystem.OriginalIngredients(i))
 				{
 					if (InGroup(recipe, g, out _) || !ItemPool.IsRandomizable(g) || Unusable.Contains(ItemPool.Info[g].Category)) continue;
-					if (g < avail.Length && avail[g] <= rt) continue;
+					// The bar of a hardmode ore the altars did not choose needs no source of that ore
+					if (OreMap.IsHardmodePairOre(g) || (g < avail.Length && avail[g] <= rt)) continue;
 					needed[g] = Math.Min(needed.GetValueOrDefault(g, rt), rt);
 				}
 			}

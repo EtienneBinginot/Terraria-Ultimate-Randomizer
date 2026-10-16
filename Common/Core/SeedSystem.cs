@@ -1,8 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
+using Newtonsoft.Json;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
+using Terraria.ModLoader.Config;
 using Terraria.ModLoader.IO;
 using UltimateRandomizer.Common.Configs;
 
@@ -41,9 +44,29 @@ namespace UltimateRandomizer.Common.Core
 
 		private static void Changed()
 		{
+			configSignature = ConfigSignature();
+			cacheSignature = CacheSignature();
 			ItemPool.OnSeedChanged();
 			OnSeedChanged?.Invoke();
 		}
+
+		private static string configSignature;
+		private static string cacheSignature;
+
+		private static string Json(ModConfig config) => JsonConvert.SerializeObject(config, ConfigManager.serializerSettings);
+
+		// Every server setting: tML calls OnChanged on each save (and config sync) even when nothing changed
+		private static string ConfigSignature() =>
+			string.Join("|", new ModConfig[] { GeneralConfig.Instance, LootConfig.Instance, CraftingConfig.Instance, ProgressionConfig.Instance, EconomyConfig.Instance,
+				EnemiesConfig.Instance, ExtrasConfig.Instance }.Select(Json));
+
+		public static string CacheSignature() => CacheSignature(GeneralConfig.Instance, LootConfig.Instance, CraftingConfig.Instance, ProgressionConfig.Instance,
+			EconomyConfig.Instance, EnemiesConfig.Instance);
+
+		// What the world caches (findability, guaranteed sources, recipe plan, ore map, shuffle) are built from: enemy
+		// stats and the extras don't count, except the settings of the swap pool the guaranteed hosts are taken from
+		public static string CacheSignature(GeneralConfig general, LootConfig loot, CraftingConfig crafting, ProgressionConfig progression, EconomyConfig economy, EnemiesConfig enemies) =>
+			string.Join("|", Json(general), Json(loot), Json(crafting), Json(progression), Json(economy), enemies.SwapModdedEnemies, enemies.SwapEventEnemies, enemies.SwapCritters);
 
 		// Changes the seed of the current world (command) and sends it to every player
 		public static void ChangeSeed(int seed)
@@ -52,10 +75,27 @@ namespace UltimateRandomizer.Common.Core
 			if (Main.netMode == NetmodeID.Server) NetMessage.SendData(MessageID.WorldData);
 		}
 
-		// A config value changed: recompute everything that depends on it
+		// Something the world caches depend on changed (ore choices of the world): recompute everything
 		public static void NotifyConfigChanged()
 		{
 			if (WorldReady && ItemPool.Ready) Changed();
+		}
+
+		// A config was saved: features refresh only when a value changed, and the world caches (findability, recipe
+		// plan...) are rebuilt only when one of the settings they depend on changed
+		public static void NotifyConfigSaved()
+		{
+			if (!WorldReady || !ItemPool.Ready) return;
+			string all = ConfigSignature();
+			if (all == configSignature) return;
+			configSignature = all;
+			string caches = CacheSignature();
+			if (caches != cacheSignature)
+			{
+				cacheSignature = caches;
+				ItemPool.OnSeedChanged();
+			}
+			OnSeedChanged?.Invoke();
 		}
 
 		// Chests are randomized during world generation, before the world data exists

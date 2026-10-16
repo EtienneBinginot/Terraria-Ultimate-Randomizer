@@ -1,4 +1,4 @@
 displayName = Ultimate Randomizer
 author = Etienne Binginot (based on tRandomizer by ImplicitSaber)
-version = 0.6.2
+version = 0.6.3
 buildIgnore = tools\*, CLAUDE.md

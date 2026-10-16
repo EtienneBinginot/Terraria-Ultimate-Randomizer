@@ -313,6 +313,9 @@ namespace UltimateRandomizer.Common.Features
 
 		public static SwapStats Stats { get; private set; } = new();
 
+		// The guaranteed hosts come from the pool: rebuilt with the other world caches (its swap settings may have changed)
+		public override void Load() => WorldCaches.Reset += EnemySwapPool.Reset;
+
 		public override void OnWorldLoad()
 		{
 			EnemySwapPool.Reset();
@@ -322,24 +325,26 @@ namespace UltimateRandomizer.Common.Features
 
 		public override void PostUpdateNPCs() => ProcessPending(null);
 
-		// forceChance: used by the tests to swap whatever the settings say
 		public static void ProcessPending(float? forceChance)
 		{
 			if (Main.netMode == NetmodeID.MultiplayerClient) return;
-			for (int i = 0; i < Main.maxNPCs; i++)
-			{
-				if (!Pending[i]) continue;
-				Pending[i] = false;
-				NPC npc = Main.npc[i];
-				if (!npc.active) continue;
-				int target = EnemySwapPool.Replacement(npc, forceChance, Stats);
-				if (target <= 0 || target == npc.type) continue;
-				if (NPCID.Sets.CountsAsCritter[target]) Stats.SwappedCritters++;
-				else Stats.SwappedEnemies++;
-				npc.Transform(target);
-				// Transform gives the NPC new globals: its individual stats (giant, mini...) are rolled again
-				EnemyIndividualNPC.RollAndApply(npc);
-			}
+			for (int i = 0; i < Main.maxNPCs; i++) ProcessSlot(i, forceChance);
+		}
+
+		// forceChance: used by the tests to swap whatever the settings say (on their own slots only)
+		public static void ProcessSlot(int i, float? forceChance)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || i < 0 || i >= Main.maxNPCs || !Pending[i]) return;
+			Pending[i] = false;
+			NPC npc = Main.npc[i];
+			if (!npc.active) return;
+			int target = EnemySwapPool.Replacement(npc, forceChance, Stats);
+			if (target <= 0 || target == npc.type) return;
+			if (NPCID.Sets.CountsAsCritter[target]) Stats.SwappedCritters++;
+			else Stats.SwappedEnemies++;
+			npc.Transform(target);
+			// Transform gives the NPC new globals: its individual stats (giant, mini...) are rolled again
+			EnemyIndividualNPC.RollAndApply(npc);
 		}
 
 		public override void Unload() => EnemySwapPool.Reset();

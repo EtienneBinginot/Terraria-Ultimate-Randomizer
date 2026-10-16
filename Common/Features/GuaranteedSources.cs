@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Terraria;
+using Terraria.GameContent.Bestiary;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using UltimateRandomizer.Common.Configs;
@@ -127,13 +129,36 @@ namespace UltimateRandomizer.Common.Features
 		// Common natural enemies of a tier (bestiary rarity 1, else 2, else any)
 		private static List<int> Hosts(int tier)
 		{
-			List<int> natural = EnemySwapPool.NaturalEnemies(tier).Where(n => !NPCID.Sets.CountsAsCritter[n]).ToList();
+			List<int> natural = EnemySwapPool.NaturalEnemies(tier).Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n)).ToList();
 			for (int stars = 1; stars <= 5; stars++)
 			{
 				List<int> common = natural.Where(n => Stars(n) <= stars).OrderBy(DetRandom.NpcKey).ToList();
 				if (common.Count > 0) return common;
 			}
 			return natural.OrderBy(DetRandom.NpcKey).ToList();
+		}
+
+		private static HashSet<IBestiaryInfoElement> eventTags;
+
+		// Halloween enemies whose bestiary entry has no event tag (they also come to graveyards, rarely)
+		private static readonly int[] UntaggedSeasonal = { NPCID.Raven, NPCID.Ghost };
+
+		// Enemies that only come with an event, a moon, a season or a weather (invasions, blood moon, eclipse, pumpkin and
+		// frost moons, Halloween, Christmas, rain, windy day...): a guaranteed drop on them could be out of reach for weeks.
+		// Read from the bestiary spawn conditions (every event tag of CommonTags), plus the invasion sets for modded enemies.
+		public static bool IsEventEnemy(int npcType)
+		{
+			if (npcType <= 0 || npcType >= NPCID.Sets.BelongsToInvasionOldOnesArmy.Length) return false;
+			if (NPCID.Sets.BelongsToInvasionOldOnesArmy[npcType] || NPCID.Sets.BelongsToInvasionGoblinArmy[npcType] || NPCID.Sets.BelongsToInvasionFrostLegion[npcType]
+				|| NPCID.Sets.BelongsToInvasionPirate[npcType] || NPCID.Sets.BelongsToInvasionMartianMadness[npcType] || UntaggedSeasonal.Contains(npcType))
+			{
+				return true;
+			}
+			eventTags ??= typeof(BestiaryDatabaseNPCsPopulator.CommonTags.SpawnConditions.Events).GetFields(BindingFlags.Public | BindingFlags.Static)
+				.Concat(typeof(BestiaryDatabaseNPCsPopulator.CommonTags.SpawnConditions.Invasions).GetFields(BindingFlags.Public | BindingFlags.Static))
+				.Select(f => f.GetValue(null)).OfType<IBestiaryInfoElement>().ToHashSet();
+			List<IBestiaryInfoElement> info = Main.BestiaryDB?.FindEntryByNPCID(npcType)?.Info;
+			return info != null && info.Any(eventTags.Contains);
 		}
 
 		private static int Stars(int npcType) => ContentSamples.NpcBestiaryRarityStars.TryGetValue(npcType, out int stars) ? stars : 1;
@@ -256,7 +281,8 @@ namespace UltimateRandomizer.Common.Features
 			}
 			for (int t = 0; t < Tiers.Count; t++)
 			{
-				foreach (int npc in EnemySwapPool.NaturalEnemies(t)) AddPlan(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false), t);
+				// Event, moon and seasonal enemies (in the pool when SwapEventEnemies is on) are no reliable source
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) AddPlan(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false), t);
 			}
 			foreach (int boss in NpcTiers.BossTypes) AddPlan(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss));
 			// A bag's content is found once the bag is (bags may hold bags: repeat until nothing changes)
@@ -322,6 +348,11 @@ namespace UltimateRandomizer.Common.Features
 		// reachable, dungeon crates after Skeletron, sky crates once floating islands are reachable
 		public static int CrateAccessTier(int crate)
 		{
+			// Evil crates need their evil (both in drunk worlds); the Hallow only exists before hardmode in drunk and remix worlds
+			bool Evil(bool crimson) => Main.drunkWorld || WorldGen.crimson == crimson;
+			if (crate is ItemID.CorruptFishingCrate or ItemID.CorruptFishingCrateHard && !Evil(false)) return Never;
+			if (crate is ItemID.CrimsonFishingCrate or ItemID.CrimsonFishingCrateHard && !Evil(true)) return Never;
+			if (crate is ItemID.HallowedFishingCrate && !Main.drunkWorld && !Main.remixWorld) return Never;
 			if (ItemID.Sets.IsFishingCrateHardmode[crate] || crate is ItemID.LavaCrate or ItemID.LavaCrateHard) return (int)Core.Tier.Hardmode;
 			if (crate is ItemID.DungeonFishingCrate) return (int)Core.Tier.PostSkeletron;
 			if (crate is ItemID.FloatingIslandFishingCrate) return (int)Core.Tier.PostEvilBoss;

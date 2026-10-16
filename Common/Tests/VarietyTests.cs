@@ -199,13 +199,33 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (!present.Any(o => ItemPool.TierOf(o) == ItemPool.TierOf(ore))) failures.Add($"no ore of this world at the tier of {N(ore)}");
 			}
+			// One-to-one too when some pairs have both ores present next to pairs with one (drunk worlds, undecided hardmode
+			// pairs, modded ores): every present ore is given by exactly one present ore of its tier
+			void OneToOne(Func<int, bool> presence, string label)
+			{
+				Dictionary<int, int> m = OreMap.Build(presence);
+				HashSet<int> given = new();
+				foreach (int ore in ores.Where(presence))
+				{
+					int image = m.TryGetValue(ore, out int v) ? v : ore;
+					if (!presence(image)) failures.Add($"{label}: {N(ore)} gives {N(image)}, absent");
+					else if (!given.Add(image)) failures.Add($"{label}: {N(image)} given by two ores");
+					if (ItemPool.TierOf(image) != ItemPool.TierOf(ore)) failures.Add($"{label}: {N(ore)} -> {N(image)} changes tier");
+				}
+			}
+			OneToOne(type => OreMap.PairOf(type) is 0 or 2 || firstOfPair(type), "Copper and Silver pairs both present");
+			OneToOne(type => OreMap.PairOf(type) >= 4 || firstOfPair(type), "drunk world");
 			// An altar deciding a pair only changes what stood for that pair: undecided Cobalt/Palladium, then Cobalt chosen
 			Func<int, bool> before = type => OreMap.PairOf(type) == OreMap.PairOf(ItemID.CobaltOre) || firstOfPair(type);
 			Func<int, bool> after = type => OreMap.PairOf(type) == OreMap.PairOf(ItemID.CobaltOre) ? type == ItemID.CobaltOre : firstOfPair(type);
+			OneToOne(before, "Cobalt undecided");
+			OneToOne(after, "Cobalt chosen");
 			Dictionary<int, int> mapBefore = OreMap.Build(before);
 			Dictionary<int, int> mapAfter = OreMap.Build(after);
 			HashSet<int> pair = new() { ItemID.CobaltOre, ItemID.PalladiumOre };
-			foreach (int ore in ores.Where(o => !pair.Contains(o) && before(o)))
+			// Ores of Cobalt's tier may change with it (a cycle with unequal counts stays in place); other tiers never do
+			int cobaltTier = ItemPool.TierOf(ItemID.CobaltOre);
+			foreach (int ore in ores.Where(o => !pair.Contains(o) && before(o) && ItemPool.TierOf(o) != cobaltTier))
 			{
 				int was = mapBefore.TryGetValue(ore, out int w) ? w : ore;
 				int now = mapAfter.TryGetValue(ore, out int n) ? n : ore;

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Terraria;
 using Terraria.DataStructures;
+using Terraria.GameContent.Events;
 using Terraria.ID;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Features;
@@ -38,7 +39,10 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
 			if (!EnemiesConfig.Instance.RandomizeEnemySpawns) Check.Skip("enemy spawns are not randomized");
-			if (Main.pumpkinMoon || Main.snowMoon || Main.invasionType > 0) Check.Skip("an event is running");
+			// Same conditions as EnemySwapNPC.EventInProgress: events keep their own spawns
+			if (Main.pumpkinMoon || Main.snowMoon || Main.invasionType > 0 || DD2Event.Ongoing) Check.Skip("an event is running");
+			Player player = Main.LocalPlayer;
+			if (player.ZoneTowerSolar || player.ZoneTowerVortex || player.ZoneTowerNebula || player.ZoneTowerStardust) Check.Skip("near a celestial pillar");
 		}
 
 		// Vanilla sets the variant (Pinky, zombie variants...) with SetDefaults right after spawning: the swap must survive it
@@ -54,7 +58,7 @@ namespace UltimateRandomizer.Common.Tests
 				{
 					npc.SetDefaults(NPCID.Pinky);
 					Check.That(EnemySwapSystem.Pending[npc.whoAmI], "the pending swap was lost by SetDefaults");
-					EnemySwapSystem.ProcessPending(100);
+					EnemySwapSystem.ProcessSlot(npc.whoAmI, 100);
 					swapped = npc.netID != NPCID.Pinky;
 				}
 				finally
@@ -78,7 +82,7 @@ namespace UltimateRandomizer.Common.Tests
 				try
 				{
 					string habitat = EnemySwapPool.HabitatOf(npc.type);
-					EnemySwapSystem.ProcessPending(100);
+					EnemySwapSystem.ProcessSlot(npc.whoAmI, 100);
 					if (npc.type == NPCID.Bunny) continue;
 					changed++;
 					if (!NPCID.Sets.CountsAsCritter[npc.type]) failures.Add($"bunny became {npc.TypeName}, not a critter");

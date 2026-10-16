@@ -155,6 +155,18 @@ namespace UltimateRandomizer.Common.Features
 			return ContentSamples.ItemsByType.TryGetValue(original, out Item sample) && sample.pick > 0;
 		}
 
+		// Is this item one of the recipe's own ingredients through a group (any Wood -> N Boreal Wood)? Groups are never
+		// randomized: the live recipe's are the originals
+		public static bool InAcceptedGroup(int i, int item)
+		{
+			if (i < 0 || i >= Recipe.numRecipes) return false;
+			foreach (int id in Main.recipe[i].acceptedGroups)
+			{
+				if (RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group) && group.ValidItems.Contains(item)) return true;
+			}
+			return false;
+		}
+
 		// The result of a randomized recipe. lucky: ignores the progression lock (what the recipe gives once unlocked)
 		public static (int type, int stack) RollResult(int i, IList<int> ingredientTypes, int ingredientCount, bool lucky, long ingredientValue = -1)
 		{
@@ -181,7 +193,7 @@ namespace UltimateRandomizer.Common.Features
 				};
 				int replacement = ItemPool.Roll(request);
 				// A recipe must never give back one of its own ingredients (1 Wood -> 4 Wood would be infinite)
-				if (ingredientTypes.Contains(replacement)) continue;
+				if (ingredientTypes.Contains(replacement) || InAcceptedGroup(i, replacement)) continue;
 				int stack = StackRules.Scaled(original, originalStack, replacement);
 				if (StackRules.ValueOf(replacement) <= 0) stack = Math.Min(stack, Math.Max(1, ingredientCount));
 				if ((long)StackRules.ValueOf(replacement) * stack <= maxValue) return (replacement, stack);

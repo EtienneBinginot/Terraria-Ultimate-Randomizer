@@ -19,13 +19,48 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BasicStationsFindable", BasicStationsFindable);
 			TestRunner.Register("GuaranteedReachability", GuaranteedReachability);
 			TestRunner.Register("GuaranteedLoadBalanced", GuaranteedLoadBalanced);
+			TestRunner.Register("GuaranteedHostsNotEvents", GuaranteedHostsNotEvents);
 			TestRunner.Register("GuaranteedDeterminism", GuaranteedDeterminism);
 			TestRunner.Register("FindabilityDeterminism", FindabilityDeterminism);
 			TestRunner.Register("WorldMaterialsFindable", WorldMaterialsFindable);
 			TestRunner.Register("BagContentFindable", BagContentFindable);
+			TestRunner.Register("CrateAccessWorld", CrateAccessWorld);
+			TestRunner.Register("HardmodeOresOfWorld", HardmodeOresOfWorld);
+			TestRunner.Register("AltarDecisionKeepsCaches", AltarDecisionKeepsCaches);
 		}
 
 		private static string Name(int item) => Lang.GetItemNameValue(item);
+
+		// Guaranteed drops are never on event, moon, seasonal or weather enemies, whatever the swap settings
+		private static void GuaranteedHostsNotEvents()
+		{
+			int[] events =
+			{
+				NPCID.BloodZombie, NPCID.Drippler, NPCID.CorruptBunny, NPCID.Raven, NPCID.Ghost, NPCID.ZombieElf, NPCID.GingerbreadMan, NPCID.Eyezor,
+				NPCID.Frankenstein, NPCID.Splinterling, NPCID.GoblinPeon, NPCID.PirateDeckhand, NPCID.SnowmanGangsta, NPCID.FlyingFish, NPCID.UmbrellaSlime
+			};
+			int[] common = { NPCID.Zombie, NPCID.BlueSlime, NPCID.DemonEye, NPCID.Skeleton, NPCID.CaveBat };
+			List<string> failures = new();
+			foreach (int type in events)
+			{
+				if (!GuaranteedSources.IsEventEnemy(type)) failures.Add($"{Lang.GetNPCNameValue(type)} not seen as an event enemy");
+			}
+			foreach (int type in common)
+			{
+				if (GuaranteedSources.IsEventEnemy(type)) failures.Add($"{Lang.GetNPCNameValue(type)} seen as an event enemy");
+			}
+			int hosts = 0;
+			foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements)
+			{
+				foreach (int host in GuaranteedSources.HostsOf(requirement.Item))
+				{
+					hosts++;
+					if (events.Contains(host) || GuaranteedSources.IsEventEnemy(host)) failures.Add($"{Name(requirement.Item)} on {Lang.GetNPCNameValue(host)}");
+				}
+			}
+			if (GuaranteedSources.Requirements.Count > 0) Check.That(hosts > 0, "no guaranteed host at all");
+			Check.All(failures, "Guaranteed drops on event enemies");
+		}
 
 		private static void BasicStationsUnprotected()
 		{
@@ -40,12 +75,14 @@ namespace UltimateRandomizer.Common.Tests
 
 		private static void ProgressionStationsProtected()
 		{
-			if (ProgressionConfig.Instance.StationProtection == StationProtection.None) Check.Skip("no station is protected");
-			int[] items =
+			// Progression stations stay protected even with StationProtection.None (nothing else guarantees them);
+			// themed ones only when stations are protected
+			List<int> items = new()
 			{
 				ItemID.Hellforge, ItemID.MythrilAnvil, ItemID.OrichalcumAnvil, ItemID.AdamantiteForge, ItemID.TitaniumForge, ItemID.TinkerersWorkshop,
-				ItemID.ImbuingStation, ItemID.CrystalBall, ItemID.Autohammer, ItemID.LihzahrdFurnace, ItemID.LunarCraftingStation, ItemID.GlassKiln
+				ItemID.ImbuingStation, ItemID.CrystalBall, ItemID.Autohammer, ItemID.LihzahrdFurnace, ItemID.LunarCraftingStation
 			};
+			if (ProgressionConfig.Instance.StationProtection != StationProtection.None) items.Add(ItemID.GlassKiln);
 			List<string> failures = items.Where(ItemPool.IsRandomizable).Select(Name).ToList();
 			Check.All(failures, "Progression stations not protected");
 		}
@@ -115,6 +152,86 @@ namespace UltimateRandomizer.Common.Tests
 
 		// A bag's content counts only once the bag can be obtained: never seasonal bags, and treasure bags only in expert
 		// mode (their boss drop is expert-only)
+		// Crates the world can't give are no source: the other evil's crates (except in drunk worlds), the pre-hardmode
+		// Hallowed crate (except drunk and remix worlds); the hardmode Divine crate comes in hardmode
+		private static void CrateAccessWorld()
+		{
+			List<string> failures = new();
+			void Expect(int crate, bool reachable)
+			{
+				bool actual = Findability.CrateAccessTier(crate) < Findability.Never;
+				if (actual != reachable) failures.Add($"{Name(crate)}: {(actual ? "counted" : "not counted")}");
+			}
+			bool crimson = WorldGen.crimson;
+			Expect(ItemID.CorruptFishingCrate, Main.drunkWorld || !crimson);
+			Expect(ItemID.CorruptFishingCrateHard, Main.drunkWorld || !crimson);
+			Expect(ItemID.CrimsonFishingCrate, Main.drunkWorld || crimson);
+			Expect(ItemID.CrimsonFishingCrateHard, Main.drunkWorld || crimson);
+			Expect(ItemID.HallowedFishingCrate, Main.drunkWorld || Main.remixWorld);
+			Expect(ItemID.WoodenCrate, true);
+			Check.Equal((int)Core.Tier.Hardmode, Findability.CrateAccessTier(ItemID.HallowedFishingCrateHard), "tier of the Divine crate");
+			Check.All(failures, "Crates counted wrongly for this world");
+		}
+
+		// Hardmode pair ores always count as findable (the altars must not change the world caches) and are never picked as
+		// new recipe ingredients, so an ore the altars did not choose is never required
+		private static void HardmodeOresOfWorld()
+		{
+			List<string> failures = new();
+			int[] ores = { ItemID.CobaltOre, ItemID.PalladiumOre, ItemID.MythrilOre, ItemID.OrichalcumOre, ItemID.AdamantiteOre, ItemID.TitaniumOre };
+			foreach (int ore in ores)
+			{
+				if (!OreMap.IsHardmodePairOre(ore)) failures.Add($"{Name(ore)} not seen as a hardmode pair ore");
+				if (!OreMap.IsFindable(ore)) failures.Add($"{Name(ore)} not findable");
+			}
+			if (OreMap.IsHardmodePairOre(ItemID.CopperOre) || OreMap.IsHardmodePairOre(ItemID.DemoniteOre)) failures.Add("a pre-hardmode ore is seen as a hardmode pair ore");
+			if (RecipeSystem.Applied && CraftingConfig.Instance.IngredientMode == IngredientMode.Randomized)
+			{
+				RecipePlan plan = RecipePlanner.Get();
+				for (int i = 0; i < plan.Ingredients.Length; i++)
+				{
+					if (plan.Ingredients[i] == null) continue;
+					HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
+					foreach ((int type, _) in plan.Ingredients[i])
+					{
+						if (!originals.Contains(type) && OreMap.IsHardmodePairOre(type)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} now needs {Name(type)}");
+					}
+				}
+			}
+			Check.All(failures, "Hardmode ores");
+		}
+
+		// An altar deciding Cobalt or Palladium changes nothing the world caches hold: same requirements, same guaranteed
+		// hosts, same findability. The world's choice is changed only for the test and restored
+		private static void AltarDecisionKeepsCaches()
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient) Check.Skip("the server decides the ores");
+			string Describe()
+			{
+				ItemPool.OnSeedChanged();
+				string requirements = string.Join(",", GuaranteedSources.Requirements.Select(r => $"{r.Item}@{r.Tier}:{string.Join("/", GuaranteedSources.HostsOf(r.Item).OrderBy(h => h))}"));
+				string tiers = string.Join(",", Enumerable.Range(1, ItemPool.Info.Length - 1).Select(Findability.Tier));
+				return requirements + "|" + tiers;
+			}
+			int saved = WorldGen.SavedOreTiers.Cobalt;
+			try
+			{
+				WorldGen.SavedOreTiers.Cobalt = -1;
+				string undecided = Describe();
+				WorldGen.SavedOreTiers.Cobalt = TileID.Cobalt;
+				string cobalt = Describe();
+				WorldGen.SavedOreTiers.Cobalt = TileID.Palladium;
+				string palladium = Describe();
+				Check.Equal(undecided.GetHashCode(), cobalt.GetHashCode(), "guaranteed sources and findability once Cobalt is chosen");
+				Check.Equal(undecided.GetHashCode(), palladium.GetHashCode(), "guaranteed sources and findability once Palladium is chosen");
+			}
+			finally
+			{
+				WorldGen.SavedOreTiers.Cobalt = saved;
+				ItemPool.OnSeedChanged();
+			}
+		}
+
 		private static void BagContentFindable()
 		{
 			List<string> failures = new();

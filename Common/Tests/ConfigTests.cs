@@ -11,11 +11,36 @@ namespace UltimateRandomizer.Common.Tests
 {
 	public static class ConfigTests
 	{
+		// Saving a setting the world caches don't use (enemy stats) keeps findability and the recipe plan; a loot setting or a
+		// swap pool setting rebuilds them. Checked on clones: the live config is never touched
+		private static void CacheSignatureScope()
+		{
+			T Clone<T>(T config) where T : ModConfig => (T)ConfigManager.GeneratePopulatedClone(config);
+			GeneralConfig general = GeneralConfig.Instance;
+			LootConfig loot = LootConfig.Instance;
+			CraftingConfig crafting = CraftingConfig.Instance;
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			EconomyConfig economy = EconomyConfig.Instance;
+			string current = Core.SeedSystem.CacheSignature(general, loot, crafting, progression, economy, EnemiesConfig.Instance);
+			Check.Equal(Core.SeedSystem.CacheSignature(), current, "signature of the live configs");
+			EnemiesConfig stats = Clone(EnemiesConfig.Instance);
+			stats.GiantChance += 1;
+			stats.RandomizeEnemyStats = !stats.RandomizeEnemyStats;
+			Check.That(Core.SeedSystem.CacheSignature(general, loot, crafting, progression, economy, stats) == current, "an enemy stat setting rebuilds the world caches");
+			EnemiesConfig pool = Clone(EnemiesConfig.Instance);
+			pool.SwapEventEnemies = !pool.SwapEventEnemies;
+			Check.That(Core.SeedSystem.CacheSignature(general, loot, crafting, progression, economy, pool) != current, "a swap pool setting does not rebuild the world caches");
+			LootConfig otherLoot = Clone(loot);
+			otherLoot.RandomizeMobDrops = !otherLoot.RandomizeMobDrops;
+			Check.That(Core.SeedSystem.CacheSignature(general, otherLoot, crafting, progression, economy, EnemiesConfig.Instance) != current, "a loot setting does not rebuild the world caches");
+		}
+
 		public static void Register()
 		{
 			TestRunner.Register("ConfigTexts", ConfigTexts);
 			TestRunner.Register("OtherTexts", OtherTexts);
 			TestRunner.Register("ConfigRanges", ConfigRanges);
+			TestRunner.Register("CacheSignatureScope", CacheSignatureScope);
 		}
 
 		private static readonly Type[] ConfigTypes =

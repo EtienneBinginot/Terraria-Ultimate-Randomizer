@@ -36,15 +36,20 @@ namespace UltimateRandomizer.Common.Core
 					if (ItemID.Sets.SortingPriorityBossSpawns[type] >= 0) set.Add(type);
 				}
 			}
-			if (cfg.StationProtection != StationProtection.None)
 			{
 				// Any item placing a tile that some recipe requires (work bench, anvils, furnaces...); basic stations
-				// are left to the randomizer when only progression stations are protected
+				// are left to the randomizer when only progression stations are protected. Progression stations
+				// (tinkerer, hellforge, mythril anvil...) are always protected: nothing guarantees them otherwise
 				HashSet<int> stationTiles = Stations.RequiredTiles();
 				foreach ((int type, Item item) in ContentSamples.ItemsByType)
 				{
 					if (item.createTile < 0 || !stationTiles.Contains(item.createTile)) continue;
-					if (cfg.StationProtection == StationProtection.ProgressionOnly && Stations.Info(item.createTile).Kind == StationKind.Basic) continue;
+					StationKind kind = Stations.Info(item.createTile).Kind;
+					if (kind != StationKind.Progression)
+					{
+						if (cfg.StationProtection == StationProtection.None) continue;
+						if (cfg.StationProtection == StationProtection.ProgressionOnly && kind == StationKind.Basic) continue;
+					}
 					set.Add(type);
 				}
 			}

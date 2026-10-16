@@ -18,6 +18,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("RecipesDoable", RecipesDoable);
 			TestRunner.Register("AvailabilityConsistent", AvailabilityConsistent);
 			TestRunner.Register("NoSelfIngredient", NoSelfIngredient);
+			TestRunner.Register("ResultNotInGroup", ResultNotInGroup);
 			TestRunner.Register("IngredientValueCoherent", IngredientValueCoherent);
 			TestRunner.Register("ProtectedIngredientsKept", ProtectedIngredientsKept);
 			TestRunner.Register("RecipeGroupsSane", RecipeGroupsSane);
@@ -77,6 +78,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			RequireApplied();
 			RecipePlan plan = RecipePlanner.Get();
+			Dictionary<int, List<int>> placers = Placers();
 			int touchable = 0;
 			int doable = 0;
 			List<string> examples = new();
@@ -86,12 +88,40 @@ namespace UltimateRandomizer.Common.Tests
 				touchable++;
 				Recipe recipe = Main.recipe[i];
 				int rt = RecipePlanner.RecipeTier(i);
-				bool ok = recipe.requiredItem.All(item => item.type < plan.Availability.Length && (plan.Availability[item.type] <= rt || GroupAvailable(recipe, item.type, plan, rt)));
+				bool ok = recipe.requiredItem.All(item => item.type < plan.Availability.Length && (plan.Availability[item.type] <= rt || GroupAvailable(recipe, item.type, plan, rt)))
+					&& recipe.requiredTile.All(tile => StationTier(tile, placers, plan.Availability) <= rt);
 				if (ok) doable++;
 				else if (examples.Count < 5) examples.Add(Name(RecipeSystem.OriginalResult(i)));
 			}
 			double ratio = touchable == 0 ? 1 : doable / (double)touchable;
 			Check.That(ratio >= 0.85, $"only {ratio:P0} of the recipes can be made at their level (e.g. {string.Join(", ", examples)})");
+		}
+
+		// Items placing each tile, built here independently of the planner
+		private static Dictionary<int, List<int>> Placers()
+		{
+			Dictionary<int, List<int>> placers = new();
+			foreach ((int type, Item item) in ContentSamples.ItemsByType)
+			{
+				if (item.createTile < TileID.Dirt) continue;
+				if (!placers.TryGetValue(item.createTile, out List<int> list)) placers[item.createTile] = list = new List<int>();
+				list.Add(type);
+			}
+			return placers;
+		}
+
+		// A station is usable from its cheapest placing item; progression stations from their tier (protected, bought...);
+		// tiles no item places (Demon Altar) are part of the world
+		private static int StationTier(int tile, Dictionary<int, List<int>> placers, int[] avail)
+		{
+			if (!placers.TryGetValue(tile, out List<int> items)) return 0;
+			Stations.StationInfo info = Stations.Info(tile);
+			int best = info.Kind == StationKind.Progression ? info.Tier : Findability.Never;
+			foreach (int item in items)
+			{
+				if (item < avail.Length) best = Math.Min(best, avail[item]);
+			}
+			return best;
 		}
 
 		private static bool GroupAvailable(Recipe recipe, int item, RecipePlan plan, int tier)
@@ -103,13 +133,50 @@ namespace UltimateRandomizer.Common.Tests
 			return false;
 		}
 
-		// The availability of items only relies on raw sources: recomputing it from scratch gives the same values
+		// The plan's availability is the one of the applied recipes: recomputed here with a naive fixed point (written
+		// independently of the planner) over the live ingredients and stations and the planned results
 		private static void AvailabilityConsistent()
 		{
 			RequireApplied();
 			RecipePlan plan = RecipePlanner.Get();
-			int[] again = RecipePlanner.Get().Availability;
-			Check.That(ReferenceEquals(plan.Availability, again), "the plan is rebuilt between two calls");
+			Dictionary<int, List<int>> placers = Placers();
+			int[] naive = new int[plan.Availability.Length];
+			for (int t = 1; t < naive.Length; t++) naive[t] = Findability.Tier(t);
+			bool changed = true;
+			int passes = 0;
+			while (changed && passes++ < 200)
+			{
+				changed = false;
+				for (int i = 0; i < Count; i++)
+				{
+					Recipe recipe = Main.recipe[i];
+					if (recipe.Disabled) continue;
+					int tier = 0;
+					foreach (Item item in recipe.requiredItem)
+					{
+						int a = item.type < naive.Length ? naive[item.type] : Findability.Never;
+						foreach (int id in recipe.acceptedGroups)
+						{
+							if (!RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group) || !group.ContainsItem(item.type)) continue;
+							a = group.ValidItems.Where(v => v < naive.Length).Select(v => naive[v]).DefaultIfEmpty(Findability.Never).Min();
+							break;
+						}
+						tier = Math.Max(tier, a);
+					}
+					foreach (int tile in recipe.requiredTile) tier = Math.Max(tier, StationTier(tile, placers, naive));
+					if (tier == Findability.Never) continue;
+					int result = plan.Results[i].type;
+					int at = Math.Max(tier, plan.ResultTiers[i]);
+					if (result > 0 && result < naive.Length && at < naive[result])
+					{
+						naive[result] = at;
+						changed = true;
+					}
+				}
+			}
+			List<string> differences = Enumerable.Range(1, naive.Length - 1).Where(t => naive[t] != plan.Availability[t])
+				.Select(t => $"{Name(t)}: {Show(naive[t])} recomputed, {Show(plan.Availability[t])} in the plan").Take(5).ToList();
+			Check.All(differences, "Availability differs from a recomputation");
 			int found = Enumerable.Range(1, plan.Availability.Length - 1).Count(t => plan.Availability[t] < Findability.Never);
 			int raw = Enumerable.Range(1, plan.Availability.Length - 1).Count(t => Findability.Tier(t) < Findability.Never);
 			Check.That(found >= raw, $"crafting makes fewer items available ({found}) than finding them ({raw})");
@@ -133,6 +200,31 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Recipes using their own result");
 		}
 
+		// A randomized result is never an item one of the recipe's groups accepts (any Wood -> N Boreal Wood would loop)
+		private static void ResultNotInGroup()
+		{
+			RequireApplied();
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			int withGroups = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe.acceptedGroups.Count == 0) continue;
+				withGroups++;
+				foreach (int result in new[] { plan.Results[i].type, recipe.createItem.type })
+				{
+					if (result == RecipeSystem.OriginalResult(i)) continue;
+					foreach (int id in recipe.acceptedGroups)
+					{
+						if (RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group) && group.ValidItems.Contains(result)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} gives {Name(result)}, accepted by {group.GetText()}");
+					}
+				}
+			}
+			Check.That(withGroups > 0, "no recipe uses a group");
+			Check.All(failures, "Recipes giving an item their group accepts");
+		}
+
 		private static void IngredientValueCoherent()
 		{
 			RequireRandomIngredients();
@@ -144,8 +236,12 @@ namespace UltimateRandomizer.Common.Tests
 				if (plan.Ingredients[i] == null) continue;
 				long before = RecipeSystem.OriginalIngredientValue(i);
 				long after = plan.IngredientValues[i];
-				bool capped = plan.Ingredients[i].Any(p => p.stack >= Math.Min(cap, StackRules.MaxStackOf(p.type)) || p.stack == 1);
-				if (!capped && (after < before / 2 || after > before * 2 + Item.silver)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {before} -> {after}");
+				// A stack held by the cap may lose value; a replacement's stack is rounded up, so each new ingredient may add up
+				// to its own unit value (a x1 of something pricier than what it replaced). Nothing else excuses a change
+				bool capped = plan.Ingredients[i].Any(p => p.stack >= Math.Min(cap, StackRules.MaxStackOf(p.type)));
+				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
+				long roundUp = plan.Ingredients[i].Where(p => !originals.Contains(p.type)).Sum(p => (long)Math.Max(StackRules.ValueOf(p.type), 1));
+				if ((!capped && after < before / 2) || after > before * 2 + Item.silver + roundUp) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {before} -> {after}");
 			}
 			Check.All(failures, "Ingredient values changed too much");
 		}
@@ -246,21 +342,32 @@ namespace UltimateRandomizer.Common.Tests
 		private static void StationDag()
 		{
 			RequireApplied();
-			Dictionary<int, HashSet<int>> edges = new();
+			// The station sets of the recipes making each station
+			Dictionary<int, List<int[]>> recipesOf = new();
 			for (int i = 0; i < Count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (!Stations.PlacedTile(recipe.createItem.type, out int made) || Stations.Info(made).Kind is not (StationKind.Basic or StationKind.Progression)) continue;
-				if (!edges.TryGetValue(made, out HashSet<int> needs)) edges[made] = needs = new HashSet<int>();
-				foreach (int tile in recipe.requiredTile) needs.Add(tile);
+				if (recipe.Disabled || !Stations.PlacedTile(recipe.createItem.type, out int made) || Stations.Info(made).Kind is not (StationKind.Basic or StationKind.Progression)) continue;
+				if (!recipesOf.TryGetValue(made, out List<int[]> list)) recipesOf[made] = list = new List<int[]>();
+				list.Add(recipe.requiredTile.ToArray());
 			}
-			// A station is fine when one of its recipes can be made without itself, or when it is found in the world
-			List<string> failures = new();
-			foreach ((int tile, HashSet<int> needs) in edges)
+			// Reachable: stations no recipe makes (world, shops) and basic ones (found in the world), then any station one
+			// of whose recipes only needs reachable stations. Whatever is left needs itself, directly or through others
+			HashSet<int> reachable = Stations.Basic().Select(s => s.tile).ToHashSet();
+			bool Reachable(int tile) => reachable.Contains(tile) || !recipesOf.ContainsKey(tile);
+			bool changed = true;
+			while (changed)
 			{
-				if (needs.Contains(tile) && !Stations.Basic().Any(s => s.tile == tile)) failures.Add(TileID.Search.GetName(tile));
+				changed = false;
+				foreach ((int tile, List<int[]> recipes) in recipesOf)
+				{
+					if (Reachable(tile) || !recipes.Any(needs => needs.All(Reachable))) continue;
+					reachable.Add(tile);
+					changed = true;
+				}
 			}
-			Check.All(failures, "Stations needing themselves");
+			List<string> failures = recipesOf.Keys.Where(t => !Reachable(t)).Select(t => TileID.Search.GetName(t)).ToList();
+			Check.All(failures, "Stations needing themselves (directly or not)");
 		}
 
 		private static void StationTierRespected()

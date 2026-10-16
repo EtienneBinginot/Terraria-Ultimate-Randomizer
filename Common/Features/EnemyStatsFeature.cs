@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.DataStructures;
@@ -51,25 +52,111 @@ namespace UltimateRandomizer.Common.Features
 		public float Defense = 1;
 		public float Size = 1;
 		public EnemyKind Kind;
+		// Identifies a roll: a client that already applied another roll of this NPC undoes it first
+		public byte RollId;
 		private bool rolled;
 		private bool applied;
+		// Stats before Apply, to undo it
+		private int baseLifeMax, baseDamage, baseDefense, baseWidth, baseHeight;
+		private float baseScale;
 
 		public bool Rolled => rolled;
 
 		public override bool InstancePerEntity => true;
 
-		public override void OnSpawn(NPC npc, IEntitySource source)
+		// The roll of each NPC slot (server or single player): every SetDefaults (variants right after the spawn, vanilla
+		// Transform of fighters, spiders, shimmer, evil conversions...) recreates the globals, and the NPC gets the same roll
+		// back instead of a new one. Health ratio of each slot at the end of the last update, kept across those resets.
+		private static readonly Stored?[] slotRolls = new Stored?[Main.maxNPCs + 1];
+		private static readonly float[] slotRatios = Enumerable.Repeat(-1f, Main.maxNPCs + 1).ToArray();
+		private static byte lastRollId;
+
+		private struct Stored
 		{
-			if (Main.netMode != NetmodeID.MultiplayerClient) RollAndApply(npc);
+			public float Life, Damage, Defense, Size;
+			public EnemyKind Kind;
+			public byte Id;
 		}
 
-		// Also after a swap: Transform gives the NPC new globals
-		public static void RollAndApply(NPC npc)
+		public override void OnSpawn(NPC npc, IEntitySource source)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient) return;
+			ClearSlot(npc.whoAmI);
+			RollAndApply(npc);
+		}
+
+		private static void ClearSlot(int slot)
+		{
+			if (slot < 0 || slot >= slotRolls.Length) return;
+			slotRolls[slot] = null;
+			slotRatios[slot] = -1;
+		}
+
+		public static void ClearAll()
+		{
+			Array.Clear(slotRolls);
+			Array.Fill(slotRatios, -1);
+		}
+
+		// A new roll (spawn, swap: Transform gives the NPC new globals), kept for the slot
+		public static void RollAndApply(NPC npc) => RollAndApply(npc, new Random(Main.rand.Next()));
+
+		public static void RollAndApply(NPC npc, Random rng)
 		{
 			if (!npc.TryGetGlobalNPC(out EnemyIndividualNPC individual)) return;
-			individual.Roll(npc, new Random(Main.rand.Next()));
+			individual.Roll(npc, rng);
+			if (npc.whoAmI >= 0 && npc.whoAmI < slotRolls.Length)
+			{
+				slotRolls[npc.whoAmI] = new Stored { Life = individual.Life, Damage = individual.Damage, Defense = individual.Defense, Size = individual.Size, Kind = individual.Kind, Id = individual.RollId };
+			}
 			individual.Apply(npc);
 			npc.netUpdate = true;
+		}
+
+		// After the NPC update (server or single player): NPCs whose globals were recreated get their slot's roll back
+		// (a new one if the slot has none), with the health ratio they had; netUpdate sends them to the clients
+		public static void RollMissing()
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || !SeedSystem.WorldReady) return;
+			for (int i = 0; i < Main.maxNPCs; i++) RollMissing(Main.npc[i]);
+		}
+
+		public static void RollMissing(NPC npc)
+		{
+			if (!npc.active || !npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) || individual.rolled || !Eligible(npc)) return;
+			int slot = npc.whoAmI;
+			bool inRange = slot >= 0 && slot < slotRolls.Length;
+			float ratio = npc.lifeMax > 0 ? npc.life / (float)npc.lifeMax : 1;
+			if (inRange && slotRatios[slot] > 0) ratio = Math.Min(ratio, slotRatios[slot]);
+			if (inRange && slotRolls[slot] is Stored stored)
+			{
+				individual.Life = stored.Life;
+				individual.Damage = stored.Damage;
+				individual.Defense = stored.Defense;
+				// The new form may not be resizable (worm, boss minion)
+				individual.Size = Scalable(npc) ? stored.Size : 1;
+				individual.Kind = stored.Kind;
+				individual.RollId = stored.Id;
+				individual.rolled = true;
+				individual.applied = false;
+				individual.Apply(npc);
+				npc.netUpdate = true;
+			}
+			else RollAndApply(npc);
+			if (ratio < 1) npc.life = Math.Clamp((int)(npc.lifeMax * ratio), 1, npc.lifeMax);
+		}
+
+		// End of the server's NPC update: the health ratio of each slot, restored if a SetDefaults resets the NPC
+		public static void SnapshotRatios()
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient) return;
+			for (int i = 0; i < Main.maxNPCs; i++) SnapshotRatio(Main.npc[i]);
+		}
+
+		public static void SnapshotRatio(NPC npc)
+		{
+			if (npc.whoAmI < 0 || npc.whoAmI >= slotRatios.Length) return;
+			slotRatios[npc.whoAmI] = npc.active && npc.lifeMax > 0 ? Math.Clamp(npc.life / (float)npc.lifeMax, 0, 1) : -1;
 		}
 
 		public static bool Eligible(NPC npc) =>
@@ -86,6 +173,8 @@ namespace UltimateRandomizer.Common.Features
 			Kind = EnemyKind.Normal;
 			rolled = true;
 			applied = false;
+			lastRollId = (byte)(lastRollId == byte.MaxValue ? 1 : lastRollId + 1);
+			RollId = lastRollId;
 			if (!Eligible(npc)) return;
 			EnemiesConfig cfg = EnemiesConfig.Instance;
 			bool boss = npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[npc.type];
@@ -133,6 +222,12 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (applied) return;
 			applied = true;
+			baseLifeMax = npc.lifeMax;
+			baseDamage = npc.damage;
+			baseDefense = npc.defense;
+			baseWidth = npc.width;
+			baseHeight = npc.height;
+			baseScale = npc.scale;
 			if (Life != 1)
 			{
 				// Packet 23 syncs life but not lifeMax: clients scale lifeMax themselves. For a full-health NPC vanilla sets
@@ -170,6 +265,24 @@ namespace UltimateRandomizer.Common.Features
 			binaryWriter.Write(Defense);
 			binaryWriter.Write(Size);
 			binaryWriter.Write((byte)Kind);
+			binaryWriter.Write(RollId);
+		}
+
+		// Back to the stats before Apply (a client receiving another roll for the same NPC: the server rolled again after
+		// a SetDefaults that kept the netID, so the client's NPC was not reset)
+		private void Undo(NPC npc)
+		{
+			if (!applied) return;
+			applied = false;
+			Vector2 center = npc.Center;
+			npc.lifeMax = baseLifeMax;
+			npc.life = Math.Min(npc.life, npc.lifeMax);
+			npc.damage = npc.defDamage = baseDamage;
+			npc.defense = npc.defDefense = baseDefense;
+			npc.width = baseWidth;
+			npc.height = baseHeight;
+			npc.scale = baseScale;
+			npc.Center = center;
 		}
 
 		public override void ReceiveExtraAI(NPC npc, BitReader bitReader, BinaryReader binaryReader)
@@ -181,7 +294,10 @@ namespace UltimateRandomizer.Common.Features
 			float defense = binaryReader.ReadSingle();
 			float size = binaryReader.ReadSingle();
 			EnemyKind kind = (EnemyKind)binaryReader.ReadByte();
-			if (applied) return;
+			byte id = binaryReader.ReadByte();
+			if (applied && id == RollId) return;
+			Undo(npc);
+			RollId = id;
 			Life = life;
 			Damage = damage;
 			Defense = defense;
@@ -227,11 +343,12 @@ namespace UltimateRandomizer.Common.Features
 
 	public static class EnemyStatCache
 	{
-		private static readonly Dictionary<int, EnemyMultipliers> cache = new();
+		// Boss parts and their owner share a type key but may be asked with different boss flags
+		private static readonly Dictionary<(int, bool), EnemyMultipliers> cache = new();
 
 		public static EnemyMultipliers Get(int npcType, bool boss)
 		{
-			if (cache.TryGetValue(npcType, out EnemyMultipliers m)) return m;
+			if (cache.TryGetValue((npcType, boss), out EnemyMultipliers m)) return m;
 			EnemiesConfig cfg = EnemiesConfig.Instance;
 			int key = DetRandom.NpcKey(npcType);
 			m = new EnemyMultipliers { Life = 1, Damage = 1, Defense = 1, Scale = 1 };
@@ -252,7 +369,7 @@ namespace UltimateRandomizer.Common.Features
 				double follow = Math.Clamp(cfg.ScaleFollowsLife, 0, 1);
 				m.Scale = StatCurve.FromPosition(follow * lifePosition + (1 - follow) * ownPosition, cfg.EnemyScaleMin, cfg.EnemyScaleMax);
 			}
-			cache[npcType] = m;
+			cache[(npcType, boss)] = m;
 			return m;
 		}
 
@@ -262,6 +379,16 @@ namespace UltimateRandomizer.Common.Features
 	public class EnemyStatSystem : ModSystem
 	{
 		public override void PostSetupRecipes() => SeedSystem.OnSeedChanged += EnemyStatCache.Clear;
+
+		public override void PostUpdateNPCs()
+		{
+			EnemyIndividualNPC.RollMissing();
+			EnemyIndividualNPC.SnapshotRatios();
+		}
+
+		public override void OnWorldLoad() => EnemyIndividualNPC.ClearAll();
+
+		public override void OnWorldUnload() => EnemyIndividualNPC.ClearAll();
 
 		public override void Unload() => EnemyStatCache.Clear();
 	}

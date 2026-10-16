@@ -17,6 +17,6 @@ namespace UltimateRandomizer.Common.Configs
 			return false;
 		}
 
-		public override void OnChanged() => SeedSystem.NotifyConfigChanged();
+		public override void OnChanged() => SeedSystem.NotifyConfigSaved();
 	}
 }

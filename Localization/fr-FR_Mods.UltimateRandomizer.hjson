@@ -105,7 +105,7 @@ Tests: {
 	RecipeSurpriseRate: La part de recettes qui changent de catégorie suit le réglage
 	WeightTablesSeparated: Les poids du loot favorisent l'équipement, ceux des ingrédients jamais
 	TierWindowVariety: Les tirages de début de partie donnent beaucoup d'objets différents
-	OreMappingBijective: Chaque minerai du monde existe encore, comme drop d'un seul autre minerai du monde ; les minerais absents restent eux-mêmes, et le choix d'une paire hardmode ne change aucun autre minerai
+	OreMappingBijective: Chaque minerai du monde existe encore, comme drop d'un seul autre minerai du monde ; les minerais absents restent eux-mêmes, et le choix d'une paire hardmode ne change aucun minerai d'un autre palier ; un pour un même quand les deux minerais d'une paire sont présents
 	TreeShakeReplacement: Les arbres secoués donnent des objets aléatoires et gardent les glands
 	HerbReplacementTable: Chaque herbe a un ensemble fixe de remplaçants valides
 	ExtractinatorRules: L'Extractinator garde les pièces et échange les minerais contre des minerais
@@ -121,14 +121,19 @@ Tests: {
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
 	GuaranteedLoadBalanced: Aucun ennemi ne porte trop d'objets garantis
+	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
 	WorldMaterialsFindable: Bois, pierre, gemmes et premiers minerais se trouvent dès le début
 	BagContentFindable: Le contenu d'un sac ne compte comme trouvable que si le sac peut être obtenu (jamais les sacs saisonniers, les sacs de trésor seulement en mode expert)
+	CrateAccessWorld: Les caisses que le monde ne peut pas donner (autre mal, caisse sacrée avant le hardmode) ne comptent pas comme source
+	HardmodeOresOfWorld: Les minerais des paires hardmode comptent toujours comme trouvables et ne deviennent jamais de nouveaux ingrédients
+	AltarDecisionKeepsCaches: Le choix d'un minerai hardmode par un autel ne change ni les sources garanties ni la trouvabilité
 	IngredientReplacementsFindable: Les ingrédients remplacés se trouvent (sans craft) au niveau de la recette
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
-	AvailabilityConsistent: La disponibilité des objets repose uniquement sur des sources brutes
+	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
 	NoSelfIngredient: Aucune recette n'utilise son propre résultat
+	ResultNotInGroup: Aucune recette randomisée ne donne un objet accepté par son propre groupe d'ingrédients
 	IngredientValueCoherent: Les ingrédients remplacés gardent à peu près la même valeur
 	ProtectedIngredientsKept: Les ingrédients protégés (matériaux de progression...) ne sont jamais remplacés
 	RecipeGroupsSane: Chaque groupe de recette (n'importe quel bois, lingot de fer...) garde son ingrédient
@@ -136,7 +141,7 @@ Tests: {
 	UntouchedRecipesIntact: Les recettes protégées gardent leurs ingrédients et stations
 	DecraftSafeWithIngredients: Le décraft au Shimmer ne rend jamais des ingrédients plus précieux
 	VanillaModeGuaranteed: En mode ingrédients vanilla, chaque ingrédient manquant est placé sur des ennemis
-	StationDag: Aucune station de craft n'a besoin d'elle-même pour être fabriquée
+	StationDag: Aucune station de craft n'a besoin d'elle-même pour être fabriquée, directement ou via d'autres stations
 	StationTierRespected: Les recettes ne demandent jamais de station au-dessus de leur niveau, ni de station thématique
 	HandCraftKept: Les recettes à la main restent à la main
 	StationsVaried: Une bonne part des recettes a changé de station
@@ -153,6 +158,9 @@ Tests: {
 	ClientIndividualLife: Les géants et les minis ont la bonne vie maximale chez les clients en multijoueur, sans écraser leur vie synchronisée
 	NoGiantMinions: Les minions de boss ne sont jamais géants ni minis et ne donnent jamais le drop bonus des géants
 	TransformRerollsIndividual: Les ennemis remplacés reçoivent leurs propres stats individuelles
+	VariantGetsIndividual: Un ennemi changé en variante (Pinky...) garde ses propres stats individuelles et sa proportion de vie
+	TransformKeepsIndividual: Une transformation vanilla garde les stats individuelles de l'ennemi (pas de géant qui clignote) et sa proportion de vie
+	StatCacheBossFlag: Les multiplicateurs d'un boss ne dépendent pas d'une lecture antérieure du même type comme non-boss
 	LootBonusCap: Le bonus de loot augmente avec la force et reste sous son plafond
 	LootBonusApplied: Les ennemis plus forts reçoivent un bonus de loot
 	BagPlansValid: Tous les contenus de sacs sont valides
@@ -169,6 +177,7 @@ Tests: {
 	ConfigTexts: Chaque réglage a un texte
 	OtherTexts: Chaque message a un texte
 	ConfigRanges: Les réglages sont cohérents
+	CacheSignatureScope: Sauvegarder un réglage de stats d'ennemis garde la trouvabilité et le plan des recettes ; les réglages de butin et du pool d'échanges les recalculent
 }
 
 Journal: {
@@ -435,7 +444,7 @@ Configs: {
 
 		StationProtection: {
 			Label: Protection des stations de craft
-			Tooltip: Progression seulement : les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) ne sont plus protégées ; on les trouve dans le monde (ennemis courants, pots, coffres en bois). Les stations de progression (Hellforge, enclumes et forges hardmode...) gardent leur recette.
+			Tooltip: Progression seulement : les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) ne sont plus protégées ; on les trouve dans le monde (ennemis courants, pots, coffres en bois). Les stations de progression (Hellforge, enclumes et forges hardmode...) gardent leur recette, même avec Aucune.
 		}
 
 		ProtectPickaxeProgression: {

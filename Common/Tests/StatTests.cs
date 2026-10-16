@@ -28,6 +28,9 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ClientIndividualLife", ClientIndividualLife);
 			TestRunner.Register("NoGiantMinions", NoGiantMinions);
 			TestRunner.Register("TransformRerollsIndividual", TransformRerollsIndividual);
+			TestRunner.Register("VariantGetsIndividual", VariantGetsIndividual);
+			TestRunner.Register("TransformKeepsIndividual", TransformKeepsIndividual);
+			TestRunner.Register("StatCacheBossFlag", StatCacheBossFlag);
 			TestRunner.Register("LootBonusCap", LootBonusCap);
 			TestRunner.Register("LootBonusApplied", LootBonusApplied);
 		}
@@ -262,7 +265,7 @@ namespace UltimateRandomizer.Common.Tests
 				NPC npc = Main.npc[index];
 				try
 				{
-					EnemySwapSystem.ProcessPending(100);
+					EnemySwapSystem.ProcessSlot(index, 100);
 					if (npc.type == NPCID.BlueSlime) continue;
 					Check.That(npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Rolled, $"{npc.TypeName} has no individual stats after the swap");
 					return;
@@ -274,6 +277,79 @@ namespace UltimateRandomizer.Common.Tests
 				}
 			}
 			Check.That(false, "the slime was never swapped");
+		}
+
+		// Spawns a natural enemy off screen with a forced roll whose health multiplier is not 1 (seed search); null to skip
+		private static NPC SpawnRolled(int type, out EnemyIndividualNPC rolled)
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
+			Player player = Main.LocalPlayer;
+			int index = NPC.NewNPC(new EntitySource_SpawnNPC(), (int)player.Center.X + 1200, (int)player.Center.Y - 200, type);
+			Check.That(index >= 0 && index < Main.maxNPCs, $"could not spawn {Lang.GetNPCNameValue(type)}");
+			NPC npc = Main.npc[index];
+			EnemySwapSystem.Pending[index] = false;
+			// Fresh globals and base stats, then a roll found by seed
+			npc.SetDefaults(type);
+			EnemyIndividualNPC probe = new();
+			int seed = Enumerable.Range(1, 300).FirstOrDefault(s =>
+			{
+				probe.Roll(npc, new Random(s));
+				return Math.Abs(probe.Life - 1) > 0.05f;
+			});
+			if (seed == 0)
+			{
+				npc.active = false;
+				Check.Skip("no individual variation, giants or minis with these settings");
+			}
+			EnemyIndividualNPC.RollAndApply(npc, new Random(seed));
+			rolled = npc.GetGlobalNPC<EnemyIndividualNPC>();
+			return npc;
+		}
+
+		// A SetDefaults (Pinky variant) or a vanilla Transform (zombie variant) recreates the globals: the NPC gets its own
+		// roll back, not a new one, with the health ratio it had
+		private static void VariantGetsIndividual() => KeepsRollThrough(NPCID.BlueSlime, npc => npc.SetDefaults(NPCID.Pinky));
+
+		private static void TransformKeepsIndividual() => KeepsRollThrough(NPCID.Zombie, npc => npc.Transform(NPCID.BaldZombie));
+
+		private static void KeepsRollThrough(int type, Action<NPC> change)
+		{
+			NPC npc = SpawnRolled(type, out EnemyIndividualNPC before);
+			try
+			{
+				(float life, float damage, EnemyKind kind, byte id) = (before.Life, before.Damage, before.Kind, before.RollId);
+				npc.life = npc.lifeMax / 2;
+				EnemyIndividualNPC.SnapshotRatio(npc);
+				change(npc);
+				Check.That(!npc.GetGlobalNPC<EnemyIndividualNPC>().Rolled, "the change kept the globals: nothing to test");
+				EnemyIndividualNPC.RollMissing(npc);
+				EnemyIndividualNPC after = npc.GetGlobalNPC<EnemyIndividualNPC>();
+				Check.That(after.Rolled, $"{npc.TypeName} has no individual stats");
+				Check.That(after.Life == life && after.Damage == damage && after.Kind == kind && after.RollId == id,
+					$"{npc.TypeName} rolled again: life x{after.Life:0.00} {after.Kind}, was x{life:0.00} {kind}");
+				float ratio = npc.life / (float)npc.lifeMax;
+				Check.That(Math.Abs(ratio - 0.5f) < 0.05f, $"health ratio {ratio:0.00} instead of 0.50");
+			}
+			finally
+			{
+				EnemySwapSystem.Pending[npc.whoAmI] = false;
+				npc.active = false;
+			}
+		}
+
+		// Boss parts and their owner share a type but may ask with different boss flags: each flag has its own entry
+		private static void StatCacheBossFlag()
+		{
+			EnemiesConfig cfg = EnemiesConfig.Instance;
+			if (!cfg.RandomizeBossHealth && !cfg.RandomizeBossDamage) Check.Skip("boss stats are not randomized");
+			int type = NPCID.EyeofCthulhu;
+			// Clearing is harmless: entries are recomputed from the seed
+			EnemyStatCache.Clear();
+			EnemyStatCache.Get(type, false);
+			EnemyMultipliers afterOther = EnemyStatCache.Get(type, true);
+			EnemyStatCache.Clear();
+			EnemyMultipliers fresh = EnemyStatCache.Get(type, true);
+			Check.That(afterOther.Life == fresh.Life && afterOther.Damage == fresh.Damage, "the boss multipliers depend on an earlier non-boss lookup");
 		}
 
 		private static void LootBonusCap()

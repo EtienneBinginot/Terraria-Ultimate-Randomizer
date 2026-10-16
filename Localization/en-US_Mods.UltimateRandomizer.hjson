@@ -105,7 +105,7 @@ Tests: {
 	RecipeSurpriseRate: The share of recipes changing category matches the setting
 	WeightTablesSeparated: Loot weights favor equipment, ingredient weights never pick it
 	TierWindowVariety: Early random rolls give many different items
-	OreMappingBijective: Each ore of this world still exists, as the drop of exactly one other ore of the world; absent ores stay themselves, and deciding a hardmode pair changes no other ore
+	OreMappingBijective: Each ore of this world still exists, as the drop of exactly one other ore of the world; absent ores stay themselves, and deciding a hardmode pair changes no ore of another tier; one-to-one even with both ores of a pair present
 	TreeShakeReplacement: Shaken trees give random items and keep acorns
 	HerbReplacementTable: Each herb has a fixed set of valid replacements
 	ExtractinatorRules: The Extractinator keeps coins and swaps ores for ores
@@ -121,14 +121,19 @@ Tests: {
 	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier
 	GuaranteedLoadBalanced: No enemy carries too many guaranteed items
+	GuaranteedHostsNotEvents: Guaranteed drops are never on invasion, moon, seasonal or weather enemies
 	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
 	FindabilityDeterminism: Findability of items is the same after a rebuild
 	WorldMaterialsFindable: Wood, stone, gems and early ores are findable from the start
 	BagContentFindable: Bag contents count as found only once the bag can be obtained (never seasonal bags, treasure bags only in expert mode)
+	CrateAccessWorld: Crates the world cannot give (other evil, pre-hardmode Hallowed crate) are no source
+	HardmodeOresOfWorld: Hardmode pair ores always count as findable and are never new ingredients
+	AltarDecisionKeepsCaches: An altar choosing a hardmode ore changes neither the guaranteed sources nor findability
 	IngredientReplacementsFindable: Replaced ingredients are found (not crafted) by the recipe's level
 	RecipesDoable: At least 85% of the randomized recipes can be made at their level
-	AvailabilityConsistent: Item availability only relies on raw sources
+	AvailabilityConsistent: The planned item availability matches an independent recomputation over the applied recipes
 	NoSelfIngredient: No recipe uses its own result
+	ResultNotInGroup: No randomized recipe gives an item its own ingredient group accepts
 	IngredientValueCoherent: Replaced ingredients keep about the same value
 	ProtectedIngredientsKept: Protected ingredients (progression materials...) are never replaced
 	RecipeGroupsSane: Every recipe group (any wood, any iron bar...) still has its ingredient
@@ -136,7 +141,7 @@ Tests: {
 	UntouchedRecipesIntact: Protected recipes keep their ingredients and stations
 	DecraftSafeWithIngredients: Shimmer decrafting never gives back more valuable ingredients
 	VanillaModeGuaranteed: In vanilla ingredient mode, every missing ingredient is placed on enemies
-	StationDag: No crafting station needs itself to be made
+	StationDag: No crafting station needs itself to be made, directly or through other stations
 	StationTierRespected: Recipes never need a station above their level, nor a themed one
 	HandCraftKept: Recipes made by hand stay made by hand
 	StationsVaried: A good share of recipes changed station
@@ -153,6 +158,9 @@ Tests: {
 	ClientIndividualLife: Giants and minis have the right maximum health on multiplayer clients, without resetting their synced health
 	NoGiantMinions: Boss minions are never giants or minis and never give the giant bonus drop
 	TransformRerollsIndividual: Swapped enemies get their own individual stats
+	VariantGetsIndividual: An enemy turned into a variant (Pinky...) keeps its own individual stats and health ratio
+	TransformKeepsIndividual: A vanilla transformation keeps the enemy's individual stats (no giant flicker) and its health ratio
+	StatCacheBossFlag: Boss multipliers do not depend on an earlier lookup of the same type as a non-boss
 	LootBonusCap: The loot bonus grows with strength and stays under its cap
 	LootBonusApplied: Stronger enemies get a loot bonus
 	BagPlansValid: Every bag content is valid
@@ -169,6 +177,7 @@ Tests: {
 	ConfigTexts: Every setting has a text
 	OtherTexts: Every message has a text
 	ConfigRanges: Settings are consistent
+	CacheSignatureScope: Saving an enemy stat setting keeps findability and the recipe plan; loot and swap pool settings rebuild them
 }
 
 Journal: {
@@ -435,7 +444,7 @@ Configs: {
 
 		StationProtection: {
 			Label: Crafting station protection
-			Tooltip: Progression only: basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are no longer protected; they are found in the world (common enemies, pots, wooden chests). Progression stations (Hellforge, hardmode anvils and forges...) keep their recipe.
+			Tooltip: Progression only: basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are no longer protected; they are found in the world (common enemies, pots, wooden chests). Progression stations (Hellforge, hardmode anvils and forges...) keep their recipe, even with None.
 		}
 
 		ProtectPickaxeProgression: {
