@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
@@ -180,7 +181,7 @@ namespace UltimateRandomizer.Common.Features
 			HashSet<int> set = WorldMaterials.Select(m => m.item).ToHashSet();
 			for (int type = 1; type < ItemPool.Info.Length; type++)
 			{
-				if (OreMap.IsOre(type)) set.Add(type);
+				if (OreMap.IsOre(type) && OreMap.IsFindable(type)) set.Add(type);
 			}
 			return set;
 		}
@@ -240,8 +241,9 @@ namespace UltimateRandomizer.Common.Features
 			}
 			for (int type = 1; type < ItemPool.Info.Length; type++)
 			{
-				if (!OreMap.IsOre(type)) continue;
-				Add(loot.RandomizeOreDrops && ItemPool.IsRandomizable(type) ? OreMap.Get(type) : type, ItemPool.TierOf(type));
+				// Only the ores of this world can be mined (Tin is not in a Copper world). Randomized or not, mining gives
+				// the ores of the world of each tier (a permutation inside the tier), so the mapping itself doesn't matter.
+				if (OreMap.IsOre(type) && OreMap.IsFindable(type)) Add(type, ItemPool.TierOf(type));
 			}
 
 			float minChance = progression.MinFindableChance / 100f;
@@ -249,7 +251,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				foreach (PlannedDrop drop in plan)
 				{
-					if (drop.Chance >= minChance) Add(drop.Item, Math.Max(sourceTier, Gated(drop.Item)));
+					if (drop.Chance >= minChance && WorldAllows(drop.Conditions)) Add(drop.Item, Math.Max(sourceTier, Gated(drop.Item)));
 				}
 			}
 			for (int t = 0; t < Tiers.Count; t++)
@@ -257,13 +259,94 @@ namespace UltimateRandomizer.Common.Features
 				foreach (int npc in EnemySwapPool.NaturalEnemies(t)) AddPlan(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false), t);
 			}
 			foreach (int boss in NpcTiers.BossTypes) AddPlan(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss));
-			foreach (int bag in LootSnapshot.Items.Keys)
+			// A bag's content is found once the bag is (bags may hold bags: repeat until nothing changes)
+			Dictionary<int, List<PlannedDrop>> bagPlans = LootSnapshot.Items.Keys.Where(b => !SeasonalBags.Contains(b)).OrderBy(b => b)
+				.ToDictionary(b => b, b => BagPlan.Plan(b, lucky: true));
+			bool changed = true;
+			for (int pass = 0; pass < 8 && changed; pass++)
 			{
-				int bagTier = LootSnapshot.BagTier(bag);
-				AddPlan(BagPlan.Plan(bag, lucky: true), bagTier >= 0 ? bagTier : ItemPool.TierOf(bag));
+				changed = false;
+				foreach ((int bag, List<PlannedDrop> plan) in bagPlans)
+				{
+					int tier = BagContentTier(bag, result);
+					if (tier == Never) continue;
+					foreach (PlannedDrop drop in plan)
+					{
+						if (drop.Chance < minChance || drop.Item <= 0 || drop.Item >= result.Length || !WorldAllows(drop.Conditions)) continue;
+						int dropTier = Math.Max(tier, Gated(drop.Item));
+						if (dropTier < result[drop.Item])
+						{
+							result[drop.Item] = dropTier;
+							changed = true;
+						}
+					}
+				}
 			}
 			baseTiers = result;
 			return result;
+		}
+
+		// Drop conditions fixed by the world (difficulty, world evil): an expert-only treasure bag is no source in Classic.
+		// Their CanDrop only reads Main.expertMode, Main.masterMode and WorldGen.crimson (synced in message 7); in
+		// drunk worlds both evils exist. Other conditions (events, biomes...) are left to the drop chance.
+		public static bool WorldAllows(List<IItemDropRuleCondition> conditions)
+		{
+			if (conditions == null) return true;
+			bool Evil(bool crimson) => Main.drunkWorld || WorldGen.crimson == crimson;
+			foreach (IItemDropRuleCondition condition in conditions)
+			{
+				bool allowed = condition switch
+				{
+					Conditions.IsExpert => Main.expertMode,
+					Conditions.NotExpert => !Main.expertMode,
+					Conditions.IsMasterMode => Main.masterMode,
+					Conditions.NotMasterMode => !Main.masterMode,
+					Conditions.IsCrimson => Evil(true),
+					Conditions.IsCorruption => Evil(false),
+					Conditions.IsCrimsonAndNotExpert => Evil(true) && !Main.expertMode,
+					Conditions.IsCorruptionAndNotExpert => Evil(false) && !Main.expertMode,
+					_ => true
+				};
+				if (!allowed) return false;
+			}
+			return true;
+		}
+
+		// Only given during seasonal events: never counted as a source
+		public static readonly HashSet<int> SeasonalBags = new() { ItemID.Present, ItemID.GoodieBag };
+
+		// Fishing is possible from the start (a Wooden Fishing Pole, Angler rewards)
+		public const int FishingTier = 0;
+
+		// Where a crate is caught, conservatively: hardmode crates in hardmode, lava crates once lava fishing gear is
+		// reachable, dungeon crates after Skeletron, sky crates once floating islands are reachable
+		public static int CrateAccessTier(int crate)
+		{
+			if (ItemID.Sets.IsFishingCrateHardmode[crate] || crate is ItemID.LavaCrate or ItemID.LavaCrateHard) return (int)Core.Tier.Hardmode;
+			if (crate is ItemID.DungeonFishingCrate) return (int)Core.Tier.PostSkeletron;
+			if (crate is ItemID.FloatingIslandFishingCrate) return (int)Core.Tier.PostEvilBoss;
+			return FishingTier;
+		}
+
+		// Crates are caught as crates unless fishing turns them into something else
+		public static bool CrateFished(int bag)
+		{
+			LootConfig loot = LootConfig.Instance;
+			return ItemID.Sets.IsFishingCrate[bag] && (!loot.RandomizeFishing || loot.CratesStayCrates || !ItemPool.IsRandomizable(bag));
+		}
+
+		// The tier from which a bag's content counts as found: the bag's own tier, once the bag itself can be obtained
+		// without crafting (dropped, or fished for crates); never for seasonal bags
+		public static int BagContentTier(int bag) => BagContentTier(bag, BaseTiers());
+
+		private static int BagContentTier(int bag, int[] found)
+		{
+			if (SeasonalBags.Contains(bag)) return Never;
+			int tier = bag > 0 && bag < found.Length ? found[bag] : Never;
+			if (CrateFished(bag)) tier = Math.Min(tier, CrateAccessTier(bag));
+			if (tier == Never) return Never;
+			int bagTier = LootSnapshot.BagTier(bag);
+			return Math.Max(tier, bagTier >= 0 ? bagTier : ItemPool.TierOf(bag));
 		}
 	}
 }

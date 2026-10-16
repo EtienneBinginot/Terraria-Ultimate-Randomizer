@@ -105,7 +105,7 @@ Tests: {
 	RecipeSurpriseRate: La part de recettes qui changent de catégorie suit le réglage
 	WeightTablesSeparated: Les poids du loot favorisent l'équipement, ceux des ingrédients jamais
 	TierWindowVariety: Les tirages de début de partie donnent beaucoup d'objets différents
-	OreMappingBijective: Chaque minerai existe encore, comme drop d'un seul autre minerai
+	OreMappingBijective: Chaque minerai du monde existe encore, comme drop d'un seul autre minerai du monde ; les minerais absents restent eux-mêmes, et le choix d'une paire hardmode ne change aucun autre minerai
 	TreeShakeReplacement: Les arbres secoués donnent des objets aléatoires et gardent les glands
 	HerbReplacementTable: Chaque herbe a un ensemble fixe de remplaçants valides
 	ExtractinatorRules: L'Extractinator garde les pièces et échange les minerais contre des minerais
@@ -124,6 +124,7 @@ Tests: {
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
 	WorldMaterialsFindable: Bois, pierre, gemmes et premiers minerais se trouvent dès le début
+	BagContentFindable: Le contenu d'un sac ne compte comme trouvable que si le sac peut être obtenu (jamais les sacs saisonniers, les sacs de trésor seulement en mode expert)
 	IngredientReplacementsFindable: Les ingrédients remplacés se trouvent (sans craft) au niveau de la recette
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
 	AvailabilityConsistent: La disponibilité des objets repose uniquement sur des sources brutes
@@ -139,6 +140,9 @@ Tests: {
 	StationTierRespected: Les recettes ne demandent jamais de station au-dessus de leur niveau, ni de station thématique
 	HandCraftKept: Les recettes à la main restent à la main
 	StationsVaried: Une bonne part des recettes a changé de station
+	AppliedResultsMatchPlan: Les recettes donnent les résultats prévus par le planificateur, et sa disponibilité correspond aux recettes en jeu
+	StationPlanFromOriginals: Le choix des stations ne dépend que des recettes d'origine, pas de celles déjà randomisées
+	RealCrafting: Le menu d'artisanat propose une recette avec ses nouveaux ingrédients, et plus avec les anciens
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares

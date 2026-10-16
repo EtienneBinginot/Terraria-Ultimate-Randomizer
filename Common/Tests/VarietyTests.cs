@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.ID;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
@@ -158,16 +159,69 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			List<int> ores = Enumerable.Range(1, ItemPool.Info.Length - 1).Where(t => ItemPool.IsRandomizable(t) && OreMap.IsOre(t)).ToList();
 			Check.That(ores.Count >= 8, $"only {ores.Count} ores");
-			HashSet<int> images = new();
+			string N(int item) => Lang.GetItemNameValue(item);
 			List<string> failures = new();
+			// Each vanilla pair has exactly one ore once the world chose it (both in drunk worlds for the evil and hardmode ores)
+			(int a, int b, int chosen, bool both)[] pairs =
+			{
+				(ItemID.CopperOre, ItemID.TinOre, WorldGen.SavedOreTiers.Copper, false), (ItemID.IronOre, ItemID.LeadOre, WorldGen.SavedOreTiers.Iron, false),
+				(ItemID.SilverOre, ItemID.TungstenOre, WorldGen.SavedOreTiers.Silver, false), (ItemID.GoldOre, ItemID.PlatinumOre, WorldGen.SavedOreTiers.Gold, false),
+				(ItemID.DemoniteOre, ItemID.CrimtaneOre, WorldGen.crimson ? TileID.Crimtane : TileID.Demonite, Main.drunkWorld),
+				(ItemID.CobaltOre, ItemID.PalladiumOre, WorldGen.SavedOreTiers.Cobalt, Main.drunkWorld), (ItemID.MythrilOre, ItemID.OrichalcumOre, WorldGen.SavedOreTiers.Mythril, Main.drunkWorld),
+				(ItemID.AdamantiteOre, ItemID.TitaniumOre, WorldGen.SavedOreTiers.Adamantite, Main.drunkWorld)
+			};
+			foreach ((int a, int b, int chosen, bool both) in pairs)
+			{
+				bool known = !both && (chosen == ContentSamples.ItemsByType[a].createTile || chosen == ContentSamples.ItemsByType[b].createTile);
+				int count = (OreMap.IsPresent(a) ? 1 : 0) + (OreMap.IsPresent(b) ? 1 : 0);
+				if (count != (known ? 1 : 2)) failures.Add($"{N(a)}/{N(b)}: {count} present, expected {(known ? 1 : 2)}");
+			}
+			// With every pair decided (one ore each): a permutation of the world's ores inside each tier, absent ores unchanged
+			Func<int, bool> decided = type => OreMap.PairOf(type) < 0 || OreMap.IsPresent(type) && !OreMap.IsPresent(Partner(type));
+			Func<int, bool> firstOfPair = type => OreMap.PairOf(type) < 0 || (decided(type) || decided(Partner(type)) ? OreMap.IsPresent(type) && decided(type) : type < Partner(type));
+			Dictionary<int, int> map = OreMap.Build(firstOfPair);
+			List<int> present = ores.Where(firstOfPair).ToList();
+			HashSet<int> images = new();
 			foreach (int ore in ores)
 			{
-				int image = OreMap.Get(ore);
-				if (!images.Add(image)) failures.Add($"{Lang.GetItemNameValue(image)} given by two ores");
-				if (!OreMap.IsOre(image)) failures.Add($"{Lang.GetItemNameValue(ore)} gives {Lang.GetItemNameValue(image)}, not an ore");
-				if (ItemPool.TierOf(image) != ItemPool.TierOf(ore)) failures.Add($"{Lang.GetItemNameValue(ore)} -> {Lang.GetItemNameValue(image)} changes tier");
+				int image = map.TryGetValue(ore, out int x) ? x : ore;
+				if (!present.Contains(ore))
+				{
+					if (image != ore) failures.Add($"{N(ore)} (not in this world) gives {N(image)}");
+					continue;
+				}
+				if (!images.Add(image)) failures.Add($"{N(image)} given by two ores");
+				if (!present.Contains(image)) failures.Add($"{N(ore)} gives {N(image)}, not an ore of this world");
+				if (ItemPool.TierOf(image) != ItemPool.TierOf(ore)) failures.Add($"{N(ore)} -> {N(image)} changes tier");
+			}
+			// Every tier keeps an ore of the world
+			foreach (int ore in ores)
+			{
+				if (!present.Any(o => ItemPool.TierOf(o) == ItemPool.TierOf(ore))) failures.Add($"no ore of this world at the tier of {N(ore)}");
+			}
+			// An altar deciding a pair only changes what stood for that pair: undecided Cobalt/Palladium, then Cobalt chosen
+			Func<int, bool> before = type => OreMap.PairOf(type) == OreMap.PairOf(ItemID.CobaltOre) || firstOfPair(type);
+			Func<int, bool> after = type => OreMap.PairOf(type) == OreMap.PairOf(ItemID.CobaltOre) ? type == ItemID.CobaltOre : firstOfPair(type);
+			Dictionary<int, int> mapBefore = OreMap.Build(before);
+			Dictionary<int, int> mapAfter = OreMap.Build(after);
+			HashSet<int> pair = new() { ItemID.CobaltOre, ItemID.PalladiumOre };
+			foreach (int ore in ores.Where(o => !pair.Contains(o) && before(o)))
+			{
+				int was = mapBefore.TryGetValue(ore, out int w) ? w : ore;
+				int now = mapAfter.TryGetValue(ore, out int n) ? n : ore;
+				int expected = pair.Contains(was) ? ItemID.CobaltOre : was;
+				if (now != expected) failures.Add($"{N(ore)} gave {N(was)}, gives {N(now)} once Cobalt is chosen");
 			}
 			Check.All(failures, "Ore permutation");
 		}
+
+		private static int Partner(int ore) => ore switch
+		{
+			ItemID.CopperOre => ItemID.TinOre, ItemID.TinOre => ItemID.CopperOre, ItemID.IronOre => ItemID.LeadOre, ItemID.LeadOre => ItemID.IronOre,
+			ItemID.SilverOre => ItemID.TungstenOre, ItemID.TungstenOre => ItemID.SilverOre, ItemID.GoldOre => ItemID.PlatinumOre, ItemID.PlatinumOre => ItemID.GoldOre,
+			ItemID.DemoniteOre => ItemID.CrimtaneOre, ItemID.CrimtaneOre => ItemID.DemoniteOre, ItemID.CobaltOre => ItemID.PalladiumOre, ItemID.PalladiumOre => ItemID.CobaltOre,
+			ItemID.MythrilOre => ItemID.OrichalcumOre, ItemID.OrichalcumOre => ItemID.MythrilOre, ItemID.AdamantiteOre => ItemID.TitaniumOre, ItemID.TitaniumOre => ItemID.AdamantiteOre,
+			_ => ore
+		};
 	}
 }

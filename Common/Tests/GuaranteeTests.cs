@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
@@ -21,6 +22,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("GuaranteedDeterminism", GuaranteedDeterminism);
 			TestRunner.Register("FindabilityDeterminism", FindabilityDeterminism);
 			TestRunner.Register("WorldMaterialsFindable", WorldMaterialsFindable);
+			TestRunner.Register("BagContentFindable", BagContentFindable);
 		}
 
 		private static string Name(int item) => Lang.GetItemNameValue(item);
@@ -109,6 +111,39 @@ namespace UltimateRandomizer.Common.Tests
 			Findability.Reset();
 			int[] second = sample.Select(Findability.Tier).ToArray();
 			Check.That(first.SequenceEqual(second), "findability changes after a rebuild");
+		}
+
+		// A bag's content counts only once the bag can be obtained: never seasonal bags, and treasure bags only in expert
+		// mode (their boss drop is expert-only)
+		private static void BagContentFindable()
+		{
+			List<string> failures = new();
+			foreach (int bag in Findability.SeasonalBags)
+			{
+				if (LootSnapshot.Items.ContainsKey(bag) && Findability.BagContentTier(bag) != Findability.Never) failures.Add($"{Name(bag)} counts as a source");
+			}
+			HashSet<int> bossBags = new();
+			foreach (int boss in NpcTiers.BossTypes)
+			{
+				foreach (DropRateInfo entry in LootSnapshot.ForNpc(boss))
+				{
+					if (!ItemID.Sets.BossBag[entry.itemId]) continue;
+					bossBags.Add(entry.itemId);
+					if (Findability.WorldAllows(entry.conditions) != Main.expertMode) failures.Add($"{Name(entry.itemId)} from {Lang.GetNPCNameValue(boss)}: allowed = {!Main.expertMode} in {(Main.expertMode ? "expert" : "classic")}");
+				}
+			}
+			Check.That(bossBags.Count >= 10, $"only {bossBags.Count} treasure bags found in boss drops");
+			List<int> counted = bossBags.Where(b => Findability.BagContentTier(b) != Findability.Never).ToList();
+			if (Main.expertMode)
+			{
+				failures.AddRange(bossBags.Except(counted).Select(b => $"{Name(b)} doesn't count in expert mode"));
+			}
+			// In Classic a treasure bag only comes from a random extra drop, if ever
+			else if (counted.Count > System.Math.Max(2, bossBags.Count / 4))
+			{
+				failures.Add($"{counted.Count} of {bossBags.Count} treasure bags count as sources in Classic (e.g. {string.Join(", ", counted.Take(3).Select(Name))})");
+			}
+			Check.All(failures, "Bag contents");
 		}
 
 		private static void WorldMaterialsFindable()

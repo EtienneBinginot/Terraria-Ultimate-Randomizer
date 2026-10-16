@@ -123,8 +123,7 @@ namespace UltimateRandomizer.Common.Features
 					SetResult(recipe.createItem, original, originalStacks[i]);
 					continue;
 				}
-				long currentValue = recipe.requiredItem.Sum(item => (long)Math.Max(StackRules.ValueOf(item.type), 1) * item.stack);
-				(int replacement, int stack) = RollResult(i, recipe.requiredItem.Select(item => item.type).ToList(), recipe.requiredItem.Sum(item => item.stack), lucky: false, Math.Min(currentValue, ingredientValues[i]));
+				(int replacement, int stack) = AppliedResult(plan, i);
 				SetResult(recipe.createItem, replacement, stack);
 				if (replacement != original || stack != originalStacks[i])
 				{
@@ -137,6 +136,14 @@ namespace UltimateRandomizer.Common.Features
 			ApplyDecraftRules(changed, newResults, cfg.DisableDecraftOfRandomizedResults);
 			applied = true;
 			RefreshCraftingMenu();
+		}
+
+		// The planned result once its tier is unlocked (the plan is built around it); before, a stand-in of an unlocked
+		// tier rolled with the same arguments, which the plan never relies on
+		public static (int type, int stack) AppliedResult(RecipePlan plan, int i)
+		{
+			if (ProgressionSystem.UnlockedTier >= plan.ResultTiers[i]) return plan.Results[i];
+			return RecipePlanner.ResultFor(i, plan.Ingredients[i] ?? originalIngredients[i], lucky: false);
 		}
 
 		// Pickaxes and bars (the mining chain: anvils, Molten Pickaxe...) are never randomized when protected

@@ -76,13 +76,16 @@ namespace UltimateRandomizer.Common.Core
 		public static StationInfo Info(int tile) =>
 			Known.TryGetValue(tile, out StationInfo info) ? info : new StationInfo { Kind = StationKind.Unknown, Tier = Tiers.Max };
 
-		// Every tile some recipe requires
+		// Every tile some recipe originally requires (the live recipes may already be randomized: reading them would make
+		// the result depend on the previous randomization, and differ on a client that just joined)
 		public static HashSet<int> RequiredTiles()
 		{
 			HashSet<int> tiles = new();
+			int stored = Features.RecipeSystem.RecipeCount;
 			for (int i = 0; i < Recipe.numRecipes; i++)
 			{
-				foreach (int tile in Main.recipe[i].requiredTile)
+				IEnumerable<int> required = i < stored ? Features.RecipeSystem.OriginalTiles(i) : Main.recipe[i].requiredTile;
+				foreach (int tile in required)
 				{
 					if (tile >= 0) tiles.Add(tile);
 				}

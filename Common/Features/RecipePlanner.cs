@@ -14,6 +14,10 @@ namespace UltimateRandomizer.Common.Features
 		public (int type, int stack)[][] Ingredients;
 		public long[] IngredientValues;
 		public int[][] Tiles;
+		// What each recipe gives once unlocked: exactly what RecipeSystem.Apply sets from ResultTiers[i] on
+		public (int type, int stack)[] Results;
+		// Unlocked tier from which recipe i gives Results[i]; before, Apply gives a stand-in of an unlocked tier
+		public int[] ResultTiers;
 		// Tier at which each item can be obtained (found or crafted), with this plan
 		public int[] Availability;
 	}
@@ -41,10 +45,18 @@ namespace UltimateRandomizer.Common.Features
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
 
-		private static int Gated(int item)
+		// Recipes whose result Apply rolls
+		private static bool Randomized(int i) => CraftingConfig.Instance.RandomizeRecipes && RecipeSystem.Touchable(i);
+
+		// The progression lock of a recipe's result (see ItemPool.Roll): the roll targets the original's tier and is
+		// replaced by a stand-in while that tier is out of reach; a result above that tier waits for its own tier too.
+		// Only the Coherent mode is gated.
+		public static int ResultTier(int i, int result)
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			return progression.TierGating ? Math.Max(0, ItemPool.TierOf(item) - progression.TierAllowance) : 0;
+			if (!Randomized(i) || !progression.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) return 0;
+			int tier = Math.Max(ItemPool.TierOf(RecipeSystem.OriginalResult(i)), ItemPool.TierOf(result));
+			return Math.Max(0, tier - progression.TierAllowance);
 		}
 
 		// The level of a recipe: its original result, and the level of its stations
@@ -83,8 +95,9 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Availability fixed point: found items, then items crafted from available ingredients at available stations.
-		// recipeTiers[i] = tier from which recipe i can be made (ingredients and stations only).
-		public static int[] Availability(Func<int, int> found, int[] results, (int type, int stack)[][] ingredients, int[][] tiles, out int[] recipeTiers)
+		// recipeTiers[i] = tier from which recipe i can be made (ingredients and stations only); recipe i gives results[i]
+		// from resultTiers[i].
+		public static int[] Availability(Func<int, int> found, int[] results, int[] resultTiers, (int type, int stack)[][] ingredients, int[][] tiles, out int[] recipeTiers)
 		{
 			int[] avail = new int[ItemPool.Info.Length];
 			for (int item = 1; item < avail.Length; item++) avail[item] = found(item);
@@ -126,7 +139,7 @@ namespace UltimateRandomizer.Common.Features
 					if (tier == Never) continue;
 					recipeTiers[i] = Math.Min(recipeTiers[i], tier);
 					int result = results[i];
-					int resultTier = Math.Max(tier, Gated(result));
+					int resultTier = Math.Max(tier, resultTiers[i]);
 					if (result > 0 && result < avail.Length && resultTier < avail[result])
 					{
 						avail[result] = resultTier;
@@ -138,18 +151,25 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Results once everything is unlocked (the plan must not depend on progression)
-		private static int[] LuckyResults((int type, int stack)[][] ingredients)
+		private static (int type, int stack)[] UnlockedResults((int type, int stack)[][] ingredients)
 		{
 			int count = Count;
-			int[] results = new int[count];
-			for (int i = 0; i < count; i++)
-			{
-				results[i] = RecipeSystem.Touchable(i)
-					? RecipeSystem.RollResult(i, ingredients[i].Select(x => x.type).ToList(), ingredients[i].Sum(x => x.stack), lucky: true).type
-					: RecipeSystem.OriginalResult(i);
-			}
+			(int, int)[] results = new (int, int)[count];
+			for (int i = 0; i < count; i++) results[i] = ResultFor(i, ingredients[i], lucky: true);
 			return results;
 		}
+
+		// lucky: false gives the stand-in of the current progression (RecipeSystem.Apply, before ResultTiers[i])
+		public static (int type, int stack) ResultFor(int i, (int type, int stack)[] ingredients, bool lucky)
+		{
+			if (!Randomized(i)) return (RecipeSystem.OriginalResult(i), RecipeSystem.OriginalStack(i));
+			long value = ingredients.Sum(x => (long)Math.Max(StackRules.ValueOf(x.type), 1) * x.stack);
+			return RecipeSystem.RollResult(i, ingredients.Select(x => x.type).ToList(), ingredients.Sum(x => x.stack), lucky, Math.Min(value, RecipeSystem.OriginalIngredientValue(i)));
+		}
+
+		private static int[] Types((int type, int stack)[] results) => results.Select(r => r.type).ToArray();
+
+		private static int[] ResultTiers(int[] results) => Enumerable.Range(0, results.Length).Select(i => ResultTier(i, results[i])).ToArray();
 
 		private static (int, int)[][] OriginalIngredients() => Enumerable.Range(0, Count).Select(RecipeSystem.OriginalIngredients).ToArray();
 
@@ -161,23 +181,22 @@ namespace UltimateRandomizer.Common.Features
 			CraftingConfig cfg = CraftingConfig.Instance;
 			(int, int)[][] ingredients = OriginalIngredients();
 			int[][] tiles = OriginalTiles();
-			int[] results = LuckyResults(ingredients);
-			int[] avail = Availability(Findability.Tier, results, ingredients, tiles, out int[] recipeTiers);
+			// The results are rolled once, from the original recipe, and everything is planned around them: they are never
+			// one of the original ingredients (RollResult) nor a replaced one (PickIngredient), and Apply gives exactly them
 			RecipePlan result = new()
 			{
 				Ingredients = new (int, int)[count][],
 				IngredientValues = new long[count],
-				Tiles = new int[count][]
+				Tiles = new int[count][],
+				Results = UnlockedResults(ingredients)
 			};
-			if (!cfg.RandomizeRecipes)
-			{
-				result.Availability = avail;
-				return result;
-			}
-			if (cfg.RandomizeStations) PlanStations(result, results, avail, recipeTiers);
-			if (cfg.IngredientMode == IngredientMode.Randomized) PlanIngredients(result, results, avail, recipeTiers);
-			result.Availability = Availability(Findability.Tier, results,
-				Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray(),
+			int[] results = Types(result.Results);
+			result.ResultTiers = ResultTiers(results);
+			int[] avail = Availability(Findability.Tier, results, result.ResultTiers, ingredients, tiles, out int[] recipeTiers);
+			if (cfg.RandomizeRecipes && cfg.IngredientMode == IngredientMode.Randomized) PlanIngredients(result, results, avail, recipeTiers);
+			if (cfg.RandomizeRecipes && cfg.RandomizeStations) PlanStations(result, results, avail, recipeTiers);
+			(int, int)[][] planned = Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
+			result.Availability = Availability(Findability.Tier, results, result.ResultTiers, planned,
 				Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray(), out _);
 			return result;
 		}
@@ -206,6 +225,7 @@ namespace UltimateRandomizer.Common.Features
 				: 0;
 			// A fixed order of the stations: a recipe making a station only ever requires stations placed before it,
 			// so no station can end up needing itself
+			// From the original stations: the live ones are already randomized (the plan would depend on the previous one)
 			List<int> order = Stations.RequiredTiles().Where(Assignable)
 				.OrderBy(TileAvail).ThenBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(TileID.Search.GetName(t)))
 				.ToList();
@@ -363,8 +383,8 @@ namespace UltimateRandomizer.Common.Features
 			CraftingConfig cfg = CraftingConfig.Instance;
 			if (!cfg.RandomizeRecipes || cfg.IngredientMode != IngredientMode.Vanilla || RecipeSystem.RecipeCount == 0) yield break;
 			(int, int)[][] ingredients = OriginalIngredients();
-			int[] results = LuckyResults(ingredients);
-			int[] avail = Availability(Findability.BaseTier, results, ingredients, OriginalTiles(), out _);
+			int[] results = Types(UnlockedResults(ingredients));
+			int[] avail = Availability(Findability.BaseTier, results, ResultTiers(results), ingredients, OriginalTiles(), out _);
 			Dictionary<int, int> needed = new();
 			for (int i = 0; i < Count; i++)
 			{

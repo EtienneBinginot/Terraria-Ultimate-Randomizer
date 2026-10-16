@@ -105,7 +105,7 @@ Tests: {
 	RecipeSurpriseRate: The share of recipes changing category matches the setting
 	WeightTablesSeparated: Loot weights favor equipment, ingredient weights never pick it
 	TierWindowVariety: Early random rolls give many different items
-	OreMappingBijective: Each ore still exists, as the drop of exactly one other ore
+	OreMappingBijective: Each ore of this world still exists, as the drop of exactly one other ore of the world; absent ores stay themselves, and deciding a hardmode pair changes no other ore
 	TreeShakeReplacement: Shaken trees give random items and keep acorns
 	HerbReplacementTable: Each herb has a fixed set of valid replacements
 	ExtractinatorRules: The Extractinator keeps coins and swaps ores for ores
@@ -124,6 +124,7 @@ Tests: {
 	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
 	FindabilityDeterminism: Findability of items is the same after a rebuild
 	WorldMaterialsFindable: Wood, stone, gems and early ores are findable from the start
+	BagContentFindable: Bag contents count as found only once the bag can be obtained (never seasonal bags, treasure bags only in expert mode)
 	IngredientReplacementsFindable: Replaced ingredients are found (not crafted) by the recipe's level
 	RecipesDoable: At least 85% of the randomized recipes can be made at their level
 	AvailabilityConsistent: Item availability only relies on raw sources
@@ -139,6 +140,9 @@ Tests: {
 	StationTierRespected: Recipes never need a station above their level, nor a themed one
 	HandCraftKept: Recipes made by hand stay made by hand
 	StationsVaried: A good share of recipes changed station
+	AppliedResultsMatchPlan: Recipes give the results the planner was built around, and its availability matches the live recipes
+	StationPlanFromOriginals: The station plan depends only on the original recipes, not on the already randomized ones
+	RealCrafting: The crafting menu offers a recipe with its new ingredients, and no longer with its old ones
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
