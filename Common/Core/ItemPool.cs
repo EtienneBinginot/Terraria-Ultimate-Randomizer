@@ -163,9 +163,12 @@ namespace UltimateRandomizer.Common.Core
 			};
 			bool gated = !request.IgnoreGating && progression.TierGating;
 			int limit = gated ? Tiers.Clamp(Math.Max(ProgressionSystem.UnlockedTier + progression.TierAllowance, request.MinLimit)) : Tiers.Max;
+			// Some categories have nothing in the early tiers (dyes, summon weapons...): rather than changing the category,
+			// a replacement may go up to the original item's own tier, which this source already gives in vanilla
+			int categoryLimit = hasOriginal && category == Info[request.OriginalItem].Category ? Math.Max(limit, Info[request.OriginalItem].Tier) : limit;
 			if (target <= limit)
 			{
-				int intended = PickFromBucket(category, target, rng, limit);
+				int intended = PickFromBucket(category, target, rng, categoryLimit);
 				rolledTier = TierOf(intended);
 				return intended;
 			}
@@ -175,7 +178,7 @@ namespace UltimateRandomizer.Common.Core
 			request.Keys.CopyTo(fallbackKeys, 0);
 			fallbackKeys[^2] = RollKey.Fallback;
 			fallbackKeys[^1] = limit;
-			int fallback = PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), limit);
+			int fallback = PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), categoryLimit);
 			rolledTier = TierOf(fallback);
 			return fallback;
 		}

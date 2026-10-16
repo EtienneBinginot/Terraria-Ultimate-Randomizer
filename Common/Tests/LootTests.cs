@@ -18,6 +18,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("MobPlansValid", MobPlansValid);
 			TestRunner.Register("ProtectedDropsKept", ProtectedDropsKept);
 			TestRunner.Register("NoMinionFarms", NoMinionFarms);
+			TestRunner.Register("EventItemsKept", EventItemsKept);
 			TestRunner.Register("BagPlansValid", BagPlansValid);
 			TestRunner.Register("BagsKeepCoins", BagsKeepCoins);
 		}
@@ -80,10 +81,23 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			foreach (int type in noExtra)
 			{
-				int count = RandomNpcDropRule.ExtraDrops(type, type, false, false).Count;
-				if (count > 0) failures.Add($"{NpcName(type)} gets {count} extra drops");
+				// The number of extra drops is random and may be 0: check the rule itself
+				if (RandomNpcDropRule.CanHaveExtraDrops(type, RandomNpcDropRule.IsBossType(type), LootSnapshot.ForNpc(type))) failures.Add($"{NpcName(type)} can get extra drops");
 			}
 			Check.All(failures, "Minions or town NPCs get random drops");
+		}
+
+		// Old One's Army medals and mana, and banners must never be replaced
+		private static void EventItemsKept()
+		{
+			List<string> failures = new();
+			foreach (int item in new[] { ItemID.DefenderMedal, ItemID.DD2EnergyCrystal })
+			{
+				if (ItemPool.IsRandomizable(item)) failures.Add($"{Lang.GetItemNameValue(item)} is randomizable");
+			}
+			Check.All(failures, "Event items can be replaced");
+			Check.Equal(NPCID.EaterofWorldsHead, BossParts.Owner(NPCID.EaterofWorldsTail), "owner of the Eater of Worlds tail");
+			Check.That(RandomNpcDropRule.IsBossType(BossParts.Owner(NPCID.EaterofWorldsBody)), "Eater of Worlds segments count as the boss");
 		}
 
 		private static void BagPlansValid()

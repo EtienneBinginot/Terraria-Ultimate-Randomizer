@@ -44,7 +44,9 @@ namespace UltimateRandomizer.Common.Features
 			return (min, Math.Max(min, max));
 		}
 
-		// Turns an item that was just spawned into another one, keeping its position and slot
+		// Turns an item that was just spawned into another one, keeping its position and slot.
+		// Done inside OnSpawn so the new type is what gets synced; other mods' OnSpawn running after ours see the
+		// replaced item but their per-item data from before the change (known limitation, vanilla content is fine).
 		public static void ChangeSpawnedItem(Item item, int newType, int stack)
 		{
 			if (newType <= ItemID.None || newType == item.type) return;

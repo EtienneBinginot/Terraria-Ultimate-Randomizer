@@ -11,10 +11,11 @@ using UltimateRandomizer.Common.Core;
 namespace UltimateRandomizer.Common.Features
 {
 	// Naturally spawning enemies are turned into another natural enemy of the same tier that moves the same way.
-	// The swap happens on the enemy's first update: vanilla still adjusts the NPC right after it spawns (variants, plant anchors).
+	// The swap happens after the NPC update loop: vanilla still adjusts the NPC right after it spawns (variants, plant anchors),
+	// and changing its type inside a hook would hand the other mods' hooks of that tick a stale NPC.
 	public class EnemySwapNPC : GlobalNPC
 	{
-		private bool pendingSwap;
+		public bool PendingSwap;
 
 		public override bool InstancePerEntity => true;
 
@@ -24,16 +25,7 @@ namespace UltimateRandomizer.Common.Features
 			if (!EnemiesConfig.Instance.RandomizeEnemySpawns || !SeedSystem.WorldReady || npc.SpawnedFromStatue) return;
 			// Events count their own enemies (pillar shields, moon waves, invasions): never touch their spawns
 			if (EventInProgress(npc)) return;
-			pendingSwap = true;
-		}
-
-		public override bool PreAI(NPC npc)
-		{
-			if (!pendingSwap) return true;
-			pendingSwap = false;
-			int target = EnemySwapPool.Replacement(npc);
-			if (target > 0 && target != npc.type) npc.Transform(target);
-			return true;
+			PendingSwap = true;
 		}
 
 		private static bool EventInProgress(NPC npc)
@@ -183,10 +175,43 @@ namespace UltimateRandomizer.Common.Features
 			return npc.noGravity ? Movement.Flying : Movement.Ground;
 		}
 
-		// Fighters and flying eyes that vanilla sends away during the day on the surface
-		private static bool FleesDaylight(NPC npc) =>
-			npc.aiStyle == NPCAIStyleID.DemonEye
-			|| (npc.aiStyle == NPCAIStyleID.Fighter && !NPC.DespawnEncouragement_AIStyle3_Fighters_NotDiscouraged(npc.type, npc.position, npc));
+		// Fighters and flying eyes that vanilla sends away during the day on the surface. Vanilla's check looks at the
+		// current time, eclipse and invasion: they are forced to a plain surface day so the pool doesn't depend on when it was built.
+		public static bool FleesDaylight(NPC npc)
+		{
+			if (npc.aiStyle == NPCAIStyleID.DemonEye) return true;
+			if (npc.aiStyle != NPCAIStyleID.Fighter) return false;
+			bool dayTime = Main.dayTime;
+			bool eclipse = Main.eclipse;
+			int invasion = Main.invasionType;
+			int target = npc.target;
+			try
+			{
+				Main.dayTime = true;
+				Main.eclipse = false;
+				Main.invasionType = 0;
+				// Player 255 is never in a graveyard
+				npc.target = Main.maxPlayers;
+				return !NPC.DespawnEncouragement_AIStyle3_Fighters_NotDiscouraged(npc.type, Microsoft.Xna.Framework.Vector2.Zero, npc);
+			}
+			finally
+			{
+				npc.target = target;
+				Main.dayTime = dayTime;
+				Main.eclipse = eclipse;
+				Main.invasionType = invasion;
+			}
+		}
+
+		// Enemies that may replace a surface spawn by day, for the tests
+		public static IEnumerable<int> DaylightEnemies()
+		{
+			Build();
+			foreach (List<int> bucket in dayBuckets)
+			{
+				foreach (int type in bucket) yield return type;
+			}
+		}
 
 		private static bool IsEventEnemy(int type) =>
 			NPCID.Sets.BelongsToInvasionOldOnesArmy[type] || NPCID.Sets.BelongsToInvasionGoblinArmy[type] || NPCID.Sets.BelongsToInvasionFrostLegion[type]
@@ -203,6 +228,19 @@ namespace UltimateRandomizer.Common.Features
 	public class EnemySwapSystem : ModSystem
 	{
 		public override void OnWorldLoad() => EnemySwapPool.Reset();
+
+		public override void PostUpdateNPCs()
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient) return;
+			for (int i = 0; i < Main.maxNPCs; i++)
+			{
+				NPC npc = Main.npc[i];
+				if (!npc.active || !npc.TryGetGlobalNPC(out EnemySwapNPC swap) || !swap.PendingSwap) continue;
+				swap.PendingSwap = false;
+				int target = EnemySwapPool.Replacement(npc);
+				if (target > 0 && target != npc.type) npc.Transform(target);
+			}
+		}
 
 		public override void Unload() => EnemySwapPool.Reset();
 	}

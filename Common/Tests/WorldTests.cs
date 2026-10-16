@@ -148,6 +148,21 @@ namespace UltimateRandomizer.Common.Tests
 			bool wasDay = Main.dayTime;
 			EnemySwapMode mode = EnemiesConfig.Instance.EnemySwapMode;
 			List<string> failures = new();
+			// The pool must not depend on the time it was built at: rebuild it at night
+			try
+			{
+				Main.dayTime = false;
+				EnemySwapPool.Reset();
+				foreach (int type in EnemySwapPool.DaylightEnemies())
+				{
+					if (ContentSamples.NpcsByNetId.TryGetValue(type, out NPC npc) && EnemySwapPool.FleesDaylight(npc)) failures.Add($"{npc.TypeName} in the day pool");
+				}
+				Check.That(EnemySwapPool.DaylightEnemies().Any(), "the day pool is empty");
+			}
+			finally
+			{
+				Main.dayTime = wasDay;
+			}
 			try
 			{
 				Main.dayTime = true;
@@ -158,7 +173,7 @@ namespace UltimateRandomizer.Common.Tests
 				{
 					int target = EnemySwapPool.Replacement(slime);
 					if (!ContentSamples.NpcsByNetId.TryGetValue(target, out NPC sample)) continue;
-					if (sample.aiStyle == NPCAIStyleID.DemonEye) failures.Add($"{sample.TypeName} by day");
+					if (EnemySwapPool.FleesDaylight(sample)) failures.Add($"{sample.TypeName} by day");
 					if (mode == EnemySwapMode.PerType) break;
 				}
 			}

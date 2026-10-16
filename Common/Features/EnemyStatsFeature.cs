@@ -18,18 +18,23 @@ namespace UltimateRandomizer.Common.Features
 			// Also called at load for the bestiary and content samples: they must keep the original stats
 			if (!SeedSystem.WorldReady) return;
 			if (npc.townNPC || npc.friendly || NPCID.Sets.CountsAsCritter[npc.type] || NPCID.Sets.ProjectileNPC[npc.type]) return;
-			EnemyMultipliers m = EnemyStatCache.Get(npc.type, npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[npc.type]);
+			// Boss parts (worm segments, hands, cannons...) share the boss's multipliers
+			int owner = BossParts.Owner(npc.type);
+			EnemyMultipliers m = EnemyStatCache.Get(owner, IsBossLike(npc));
 			if (m.Life != 1) npc.lifeMax = Math.Max(1, (int)(npc.lifeMax * m.Life));
 			npc.life = npc.lifeMax;
 			npc.damage = (int)(npc.damage * m.Damage);
 			npc.defense = (int)(npc.defense * m.Defense);
-			if (Math.Abs(m.Scale - 1) > 0.01)
+			// Worm segments of different sizes would leave gaps between them
+			if (Math.Abs(m.Scale - 1) > 0.01 && npc.aiStyle != NPCAIStyleID.Worm && owner == npc.type)
 			{
 				npc.scale *= m.Scale;
 				npc.width = Math.Max(1, (int)(npc.width * m.Scale));
 				npc.height = Math.Max(1, (int)(npc.height * m.Scale));
 			}
 		}
+
+		public static bool IsBossLike(NPC npc) => npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[npc.type] || BossParts.IsPart(npc.type);
 	}
 
 	// Boss projectiles get the boss damage multiplier too (contact damage alone would barely matter)
@@ -38,8 +43,8 @@ namespace UltimateRandomizer.Common.Features
 		public override void OnSpawn(Projectile projectile, IEntitySource source)
 		{
 			if (!SeedSystem.WorldReady || !projectile.hostile || source is not EntitySource_Parent parent || parent.Entity is not NPC npc) return;
-			if (!npc.boss && !NPCID.Sets.ShouldBeCountedAsBoss[npc.type]) return;
-			float multiplier = EnemyStatCache.Get(npc.type, true).Damage;
+			if (!EnemyStatsNPC.IsBossLike(npc)) return;
+			float multiplier = EnemyStatCache.Get(BossParts.Owner(npc.type), true).Damage;
 			if (multiplier != 1) projectile.damage = Math.Max(1, (int)(projectile.damage * multiplier));
 		}
 	}

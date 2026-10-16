@@ -54,7 +54,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			}
-			foreach (PlannedDrop drop in ExtraDrops(netId, npc.type, info.IsExpertMode, DropHelper.RollLucky()))
+			foreach (PlannedDrop drop in ExtraDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky()))
 			{
 				if (info.rng.NextFloat() >= drop.Chance) continue;
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
@@ -63,11 +63,12 @@ namespace UltimateRandomizer.Common.Features
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
 		}
 
-		// Multi-part bosses drop their loot once: the last Eater of Worlds segment, the last of the Twins
+		// Multi-part bosses drop their loot once: the last Eater of Worlds segment (vanilla makes it a boss as it dies,
+		// whether head, body or tail), the last of the Twins
 		private bool ExtraDropsAllowedNow(DropAttemptInfo info)
 		{
 			NPC npc = info.npc;
-			if (!IsBossType(npc.type)) return true;
+			if (!IsBossType(BossParts.Owner(npc.type))) return true;
 			if (!npc.boss) return false;
 			if (npc.type == NPCID.Retinazer || npc.type == NPCID.Spazmatism) return new Conditions.MissingTwin().CanDrop(info);
 			return true;
@@ -80,7 +81,7 @@ namespace UltimateRandomizer.Common.Features
 		public static List<PlannedDrop> Plan(int netId, bool expert)
 		{
 			List<PlannedDrop> drops = new();
-			int type = ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId;
+			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
 			bool isBoss = IsBossType(type);
 			foreach (DropRateInfo entry in LootSnapshot.ForNpc(netId))
 			{
@@ -107,7 +108,7 @@ namespace UltimateRandomizer.Common.Features
 			List<DropRateInfo> original = LootSnapshot.ForNpc(netId);
 			bool isBoss = IsBossType(type);
 			if (!CanHaveExtraDrops(type, isBoss, original)) return drops;
-			// In expert mode, a boss with a treasure bag puts its loot in the bag
+			// In expert mode, a boss with a treasure bag gets no extra drops: the content of its bag is replaced instead
 			if (isBoss && expert && original.Any(d => ItemID.Sets.BossBag[d.itemId])) return drops;
 
 			int npcKey = DetRandom.NpcKey(type);
@@ -153,9 +154,10 @@ namespace UltimateRandomizer.Common.Features
 			return drops;
 		}
 
-		private static bool CanHaveExtraDrops(int type, bool isBoss, List<DropRateInfo> original)
+		public static bool CanHaveExtraDrops(int type, bool isBoss, List<DropRateInfo> original)
 		{
 			if (!ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample)) return false;
+			if (BossParts.IsMinion(type)) return false;
 			if (sample.townNPC || NPCID.Sets.ActsLikeTownNPC[type] || NPCID.Sets.IsTownPet[type] || type == NPCID.TorchGod) return false;
 			if (NPCID.Sets.CountsAsCritter[type]) return LootConfig.Instance.CrittersCanDrop;
 			if (NPCID.Sets.ProjectileNPC[type] || sample.lifeMax <= 5 || (sample.friendly && !isBoss)) return false;

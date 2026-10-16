@@ -1,103 +1,105 @@
-Keybinds.Debug.DisplayName: "Open the randomizer debug panel"
+Keybinds: {
+	Debug.DisplayName: Open the randomizer debug panel
+	Journal.DisplayName: Open the randomizer journal
+}
 
 Debug: {
-	Title: "Ultimate Randomizer - debug"
-	NeedWorld: "Load a world first."
-	SinglePlayerOnly: "This action only works in single player."
-	TabOverview: "Overview"
-	TabInspector: "Inspector"
-	TabTools: "Tools"
-	TabTests: "Tests"
-	On: "on"
-	Off: "off"
-	Seed: "Seed"
-	Mode: "Mode"
-	Network: "Game"
-	SinglePlayer: "single player"
-	Multiplayer: "multiplayer"
-	Tier: "Unlocked tier"
-	Limit: "Max allowed tier"
-	Gating: "Lock"
-	Pool: "Items randomizable / protected / excluded"
-	Snapshots: "Drop tables enemies / bags"
-	Recipes: "Recipes"
-	Shimmer: "Shimmer"
-	Chests: "Chests"
-	SetTier: "Set progression (boss flags) to tier:"
-	NewSeed: "New random seed"
-	PoolTable: "Items per category, tiers 0 to 9:"
-	TierSet: "Progression set to {0}."
-	SeedSet: "New seed: {0}."
-	HoverItem: "Item under the mouse (or held)"
-	NoItem: "Hover an item or hold one."
-	ItemInfo: "Category {0}, tier {1} ({2}), protected {3}, excluded {4}, stack {5}-{6}, value {7}"
-	ShufflePartner: "Guaranteed shuffle partner: {0}"
-	NearestNpc: "NPC nearest to the mouse"
-	NoNpc: "No NPC near the mouse."
-	NpcTier: "tier {0} (rolls: {1})"
-	Multipliers: "Multipliers: life x{0}, damage x{1}, defense x{2}, size x{3}"
-	Swappable: "Can be replaced by the random enemies feature."
-	NotSwappable: "Never replaced by the random enemies feature."
-	Drops: "Drops in this world:"
-	NoDrops: "Drops nothing in this world."
-	ExtraTag: "(extra)"
-	ConditionTag: "(conditions)"
-	Player: "Player"
-	GodMode: "Invincible"
-	SpawnRate: "Spawns"
-	SpawnRateNormal: "normal"
-	SpawnRateNone: "none"
-	SpawnRateHigh: "many"
-	ToggleGodMode: "Invincible on/off"
-	CycleSpawnRate: "Spawn rate"
-	GiveKit: "Test kit"
-	World: "World"
-	Day: "day"
-	Night: "night"
-	SpawnEnemies: "Spawn 5 enemies"
-	KillHostiles: "Kill enemies on screen"
-	ToggleDay: "Day/night"
-	GiveBags: "All boss bags"
-	OpenJournal: "Journal"
-	ToolsHelp: "Tip: Inspector tab + mouse over an enemy shows its drops; kill it to compare. Spawned enemies spawn like natural ones (random enemies apply)."
-	RunTests: "Run all tests"
-	TestsHelp: "Runs every automated test in the current world. Results also go to client.log."
+	Title: Ultimate Randomizer - debug
+	NeedWorld: Load a world first.
+	SinglePlayerOnly: This action only works in single player.
+	TabOverview: Overview
+	TabInspector: Inspector
+	TabTools: Tools
+	TabTests: Tests
+	On: on
+	Off: off
+	Seed: Seed
+	Mode: Mode
+	Network: Game
+	SinglePlayer: single player
+	Multiplayer: multiplayer
+	Tier: Unlocked tier
+	Limit: Max allowed tier
+	Gating: Lock
+	Pool: Items randomizable / protected / excluded
+	Snapshots: Drop tables enemies / bags
+	Recipes: Recipes
+	Shimmer: Shimmer
+	Chests: Chests
+	SetTier: Set progression (boss flags) to tier:
+	NewSeed: New random seed
+	PoolTable: Items per category, tiers 0 to 9:
+	TierSet: Progression set to {0}.
+	SeedSet: New seed: {0}.
+	HoverItem: Item under the mouse (or held)
+	NoItem: Hover an item or hold one.
+	ItemInfo: Category {0}, tier {1} ({2}), protected {3}, excluded {4}, stack {5}-{6}, value {7}
+	ShufflePartner: Guaranteed shuffle partner: {0}
+	NearestNpc: NPC nearest to the mouse
+	NoNpc: No NPC near the mouse.
+	NpcTier: tier {0} (rolls: {1})
+	Multipliers: Multipliers: life x{0}, damage x{1}, defense x{2}, size x{3}
+	Swappable: Can be replaced by the random enemies feature.
+	NotSwappable: Never replaced by the random enemies feature.
+	Drops: Drops in this world:
+	NoDrops: Drops nothing in this world.
+	ExtraTag: (extra)
+	ConditionTag: (conditions)
+	Player: Player
+	GodMode: Invincible
+	SpawnRate: Spawns
+	SpawnRateNormal: normal
+	SpawnRateNone: none
+	SpawnRateHigh: many
+	ToggleGodMode: Invincible on/off
+	CycleSpawnRate: Spawn rate
+	GiveKit: Test kit
+	World: World
+	Day: day
+	Night: night
+	SpawnEnemies: Spawn 5 enemies
+	KillHostiles: Kill enemies on screen
+	ToggleDay: Day/night
+	GiveBags: All boss bags
+	OpenJournal: Journal
+	ToolsHelp: Tip: Inspector tab + mouse over an enemy shows its drops; kill it to compare. Spawned enemies spawn like natural ones (random enemies apply).
+	RunTests: Run all tests
+	TestsHelp: Runs every automated test in the current world. Results also go to client.log.
 	TestSummary: "{0} passed, {1} failed, {2} skipped"
 }
 
 Tests: {
-	NoWorld: "World loaded"
-	PoolBuilt: "Item pool built, every main category has items"
-	Classification: "Known items are classified correctly"
-	Determinism: "Rolls are deterministic and depend on the seed"
-	GatingRespected: "No item above the allowed tier (progression lock)"
-	NoProtectedRolled: "Protected and excluded items are never given at random"
-	SameCategory: "Replacements keep the category"
-	ShuffleBijection: "Guaranteed shuffle: every obtainable item is given exactly once"
-	StackRules: "Stack sizes are valid"
-	PriceFloor: "Shop prices are never below the item value"
-	DropRates: "Drop rates are valid"
-	SnapshotsCaptured: "Original drop tables were read"
-	MobPlansValid: "Every enemy drop table is valid"
-	ProtectedDropsKept: "Progression drops are kept"
-	NoMinionFarms: "Boss minions and town NPCs get no random drops"
-	BagPlansValid: "Every bag content is valid"
-	BagsKeepCoins: "Boss bags keep their coins"
-	RecipesSafe: "Recipes: no self-ingredient, value guard respected"
-	MiningProtected: "Pickaxe and bar recipes are unchanged"
-	DecraftSafe: "Shimmer decrafting can't duplicate items"
-	ShimmerCoherent: "Shimmer transformations keep category and value"
-	ShopSimulation: "Simulated shop: no duplicates, fair prices, special slots untouched"
-	EnemySwapPool: "Random enemies: no boss parts, minions or event enemies"
-	EnemySwapDaylight: "Random enemies: nothing that flees daylight by day"
-	TownOrderPermutation: "Town NPC order is a valid permutation"
-	EnemyStatRanges: "Boss multipliers stay in the configured range"
-	ConfigTexts: "Every setting has a text"
-	OtherTexts: "Every message has a text"
-	ConfigRanges: "Settings are consistent"
+	NoWorld: World loaded
+	PoolBuilt: Item pool built, every main category has items
+	Classification: Known items are classified correctly
+	Determinism: Rolls are deterministic and depend on the seed
+	GatingRespected: No item above the allowed tier (progression lock)
+	NoProtectedRolled: Protected and excluded items are never given at random
+	SameCategory: Replacements keep the category
+	ShuffleBijection: Guaranteed shuffle: every obtainable item is given exactly once
+	StackRules: Stack sizes are valid
+	PriceFloor: Shop prices are never below the item value
+	DropRates: Drop rates are valid
+	SnapshotsCaptured: Original drop tables were read
+	MobPlansValid: Every enemy drop table is valid
+	ProtectedDropsKept: Progression drops are kept
+	NoMinionFarms: Boss minions and town NPCs get no random drops
+	EventItemsKept: Old One's Army items and boss segments are handled
+	BagPlansValid: Every bag content is valid
+	BagsKeepCoins: Boss bags keep their coins
+	RecipesSafe: Recipes: no self-ingredient, value guard respected
+	MiningProtected: Pickaxe and bar recipes are unchanged
+	DecraftSafe: Shimmer decrafting can't duplicate items
+	ShimmerCoherent: Shimmer transformations keep category and value
+	ShopSimulation: Simulated shop: no duplicates, fair prices, special slots untouched
+	EnemySwapPool: Random enemies: no boss parts, minions or event enemies
+	EnemySwapDaylight: Random enemies: nothing that flees daylight by day
+	TownOrderPermutation: Town NPC order is a valid permutation
+	EnemyStatRanges: Boss multipliers stay in the configured range
+	ConfigTexts: Every setting has a text
+	OtherTexts: Every message has a text
+	ConfigRanges: Settings are consistent
 }
-
-Keybinds.Journal.DisplayName: Open the randomizer journal
 
 Journal: {
 	Title: Randomizer journal
@@ -109,7 +111,7 @@ Journal: {
 }
 
 Chat: {
-	ConfigHostOnly: "Only the host can change the Ultimate Randomizer settings."
+	ConfigHostOnly: Only the host can change the Ultimate Randomizer settings.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
 	StartingKit: Ultimate Randomizer: you received a random starting kit for this world!
 }
@@ -135,7 +137,7 @@ Commands: {
 	Chests: {
 		Description: Randomizes the natural chests of a world created without the mod
 		AlreadyDone: Chests are already randomized in this world.
-		Warning: "This randomizes once the natural chests of this world. Chests with a name, and chests near the spawn point or town NPC houses (probably yours) are skipped. Type /rchests confirm to proceed."
+		Warning: This randomizes once the natural chests of this world. Chests with a name, and chests near the spawn point or town NPC houses (probably yours) are skipped. Type /rchests confirm to proceed.
 		Done: "{0} chests randomized."
 	}
 }
@@ -352,7 +354,7 @@ Configs: {
 
 		ProtectProgressionMaterials: {
 			Label: Protect progression materials
-			Tooltip: "Shadow Scales, Tissue Samples, Hallowed Bars, mechanical souls, lunar fragments, Luminite, Ectoplasm and biome keys are never randomized."
+			Tooltip: Shadow Scales, Tissue Samples, Hallowed Bars, mechanical souls, lunar fragments, Luminite, Ectoplasm and biome keys are never randomized.
 		}
 
 		AutoProtectBossSummons: {
@@ -367,7 +369,7 @@ Configs: {
 
 		ProtectPickaxeProgression: {
 			Label: Protect the mining progression
-			Tooltip: "Pickaxe and bar recipes are never randomized, and mined ores only turn into other ores of the same tier: you can always reach the next ore."
+			Tooltip: Pickaxe and bar recipes are never randomized, and mined ores only turn into other ores of the same tier: you can always reach the next ore.
 		}
 
 		TierOverrides: {
@@ -401,22 +403,22 @@ Configs: {
 
 		RandomizeMobDrops: {
 			Label: Randomize enemy and boss drops
-			Tooltip: "Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions. Progression items, coins and treasure bags are kept."
+			Tooltip: Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions. Progression items, coins and treasure bags are kept.
 		}
 
 		DropTableStyle: {
 			Label: Extra drops
-			Tooltip: "On top of the replaced original drops. Vanilla-like: each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced)."
+			Tooltip: On top of the replaced original drops. Vanilla-like: each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced).
 		}
 
 		EnemiesWithoutDropsCanDrop: {
 			Label: Enemies without drops get extra drops
-			Tooltip: "Enemies that drop nothing in the base game also get extra random drops. Boss minions and parts never do."
+			Tooltip: Enemies that drop nothing in the base game also get extra random drops. Boss minions and parts never do.
 		}
 
 		CrittersCanDrop: {
 			Label: Critters get extra drops
-			Tooltip: "Bunnies, birds, butterflies, insects... get up to 2 extra random drops."
+			Tooltip: Bunnies, birds, butterflies, insects... get up to 2 extra random drops.
 		}
 
 		DropRateMultiplier: {
@@ -426,7 +428,7 @@ Configs: {
 
 		DropSlotsMin: {
 			Label: Extra drops (minimum)
-			Tooltip: "Number of possible extra drops of a normal enemy. Each enemy type gets its own fixed number in a world, usually close to the minimum."
+			Tooltip: Number of possible extra drops of a normal enemy. Each enemy type gets its own fixed number in a world, usually close to the minimum.
 		}
 
 		DropSlotsMax: {
@@ -441,7 +443,7 @@ Configs: {
 
 		BossDropSlotsMin: {
 			Label: Boss extra drops (minimum)
-			Tooltip: "In expert and master mode, bosses with a treasure bag get no extra drops: their bag content is randomized instead."
+			Tooltip: In expert and master mode, bosses with a treasure bag get no extra drops: their bag content is randomized instead.
 		}
 
 		BossDropSlotsMax: {
@@ -806,7 +808,7 @@ Configs: {
 
 		RandomizeBossDamage: {
 			Label: Randomize boss damage
-			Tooltip: "Contact damage and projectiles of each boss are multiplied by a random value fixed for the world."
+			Tooltip: Contact damage and projectiles of each boss are multiplied by a random value fixed for the world.
 		}
 
 		BossDamageMin: {
@@ -930,18 +932,17 @@ Configs: {
 
 		RandomizeTownNpcOrder: {
 			Label: Random arrival order of town NPCs
-			Tooltip: "Each arrival condition brings another NPC: the Wizard may come with 50 silver, the Merchant after Skeletron... Fixed for the world. Rescued NPCs (Goblin, Mechanic...) are not affected."
+			Tooltip: Each arrival condition brings another NPC: the Wizard may come with 50 silver, the Merchant after Skeletron... Fixed for the world. Rescued NPCs (Goblin, Mechanic...) are not affected.
 		}
-
 	}
 
 	ClientConfig: {
-		DisplayName: "8. Client"
+		DisplayName: 8. Client
 		Headers.Debug: Debug tools
 
 		DebugTools: {
 			Label: Debug tools (K key)
-			Tooltip: "Shows the debug panel with the K key: state of the randomizer, inspector, testing tools and automated tests."
+			Tooltip: Shows the debug panel with the K key: state of the randomizer, inspector, testing tools and automated tests.
 		}
 	}
 }

@@ -67,7 +67,9 @@ namespace UltimateRandomizer.Common.Features
 					Policy = CategoryPolicy.SameAsOriginal,
 					TierJitterDown = 0,
 					TierJitterUp = 0,
-					AllowJackpot = false
+					AllowJackpot = false,
+					// The player already holds an item of that tier: no progression to protect
+					IgnoreGating = true
 				};
 				int replacement = ItemPool.Roll(request);
 				if (replacement != type && StackRules.ValueOf(replacement) <= maxValue) return replacement;

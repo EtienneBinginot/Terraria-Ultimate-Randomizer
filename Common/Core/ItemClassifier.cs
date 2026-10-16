@@ -63,6 +63,8 @@ namespace UltimateRandomizer.Common.Core
 			if (item == null || item.IsAir || item.type != type) return true;
 			if (ItemID.Sets.Deprecated[type] || ItemID.Sets.ItemsThatShouldNotBeInInventory[type]) return true;
 			if (ItemID.Sets.IsAPickup[type] || ItemID.Sets.CommonCoin[type]) return true;
+			// Old One's Army currency and sentry fuel
+			if (type is ItemID.DefenderMedal or ItemID.DD2EnergyCrystal) return true;
 			if (item.questItem) return true;
 			if (item.ModItem is UnloadedItem) return true;
 			if (excludedItems.Contains(type)) return true;

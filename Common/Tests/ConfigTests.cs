@@ -41,8 +41,13 @@ namespace UltimateRandomizer.Common.Tests
 							if (!Language.Exists($"{Prefix}{field.FieldType.Name}.{value}.Label")) missing.Add($"{field.FieldType.Name}.{value}");
 						}
 					}
+					// Header only has a value once tModLoader has localized it: read the identifier given in the code
 					HeaderAttribute header = field.GetCustomAttribute<HeaderAttribute>();
-					if (header != null && !Language.Exists($"{Prefix}{type.Name}.Headers.{header.Header}")) missing.Add($"{type.Name}.Headers.{header.Header}");
+					string identifier = header != null && header.IsIdentifier
+						? typeof(HeaderAttribute).GetField("identifier", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(header) as string
+						: null;
+					if (header != null && header.IsIdentifier && identifier == null) missing.Add($"{type.Name}.{field.Name} header (unreadable)");
+					if (identifier != null && !Language.Exists($"{Prefix}{type.Name}.Headers.{identifier}")) missing.Add($"{type.Name}.Headers.{identifier}");
 				}
 				if (typeof(ModConfig).IsAssignableFrom(type) && !Language.Exists($"{Prefix}{type.Name}.DisplayName")) missing.Add($"{type.Name}.DisplayName");
 			}
