@@ -27,6 +27,9 @@ Debug: {
 	GuaranteedOn: Drop garanti de : {0}
 	GuaranteedTag: (garanti)
 	Individual: "{0} : vie x{1}, dégâts x{2}, défense x{3}, taille x{4} ; bonus de loot x{5}"
+	Adaptive: "Puissance adaptative : vie x{0}, dégâts x{1} (compris ci-dessus)"
+	Power: Puissance adaptative
+	PowerStats: "puissance {0}, écart {1} tiers : ennemis vie x{2} dégâts x{3}, boss vie x{4} dégâts x{5}"
 	KindNormal: Normal
 	KindGiant: Géant
 	KindMini: Mini
@@ -169,6 +172,11 @@ Tests: {
 	StatCacheBossFlag: Les multiplicateurs d'un boss ne dépendent pas d'une lecture antérieure du même type comme non-boss
 	LootBonusCap: Le bonus de loot augmente avec la force et reste sous son plafond
 	LootBonusApplied: Les ennemis plus forts reçoivent un bonus de loot
+	AdaptivePowerMeasured: La puissance du joueur vient de la meilleure arme, de l'armure portée et des 3 meilleurs accessoires
+	AdaptiveFormula: Les multiplicateurs adaptatifs grandissent avec l'écart, sont plafonnés et jamais sous x1
+	AdaptiveAppliedAtSpawn: Les ennemis reçoivent les multiplicateurs adaptatifs à leur apparition
+	AdaptiveBossParts: Les parties de boss sont renforcées comme leur boss
+	AdaptiveNotCompounded: Un ennemi transformé garde ses multiplicateurs adaptatifs sans les cumuler
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
@@ -199,6 +207,9 @@ Chat: {
 	ConfigHostOnly: Seul l'hôte peut modifier les réglages d'Ultimate Randomizer.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer est aussi activé : le loot est randomisé deux fois. N'active qu'un seul des deux randomizers dans Manage Mods."
 	StartingKit: Ultimate Randomizer : tu as reçu un kit de départ aléatoire pour ce monde !
+	PowerUp: "Ton équipement a de l'avance sur le monde : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts."
+	PowerDown: "Le monde rattrape ton équipement : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts."
+	PowerCaughtUp: Le monde a rattrapé ton équipement : les nouveaux ennemis redeviennent normaux.
 }
 
 Commands: {
@@ -398,6 +409,7 @@ Configs: {
 			Protection: Objets de progression protégés
 			Tiers: Tiers
 			Guarantees: Sources garanties
+			AdaptivePower: "Puissance adaptative"
 		}
 
 		TierGating: {
@@ -410,8 +422,8 @@ Configs: {
 		}
 
 		TierAllowance: {
-			Label: Tiers autorisés au-dessus de ta progression
-			Tooltip: 0 = seulement les tiers déjà débloqués. 1 = un tier d'avance (par défaut), etc.
+			Label: "Tiers autorisés au-dessus de ta progression"
+			Tooltip: "0 = seulement les tiers déjà débloqués. 3 = trois tiers d'avance (par défaut), etc. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde."
 		}
 
 		JackpotTierChance: {
@@ -432,6 +444,41 @@ Configs: {
 		ScaleWeakEnemiesWithProgression: {
 			Label: Les ennemis faibles suivent ta progression
 			Tooltip: Activé : les ennemis du début donnent des objets proches de ton tier actuel au lieu de rester à leur niveau.
+		}
+
+		AdaptivePower: {
+			Label: "Les ennemis s'adaptent à ton équipement"
+			Tooltip: "Les objets puissants peuvent arriver tôt, mais les ennemis et les boss deviennent alors plus forts : chaque tier de puissance au-dessus de la progression du monde multiplie leur vie et leurs dégâts à leur apparition (les boss sont remesurés pendant le combat). Les ennemis ne s'affaiblissent jamais. Puissance = meilleure arme portée sur toi, inventaire et coffre du néant (50 %), armure (25 %) et 3 meilleurs accessoires (25 %), les meilleurs entre l'équipement porté et les configurations d'équipement."
+		}
+
+		AdaptiveGrace: {
+			Label: "Tiers de puissance gratuits"
+			Tooltip: "Tiers de puissance au-dessus de ta progression qui ne renforcent pas encore les ennemis."
+		}
+
+		LifeGrowthPerTier: {
+			Label: "Vie des ennemis par tier de puissance"
+			Tooltip: "Multiplicateur de vie des ennemis pour chaque tier de puissance en trop (cumulé à chaque tier)."
+		}
+
+		DamageGrowthPerTier: {
+			Label: "Dégâts des ennemis par tier de puissance"
+			Tooltip: "Multiplicateur de dégâts des ennemis pour chaque tier de puissance en trop (cumulé à chaque tier)."
+		}
+
+		BossLifeGrowthPerTier: {
+			Label: "Vie des boss par tier de puissance"
+			Tooltip: "Pareil pour les boss et leurs parties, qui répondent au joueur le plus fort."
+		}
+
+		BossDamageGrowthPerTier: {
+			Label: "Dégâts des boss par tier de puissance"
+			Tooltip: "Pareil pour les dégâts des boss, de leurs parties et de leurs projectiles."
+		}
+
+		AdaptiveCap: {
+			Label: "Multiplicateur maximum"
+			Tooltip: "La puissance adaptative ne multiplie jamais la vie et les dégâts des ennemis par plus que ça."
 		}
 
 		ProtectedItems: {
@@ -1275,10 +1322,16 @@ Configs: {
 	ClientConfig: {
 		DisplayName: 8. Client
 		Headers.Debug: Outils de débogage
+		Headers.Messages: Messages
 
 		DebugTools: {
 			Label: Outils de débogage (touche K)
 			Tooltip: Affiche le panneau de débogage avec la touche K : état du randomizer, inspecteur, outils de test et tests automatiques.
+		}
+
+		AdaptiveMessages: {
+			Label: Messages de puissance adaptative
+			Tooltip: Te prévient dans le chat quand ton équipement renforce les ennemis, ou quand le monde l'a rattrapé.
 		}
 	}
 

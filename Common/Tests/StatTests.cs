@@ -147,6 +147,9 @@ namespace UltimateRandomizer.Common.Tests
 			server.TryGetGlobalNPC(out EnemyIndividualNPC sent);
 			Random rng = new(12);
 			for (int i = 0; i < 200 && sent.Kind != EnemyKind.Giant; i++) sent.Roll(server, rng);
+			// Only carried by the sync here (adaptive power is off during tests)
+			sent.AdaptiveLife = 1.7f;
+			sent.AdaptiveDamage = 1.3f;
 			using MemoryStream extra = new();
 			using BinaryWriter extraWriter = new(extra);
 			BitWriter bits = new();
@@ -165,6 +168,7 @@ namespace UltimateRandomizer.Common.Tests
 			Check.Equal(sent.Kind, received.Kind, "kind");
 			Check.That(Math.Abs(sent.Life - received.Life) < 0.0001f && Math.Abs(sent.Damage - received.Damage) < 0.0001f, "health or damage multiplier");
 			Check.That(Math.Abs(sent.Defense - received.Defense) < 0.0001f, "defense multiplier");
+			Check.That(received.AdaptiveLife == 1.7f && received.AdaptiveDamage == 1.3f, $"adaptive multipliers x{received.AdaptiveLife}/x{received.AdaptiveDamage}");
 			Check.That(Math.Abs(client.scale - Sample(NPCID.Zombie).scale * received.Size) < 0.01f, $"size x{client.scale} on the client");
 		}
 

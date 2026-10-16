@@ -27,6 +27,9 @@ Debug: {
 	GuaranteedOn: Guaranteed drop of: {0}
 	GuaranteedTag: (guaranteed)
 	Individual: "{0}: health x{1}, damage x{2}, defense x{3}, size x{4}; loot bonus x{5}"
+	Adaptive: "Adaptive power: health x{0}, damage x{1} (included above)"
+	Power: Adaptive power
+	PowerStats: "power {0}, gap {1} tiers: enemies health x{2} damage x{3}, bosses health x{4} damage x{5}"
 	KindNormal: Normal
 	KindGiant: Giant
 	KindMini: Mini
@@ -169,6 +172,11 @@ Tests: {
 	StatCacheBossFlag: Boss multipliers do not depend on an earlier lookup of the same type as a non-boss
 	LootBonusCap: The loot bonus grows with strength and stays under its cap
 	LootBonusApplied: Stronger enemies get a loot bonus
+	AdaptivePowerMeasured: Player power comes from the best weapon, the worn armor and the 3 best accessories
+	AdaptiveFormula: Adaptive multipliers grow with the gap, are capped and never below x1
+	AdaptiveAppliedAtSpawn: Enemies get the adaptive multipliers when they spawn
+	AdaptiveBossParts: Boss parts are scaled like their boss
+	AdaptiveNotCompounded: A transformed enemy keeps its adaptive multipliers without stacking them
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
 	RecipesSafe: Recipes: no self-ingredient, value guard respected
@@ -199,6 +207,9 @@ Chat: {
 	ConfigHostOnly: Only the host can change the Ultimate Randomizer settings.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
 	StartingKit: Ultimate Randomizer: you received a random starting kit for this world!
+	PowerUp: "Your equipment is ahead of the world: new enemies get x{0} health and x{1} damage."
+	PowerDown: "The world is catching up with your equipment: new enemies get x{0} health and x{1} damage."
+	PowerCaughtUp: The world has caught up with your equipment: new enemies are back to normal.
 }
 
 Commands: {
@@ -398,6 +409,7 @@ Configs: {
 			Protection: Protected progression items
 			Tiers: Tiers
 			Guarantees: Guaranteed sources
+			AdaptivePower: "Adaptive power"
 		}
 
 		TierGating: {
@@ -410,8 +422,8 @@ Configs: {
 		}
 
 		TierAllowance: {
-			Label: Tiers allowed above your progression
-			Tooltip: 0 = only tiers already unlocked. 1 = one tier ahead (default), and so on.
+			Label: "Tiers allowed above your progression"
+			Tooltip: "0 = only tiers already unlocked. 3 = three tiers ahead (default), and so on. Adaptive power makes enemies stronger if your equipment gets ahead of the world."
 		}
 
 		JackpotTierChance: {
@@ -432,6 +444,41 @@ Configs: {
 		ScaleWeakEnemiesWithProgression: {
 			Label: Weak enemies follow your progression
 			Tooltip: On: early enemies drop items close to your current tier instead of staying at their own level.
+		}
+
+		AdaptivePower: {
+			Label: "Enemies adapt to your equipment"
+			Tooltip: "Strong items may come early, but then enemies and bosses get stronger: every tier of power above the world's progression multiplies their health and damage when they spawn (bosses are measured again during the fight). Enemies never get weaker. Power = best weapon carried, inventory and Void Vault (50%), armor (25%) and 3 best accessories (25%), the best of the worn ones and of the loadouts."
+		}
+
+		AdaptiveGrace: {
+			Label: "Free tiers of power"
+			Tooltip: "Tiers of power above your progression that do not make enemies stronger yet."
+		}
+
+		LifeGrowthPerTier: {
+			Label: "Enemy health per tier of power"
+			Tooltip: "Enemy health multiplier for each tier of power too many (multiplied again for each tier)."
+		}
+
+		DamageGrowthPerTier: {
+			Label: "Enemy damage per tier of power"
+			Tooltip: "Enemy damage multiplier for each tier of power too many (multiplied again for each tier)."
+		}
+
+		BossLifeGrowthPerTier: {
+			Label: "Boss health per tier of power"
+			Tooltip: "Same for bosses and their parts, which answer to the strongest player."
+		}
+
+		BossDamageGrowthPerTier: {
+			Label: "Boss damage per tier of power"
+			Tooltip: "Same for the damage of bosses, their parts and their projectiles."
+		}
+
+		AdaptiveCap: {
+			Label: "Maximum multiplier"
+			Tooltip: "Enemy health and damage are never multiplied by more than this by adaptive power."
 		}
 
 		ProtectedItems: {
@@ -1275,10 +1322,16 @@ Configs: {
 	ClientConfig: {
 		DisplayName: 8. Client
 		Headers.Debug: Debug tools
+		Headers.Messages: Messages
 
 		DebugTools: {
 			Label: Debug tools (K key)
 			Tooltip: Shows the debug panel with the K key: state of the randomizer, inspector, testing tools and automated tests.
+		}
+
+		AdaptiveMessages: {
+			Label: Adaptive power messages
+			Tooltip: Tells you in the chat when your equipment makes enemies stronger, or when the world caught up with it.
 		}
 	}
 

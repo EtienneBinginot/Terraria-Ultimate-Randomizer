@@ -33,23 +33,30 @@ namespace UltimateRandomizer.Common.Configs
 	{
 		public static ProgressionConfig Instance => ModContent.GetInstance<ProgressionConfig>();
 
+		// Read at spawn only: left out of the world caches' signature (SeedSystem.CacheSignature)
+		public static readonly string[] AdaptiveFields =
+		{
+			nameof(AdaptivePower), nameof(AdaptiveGrace), nameof(LifeGrowthPerTier), nameof(DamageGrowthPerTier), nameof(BossLifeGrowthPerTier),
+			nameof(BossDamageGrowthPerTier), nameof(AdaptiveCap)
+		};
+
 		[Header("TierGating")]
 		[DefaultValue(true)]
 		public bool TierGating;
 
 		[Range(0, 9)]
-		[DefaultValue(1)]
+		[DefaultValue(3)]
 		[Slider]
 		public int TierAllowance;
 
 		[Range(0f, 100f)]
 		[Increment(0.5f)]
-		[DefaultValue(6f)]
+		[DefaultValue(10f)]
 		public float JackpotTierChance;
 
 		[Range(0f, 100f)]
 		[Increment(0.1f)]
-		[DefaultValue(2f)]
+		[DefaultValue(4f)]
 		public float RuntimeJackpotChance;
 
 		[DefaultValue(false)]
@@ -57,6 +64,41 @@ namespace UltimateRandomizer.Common.Configs
 
 		[DefaultValue(false)]
 		public bool ScaleWeakEnemiesWithProgression;
+
+		// Enemies scale with the player's equipment when it gets ahead of the world (AdaptivePower)
+		[Header("AdaptivePower")]
+		[DefaultValue(true)]
+		public bool AdaptivePower;
+
+		[Range(0, 9)]
+		[DefaultValue(1)]
+		[Slider]
+		public int AdaptiveGrace;
+
+		[Range(1f, 4f)]
+		[Increment(0.1f)]
+		[DefaultValue(1.8f)]
+		public float LifeGrowthPerTier;
+
+		[Range(1f, 4f)]
+		[Increment(0.1f)]
+		[DefaultValue(1.5f)]
+		public float DamageGrowthPerTier;
+
+		[Range(1f, 4f)]
+		[Increment(0.1f)]
+		[DefaultValue(2f)]
+		public float BossLifeGrowthPerTier;
+
+		[Range(1f, 4f)]
+		[Increment(0.1f)]
+		[DefaultValue(1.6f)]
+		public float BossDamageGrowthPerTier;
+
+		[Range(1f, 50f)]
+		[Increment(0.5f)]
+		[DefaultValue(10f)]
+		public float AdaptiveCap;
 
 		[Header("Protection")]
 		[ReloadRequired]

@@ -116,6 +116,12 @@ namespace UltimateRandomizer.Common.Debug
 			Text($"[c/FFD966:{T("Tier")}] {unlocked} ({(Tier)unlocked})   [c/FFD966:{T("Limit")}] {limit}   [c/FFD966:{T("Gating")}] {OnOff(progression.TierGating)}");
 			Text($"[c/FFD966:{T("Pool")}] {randomizable} / {protectedCount} / {ItemPool.Info.Count(i => i.Excluded)}   [c/FFD966:{T("Snapshots")}] {LootSnapshot.Npcs.Count} / {LootSnapshot.Items.Count}");
 			Text($"[c/FFD966:{T("Recipes")}] {OnOff(RecipeSystem.Applied)}   [c/FFD966:{T("Shimmer")}] {OnOff(ShimmerSystem.Applied)}   [c/FFD966:{T("Chests")}] {OnOff(ChestSystem.ChestsRandomized)}");
+			// Measured on the local player (the server measures each player the same way from the synced equipment)
+			float power = AdaptivePower.PowerOf(Main.LocalPlayer);
+			float gap = AdaptivePower.Gap(power);
+			(float life, float damage) normal = AdaptivePower.Multipliers(gap, false);
+			(float life, float damage) boss = AdaptivePower.Multipliers(gap, true);
+			Text($"[c/FFD966:{T("Power")}] {OnOff(AdaptivePower.Enabled)}   {T("PowerStats", power.ToString("0.00"), gap.ToString("0.00"), normal.life.ToString("0.00"), normal.damage.ToString("0.00"), boss.life.ToString("0.00"), boss.damage.ToString("0.00"))}");
 			SwapStats swaps = EnemySwapSystem.Stats;
 			Text($"[c/FFD966:{T("Swaps")}] {T("SwapStats", swaps.Flagged, swaps.SwappedEnemies, swaps.SwappedCritters, swaps.NotInPool, swaps.ChanceFailed, swaps.NoTarget)}");
 			Text($"[c/FFD966:{T("SetTier")}]");
@@ -166,6 +172,7 @@ namespace UltimateRandomizer.Common.Debug
 			if (npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Rolled)
 			{
 				Text(T("Individual", T("Kind" + individual.Kind), individual.Life.ToString("0.00"), individual.Damage.ToString("0.00"), individual.Defense.ToString("0.00"), individual.Size.ToString("0.00"), EnemyIndividualNPC.LootBonus(npc).ToString("0.00")));
+				Text(T("Adaptive", individual.AdaptiveLife.ToString("0.00"), individual.AdaptiveDamage.ToString("0.00")));
 			}
 			string swap = EnemySwapPool.IsSwappable(npc.type) ? T("Swappable") : T("NotSwappable");
 			Text(swap);

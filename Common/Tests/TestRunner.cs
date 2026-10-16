@@ -5,6 +5,7 @@ using System.Text;
 using Terraria.Localization;
 using Terraria.ModLoader;
 using UltimateRandomizer.Common.Core;
+using UltimateRandomizer.Common.Features;
 
 namespace UltimateRandomizer.Common.Tests
 {
@@ -79,6 +80,7 @@ namespace UltimateRandomizer.Common.Tests
 			GuaranteeTests.Register();
 			RecipeTests.Register();
 			StatTests.Register();
+			AdaptivePowerTests.Register();
 		}
 
 		public static List<TestResult> RunAll()
@@ -95,6 +97,8 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				Stopwatch watch = Stopwatch.StartNew();
 				TestResult result = new() { Id = id, Outcome = TestOutcome.Passed };
+				// Rolls must not depend on the tester's equipment: no adaptive power unless a test forces one
+				AdaptivePower.PowerOverride = 0;
 				try
 				{
 					run();
@@ -114,6 +118,10 @@ namespace UltimateRandomizer.Common.Tests
 					result.Outcome = TestOutcome.Failed;
 					result.Detail = e.GetType().Name + ": " + e.Message;
 					ModContent.GetInstance<UltimateRandomizer>().Logger.Error($"Test {id} crashed", e);
+				}
+				finally
+				{
+					AdaptivePower.PowerOverride = null;
 				}
 				result.Milliseconds = watch.ElapsedMilliseconds;
 				results.Add(result);

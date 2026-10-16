@@ -70,11 +70,13 @@ namespace UltimateRandomizer.Common.Features
 				return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			}
 			IEnumerable<PlannedDrop> drops = ExtraDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky()).Concat(GuaranteedSources.For(npc.type));
-			// Stronger enemies (type and individual) drop more often
+			// Stronger enemies (type and individual) drop more often. Guaranteed drops (stations...) leave adaptive power
+			// out, so that how fast they are found does not depend on the player's equipment
 			float bonus = EnemyIndividualNPC.LootBonus(npc);
+			float guaranteedBonus = EnemyIndividualNPC.LootBonus(npc, false);
 			foreach (PlannedDrop drop in drops)
 			{
-				if (info.rng.NextFloat() >= Math.Min(1f, drop.Chance * bonus)) continue;
+				if (info.rng.NextFloat() >= Math.Min(1f, drop.Chance * (drop.Guaranteed ? guaranteedBonus : bonus))) continue;
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
 				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), drop.Item, stack, false);
 			}

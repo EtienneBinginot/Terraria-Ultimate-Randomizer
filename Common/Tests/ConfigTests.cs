@@ -33,6 +33,16 @@ namespace UltimateRandomizer.Common.Tests
 			LootConfig otherLoot = Clone(loot);
 			otherLoot.RandomizeMobDrops = !otherLoot.RandomizeMobDrops;
 			Check.That(Core.SeedSystem.CacheSignature(general, otherLoot, crafting, progression, economy, EnemiesConfig.Instance) != current, "a loot setting does not rebuild the world caches");
+			ProgressionConfig adaptive = Clone(progression);
+			adaptive.AdaptivePower = !adaptive.AdaptivePower;
+			adaptive.AdaptiveGrace += 1;
+			adaptive.LifeGrowthPerTier += 0.5f;
+			adaptive.BossDamageGrowthPerTier += 0.5f;
+			adaptive.AdaptiveCap += 1;
+			Check.That(Core.SeedSystem.CacheSignature(general, loot, crafting, adaptive, economy, EnemiesConfig.Instance) == current, "an adaptive power setting rebuilds the world caches");
+			ProgressionConfig allowance = Clone(progression);
+			allowance.TierAllowance += allowance.TierAllowance < 9 ? 1 : -1;
+			Check.That(Core.SeedSystem.CacheSignature(general, loot, crafting, allowance, economy, EnemiesConfig.Instance) != current, "the tier allowance does not rebuild the world caches");
 		}
 
 		public static void Register()

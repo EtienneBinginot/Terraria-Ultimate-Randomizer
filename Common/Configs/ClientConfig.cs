@@ -13,5 +13,10 @@ namespace UltimateRandomizer.Common.Configs
 		[Header("Debug")]
 		[DefaultValue(true)]
 		public bool DebugTools;
+
+		// Chat messages when adaptive power makes enemies stronger or weaker
+		[Header("Messages")]
+		[DefaultValue(true)]
+		public bool AdaptiveMessages;
 	}
 }

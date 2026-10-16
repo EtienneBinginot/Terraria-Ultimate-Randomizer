@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -66,7 +67,15 @@ namespace UltimateRandomizer.Common.Core
 		// What the world caches (findability, guaranteed sources, recipe plan, ore map, shuffle) are built from: enemy
 		// stats and the extras don't count, except the settings of the swap pool the guaranteed hosts are taken from
 		public static string CacheSignature(GeneralConfig general, LootConfig loot, CraftingConfig crafting, ProgressionConfig progression, EconomyConfig economy, EnemiesConfig enemies) =>
-			string.Join("|", Json(general), Json(loot), Json(crafting), Json(progression), Json(economy), enemies.SwapModdedEnemies, enemies.SwapEventEnemies, enemies.SwapCritters);
+			string.Join("|", Json(general), Json(loot), Json(crafting), CacheJson(progression), Json(economy), enemies.SwapModdedEnemies, enemies.SwapEventEnemies, enemies.SwapCritters);
+
+		// Adaptive power only changes enemies at spawn: its settings don't rebuild the world caches
+		private static string CacheJson(ProgressionConfig progression)
+		{
+			JObject json = JObject.FromObject(progression, JsonSerializer.Create(ConfigManager.serializerSettings));
+			foreach (string field in ProgressionConfig.AdaptiveFields) json.Remove(field);
+			return json.ToString(Formatting.None);
+		}
 
 		// Changes the seed of the current world (command) and sends it to every player
 		public static void ChangeSeed(int seed)

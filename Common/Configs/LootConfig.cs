@@ -49,7 +49,8 @@ namespace UltimateRandomizer.Common.Configs
 		// Chance that a replaced item (drop, chest, pot, bag, fish...) is rolled with the loot weights instead of keeping its category
 		[Range(0f, 100f)]
 		[Increment(1f)]
-		[DefaultValue(10f)]
+		// 8: with DropRateMultiplier 1.2, about 22 pieces of equipment per early hour (PacingModel, target 15-25)
+		[DefaultValue(8f)]
 		public float SurpriseChance;
 
 		// Items are picked among this many tiers below the target too: more variety early on
@@ -83,7 +84,7 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.1f, 10f)]
 		[Increment(0.1f)]
-		[DefaultValue(1.5f)]
+		[DefaultValue(1.2f)]
 		public float DropRateMultiplier;
 
 		[Range(1f, 100f)]

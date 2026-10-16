@@ -51,6 +51,9 @@ namespace UltimateRandomizer.Common.Features
 		public float Damage = 1;
 		public float Defense = 1;
 		public float Size = 1;
+		// Part of Life and Damage that comes from adaptive power (already included in them)
+		public float AdaptiveLife = 1;
+		public float AdaptiveDamage = 1;
 		public EnemyKind Kind;
 		// Identifies a roll: a client that already applied another roll of this NPC undoes it first
 		public byte RollId;
@@ -73,7 +76,7 @@ namespace UltimateRandomizer.Common.Features
 
 		private struct Stored
 		{
-			public float Life, Damage, Defense, Size;
+			public float Life, Damage, Defense, Size, AdaptiveLife, AdaptiveDamage;
 			public EnemyKind Kind;
 			public byte Id;
 		}
@@ -105,16 +108,54 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (!npc.TryGetGlobalNPC(out EnemyIndividualNPC individual)) return;
 			individual.Roll(npc, rng);
-			if (npc.whoAmI >= 0 && npc.whoAmI < slotRolls.Length)
-			{
-				slotRolls[npc.whoAmI] = new Stored { Life = individual.Life, Damage = individual.Damage, Defense = individual.Defense, Size = individual.Size, Kind = individual.Kind, Id = individual.RollId };
-			}
+			individual.Store(npc);
 			individual.Apply(npc);
 			npc.netUpdate = true;
 		}
 
+		// Keeps the roll for the NPC's slot (re-applied by RollMissing after a SetDefaults)
+		private void Store(NPC npc)
+		{
+			if (npc.whoAmI < 0 || npc.whoAmI >= slotRolls.Length) return;
+			slotRolls[npc.whoAmI] = new Stored
+			{
+				Life = Life, Damage = Damage, Defense = Defense, Size = Size, AdaptiveLife = AdaptiveLife, AdaptiveDamage = AdaptiveDamage, Kind = Kind, Id = RollId
+			};
+		}
+
+		private static byte NextRollId()
+		{
+			lastRollId = (byte)(lastRollId == byte.MaxValue ? 1 : lastRollId + 1);
+			return lastRollId;
+		}
+
+		// A living boss measured again (AdaptivePower.RaiseBosses, server or single player): the adaptive multipliers only
+		// go up. The rise is applied on top of the current stats, keeping the health ratio; the slot's stored roll gets the
+		// new values (RollMissing re-applies them once on base stats) and a new RollId makes the clients re-apply it
+		public void RaiseAdaptive(NPC npc, float life, float damage)
+		{
+			if (!rolled || !applied) return;
+			float lifeFactor = Math.Max(1, life / Math.Max(0.0001f, AdaptiveLife));
+			float damageFactor = Math.Max(1, damage / Math.Max(0.0001f, AdaptiveDamage));
+			if (lifeFactor < 1.001f && damageFactor < 1.001f) return;
+			AdaptiveLife *= lifeFactor;
+			AdaptiveDamage *= damageFactor;
+			Life *= lifeFactor;
+			Damage *= damageFactor;
+			float ratio = npc.lifeMax > 0 ? Math.Clamp(npc.life / (float)npc.lifeMax, 0, 1) : 1;
+			npc.lifeMax = Math.Max(1, (int)(baseLifeMax * Life));
+			npc.life = Math.Clamp((int)Math.Ceiling(npc.lifeMax * ratio), 1, npc.lifeMax);
+			// Bosses change their contact damage between phases: scale the current value, and the default from the base
+			npc.damage = (int)(npc.damage * damageFactor);
+			npc.defDamage = (int)(baseDamage * Damage);
+			RollId = NextRollId();
+			Store(npc);
+			npc.netUpdate = true;
+		}
+
 		// After the NPC update (server or single player): NPCs whose globals were recreated get their slot's roll back
-		// (a new one if the slot has none), with the health ratio they had; netUpdate sends them to the clients
+		// (a new one if the slot has none), with the health ratio they had; netUpdate sends them to the clients.
+		// The stored roll already includes the adaptive multipliers measured at spawn: re-applied once, never compounded
 		public static void RollMissing()
 		{
 			if (Main.netMode == NetmodeID.MultiplayerClient || !SeedSystem.WorldReady) return;
@@ -123,7 +164,8 @@ namespace UltimateRandomizer.Common.Features
 
 		public static void RollMissing(NPC npc)
 		{
-			if (!npc.active || !npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) || individual.rolled || !Eligible(npc)) return;
+			// Boss parts too: they carry adaptive multipliers
+			if (!npc.active || !npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) || individual.rolled || !Rollable(npc)) return;
 			int slot = npc.whoAmI;
 			bool inRange = slot >= 0 && slot < slotRolls.Length;
 			float ratio = npc.lifeMax > 0 ? npc.life / (float)npc.lifeMax : 1;
@@ -133,6 +175,8 @@ namespace UltimateRandomizer.Common.Features
 				individual.Life = stored.Life;
 				individual.Damage = stored.Damage;
 				individual.Defense = stored.Defense;
+				individual.AdaptiveLife = stored.AdaptiveLife;
+				individual.AdaptiveDamage = stored.AdaptiveDamage;
 				// The new form may not be resizable (worm, boss minion)
 				individual.Size = Scalable(npc) ? stored.Size : 1;
 				individual.Kind = stored.Kind;
@@ -159,9 +203,12 @@ namespace UltimateRandomizer.Common.Features
 			slotRatios[npc.whoAmI] = npc.active && npc.lifeMax > 0 ? Math.Clamp(npc.life / (float)npc.lifeMax, 0, 1) : -1;
 		}
 
-		public static bool Eligible(NPC npc) =>
+		public static bool Eligible(NPC npc) => Rollable(npc) && !BossParts.IsPart(npc.type);
+
+		// Gets a roll at all: boss parts only get the adaptive multipliers (no variation of their own)
+		public static bool Rollable(NPC npc) =>
 			SeedSystem.WorldReady && !npc.townNPC && !npc.friendly && !NPCID.Sets.CountsAsCritter[npc.type] && !NPCID.Sets.ProjectileNPC[npc.type]
-			&& npc.lifeMax > 5 && !BossParts.IsPart(npc.type);
+			&& npc.lifeMax > 5;
 
 		// Worms (segments would come apart) and boss parts keep their size; boss minions are never giants or minis
 		// (swarms of giant creepers or bees, and no giant loot from them)
@@ -173,8 +220,16 @@ namespace UltimateRandomizer.Common.Features
 			Kind = EnemyKind.Normal;
 			rolled = true;
 			applied = false;
-			lastRollId = (byte)(lastRollId == byte.MaxValue ? 1 : lastRollId + 1);
-			RollId = lastRollId;
+			RollId = NextRollId();
+			// Before the Eligible check: boss parts scale too. Uses no rng, so the variation rolls stay the same
+			(AdaptiveLife, AdaptiveDamage) = AdaptivePower.ForNpc(npc);
+			RollVariation(npc, rng);
+			Life *= AdaptiveLife;
+			Damage *= AdaptiveDamage;
+		}
+
+		private void RollVariation(NPC npc, Random rng)
+		{
 			if (!Eligible(npc)) return;
 			EnemiesConfig cfg = EnemiesConfig.Instance;
 			bool boss = npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[npc.type];
@@ -266,6 +321,8 @@ namespace UltimateRandomizer.Common.Features
 			binaryWriter.Write(Size);
 			binaryWriter.Write((byte)Kind);
 			binaryWriter.Write(RollId);
+			binaryWriter.Write(AdaptiveLife);
+			binaryWriter.Write(AdaptiveDamage);
 		}
 
 		// Back to the stats before Apply (a client receiving another roll for the same NPC: the server rolled again after
@@ -295,40 +352,60 @@ namespace UltimateRandomizer.Common.Features
 			float size = binaryReader.ReadSingle();
 			EnemyKind kind = (EnemyKind)binaryReader.ReadByte();
 			byte id = binaryReader.ReadByte();
+			float adaptiveLife = binaryReader.ReadSingle();
+			float adaptiveDamage = binaryReader.ReadSingle();
 			if (applied && id == RollId) return;
+			// The life packet 23 just synced is the server's real value: Undo must not clamp it to the unscaled lifeMax
+			int syncedLife = npc.life;
 			Undo(npc);
+			npc.life = syncedLife;
 			RollId = id;
 			Life = life;
 			Damage = damage;
 			Defense = defense;
 			Size = size;
+			AdaptiveLife = adaptiveLife;
+			AdaptiveDamage = adaptiveDamage;
 			Kind = kind;
 			rolled = true;
 			Apply(npc, true, full);
 		}
 
-		// Extra drop chance multiplier of a strong enemy (type and individual health x damage above normal)
-		public static float LootBonus(NPC npc)
+		// Extra drop chance multiplier of a strong enemy (type and individual health x damage above normal, adaptive power
+		// included since it is part of the individual multipliers)
+		public static float LootBonus(NPC npc, bool withAdaptive = true)
 		{
 			EnemiesConfig cfg = EnemiesConfig.Instance;
 			EnemyMultipliers type = EnemyStatCache.Get(BossParts.Owner(npc.type), EnemyStatsNPC.IsBossLike(npc));
 			float factor = type.Life * type.Damage;
-			if (npc.TryGetGlobalNPC(out EnemyIndividualNPC individual)) factor *= individual.Life * individual.Damage;
+			if (npc.TryGetGlobalNPC(out EnemyIndividualNPC individual))
+			{
+				factor *= individual.Life * individual.Damage;
+				if (!withAdaptive) factor /= Math.Max(0.0001f, individual.AdaptiveLife * individual.AdaptiveDamage);
+			}
 			return Bonus(factor, cfg.LootBonusStrength, cfg.LootBonusCap);
 		}
 
 		public static float Bonus(float factor, float strength, float cap) => factor <= 1 ? 1 : Math.Min(Math.Max(1, cap), 1 + strength * (factor - 1));
 	}
 
-	// Boss projectiles get the boss damage multiplier too (contact damage alone would barely matter)
+	// Boss projectiles get the boss damage multiplier too (contact damage alone would barely matter); the projectiles of
+	// other enemies only follow adaptive power (their random stats stay on contact damage)
 	public class BossProjectileDamage : GlobalProjectile
 	{
 		public override void OnSpawn(Projectile projectile, IEntitySource source)
 		{
 			if (!SeedSystem.WorldReady || !projectile.hostile || source is not EntitySource_Parent parent || parent.Entity is not NPC npc) return;
-			if (!EnemyStatsNPC.IsBossLike(npc)) return;
-			float multiplier = EnemyStatCache.Get(BossParts.Owner(npc.type), true).Damage;
-			if (npc.TryGetGlobalNPC(out EnemyIndividualNPC individual)) multiplier *= individual.Damage;
+			// Their damage comes from npc.damage, which already has the multipliers
+			if (projectile.type is ProjectileID.Nail or ProjectileID.AncientDoomProjectile) return;
+			bool hasIndividual = npc.TryGetGlobalNPC(out EnemyIndividualNPC individual);
+			float multiplier;
+			if (EnemyStatsNPC.IsBossLike(npc))
+			{
+				multiplier = EnemyStatCache.Get(BossParts.Owner(npc.type), true).Damage;
+				if (hasIndividual) multiplier *= individual.Damage;
+			}
+			else multiplier = hasIndividual ? individual.AdaptiveDamage : 1;
 			if (Math.Abs(multiplier - 1) > 0.001f) projectile.damage = Math.Max(1, (int)(projectile.damage * multiplier));
 		}
 	}
