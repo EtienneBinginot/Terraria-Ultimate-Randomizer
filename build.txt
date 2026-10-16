@@ -1,8 +1,4 @@
 displayName = Ultimate Randomizer
 author = Etienne Binginot (based on tRandomizer by ImplicitSaber)
-<<<<<<< HEAD
 version = 1.0.0
-=======
-version = 1.0.0
->>>>>>> 1c1fc6b (Codex interface on J: enemies, items, craft tree, bags, biomes)
 buildIgnore = tools\*, CLAUDE.md
