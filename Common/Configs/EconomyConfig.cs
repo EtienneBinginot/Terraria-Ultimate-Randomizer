@@ -85,7 +85,7 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.1f, 10f)]
 		[Increment(0.1f)]
-		[DefaultValue(1f)]
+		[DefaultValue(1.5f)]
 		public float StackMultiplier;
 
 		[DefaultValue(true)]

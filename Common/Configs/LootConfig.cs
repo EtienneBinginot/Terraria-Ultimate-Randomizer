@@ -8,26 +8,26 @@ namespace UltimateRandomizer.Common.Configs
 	// Relative chance of each category when a random drop is rolled (0 = never)
 	public class CategoryWeights
 	{
-		[Range(0, 100)] [DefaultValue(30)] public int Material = 30;
-		[Range(0, 100)] [DefaultValue(10)] public int OreBar = 10;
+		[Range(0, 100)] [DefaultValue(20)] public int Material = 20;
+		[Range(0, 100)] [DefaultValue(8)] public int OreBar = 8;
 		[Range(0, 100)] [DefaultValue(10)] public int Potion = 10;
 		[Range(0, 100)] [DefaultValue(4)] public int Food = 4;
-		[Range(0, 100)] [DefaultValue(6)] public int Ammo = 6;
-		[Range(0, 100)] [DefaultValue(4)] public int WeaponMelee = 4;
-		[Range(0, 100)] [DefaultValue(4)] public int WeaponRanged = 4;
-		[Range(0, 100)] [DefaultValue(4)] public int WeaponMagic = 4;
-		[Range(0, 100)] [DefaultValue(4)] public int WeaponSummon = 4;
-		[Range(0, 100)] [DefaultValue(1)] public int WeaponOther = 1;
-		[Range(0, 100)] [DefaultValue(6)] public int Armor = 6;
-		[Range(0, 100)] [DefaultValue(8)] public int Accessory = 8;
-		[Range(0, 100)] [DefaultValue(4)] public int Tool = 4;
-		[Range(0, 100)] [DefaultValue(6)] public int Block = 6;
+		[Range(0, 100)] [DefaultValue(5)] public int Ammo = 5;
+		[Range(0, 100)] [DefaultValue(6)] public int WeaponMelee = 6;
+		[Range(0, 100)] [DefaultValue(6)] public int WeaponRanged = 6;
+		[Range(0, 100)] [DefaultValue(6)] public int WeaponMagic = 6;
+		[Range(0, 100)] [DefaultValue(6)] public int WeaponSummon = 6;
+		[Range(0, 100)] [DefaultValue(2)] public int WeaponOther = 2;
+		[Range(0, 100)] [DefaultValue(7)] public int Armor = 7;
+		[Range(0, 100)] [DefaultValue(10)] public int Accessory = 10;
+		[Range(0, 100)] [DefaultValue(5)] public int Tool = 5;
+		[Range(0, 100)] [DefaultValue(3)] public int Block = 3;
 		[Range(0, 100)] [DefaultValue(3)] public int Furniture = 3;
-		[Range(0, 100)] [DefaultValue(2)] public int MountPet = 2;
-		[Range(0, 100)] [DefaultValue(2)] public int Vanity = 2;
-		[Range(0, 100)] [DefaultValue(1)] public int Dye = 1;
+		[Range(0, 100)] [DefaultValue(4)] public int MountPet = 4;
+		[Range(0, 100)] [DefaultValue(3)] public int Vanity = 3;
+		[Range(0, 100)] [DefaultValue(2)] public int Dye = 2;
 		[Range(0, 100)] [DefaultValue(1)] public int Critter = 1;
-		[Range(0, 100)] [DefaultValue(1)] public int Bag = 1;
+		[Range(0, 100)] [DefaultValue(3)] public int Bag = 3;
 		[Range(0, 100)] [DefaultValue(1)] public int Misc = 1;
 
 		public int Get(ItemCategory category) => category switch
@@ -95,29 +95,29 @@ namespace UltimateRandomizer.Common.Configs
 		public bool CrittersCanDrop;
 
 		[Range(0, 20)]
-		[DefaultValue(0)]
+		[DefaultValue(1)]
 		public int DropSlotsMin;
 
 		[Range(0, 20)]
-		[DefaultValue(3)]
+		[DefaultValue(4)]
 		public int DropSlotsMax;
 
 		[Range(0.1f, 10f)]
 		[Increment(0.1f)]
-		[DefaultValue(1f)]
+		[DefaultValue(2.5f)]
 		public float DropRateMultiplier;
 
 		[Range(1f, 100f)]
 		[Increment(1f)]
-		[DefaultValue(25f)]
+		[DefaultValue(40f)]
 		public float DropChance;
 
 		[Range(0, 30)]
-		[DefaultValue(2)]
+		[DefaultValue(3)]
 		public int BossDropSlotsMin;
 
 		[Range(0, 30)]
-		[DefaultValue(6)]
+		[DefaultValue(8)]
 		public int BossDropSlotsMax;
 
 		public CategoryWeights DropCategoryWeights = new();
@@ -137,7 +137,7 @@ namespace UltimateRandomizer.Common.Configs
 		public bool RandomizeChests;
 
 		[Range(0, 5)]
-		[DefaultValue(0)]
+		[DefaultValue(1)]
 		public int ChestTierBonus;
 
 		[DefaultValue(true)]

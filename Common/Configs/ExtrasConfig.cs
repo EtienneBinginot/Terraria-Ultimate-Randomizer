@@ -17,7 +17,7 @@ namespace UltimateRandomizer.Common.Configs
 		public int KitWeapons;
 
 		[Range(0, 5)]
-		[DefaultValue(1)]
+		[DefaultValue(2)]
 		public int KitAccessories;
 
 		[Range(0, 10)]

@@ -34,12 +34,12 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0f, 100f)]
 		[Increment(0.5f)]
-		[DefaultValue(2f)]
+		[DefaultValue(6f)]
 		public float JackpotTierChance;
 
 		[Range(0f, 100f)]
 		[Increment(0.1f)]
-		[DefaultValue(0.5f)]
+		[DefaultValue(2f)]
 		public float RuntimeJackpotChance;
 
 		[DefaultValue(false)]

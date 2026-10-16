@@ -22,12 +22,12 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.5f)]
+		[DefaultValue(0.75f)]
 		public float BossHealthMin;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(3f)]
+		[DefaultValue(2f)]
 		public float BossHealthMax;
 
 		[DefaultValue(true)]
@@ -35,72 +35,72 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.5f)]
+		[DefaultValue(0.75f)]
 		public float BossDamageMin;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(2f)]
+		[DefaultValue(1.5f)]
 		public float BossDamageMax;
 
 		[Header("Enemies")]
-		[DefaultValue(false)]
+		[DefaultValue(true)]
 		public bool RandomizeEnemyStats;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.75f)]
+		[DefaultValue(0.8f)]
 		public float EnemyHealthMin;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.5f)]
+		[DefaultValue(1.3f)]
 		public float EnemyHealthMax;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.75f)]
+		[DefaultValue(0.8f)]
 		public float EnemyDamageMin;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.5f)]
+		[DefaultValue(1.3f)]
 		public float EnemyDamageMax;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(0.75f)]
+		[DefaultValue(0.8f)]
 		public float EnemyDefenseMin;
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.5f)]
+		[DefaultValue(1.3f)]
 		public float EnemyDefenseMax;
 
 		[Range(0.5f, 2f)]
 		[Increment(0.05f)]
-		[DefaultValue(1f)]
+		[DefaultValue(0.85f)]
 		public float EnemyScaleMin;
 
 		[Range(0.5f, 2f)]
 		[Increment(0.05f)]
-		[DefaultValue(1f)]
+		[DefaultValue(1.2f)]
 		public float EnemyScaleMax;
 
 		[Header("EnemySwap")]
 		[DefaultValue(true)]
 		public bool RandomizeEnemySpawns;
 
-		[DefaultValue(EnemySwapMode.PerType)]
+		[DefaultValue(EnemySwapMode.PerSpawn)]
 		[DrawTicks]
 		public EnemySwapMode EnemySwapMode;
 
 		[Range(0f, 100f)]
 		[Increment(5f)]
-		[DefaultValue(100f)]
+		[DefaultValue(75f)]
 		public float EnemySwapChance;
 
-		[DefaultValue(false)]
+		[DefaultValue(true)]
 		[ReloadRequired]
 		public bool SwapCritters;
 
