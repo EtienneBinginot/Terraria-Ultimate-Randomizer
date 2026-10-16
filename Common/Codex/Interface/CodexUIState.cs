@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Terraria;
+using Terraria.GameContent.Bestiary;
 using Terraria.GameContent.UI.Elements;
 using Terraria.GameInput;
 using Terraria.Localization;
@@ -52,8 +54,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 	}
 
 	// The codex (J): what was discovered in this world, as tabs of portraits and icons, and pages for each enemy and item.
-	// Client only; it reads the codex synced by CodexSystem. Pages are built when shown, and rebuilt when the codex
-	// changes (CodexSystem.Version) or the panel is resized, keeping the scroll position.
+	// Client only; it reads the codex synced by CodexSystem. Pages are built when shown, and rebuilt (keeping the scroll
+	// position) when something new is listed (CodexSystem.StructureVersion) or the panel is resized; when only counts
+	// changed, at most every few seconds. Never while a mouse button is held over the panel (the click would be lost).
 	public partial class CodexUIState : UIState
 	{
 		public static CodexUIState Instance { get; private set; }
@@ -72,8 +75,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private bool dirty;
 		private bool keepScroll;
 		private long builtVersion = -1;
+		private long builtStructure = -1;
+		private int ticksSinceBuild;
 		private float builtWidth;
 		private int checkTimer;
+		private const int CountRefreshTicks = 180;
 		private bool wasTyping;
 		public bool CloseRequested;
 
@@ -251,14 +257,29 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 		}
 
+		// Rows of the page being built, added to the list at once (UIList.Add recalculates the whole list each time)
+		private readonly List<UIElement> pending = new();
+
 		// Builds the current page now, catching nothing (the tests call it)
 		public void BuildNow()
 		{
 			dirty = false;
 			builtVersion = CodexSystem.Version;
+			builtStructure = CodexSystem.StructureVersion;
+			ticksSinceBuild = 0;
 			builtWidth = ListWidth;
 			list.Clear();
-			Build(Current);
+			pending.Clear();
+			iconUses.Clear();
+			try
+			{
+				Build(Current);
+				list.AddRange(pending);
+			}
+			finally
+			{
+				pending.Clear();
+			}
 			list.Recalculate();
 			UpdateChrome();
 		}
@@ -290,15 +311,39 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			forwardButton.Enabled = historyIndex < history.Count - 1;
 		}
 
-		// Tests: pages built off screen, then the history put back
-		public (List<HistoryEntry> history, int index, string search) SaveNavigation() => (new List<HistoryEntry>(history), historyIndex, search);
+		// Tests: pages built off screen, then the navigation (history, search, filters, craft tree) put back
+		public sealed class NavigationSnapshot
+		{
+			public List<HistoryEntry> History;
+			public int Index;
+			public string Search;
+			public int CategoryFilter, TierFilter;
+			public int TreeRoot;
+			public HashSet<string> Expanded;
+		}
 
-		public void RestoreNavigation((List<HistoryEntry> history, int index, string search) saved)
+		public NavigationSnapshot SaveNavigation() => new()
+		{
+			History = history.Select(h => new HistoryEntry { Page = h.Page, Scroll = h.Scroll }).ToList(),
+			Index = historyIndex,
+			Search = search,
+			CategoryFilter = categoryFilter,
+			TierFilter = tierFilter,
+			TreeRoot = treeRoot,
+			Expanded = new HashSet<string>(expanded)
+		};
+
+		public void RestoreNavigation(NavigationSnapshot saved)
 		{
 			history.Clear();
-			history.AddRange(saved.history);
-			historyIndex = saved.index;
-			search = saved.search;
+			history.AddRange(saved.History.Select(h => new HistoryEntry { Page = h.Page, Scroll = h.Scroll }));
+			historyIndex = saved.Index;
+			search = saved.Search;
+			categoryFilter = saved.CategoryFilter;
+			tierFilter = saved.TierFilter;
+			treeRoot = saved.TreeRoot;
+			expanded.Clear();
+			expanded.UnionWith(saved.Expanded);
 			MarkDirty(true);
 		}
 
@@ -306,10 +351,16 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		public override void Update(GameTime gameTime)
 		{
+			ticksSinceBuild++;
 			if (++checkTimer >= 20)
 			{
 				checkTimer = 0;
-				if (builtVersion != CodexSystem.Version || Math.Abs(builtWidth - ListWidth) > 1) MarkDirty(true);
+				bool pressed = (Main.mouseLeft || Main.mouseRight) && panel.ContainsPoint(Main.MouseScreen);
+				if (!pressed)
+				{
+					if (builtStructure != CodexSystem.StructureVersion || Math.Abs(builtWidth - ListWidth) > 1) MarkDirty(true);
+					else if (builtVersion != CodexSystem.Version && ticksSinceBuild >= CountRefreshTicks) MarkDirty(true);
+				}
 			}
 			if (dirty) Rebuild();
 			base.Update(gameTime);
@@ -320,7 +371,13 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 			// Escape closes the codex, unless it just stopped the search input
 			bool escape = Main.keyState.IsKeyDown(Keys.Escape) && !Main.oldKeyState.IsKeyDown(Keys.Escape);
-			if (escape && !IsTyping && !wasTyping) CloseRequested = true;
+			if (escape && !IsTyping && !wasTyping)
+			{
+				CloseRequested = true;
+				// Escape is the default inventory key, and Player.Update (later in this tick than UpdateUI) would toggle
+				// the inventory: it only toggles while releaseInventory is set, which it clears until the key is released
+				Main.LocalPlayer.releaseInventory = false;
+			}
 			wasTyping = IsTyping;
 		}
 
@@ -338,22 +395,61 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			CodexHover.Draw();
 		}
 
-		// ---- Small caches, valid for one codex version ----
+		// ---- Small caches, valid until something new is listed (they hold no counts) ----
 
 		private long cacheVersion = -1;
 		private readonly Dictionary<string, object> cache = new();
 
 		private T Cached<T>(string key, Func<T> make) where T : class
 		{
-			if (cacheVersion != CodexSystem.Version)
+			if (cacheVersion != CodexSystem.StructureVersion)
 			{
 				cache.Clear();
-				cacheVersion = CodexSystem.Version;
+				cacheVersion = CodexSystem.StructureVersion;
 			}
 			if (cache.TryGetValue(key, out object value) && value is T typed) return typed;
 			T made = make();
 			cache[key] = made;
 			return made;
+		}
+
+		// Bestiary icon clones (CreateClone makes a new NPC), kept across rebuilds so that animations go on. A page
+		// showing the same enemy several times gets one clone per portrait (each one updates its own).
+		private readonly Dictionary<(int netId, bool big), List<IEntryIcon>> icons = new();
+		private readonly Dictionary<(int netId, bool big), int> iconUses = new();
+
+		public IEntryIcon BestiaryIcon(int netId, bool big, BestiaryEntry entry)
+		{
+			(int, bool) key = (netId, big);
+			if (!icons.TryGetValue(key, out List<IEntryIcon> clones)) icons[key] = clones = new List<IEntryIcon>();
+			iconUses.TryGetValue(key, out int use);
+			iconUses[key] = use + 1;
+			if (use < clones.Count) return clones[use];
+			IEntryIcon clone;
+			try
+			{
+				clone = entry?.Icon?.CreateClone();
+			}
+			catch (Exception)
+			{
+				clone = null;
+			}
+			clones.Add(clone);
+			return clone;
+		}
+
+		// An icon that failed to draw is not handed out again
+		public void ForgetIcon(int netId, bool big, IEntryIcon icon)
+		{
+			if (!icons.TryGetValue((netId, big), out List<IEntryIcon> clones)) return;
+			int i = clones.IndexOf(icon);
+			if (i >= 0) clones[i] = null;
+		}
+
+		public void ClearIcons()
+		{
+			icons.Clear();
+			iconUses.Clear();
 		}
 
 		private bool Matches(string name) => search.Length == 0 || (name != null && name.Contains(search, StringComparison.OrdinalIgnoreCase));

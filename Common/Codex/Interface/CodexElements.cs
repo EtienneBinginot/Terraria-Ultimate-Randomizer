@@ -131,8 +131,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		}
 	}
 
-	// An animated NPC: the bestiary icon of its entry (a clone, so each portrait animates on its own), else its
-	// texture frames. The NPC is drawn by a child so that the portrait clips it.
+	// An animated NPC: the bestiary icon of its entry (a clone, so each portrait animates on its own, kept by the codex
+	// across rebuilds), else its texture frames. The NPC is drawn by a child so that the portrait clips it.
 	public class CodexNpcPortrait : UIElement
 	{
 		public readonly int NetId;
@@ -214,13 +214,36 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				Width.Set(0, 1f);
 				Height.Set(0, 1f);
 				IgnoresMouseInteraction = true;
+				icon = CodexUIState.Instance?.BestiaryIcon(netId, big, entry);
+			}
+
+			private BestiaryUICollectionInfo Info => new() { OwnerEntry = entry, UnlockState = BestiaryEntryUnlockState.CanShowDropsWithDropRates_4 };
+
+			// Hovered: the icon animates (the bestiary only animates the hovered entry of its grid)
+			private EntryIconDrawSettings Settings(Rectangle box) => new() { iconbox = box, IsPortrait = big, IsHovered = true };
+
+			private void Fail(Exception e)
+			{
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Codex: bestiary icon of {netId} failed, drawing its texture instead: {e.Message}");
+				CodexUIState.Instance?.ForgetIcon(netId, big, icon);
+				icon = null;
+			}
+
+			// Animated once per game tick (not per frame drawn), only while in the visible part of the list
+			public override void Update(GameTime gameTime)
+			{
+				base.Update(gameTime);
+				if (icon == null) return;
+				Rectangle box = GetDimensions().ToRectangle();
+				UIElement view = CodexUIState.Instance?.Content;
+				if (view != null && !view.GetDimensions().ToRectangle().Intersects(box)) return;
 				try
 				{
-					icon = entry?.Icon?.CreateClone();
+					icon.Update(Info, box, Settings(box));
 				}
-				catch (Exception)
+				catch (Exception e)
 				{
-					icon = null;
+					Fail(e);
 				}
 			}
 
@@ -231,17 +254,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				{
 					try
 					{
-						BestiaryUICollectionInfo info = new() { OwnerEntry = entry, UnlockState = BestiaryEntryUnlockState.CanShowDropsWithDropRates_4 };
-						// Hovered: the icon animates (the bestiary only animates the hovered entry of its grid)
-						EntryIconDrawSettings settings = new() { iconbox = box, IsPortrait = big, IsHovered = true };
-						icon.Update(info, box, settings);
-						icon.Draw(info, spriteBatch, settings);
+						icon.Draw(Info, spriteBatch, Settings(box));
 						return;
 					}
 					catch (Exception e)
 					{
-						ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Codex: bestiary icon of {netId} failed, drawing its texture instead: {e.Message}");
-						icon = null;
+						Fail(e);
 					}
 				}
 				DrawTexture(spriteBatch, box);

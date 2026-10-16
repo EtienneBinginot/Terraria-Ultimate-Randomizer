@@ -53,6 +53,7 @@ namespace UltimateRandomizer.Common.Journal
 		public override void OnWorldUnload()
 		{
 			if (IsOpen) Toggle();
+			state?.ClearIcons();
 		}
 
 		public override void UpdateUI(GameTime gameTime)

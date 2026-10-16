@@ -28,7 +28,10 @@ namespace UltimateRandomizer.Common.Codex
 				data = value ?? new CodexData();
 				index = null;
 				version++;
+				structureVersion++;
 				lastDataVersion = data.Version;
+				lastKeyVersion = data.KeyVersion;
+				lastRecipeVersion = data.RecipeVersion;
 			}
 		}
 
@@ -37,6 +40,12 @@ namespace UltimateRandomizer.Common.Codex
 		private static long version;
 		private static int lastDataVersion;
 		private const int VersionTicks = 15;
+
+		// Moves only when something new is listed (new keys, recipes, codex replaced, recipes or tier changed), not for
+		// counts: the interface rebuilds at once for these and refreshes counts more slowly
+		public static long StructureVersion => structureVersion;
+		private static long structureVersion;
+		private static int lastKeyVersion, lastRecipeVersion;
 
 		// Server: accepted changes waiting for the next broadcast. Client: discoveries waiting to be sent.
 		private static readonly List<CodexEntry> outbox = new();
@@ -472,6 +481,12 @@ namespace UltimateRandomizer.Common.Codex
 			{
 				lastDataVersion = data.Version;
 				version++;
+				if (data.KeyVersion != lastKeyVersion || data.RecipeVersion != lastRecipeVersion)
+				{
+					lastKeyVersion = data.KeyVersion;
+					lastRecipeVersion = data.RecipeVersion;
+					structureVersion++;
+				}
 			}
 			if (!SeedSystem.WorldReady) return;
 			if (Main.netMode != NetmodeID.MultiplayerClient) UpdateSightings();
@@ -717,6 +732,7 @@ namespace UltimateRandomizer.Common.Codex
 		private static void InvalidateRecipes()
 		{
 			if (index != null) index.RecipesStale = true;
+			structureVersion++;
 		}
 
 		// Tests: forget the caches

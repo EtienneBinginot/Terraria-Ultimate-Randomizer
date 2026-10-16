@@ -48,7 +48,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		// ---- Helpers ----
 
-		private void Add(UIElement element) => list.Add(element);
+		private void Add(UIElement element) => pending.Add(element);
 
 		private void Text(string text, Color? color = null) => Add(new CodexRow(30).WithLabel(text, 0.9f, color ?? Color.White));
 
