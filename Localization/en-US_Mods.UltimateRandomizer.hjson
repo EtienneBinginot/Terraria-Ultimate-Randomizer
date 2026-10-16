@@ -104,6 +104,9 @@ Tests: {
 	ExtractinatorRules: The Extractinator keeps coins and swaps ores for ores
 	AnglerRewardsValid: Angler rewards are replaced by valid items, coins kept
 	TreeCritterSwap: Critters falling from trees are swapped too
+	PacingExpected: 15 to 25 pieces of random equipment per early hour (default settings; the value is written to client.log)
+	PacingSimulation: The pacing simulation is stable and regular
+	PacingVariety: At least 10 different pieces of equipment per early hour
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
 	RecipesSafe: Recipes: no self-ingredient, value guard respected

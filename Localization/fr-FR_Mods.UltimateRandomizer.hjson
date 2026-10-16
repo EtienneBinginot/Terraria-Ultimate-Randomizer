@@ -104,6 +104,9 @@ Tests: {
 	ExtractinatorRules: L'Extractinator garde les pièces et échange les minerais contre des minerais
 	AnglerRewardsValid: Les récompenses du Pêcheur sont des objets valides, pièces conservées
 	TreeCritterSwap: Les critters qui tombent des arbres sont aussi remplacés
+	PacingExpected: 15 à 25 pièces d'équipement aléatoires par heure en début de partie (réglages par défaut ; valeur écrite dans client.log)
+	PacingSimulation: La simulation du rythme est stable et régulière
+	PacingVariety: Au moins 10 pièces d'équipement différentes par heure en début de partie
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté

@@ -83,7 +83,7 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.1f, 10f)]
 		[Increment(0.1f)]
-		[DefaultValue(2.5f)]
+		[DefaultValue(1.5f)]
 		public float DropRateMultiplier;
 
 		[Range(1f, 100f)]
