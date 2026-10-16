@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -43,6 +44,7 @@ namespace UltimateRandomizer.Common.Features
 
 		public override void PostSetupRecipes()
 		{
+			if (CreateQuickLookups == null) Mod.Logger.Error("Recipe.CreateRequiredItemQuickLookups not found: randomized ingredients will not show correctly in the crafting menu.");
 			int count = Recipe.numRecipes;
 			originalTypes = new int[count];
 			originalStacks = new int[count];
@@ -251,8 +253,14 @@ namespace UltimateRandomizer.Common.Features
 			recipe.requiredTile.AddRange(tiles);
 		}
 
+		// tML caches each recipe's ingredients (Recipe.requiredItemQuickLookup) for the crafting menu; it is only built at
+		// setup. Without a rebuild the menu checks the old ingredients while crafting consumes the new ones.
+		private static readonly MethodInfo CreateQuickLookups = typeof(Recipe).GetMethod("CreateRequiredItemQuickLookups", BindingFlags.NonPublic | BindingFlags.Static);
+
 		private static void RefreshCraftingMenu()
 		{
+			CreateQuickLookups?.Invoke(null, null);
+			Recipe.UpdateWhichItemsAreMaterials();
 			if (!Main.dedServ && !Main.gameMenu) Recipe.FindRecipes();
 		}
 	}

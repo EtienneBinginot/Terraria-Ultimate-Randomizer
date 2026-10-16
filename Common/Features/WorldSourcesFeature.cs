@@ -54,7 +54,8 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (!LootConfig.Instance.RandomizeExtractinator || !SeedSystem.WorldReady || !ItemPool.Ready || !ItemPool.IsRandomizable(resultType)) return;
 			int replacement = WorldSources.ExtractinatorReplacement(resultType, new Random(Main.rand.Next()));
-			resultStack = StackRules.Scaled(resultType, resultStack, replacement);
+			// Ores are swapped 1 for 1, like when mining
+			if (!OreMap.IsOre(resultType)) resultStack = StackRules.Scaled(resultType, resultStack, replacement);
 			resultType = replacement;
 		}
 	}
