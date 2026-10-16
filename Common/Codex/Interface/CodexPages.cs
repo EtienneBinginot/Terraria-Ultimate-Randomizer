@@ -54,20 +54,24 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		private void Section(string text) => Add(new CodexSection(text));
 
-		private void Grid(IEnumerable<UIElement> cells, float cellWidth, float cellHeight, float indent = 0)
+		private void Grid<T>(IReadOnlyList<T> source, Func<T, UIElement> make, float cellWidth, float cellHeight, float indent = 0)
 		{
-			foreach (UIElement row in CodexGrid.Rows(cells, cellWidth, cellHeight, ListWidth, indent)) Add(row);
+			pending.AddRange(CodexGrid.Rows(source, make, cellWidth, cellHeight, ListWidth, indent));
 		}
 
-		private void Empty(bool nothingAtAll) => Text(Language.GetTextValue(nothingAtAll ? "Mods.UltimateRandomizer.Codex.Empty" : "Mods.UltimateRandomizer.Codex.NoMatch"), CodexDraw.Muted);
+		// The search and filters applied to a cached list, cached too (a tab is rebuilt every few seconds while counts change)
+		private List<int> Filtered(string key, List<int> all, Func<int, bool> keep) =>
+			Cached($"{key}|{search}|{categoryFilter}|{tierFilter}", () => all.Where(keep).ToList());
 
-		private static string Tier(int tier) => Language.GetTextValue("Mods.UltimateRandomizer.Codex.Tier", tier);
+		private void Empty(bool nothingAtAll) => Text(nothingAtAll ? CodexText.Get("Empty") : CodexText.Get("NoMatch"), CodexDraw.Muted);
+
+		private static string Tier(int tier) => CodexText.Get("Tier", tier);
 
 		private static int NpcTier(int netId) => ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? NpcTiers.BaseTier(sample.type) : 0;
 
-		private static string SourceName(CodexSource kind) => Language.GetTextValue("Mods.UltimateRandomizer.Codex.Source." + kind);
+		private static string SourceName(CodexSource kind) => CodexText.Of("Source", kind);
 
-		private static string CategoryName(int category) => Language.GetTextValue("Mods.UltimateRandomizer.Codex.Category." + (category < 0 ? "All" : ((ItemCategory)category).ToString()));
+		private static string CategoryName(int category) => category < 0 ? CodexText.Get("Category.All") : CodexText.Of("Category", (ItemCategory)category);
 
 		private List<int> SortedItems(string key, Func<IEnumerable<int>> items) => Cached(key, () => items().Distinct().Where(t => t > 0 && t < ItemLoader.ItemCount)
 			.OrderBy(CodexDraw.ItemName, StringComparer.CurrentCultureIgnoreCase).ToList());
@@ -77,14 +81,14 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private void BuildEnemies()
 		{
 			List<int> killed = Cached("killed", () => CodexSystem.KilledNpcs().Distinct().OrderBy(CodexDraw.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList());
-			List<int> shown = killed.Where(id => Matches(CodexDraw.NpcName(id))).ToList();
-			Text(Language.GetTextValue("Mods.UltimateRandomizer.Codex.EnemiesCount", killed.Count), CodexDraw.Gold);
+			List<int> shown = Filtered("killed", killed, id => Matches(CodexDraw.NpcName(id)));
+			Text(CodexText.Get("EnemiesCount", killed.Count), CodexDraw.Gold);
 			if (shown.Count == 0)
 			{
 				Empty(killed.Count == 0);
 				return;
 			}
-			Grid(shown.Select(id => (UIElement)new CodexNpcPortrait(id, Portrait, Portrait, false, CodexSystem.KillCount(id))), Portrait, Portrait);
+			Grid(shown, id => new CodexNpcPortrait(id, Portrait, Portrait, false, CodexSystem.KillCount(id)), Portrait, Portrait);
 		}
 
 		private void BuildNpc(int netId)
@@ -104,9 +108,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				top += 30 * scale + 4;
 			}
 			Line(name, 1.3f, CodexDraw.Gold);
-			Line(Language.GetTextValue("Mods.UltimateRandomizer.Codex.Kills", CodexSystem.KillCount(netId)), 0.9f, Color.White);
+			Line(CodexText.Get("Kills", CodexSystem.KillCount(netId)), 0.9f, Color.White);
 			Line(Tier(NpcTier(netId)), 0.9f, Color.White);
-			if (ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample)) Line(Language.GetTextValue("Mods.UltimateRandomizer.Codex.Life", sample.lifeMax), 0.9f, Color.White);
+			if (ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample)) Line(CodexText.Get("Life", sample.lifeMax), 0.9f, Color.White);
 			header.Add(info);
 			Add(header);
 
@@ -114,7 +118,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (biomes.Count > 0)
 			{
 				CodexRow seen = new(40);
-				seen.Add(new CodexLabel(Language.GetTextValue("Mods.UltimateRandomizer.Codex.SeenIn"), 0.85f, CodexDraw.Muted), 8);
+				seen.Add(new CodexLabel(CodexText.Get("SeenIn"), 0.85f, CodexDraw.Muted), 8);
 				foreach (string biome in biomes.OrderBy(BiomeSlots.BiomeDisplayName))
 				{
 					seen.Add(new CodexBiomeIcon(biome), 2);
@@ -124,18 +128,18 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 
 			List<(int item, int count)> drops = CodexSystem.DropsOf(netId);
-			Section(Language.GetTextValue("Mods.UltimateRandomizer.Codex.DropsFound"));
-			if (drops.Count == 0) Text(Language.GetTextValue("Mods.UltimateRandomizer.Codex.NoDrops"), CodexDraw.Muted);
-			else Grid(drops.Select(d => (UIElement)new CodexItemIcon(d.item, d.count, Icon)), Icon, Icon);
+			Section(CodexText.Get("DropsFound"));
+			if (drops.Count == 0) Text(CodexText.Get("NoDrops"), CodexDraw.Muted);
+			else Grid(drops, d => new CodexItemIcon(d.item, d.count, Icon), Icon, Icon);
 
 			// Only how many: the planned items stay secret until they drop
 			HashSet<int> found = drops.Select(d => d.item).ToHashSet();
 			int remaining = Cached("plan" + netId, () => new List<int> { RandomNpcDropRule.Plan(netId, Main.expertMode).Select(p => p.Item).Where(i => i > ItemID.None).Distinct().Count(i => !found.Contains(i)) })[0];
 			if (remaining > 0)
 			{
-				Section(Language.GetTextValue("Mods.UltimateRandomizer.Codex.ToFind", remaining));
-				string hover = Language.GetTextValue("Mods.UltimateRandomizer.Codex.UnknownDrop");
-				Grid(Enumerable.Range(0, Math.Min(remaining, 60)).Select(_ => (UIElement)new CodexItemIcon(0, 0, Icon) { HoverText = hover }), Icon, Icon);
+				Section(CodexText.Get("ToFind", remaining));
+				string hover = CodexText.Get("UnknownDrop");
+				Grid(Enumerable.Range(0, Math.Min(remaining, 60)).ToList(), _ => new CodexItemIcon(0, 0, Icon) { HoverText = hover }, Icon, Icon);
 			}
 		}
 
@@ -145,19 +149,19 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		{
 			List<int> seen = SortedItems("seen", CodexSystem.ItemsSeen);
 			CodexRow filters = new(40);
-			filters.Add(FilterButton(Language.GetTextValue("Mods.UltimateRandomizer.Codex.FilterCategory", CategoryName(categoryFilter)), 300, step =>
+			filters.Add(FilterButton(CodexText.Get("FilterCategory", CategoryName(categoryFilter)), 300, step =>
 				categoryFilter = Cycle(categoryFilter, step, ItemCategories.Count)));
-			filters.Add(FilterButton(Language.GetTextValue("Mods.UltimateRandomizer.Codex.FilterTier", tierFilter < 0 ? Language.GetTextValue("Mods.UltimateRandomizer.Codex.Category.All") : tierFilter.ToString()), 180, step =>
+			filters.Add(FilterButton(CodexText.Get("FilterTier", tierFilter < 0 ? CodexText.Get("Category.All") : tierFilter.ToString()), 180, step =>
 				tierFilter = Cycle(tierFilter, step, Tiers.Count)));
-			List<int> shown = seen.Where(t => Matches(CodexDraw.ItemName(t)) && PassesFilters(t)).ToList();
-			filters.Add(new CodexLabel(Language.GetTextValue("Mods.UltimateRandomizer.Codex.ItemsCount", shown.Count, seen.Count), 0.85f, CodexDraw.Gold));
+			List<int> shown = Filtered("seen", seen, t => Matches(CodexDraw.ItemName(t)) && PassesFilters(t));
+			filters.Add(new CodexLabel(CodexText.Get("ItemsCount", shown.Count, seen.Count), 0.85f, CodexDraw.Gold));
 			Add(filters);
 			if (shown.Count == 0)
 			{
 				Empty(seen.Count == 0);
 				return;
 			}
-			Grid(shown.Select(t => (UIElement)new CodexItemIcon(t, 0, Icon)), Icon, Icon);
+			Grid(shown, t => new CodexItemIcon(t, 0, Icon), Icon, Icon);
 		}
 
 		private bool PassesFilters(int type)
@@ -208,35 +212,35 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			info.Append(sub);
 			header.Add(info, 10);
 			List<int> giving = CodexSystem.RecipesGiving(type);
-			if (giving.Count > 0) header.Add(new CodexButton(Language.GetTextValue("Mods.UltimateRandomizer.Codex.OpenTree"), 170, () => Navigate(CodexPage.TreePage(type))));
+			if (giving.Count > 0) header.Add(new CodexButton(CodexText.Get("OpenTree"), 170, () => Navigate(CodexPage.TreePage(type))));
 			Add(header);
 
 			bool any = false;
 			if (giving.Count > 0)
 			{
 				any = true;
-				Section(Language.GetTextValue("Mods.UltimateRandomizer.Codex.CraftedWith"));
+				Section(CodexText.Get("CraftedWith"));
 				Recipes(giving);
 			}
 			List<int> using_ = CodexSystem.RecipesUsing(type);
 			if (using_.Count > 0)
 			{
 				any = true;
-				Section(Language.GetTextValue("Mods.UltimateRandomizer.Codex.UsedIn"));
+				Section(CodexText.Get("UsedIn"));
 				Recipes(using_);
 			}
 			List<(int npc, int count)> droppedBy = CodexSystem.NpcsDropping(type);
 			if (droppedBy.Count > 0)
 			{
 				any = true;
-				Section(Language.GetTextValue("Mods.UltimateRandomizer.Codex.DroppedBy"));
-				Grid(droppedBy.OrderByDescending(d => d.count).Select(d => (UIElement)new CodexNpcPortrait(d.npc, 64, 64, false, d.count)), 64, 64);
+				Section(CodexText.Get("DroppedBy"));
+				Grid(droppedBy.OrderByDescending(d => d.count).ToList(), d => new CodexNpcPortrait(d.npc, 64, 64, false, d.count), 64, 64);
 			}
 			List<(CodexSource kind, int from, int count)> sources = CodexSystem.SourcesOf(type);
 			if (sources.Count > 0)
 			{
 				any = true;
-				Section(Language.GetTextValue("Mods.UltimateRandomizer.Codex.OtherSources"));
+				Section(CodexText.Get("OtherSources"));
 				foreach ((CodexSource kind, int from, int count) in sources.OrderBy(s => s.kind).ThenByDescending(s => s.count))
 				{
 					CodexRow row = new(40) { Highlight = true };
@@ -253,16 +257,16 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (CodexSystem.HasOpenedBag(type))
 			{
 				any = true;
-				Section(Language.GetTextValue("Mods.UltimateRandomizer.Codex.BagContents"));
+				Section(CodexText.Get("BagContents"));
 				BagContents(type);
 			}
-			if (!any) Text(Language.GetTextValue("Mods.UltimateRandomizer.Codex.NoSource"), CodexDraw.Muted);
+			if (!any) Text(CodexText.Get("NoSource"), CodexDraw.Muted);
 		}
 
 		private void Recipes(List<int> recipes)
 		{
 			foreach (int recipe in recipes.Take(MaxRecipesShown)) Add(new CodexRecipeRow(recipe));
-			if (recipes.Count > MaxRecipesShown) Text(Language.GetTextValue("Mods.UltimateRandomizer.Codex.More", recipes.Count - MaxRecipesShown), CodexDraw.Muted);
+			if (recipes.Count > MaxRecipesShown) Text(CodexText.Get("More", recipes.Count - MaxRecipesShown), CodexDraw.Muted);
 		}
 
 		// ---- Crafts tree ----
@@ -290,14 +294,14 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				}
 				return results;
 			});
-			Text(Language.GetTextValue("Mods.UltimateRandomizer.Codex.PickItem"), CodexDraw.Gold);
-			List<int> shown = craftable.Where(t => Matches(CodexDraw.ItemName(t))).ToList();
+			Text(CodexText.Get("PickItem"), CodexDraw.Gold);
+			List<int> shown = Filtered("craftable", craftable, t => Matches(CodexDraw.ItemName(t)));
 			if (shown.Count == 0)
 			{
 				Empty(craftable.Count == 0);
 				return;
 			}
-			Grid(shown.Select(t => (UIElement)new CodexItemIcon(t, 0, Icon, () => Navigate(CodexPage.TreePage(t)))), Icon, Icon);
+			Grid(shown, t => new CodexItemIcon(t, 0, Icon, () => Navigate(CodexPage.TreePage(t))), Icon, Icon);
 		}
 
 		private void BuildTree(int root)
@@ -309,12 +313,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 			if (treeRoot != root) ResetTree(root);
 			CodexRow header = new(40);
-			header.Add(new CodexLabel(Language.GetTextValue("Mods.UltimateRandomizer.Codex.TreeOf", CodexDraw.ItemName(root)), 1f, CodexDraw.Gold), 16);
-			header.Add(new CodexButton(Language.GetTextValue("Mods.UltimateRandomizer.Codex.ItemPage"), 150, () => Navigate(CodexPage.ItemPage(root))));
+			header.Add(new CodexLabel(CodexText.Get("TreeOf", CodexDraw.ItemName(root)), 1f, CodexDraw.Gold), 16);
+			header.Add(new CodexButton(CodexText.Get("ItemPage"), 150, () => Navigate(CodexPage.ItemPage(root))));
 			Add(header);
 			int rows = 0;
 			TreeNode(root, 1, root.ToString(), new HashSet<int>(), 1, ref rows);
-			if (rows >= MaxTreeRows) Text(Language.GetTextValue("Mods.UltimateRandomizer.Codex.TreeTooBig"), CodexDraw.Muted);
+			if (rows >= MaxTreeRows) Text(CodexText.Get("TreeTooBig"), CodexDraw.Muted);
 		}
 
 		// One item of the tree; expanded, its discovered recipes and their ingredients below it. An item already
@@ -342,9 +346,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 			row.Add(new CodexItemIcon(item, amount, 38), 8);
 			row.Add(new CodexLabel(CodexDraw.ItemName(item), 0.9f), 12);
-			if (cycle) row.Add(new CodexLabel(Language.GetTextValue("Mods.UltimateRandomizer.Codex.Cycle"), 0.8f, CodexDraw.Muted));
+			if (cycle) row.Add(new CodexLabel(CodexText.Get("Cycle"), 0.8f, CodexDraw.Muted));
 			else if (recipes.Count == 0) LeafSources(row, item);
-			else if (!canExpand) row.Add(new CodexLabel(Language.GetTextValue("Mods.UltimateRandomizer.Codex.TooDeep"), 0.8f, CodexDraw.Muted));
+			else if (!canExpand) row.Add(new CodexLabel(CodexText.Get("TooDeep"), 0.8f, CodexDraw.Muted));
 			Add(row);
 			if (!open) return;
 
@@ -370,7 +374,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			List<(CodexSource kind, int from, int count)> sources = CodexSystem.SourcesOf(item);
 			if (droppedBy.Count == 0 && sources.Count == 0)
 			{
-				row.Add(new CodexLabel(Language.GetTextValue("Mods.UltimateRandomizer.Codex.NoSource"), 0.8f, CodexDraw.Muted));
+				row.Add(new CodexLabel(CodexText.Get("NoSource"), 0.8f, CodexDraw.Muted));
 				return;
 			}
 			foreach ((int npc, int count) in droppedBy.OrderByDescending(d => d.count).Take(4)) row.Add(new CodexNpcPortrait(npc, 38, 38, false, count), 4);
@@ -386,7 +390,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private void BuildBags()
 		{
 			List<int> bags = SortedItems("bags", CodexSystem.OpenedBags);
-			List<int> shown = bags.Where(b => Matches(CodexDraw.ItemName(b))).ToList();
+			List<int> shown = Filtered("bags", bags, b => Matches(CodexDraw.ItemName(b)));
 			if (shown.Count == 0)
 			{
 				Empty(bags.Count == 0);
@@ -406,8 +410,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private void BagContents(int bag)
 		{
 			List<(int item, int count)> contents = CodexSystem.BagContents(bag);
-			if (contents.Count == 0) Text(Language.GetTextValue("Mods.UltimateRandomizer.Codex.NothingReceived"), CodexDraw.Muted);
-			else Grid(contents.Select(c => (UIElement)new CodexItemIcon(c.item, c.count, Icon)), Icon, Icon, 20);
+			if (contents.Count == 0) Text(CodexText.Get("NothingReceived"), CodexDraw.Muted);
+			else Grid(contents, c => new CodexItemIcon(c.item, c.count, Icon), Icon, Icon, 20);
 		}
 
 		// ---- Biomes ----
@@ -419,17 +423,17 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			foreach (string biome in biomes)
 			{
 				string biomeName = BiomeSlots.BiomeDisplayName(biome);
-				List<int> npcs = CodexSystem.NpcsSeenIn(biome).Distinct().OrderBy(CodexDraw.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList();
+				List<int> npcs = Cached("biome|" + biome, () => CodexSystem.NpcsSeenIn(biome).Distinct().OrderBy(CodexDraw.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList());
 				// The search matches the biome, or else the enemies seen there
-				if (!Matches(biomeName)) npcs = npcs.Where(id => Matches(CodexDraw.NpcName(id))).ToList();
+				if (!Matches(biomeName)) npcs = Filtered("biome|" + biome, npcs, id => Matches(CodexDraw.NpcName(id)));
 				if (npcs.Count == 0) continue;
 				any = true;
 				CodexRow header = new(44);
 				header.Add(new CodexBiomeIcon(biome, 38), 10);
 				header.Add(new CodexLabel(biomeName, 1f, CodexDraw.Gold), 12);
-				header.Add(new CodexLabel(Language.GetTextValue("Mods.UltimateRandomizer.Codex.SeenCount", npcs.Count), 0.8f, CodexDraw.Muted));
+				header.Add(new CodexLabel(CodexText.Get("SeenCount", npcs.Count), 0.8f, CodexDraw.Muted));
 				Add(header);
-				Grid(npcs.Select(id => (UIElement)new CodexNpcPortrait(id, 64, 64, false, CodexSystem.KillCount(id))), 64, 64, 20);
+				Grid(npcs, id => new CodexNpcPortrait(id, 64, 64, false, CodexSystem.KillCount(id)), 64, 64, 20);
 			}
 			if (!any) Empty(biomes.Count == 0);
 		}

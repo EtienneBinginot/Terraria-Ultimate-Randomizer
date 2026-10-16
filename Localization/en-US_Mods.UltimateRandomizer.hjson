@@ -109,6 +109,8 @@ Tests: {
 	CodexSyncRoundTrip: Codex discoveries survive the network format (delta and full sync)
 	CodexUiBuilds: "Codex interface: every tab, item, enemy and craft tree page builds"
 	CodexHidesUndiscovered: "Codex interface: undiscovered recipes, enemies, items and bags stay hidden"
+	CodexManyItemsBounded: "Codex interface: 3000 items and 300 enemies only build the visible rows"
+	CodexTextsResolved: "Codex interface: no raw text key is shown"
 	BiomeSlotsReachable: By biome: every spawn place of an enemy with several places can be reached
 	NegativeNetIdSwap: Swapping into a slime colour (Pinky) works and keeps the Blue Slime type
 	BiomeRedistributionComplete: By biome: every natural enemy keeps its number of spawn places, inside its class and never in a lower tier (20 seeds)

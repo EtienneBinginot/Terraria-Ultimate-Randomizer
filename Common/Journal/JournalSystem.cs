@@ -15,7 +15,20 @@ namespace UltimateRandomizer.Common.Journal
 		private static UserInterface userInterface;
 		private static CodexUIState state;
 
-		public static CodexUIState State => state;
+		// Made when first needed, not in Load: the mod's texts are only loaded after Load (LanguageManager.ReloadLanguage
+		// at the SetupContent stage), so texts read in OnInitialize then were the raw keys, for good
+		public static CodexUIState State
+		{
+			get
+			{
+				if (state == null && userInterface != null)
+				{
+					state = new CodexUIState();
+					state.Activate();
+				}
+				return state;
+			}
+		}
 
 		public static bool IsOpen => userInterface?.CurrentState != null;
 
@@ -24,8 +37,6 @@ namespace UltimateRandomizer.Common.Journal
 			ToggleKeybind = KeybindLoader.RegisterKeybind(Mod, "Journal", "J");
 			if (Main.dedServ) return;
 			userInterface = new UserInterface();
-			state = new CodexUIState();
-			state.Activate();
 		}
 
 		public override void Unload()
@@ -40,7 +51,7 @@ namespace UltimateRandomizer.Common.Journal
 			if (userInterface == null) return;
 			if (userInterface.CurrentState == null)
 			{
-				state.Refresh();
+				State.Refresh();
 				userInterface.SetState(state);
 			}
 			else
@@ -61,7 +72,7 @@ namespace UltimateRandomizer.Common.Journal
 			if (userInterface?.CurrentState == null) return;
 			userInterface.Update(gameTime);
 			// Closed after the update, not from inside an element's handler
-			if (state.CloseRequested) Toggle();
+			if (state != null && state.CloseRequested) Toggle();
 		}
 
 		public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)

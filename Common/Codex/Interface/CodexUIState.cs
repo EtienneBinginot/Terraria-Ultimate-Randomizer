@@ -84,7 +84,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		public bool CloseRequested;
 
 		private UIPanel panel;
-		private UIList list;
+		private CodexList list;
 		private UIScrollbar scrollbar;
 		private UIPanel searchPanel;
 		private UISearchBar searchBar;
@@ -112,7 +112,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			panel.BackgroundColor = new Color(33, 43, 79) * 0.96f;
 			Append(panel);
 
-			UIText title = new(Language.GetText("Mods.UltimateRandomizer.Codex.Title"), 0.75f, true);
+			UIText title = new(CodexText.Live("Title"), 0.75f, true);
 			title.Top.Set(2, 0);
 			panel.Append(title);
 
@@ -130,7 +130,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			searchPanel.SetPadding(0);
 			searchPanel.BackgroundColor = new Color(25, 32, 66);
 			panel.Append(searchPanel);
-			searchBar = new UISearchBar(Language.GetText("Mods.UltimateRandomizer.Codex.Search"), 0.8f);
+			searchBar = new UISearchBar(CodexText.Live("Search"), 0.8f);
 			searchBar.Width.Set(-12, 1f);
 			searchBar.Height.Set(0, 1f);
 			searchBar.Left.Set(8, 0);
@@ -150,7 +150,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			for (int i = 0; i < Tabs.Length; i++)
 			{
 				CodexPageKind tab = Tabs[i];
-				CodexButton button = new(Language.GetTextValue($"Mods.UltimateRandomizer.Codex.Tab{tab}"), 0, () => OpenTab(tab));
+				CodexButton button = new(CodexText.Live("Tab" + tab), 0, () => OpenTab(tab));
 				button.Width.Set(-6, 0.2f);
 				button.Left.Set(0, i * 0.2f);
 				button.Top.Set(40, 0);
@@ -159,13 +159,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				tabButtons[i] = button;
 			}
 
-			list = new UIList();
+			list = new CodexList();
 			list.Top.Set(84, 0);
 			list.Width.Set(-26, 1f);
 			list.Height.Set(-84, 1f);
 			list.ListPadding = 6;
-			// Rows stay in the order they were added
-			list.ManualSortMethod = _ => { };
 			panel.Append(list);
 
 			scrollbar = new UIScrollbar();
@@ -297,7 +295,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			{
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Error($"Codex: page {Current.Kind} {Current.Id} failed", e);
 				list.Clear();
-				list.Add(new JournalRow($"[c/FF6060:{Language.GetTextValue("Mods.UltimateRandomizer.Codex.Error")}]"));
+				list.Add(new JournalRow($"[c/FF6060:{CodexText.Get("Error")}]"));
 				list.Recalculate();
 			}
 			list.ViewPosition = scroll;
@@ -333,6 +331,14 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			Expanded = new HashSet<string>(expanded)
 		};
 
+		// Tests: no search nor filter (RestoreNavigation puts them back)
+		public void ClearFilters()
+		{
+			search = "";
+			categoryFilter = -1;
+			tierFilter = -1;
+		}
+
 		public void RestoreNavigation(NavigationSnapshot saved)
 		{
 			history.Clear();
@@ -347,7 +353,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			MarkDirty(true);
 		}
 
-		public UIList Content => list;
+		public CodexList Content => list;
 
 		public override void Update(GameTime gameTime)
 		{
@@ -408,6 +414,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				cacheVersion = CodexSystem.StructureVersion;
 			}
 			if (cache.TryGetValue(key, out object value) && value is T typed) return typed;
+			// Searches typed letter by letter add filtered lists: keep the cache small
+			if (cache.Count > 200) cache.Clear();
 			T made = make();
 			cache[key] = made;
 			return made;

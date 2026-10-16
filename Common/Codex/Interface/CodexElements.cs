@@ -76,6 +76,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 	{
 		public readonly int Type;
 		private readonly int count;
+		private readonly string countText;
 		private readonly Item item;
 		public string HoverText;
 		public Color Tint = Color.White;
@@ -84,6 +85,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		{
 			Type = type;
 			this.count = count;
+			countText = CodexDraw.Count(count);
 			Width.Set(size, 0);
 			Height.Set(size, 0);
 			if (type > 0 && ContentSamples.ItemsByType.TryGetValue(type, out Item sample)) item = sample;
@@ -113,7 +115,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				if (count > 1)
 				{
 					float scale = d.Width < 40 ? 0.65f : 0.75f;
-					Utils.DrawBorderString(spriteBatch, CodexDraw.Count(count), new Vector2(d.X + d.Width * 0.12f, d.Y + d.Height - 22 * scale - 2), Color.White, scale, 0, 0, -1);
+					Utils.DrawBorderString(spriteBatch, countText, new Vector2(d.X + d.Width * 0.12f, d.Y + d.Height - 22 * scale - 2), Color.White, scale, 0, 0, -1);
 				}
 			}
 			else
@@ -137,6 +139,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 	{
 		public readonly int NetId;
 		private readonly int count;
+		private readonly string countText;
 		private readonly bool big;
 		private readonly Asset BackgroundAsset;
 		public string HoverText;
@@ -151,6 +154,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		{
 			NetId = netId;
 			this.count = count;
+			countText = "x" + CodexDraw.Count(count);
 			this.big = big;
 			Width.Set(width, 0);
 			Height.Set(height, 0);
@@ -186,7 +190,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			{
 				string text = HoverText ?? CodexDraw.NpcName(NetId);
 				int kills = CodexSystem.KillCount(NetId);
-				if (HoverText == null && kills > 0) text += "\n" + Language.GetTextValue("Mods.UltimateRandomizer.Codex.Kills", kills);
+				if (HoverText == null && kills > 0) text += "\n" + CodexText.Get("Kills", kills);
 				CodexHover.Text = text;
 			}
 		}
@@ -195,7 +199,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		{
 			base.DrawChildren(spriteBatch);
 			Rectangle r = GetDimensions().ToRectangle();
-			if (count > 0 && !big) Utils.DrawBorderString(spriteBatch, "x" + CodexDraw.Count(count), new Vector2(r.X + 4, r.Bottom - 20), Color.White, 0.75f, 0, 0, -1);
+			if (count > 0 && !big) Utils.DrawBorderString(spriteBatch, countText, new Vector2(r.X + 4, r.Bottom - 20), Color.White, 0.75f, 0, 0, -1);
 			CodexDraw.Border(spriteBatch, r, IsMouseHovering ? CodexDraw.Gold : new Color(18, 22, 48));
 		}
 
@@ -287,6 +291,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 	{
 		public bool Active;
 		public bool Enabled = true;
+		private readonly LocalizedText label;
+
+		public CodexButton(LocalizedText label, float width, Action onClick, float scale = 0.9f) : this(label.Value, width, onClick, scale)
+		{
+			this.label = label;
+		}
 
 		public CodexButton(string text, float width, Action onClick, float scale = 0.9f) : base(text, scale)
 		{
@@ -303,6 +313,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		protected override void DrawSelf(SpriteBatch spriteBatch)
 		{
+			if (label != null && Text != label.Value) SetText(label.Value);
 			BackgroundColor = !Enabled ? new Color(40, 46, 80) * 0.8f : Active ? new Color(90, 112, 200) : IsMouseHovering ? new Color(76, 96, 178) : new Color(55, 70, 140) * 0.9f;
 			BorderColor = Active ? CodexDraw.Gold : IsMouseHovering && Enabled ? Color.White * 0.8f : Color.Black;
 			TextColor = Enabled ? Color.White : Color.Gray;
@@ -317,6 +328,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private readonly float scale;
 		private readonly Color color;
 		public string HoverText;
+
+		public string Text => text;
 
 		public CodexLabel(string text, float scale = 0.9f, Color? color = null)
 		{
@@ -339,6 +352,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 	public class CodexSection : UIElement
 	{
 		private readonly string text;
+
+		public string Text => text;
 
 		public CodexSection(string text)
 		{
@@ -408,7 +423,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (recipe.requiredTile.Count > 0 || recipe.Conditions.Count > 0)
 			{
 				Space(10);
-				Add(new CodexLabel(Language.GetTextValue("Mods.UltimateRandomizer.Codex.At"), 0.8f, CodexDraw.Muted), 4);
+				Add(new CodexLabel(CodexText.Get("At"), 0.8f, CodexDraw.Muted), 4);
 			}
 			foreach (int tile in recipe.requiredTile)
 			{
@@ -464,29 +479,51 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		}
 	}
 
-	// Lays cells of the same size out in rows that fit the width, each row a list item (the list only draws visible rows)
+	// One row of a grid; its cells are made when the row first comes into view (CodexList)
+	public sealed class CodexGridRow : UIElement, ICodexLazy
+	{
+		private Action<CodexGridRow> fill;
+
+		public CodexGridRow(float height, Action<CodexGridRow> fill)
+		{
+			Width.Set(0, 1f);
+			Height.Set(height, 0);
+			this.fill = fill;
+		}
+
+		public void Materialize()
+		{
+			if (fill == null) return;
+			Action<CodexGridRow> make = fill;
+			fill = null;
+			make(this);
+		}
+	}
+
+	// Lays cells of the same size out in rows that fit the width, each row a list item. Cells are made from the source
+	// only for rows that are shown: a tab of thousands of items builds a few hundred icons.
 	public static class CodexGrid
 	{
-		public static List<UIElement> Rows(IEnumerable<UIElement> cells, float cellWidth, float cellHeight, float width, float indent = 0, float gap = 6)
+		public static int PerRow(float cellWidth, float width, float indent = 0, float gap = 6) => Math.Max(1, (int)((width - indent - 8 + gap) / (cellWidth + gap)));
+
+		public static List<UIElement> Rows<T>(IReadOnlyList<T> source, Func<T, UIElement> make, float cellWidth, float cellHeight, float width, float indent = 0, float gap = 6)
 		{
-			List<UIElement> rows = new();
-			int perRow = Math.Max(1, (int)((width - indent - 8 + gap) / (cellWidth + gap)));
-			UIElement row = null;
-			int inRow = 0;
-			foreach (UIElement cell in cells)
+			int perRow = PerRow(cellWidth, width, indent, gap);
+			List<UIElement> rows = new((source.Count + perRow - 1) / perRow);
+			for (int start = 0; start < source.Count; start += perRow)
 			{
-				if (row == null || inRow == perRow)
+				int from = start;
+				rows.Add(new CodexGridRow(cellHeight, row =>
 				{
-					row = new UIElement();
-					row.Width.Set(0, 1f);
-					row.Height.Set(cellHeight, 0);
-					rows.Add(row);
-					inRow = 0;
-				}
-				cell.Left.Set(indent + 4 + inRow * (cellWidth + gap), 0);
-				cell.Top.Set(0, 0);
-				row.Append(cell);
-				inRow++;
+					int end = Math.Min(source.Count, from + perRow);
+					for (int i = from; i < end; i++)
+					{
+						UIElement cell = make(source[i]);
+						cell.Left.Set(indent + 4 + (i - from) * (cellWidth + gap), 0);
+						cell.Top.Set(0, 0);
+						row.Append(cell);
+					}
+				}));
 			}
 			return rows;
 		}

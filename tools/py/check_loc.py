@@ -19,7 +19,16 @@ src={}
 for f in glob.glob(os.path.join(ROOT,"Common","**","*.cs"),recursive=True): src[f]=open(f,encoding="utf-8").read()
 code="\n".join(src.values())
 cfgsrc="\n".join(v for k,v in src.items() if os.sep+"Configs"+os.sep in k or "/Configs/" in k)
-enums=dict(re.findall(r"public enum (\w+)\s*\{([^}]*)\}",code))
+enums=dict(re.findall(r"public enum (\w+)\s*(?::\s*\w+\s*)?\{([^}]*)\}",code))
+def enum_values(name):
+    body=re.sub(r"//[^\n]*","",enums.get(name,""))
+    return [v.split("=")[0].strip() for v in body.split(",") if v.split("=")[0].strip()]
+# The mod's texts are loaded after Load (LanguageManager.ReloadLanguage at the SetupContent stage): a text read in a
+# Load method, or by a UI state built there (OnInitialize), stays the raw key
+for f,s in src.items():
+    for body in re.findall(r"override void Load\(\)\s*\{(.*?)\n\t\t\}",s,re.S):
+        if re.search(r"Language\.GetText|\.Activate\(\)",body):
+            print("text read in Load (raw keys):",os.path.relpath(f,ROOT)); failed=True
 for lang in ("en-US","fr-FR"):
     keys=flat(json.load(open(os.path.join(S,lang+".json"),encoding="utf-8-sig")))
     missing=[]
@@ -43,6 +52,19 @@ for lang in ("en-US","fr-FR"):
         if "Debug."+kk not in keys: missing.append("Debug."+kk)
     for k in set(re.findall(r'TestRunner\.Register\("(\w+)"',code)):
         if "Tests."+k not in keys: missing.append("Tests."+k)
+    # Codex texts: CodexText.Get/Live("Key") is "Codex.Key"; CodexText.Of("Group", value) is "Codex.Group." + an enum name
+    for k in set(re.findall(r'CodexText\.(?:Get|Live)\("(\w[\w.]*)"(?!\s*\+)',code)):
+        if "Codex."+k not in keys: missing.append("used key Codex."+k)
+    for group,enum in (("Source","CodexSource"),("Category","ItemCategory")):
+        for val in enum_values(enum):
+            if f"Codex.{group}.{val}" not in keys: missing.append(f"Codex.{group}.{val} (enum {enum})")
+    # Tab buttons: "Tab" + each CodexPageKind of CodexUIState.Tabs; debug tabs: "Debug." + each name of its tabs array
+    m=re.search(r"CodexPageKind\[\] Tabs = \{([^}]*)\}",code)
+    for val in re.findall(r"CodexPageKind\.(\w+)",m.group(1) if m else ""):
+        if "Codex.Tab"+val not in keys: missing.append("Codex.Tab"+val)
+    m=re.search(r'string\[\] tabs = \{([^}]*)\}',src.get(os.path.join(ROOT,"Common","Debug","DebugUIState.cs"),""))
+    for val in re.findall(r'"(\w+)"',m.group(1) if m else ""):
+        if "Debug."+val not in keys: missing.append("Debug."+val)
     for k in ("Tests.NoWorld","Debug.SpawnRateNormal","Debug.SpawnRateNone","Debug.SpawnRateHigh","Keybinds.Debug.DisplayName","Keybinds.Journal.DisplayName"):
         if k not in keys: missing.append(k)
     print(lang, "missing:", sorted(set(missing)) or "none")

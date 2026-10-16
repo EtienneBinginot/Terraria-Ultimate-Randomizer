@@ -234,12 +234,13 @@ namespace UltimateRandomizer.Common.Features
 			if (string.IsNullOrEmpty(biomeName)) return "";
 			EnsureTags();
 			ModBiome modded = biomeName.Contains('/') ? moddedBiomes.FirstOrDefault(b => b.FullName == biomeName) : null;
-			if (modded != null) return modded.DisplayName.Value;
+			// A biome its mod did not name would show its raw key
+			if (modded != null) return Terraria.Localization.Language.Exists(modded.DisplayName.Key) ? modded.DisplayName.Value : modded.Name;
 			if (BestiaryElement(biomeName) is IFilterInfoProvider filter && Terraria.Localization.Language.Exists(filter.GetDisplayNameKey()))
 			{
 				return Terraria.Localization.Language.GetTextValue(filter.GetDisplayNameKey());
 			}
-			return biomeName;
+			return Codex.Interface.CodexText.Readable(biomeName);
 		}
 
 		// The type of an owner (slime colours are Blue Slimes)

@@ -18,8 +18,6 @@ namespace UltimateRandomizer.Common.Debug
 			ToggleKeybind = KeybindLoader.RegisterKeybind(Mod, "Debug", "K");
 			if (Main.dedServ) return;
 			userInterface = new UserInterface();
-			state = new DebugUIState();
-			state.Activate();
 		}
 
 		public override void Unload()
@@ -36,6 +34,12 @@ namespace UltimateRandomizer.Common.Debug
 			if (userInterface == null) return;
 			if (userInterface.CurrentState == null)
 			{
+				// Made when first opened: the mod's texts are not loaded yet in Load (they would stay raw keys)
+				if (state == null)
+				{
+					state = new DebugUIState();
+					state.Activate();
+				}
 				state.Rebuild();
 				userInterface.SetState(state);
 			}

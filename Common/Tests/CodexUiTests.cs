@@ -22,6 +22,8 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			TestRunner.Register("CodexUiBuilds", CodexUiBuilds);
 			TestRunner.Register("CodexHidesUndiscovered", CodexHidesUndiscovered);
+			TestRunner.Register("CodexManyItemsBounded", CodexManyItemsBounded);
+			TestRunner.Register("CodexTextsResolved", CodexTextsResolved);
 		}
 
 		private static IEnumerable<UIElement> Walk(UIElement element)
@@ -30,6 +32,17 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				yield return child;
 				foreach (UIElement inner in Walk(child)) yield return inner;
+			}
+		}
+
+		// Every row of the page, shown or not, with its cells made (the list only keeps the visible rows as children)
+		private static IEnumerable<UIElement> WalkAll(CodexList list)
+		{
+			foreach (UIElement row in list.Items)
+			{
+				(row as ICodexLazy)?.Materialize();
+				yield return row;
+				foreach (UIElement inner in Walk(row)) yield return inner;
 			}
 		}
 
@@ -135,24 +148,25 @@ namespace UltimateRandomizer.Common.Tests
 				fresh.Apply(CodexEntry.Seen(CodexNames.Item(item)));
 				CodexSystem.Data = fresh;
 
+				state.ClearFilters();
 				state.Navigate(CodexPage.ItemPage(item));
 				state.BuildNow();
-				List<int> shown = Walk(state.Content).OfType<CodexRecipeRow>().Select(r => r.RecipeIndex).Distinct().ToList();
+				List<int> shown = WalkAll(state.Content).OfType<CodexRecipeRow>().Select(r => r.RecipeIndex).Distinct().ToList();
 				if (!shown.Contains(recipes.first)) failures.Add($"discovered recipe {recipes.first} not shown");
 				foreach (int recipe in shown.Where(r => !CodexSystem.IsRecipeDiscovered(r))) failures.Add($"undiscovered recipe {recipe} shown");
 
 				state.Navigate(new CodexPage(CodexPageKind.Enemies));
 				state.BuildNow();
-				int portraits = Walk(state.Content).OfType<CodexNpcPortrait>().Count();
+				int portraits = WalkAll(state.Content).OfType<CodexNpcPortrait>().Count();
 				if (portraits > 0) failures.Add($"{portraits} enemies shown with no kill");
 
 				state.Navigate(new CodexPage(CodexPageKind.Items));
 				state.BuildNow();
-				foreach (CodexItemIcon icon in Walk(state.Content).OfType<CodexItemIcon>().Where(i => i.Type != item)) failures.Add($"unseen item {icon.Type} shown");
+				foreach (CodexItemIcon icon in WalkAll(state.Content).OfType<CodexItemIcon>().Where(i => i.Type != item)) failures.Add($"unseen item {icon.Type} shown");
 
 				state.Navigate(new CodexPage(CodexPageKind.Bags));
 				state.BuildNow();
-				if (Walk(state.Content).OfType<CodexItemIcon>().Any()) failures.Add("a bag shown with none opened");
+				if (WalkAll(state.Content).OfType<CodexItemIcon>().Any()) failures.Add("a bag shown with none opened");
 			}
 			finally
 			{
@@ -160,6 +174,103 @@ namespace UltimateRandomizer.Common.Tests
 				state.RestoreNavigation(saved);
 			}
 			Check.All(failures, "Undiscovered things shown");
+		}
+
+		// A codex of 3000 seen items and 300 killed enemies: the items and enemies tabs only make the elements of the
+		// visible rows (the lag of 1.0.1 came from thousands of icons recalculated on every frame), at the top and
+		// scrolled to the bottom, and the last item is reachable
+		private static void CodexManyItemsBounded()
+		{
+			CodexUIState state = StateOrSkip();
+			if (ItemLoader.ItemCount < 3100) Check.Skip("fewer than 3100 item types");
+			const int MaxElements = 600;
+			CodexData savedData = CodexSystem.Data;
+			var saved = state.SaveNavigation();
+			List<string> failures = new();
+			try
+			{
+				CodexData fresh = new() { Seed = SeedSystem.WorldSeed, HasSeed = true };
+				for (int type = 1; type <= 3000; type++) fresh.Apply(CodexEntry.Seen(CodexNames.Item(type)));
+				int killed = 0;
+				foreach (int netId in ContentSamples.NpcsByNetId.Keys.Where(id => id != 0).OrderBy(id => id))
+				{
+					if (killed >= 300) break;
+					fresh.Apply(CodexEntry.Kill(CodexNames.Npc(netId)));
+					killed++;
+				}
+				CodexSystem.Data = fresh;
+				state.ClearFilters();
+
+				foreach (CodexPageKind tab in new[] { CodexPageKind.Items, CodexPageKind.Enemies })
+				{
+					state.Navigate(new CodexPage(tab));
+					state.BuildNow();
+					CodexList list = state.Content;
+					int top = Walk(list).Count();
+					if (top == 0 || top > MaxElements) failures.Add($"{tab}: {top} elements at the top (rows: {list.Count})");
+					list.ViewPosition = float.MaxValue;
+					list.Sync();
+					List<UIElement> bottom = Walk(list).ToList();
+					if (bottom.Count == 0 || bottom.Count > MaxElements) failures.Add($"{tab}: {bottom.Count} elements at the bottom");
+					if (tab == CodexPageKind.Items)
+					{
+						int last = CodexSystem.ItemsSeen().OrderBy(CodexDraw.ItemName, StringComparer.CurrentCultureIgnoreCase).Last();
+						if (!bottom.OfType<CodexItemIcon>().Any(i => i.Type == last)) failures.Add($"Items: the last item {last} is not shown at the bottom");
+						if (list.Count < 3000 / 40) failures.Add($"Items: only {list.Count} rows for 3000 items");
+					}
+				}
+			}
+			finally
+			{
+				CodexSystem.Data = savedData;
+				state.RestoreNavigation(saved);
+			}
+			Check.All(failures, "Codex pages too heavy");
+		}
+
+		// No text of the codex (window, tabs, every tab's page, an item and an enemy page) is a raw localization key
+		private static void CodexTextsResolved()
+		{
+			CodexUIState state = StateOrSkip();
+			var saved = state.SaveNavigation();
+			List<string> failures = new();
+			void Look(string where, IEnumerable<UIElement> elements)
+			{
+				foreach (UIElement element in elements)
+				{
+					string text = element switch
+					{
+						CodexLabel label => label.Text,
+						CodexSection section => section.Text,
+						CodexButton button => button.Text,
+						Terraria.GameContent.UI.Elements.UIText uiText => uiText.Text,
+						_ => null
+					};
+					if (text != null && (text.Contains("Mods.") || text.Contains("Bestiary_"))) failures.Add($"{where}: {text}");
+				}
+			}
+			try
+			{
+				Look("window", Walk(state));
+				List<CodexPage> pages = new[] { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes }.Select(t => new CodexPage(t)).ToList();
+				foreach (int item in CodexSystem.ItemsSeen().Take(5).Append(ItemID.WoodenSword)) pages.Add(CodexPage.ItemPage(item));
+				foreach (int npc in CodexSystem.KilledNpcs().Take(3).Append(NPCID.BlueSlime)) pages.Add(CodexPage.NpcPage(npc));
+				foreach (CodexPage page in pages)
+				{
+					state.Navigate(page);
+					state.BuildNow();
+					Look($"{page.Kind} {page.Id}", WalkAll(state.Content));
+				}
+				foreach (CodexSource kind in Enum.GetValues<CodexSource>())
+				{
+					if (!Language.Exists(CodexText.Prefix + "Source." + kind)) failures.Add("missing text Codex.Source." + kind);
+				}
+			}
+			finally
+			{
+				state.RestoreNavigation(saved);
+			}
+			Check.All(failures, "Raw keys shown");
 		}
 	}
 }
