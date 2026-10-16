@@ -115,6 +115,21 @@ Tests: {
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
 	WorldMaterialsFindable: Bois, pierre, gemmes et premiers minerais se trouvent dès le début
+	IngredientReplacementsFindable: Les ingrédients remplacés se trouvent (sans craft) au niveau de la recette
+	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
+	AvailabilityConsistent: La disponibilité des objets repose uniquement sur des sources brutes
+	NoSelfIngredient: Aucune recette n'utilise son propre résultat
+	IngredientValueCoherent: Les ingrédients remplacés gardent à peu près la même valeur
+	ProtectedIngredientsKept: Les ingrédients protégés (matériaux de progression...) ne sont jamais remplacés
+	RecipeGroupsSane: Chaque groupe de recette (n'importe quel bois, lingot de fer...) garde son ingrédient
+	RecipePlanDeterminism: Ingrédients et stations identiques après reconstruction
+	UntouchedRecipesIntact: Les recettes protégées gardent leurs ingrédients et stations
+	DecraftSafeWithIngredients: Le décraft au Shimmer ne rend jamais des ingrédients plus précieux
+	VanillaModeGuaranteed: En mode ingrédients vanilla, chaque ingrédient manquant est placé sur des ennemis
+	StationDag: Aucune station de craft n'a besoin d'elle-même pour être fabriquée
+	StationTierRespected: Les recettes ne demandent jamais de station au-dessus de leur niveau, ni de station thématique
+	HandCraftKept: Les recettes à la main restent à la main
+	StationsVaried: Une bonne part des recettes a changé de station
 	BagPlansValid: Tous les contenus de sacs sont valides
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
@@ -886,6 +901,8 @@ Configs: {
 		Headers: {
 			Recipes: Recettes
 			Shimmer: Shimmer
+			Ingredients: "Ingrédients des recettes"
+			Stations: "Stations de craft des recettes"
 		}
 
 		RandomizeRecipes: {
@@ -908,9 +925,34 @@ Configs: {
 			Tooltip: "Chance qu'une recette donne un objet de n'importe quelle catégorie (poids du loot) au lieu d'un objet du même type que le résultat d'origine."
 		}
 
+		IngredientMode: {
+			Label: "Ingrédients"
+			Tooltip: "Randomisés : les ingrédients introuvables au niveau de la recette (drops spécifiques...) sont remplacés par des matériaux trouvables (monde, drops de ce monde). Vanilla : les ingrédients sont conservés et chacun est placé sur des ennemis du niveau de la recette."
+		}
+
 		IngredientWeights: {
 			Label: "Poids des ingrédients"
 			Tooltip: "Chance relative de chaque type d'objet quand un ingrédient de recette est remplacé. 0 = jamais."
+		}
+
+		IngredientVarietyChance: {
+			Label: "Variété des ingrédients (%)"
+			Tooltip: "Chance qu'un ingrédient spécifique soit remplacé même s'il est trouvable, pour des recettes plus variées. Les matériaux récoltés dans le monde (bois, pierre, minerais...) ne sont jamais remplacés ainsi."
+		}
+
+		IngredientStackCap: {
+			Label: "Quantité maximale d'un ingrédient remplacé"
+			Tooltip: "La quantité est ajustée pour garder à peu près la valeur de l'ingrédient d'origine, jusqu'à cette limite."
+		}
+
+		RandomizeStations: {
+			Label: "Randomiser les stations de craft"
+			Tooltip: "Les recettes peuvent demander une autre station de même niveau ou inférieur. Les recettes à la main restent à la main, celles de progression gardent la leur."
+		}
+
+		StationKeepChance: {
+			Label: "Station conservée (%)"
+			Tooltip: "Chance qu'une recette garde sa propre station."
 		}
 
 		RandomizeShimmer: {
@@ -1111,6 +1153,19 @@ Configs: {
 
 		None: {
 			Label: "Aucune"
+			Tooltip: ""
+		}
+	}
+
+	IngredientMode: {
+
+		Randomized: {
+			Label: "Randomisés"
+			Tooltip: ""
+		}
+
+		Vanilla: {
+			Label: "Vanilla (garantis)"
 			Tooltip: ""
 		}
 	}

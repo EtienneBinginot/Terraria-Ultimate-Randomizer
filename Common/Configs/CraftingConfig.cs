@@ -17,6 +17,14 @@ namespace UltimateRandomizer.Common.Configs
 		[Range(0, 100)] [DefaultValue(2)] public int Misc = 2;
 	}
 
+	public enum IngredientMode
+	{
+		// Ingredients that can't be found at the recipe's tier are replaced by findable materials
+		Randomized,
+		// Vanilla ingredients, each one guaranteed somewhere in the world at the recipe's tier
+		Vanilla
+	}
+
 	public class CraftingConfig : RandomizerConfig
 	{
 		public static CraftingConfig Instance => ModContent.GetInstance<CraftingConfig>();
@@ -40,7 +48,33 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(15f)]
 		public float RecipeSurpriseChance;
 
+		[Header("Ingredients")]
+		[DefaultValue(IngredientMode.Randomized)]
+		[DrawTicks]
+		public IngredientMode IngredientMode;
+
 		public IngredientWeights IngredientWeights = new();
+
+		// Chance that a specific ingredient (not gathered in the world) is replaced even when it can be found
+		[Range(0f, 100f)]
+		[Increment(5f)]
+		[DefaultValue(25f)]
+		public float IngredientVarietyChance;
+
+		// Largest amount of a replaced ingredient
+		[Range(1, 999)]
+		[DefaultValue(30)]
+		public int IngredientStackCap;
+
+		[Header("Stations")]
+		[DefaultValue(true)]
+		public bool RandomizeStations;
+
+		// Chance that a recipe keeps its own station
+		[Range(0f, 100f)]
+		[Increment(5f)]
+		[DefaultValue(30f)]
+		public float StationKeepChance;
 
 		[Header("Shimmer")]
 		[DefaultValue(true)]

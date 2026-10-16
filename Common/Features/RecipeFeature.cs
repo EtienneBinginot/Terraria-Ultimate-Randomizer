@@ -9,20 +9,31 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// Recipe results are rewritten when a world is loaded (or progression changes), and restored when it is left.
-	// Every machine computes the same results from the synced seed and progression.
+	// Recipes (results, ingredients, stations) are rewritten when a world is loaded (or progression changes), and restored
+	// when it is left. Every machine computes the same recipes from the synced seed and progression.
 	public class RecipeSystem : ModSystem
 	{
 		private static int[] originalTypes;
 		private static int[] originalStacks;
+		private static (int type, int stack)[][] originalIngredients;
+		private static int[][] originalTiles;
 		private static int[] recipeKeys;
 		private static long[] ingredientValues;
+		private static bool[] modded;
 		private static int[][] originalDecraft;
 		private static bool applied;
 
 		public static int OriginalResult(int recipeIndex) => originalTypes != null && recipeIndex < originalTypes.Length ? originalTypes[recipeIndex] : 0;
 
 		public static int OriginalStack(int recipeIndex) => originalStacks != null && recipeIndex < originalStacks.Length ? originalStacks[recipeIndex] : 0;
+
+		public static (int type, int stack)[] OriginalIngredients(int recipeIndex) => originalIngredients[recipeIndex];
+
+		public static int[] OriginalTiles(int recipeIndex) => originalTiles[recipeIndex];
+
+		public static int RecipeKey(int recipeIndex) => recipeKeys[recipeIndex];
+
+		public static long OriginalIngredientValue(int recipeIndex) => ingredientValues[recipeIndex];
 
 		public static int RecipeCount => originalTypes?.Length ?? 0;
 
@@ -35,13 +46,19 @@ namespace UltimateRandomizer.Common.Features
 			int count = Recipe.numRecipes;
 			originalTypes = new int[count];
 			originalStacks = new int[count];
+			originalIngredients = new (int, int)[count][];
+			originalTiles = new int[count][];
 			recipeKeys = new int[count];
 			ingredientValues = new long[count];
+			modded = new bool[count];
 			for (int i = 0; i < count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
 				originalTypes[i] = recipe.createItem.type;
 				originalStacks[i] = recipe.createItem.stack;
+				originalIngredients[i] = recipe.requiredItem.Select(ingredient => (ingredient.type, ingredient.stack)).ToArray();
+				originalTiles[i] = recipe.requiredTile.ToArray();
+				modded[i] = recipe.Mod != null && recipe.Mod.Name != "ModLoader";
 				// Keyed on names, not on the recipe index, so the mapping survives mod updates
 				int key = DetRandom.StableHash(DetRandom.ItemName(recipe.createItem.type));
 				long value = 0;
@@ -58,6 +75,7 @@ namespace UltimateRandomizer.Common.Features
 			originalDecraft = new int[decraft.Length][];
 			Array.Copy(decraft, originalDecraft, decraft.Length);
 
+			GuaranteedSources.ExtraRequirements = RecipePlanner.VanillaRequirements;
 			SeedSystem.OnSeedChanged += Refresh;
 			ProgressionSystem.OnTierChanged += Refresh;
 		}
@@ -65,10 +83,14 @@ namespace UltimateRandomizer.Common.Features
 		public override void Unload()
 		{
 			Restore();
+			GuaranteedSources.ExtraRequirements = null;
 			originalTypes = null;
 			originalStacks = null;
+			originalIngredients = null;
+			originalTiles = null;
 			recipeKeys = null;
 			ingredientValues = null;
+			modded = null;
 			originalDecraft = null;
 		}
 
@@ -78,30 +100,36 @@ namespace UltimateRandomizer.Common.Features
 			else Restore();
 		}
 
+		// Recipes whose result, ingredients and station may change: vanilla recipes of randomizable items, except the mining chain
+		public static bool Touchable(int i) => !modded[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+
 		private static void Apply()
 		{
 			if (originalTypes == null) return;
 			CraftingConfig cfg = CraftingConfig.Instance;
-			bool protectMining = ProgressionConfig.Instance.ProtectPickaxeProgression;
+			RecipePlan plan = RecipePlanner.Get();
 			HashSet<int> newResults = new();
 			bool[] changed = new bool[originalTypes.Length];
 			for (int i = 0; i < originalTypes.Length && i < Recipe.numRecipes; i++)
 			{
 				Recipe recipe = Main.recipe[i];
+				SetIngredients(recipe, plan.Ingredients[i] ?? originalIngredients[i]);
+				SetTiles(recipe, plan.Tiles[i] ?? originalTiles[i]);
 				int original = originalTypes[i];
-				Item result = recipe.createItem;
-				if (KeepRecipe(original, protectMining))
+				if (!Touchable(i))
 				{
-					SetResult(result, original, originalStacks[i]);
+					SetResult(recipe.createItem, original, originalStacks[i]);
 					continue;
 				}
-				(int replacement, int stack) = RollResult(i, recipe, cfg);
-				SetResult(result, replacement, stack);
+				(int replacement, int stack) = RollResult(i, recipe.requiredItem.Select(item => item.type).ToList(), recipe.requiredItem.Sum(item => item.stack), lucky: false);
+				SetResult(recipe.createItem, replacement, stack);
 				if (replacement != original || stack != originalStacks[i])
 				{
 					changed[i] = true;
 					newResults.Add(replacement);
 				}
+				// Decrafting gives the current ingredients back: not when they are worth clearly more than before
+				if (plan.Ingredients[i] != null && plan.IngredientValues[i] > ingredientValues[i] * 5 / 4) changed[i] = true;
 			}
 			ApplyDecraftRules(changed, newResults, cfg.DisableDecraftOfRandomizedResults);
 			applied = true;
@@ -117,14 +145,15 @@ namespace UltimateRandomizer.Common.Features
 			return ContentSamples.ItemsByType.TryGetValue(original, out Item sample) && sample.pick > 0;
 		}
 
-		private static (int type, int stack) RollResult(int i, Recipe recipe, CraftingConfig cfg)
+		// The result of a randomized recipe. lucky: ignores the progression lock (what the recipe gives once unlocked)
+		public static (int type, int stack) RollResult(int i, IList<int> ingredientTypes, int ingredientCount, bool lucky)
 		{
+			CraftingConfig cfg = CraftingConfig.Instance;
 			int original = originalTypes[i];
 			int originalStack = originalStacks[i];
 			long originalValue = (long)Math.Max(StackRules.ValueOf(original), 0) * originalStack;
 			// Value guard: crafting must not turn cheap ingredients into a fortune (1 silver of tolerance)
 			long maxValue = (long)(Math.Max(ingredientValues[i], originalValue) * cfg.RecipeValueGuard) + Item.silver;
-			int ingredientCount = recipe.requiredItem.Sum(ingredient => ingredient.stack);
 			bool surprise = ItemPool.IsSurprise(original, cfg.RecipeSurpriseChance, DetRandom.Get(RollKey.Recipe, recipeKeys[i], RollKey.Surprise));
 			for (int attempt = 0; attempt < 8; attempt++)
 			{
@@ -136,11 +165,12 @@ namespace UltimateRandomizer.Common.Features
 					Policy = surprise ? CategoryPolicy.Weighted : CategoryPolicy.SameAsOriginal,
 					TierJitterDown = 0,
 					TierJitterUp = 0,
-					AllowJackpot = false
+					AllowJackpot = false,
+					IgnoreGating = lucky
 				};
 				int replacement = ItemPool.Roll(request);
 				// A recipe must never give back one of its own ingredients (1 Wood -> 4 Wood would be infinite)
-				if (recipe.requiredItem.Any(ingredient => ingredient.type == replacement)) continue;
+				if (ingredientTypes.Contains(replacement)) continue;
 				int stack = StackRules.Scaled(original, originalStack, replacement);
 				if (StackRules.ValueOf(replacement) <= 0) stack = Math.Min(stack, Math.Max(1, ingredientCount));
 				if ((long)StackRules.ValueOf(replacement) * stack <= maxValue) return (replacement, stack);
@@ -179,7 +209,10 @@ namespace UltimateRandomizer.Common.Features
 			if (!applied || originalTypes == null) return;
 			for (int i = 0; i < originalTypes.Length && i < Recipe.numRecipes; i++)
 			{
-				SetResult(Main.recipe[i].createItem, originalTypes[i], originalStacks[i]);
+				Recipe recipe = Main.recipe[i];
+				SetResult(recipe.createItem, originalTypes[i], originalStacks[i]);
+				SetIngredients(recipe, originalIngredients[i]);
+				SetTiles(recipe, originalTiles[i]);
 			}
 			RestoreDecraft();
 			applied = false;
@@ -195,6 +228,25 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (result.type != type) result.SetDefaults(type);
 			result.stack = stack;
+		}
+
+		private static void SetIngredients(Recipe recipe, (int type, int stack)[] ingredients)
+		{
+			bool same = recipe.requiredItem.Count == ingredients.Length;
+			for (int k = 0; same && k < ingredients.Length; k++)
+			{
+				same = recipe.requiredItem[k].type == ingredients[k].type && recipe.requiredItem[k].stack == ingredients[k].stack;
+			}
+			if (same) return;
+			recipe.requiredItem.Clear();
+			foreach ((int type, int stack) in ingredients) recipe.requiredItem.Add(new Item(type, stack));
+		}
+
+		private static void SetTiles(Recipe recipe, int[] tiles)
+		{
+			if (recipe.requiredTile.SequenceEqual(tiles)) return;
+			recipe.requiredTile.Clear();
+			recipe.requiredTile.AddRange(tiles);
 		}
 
 		private static void RefreshCraftingMenu()

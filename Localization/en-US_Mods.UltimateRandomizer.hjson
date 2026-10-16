@@ -115,6 +115,21 @@ Tests: {
 	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
 	FindabilityDeterminism: Findability of items is the same after a rebuild
 	WorldMaterialsFindable: Wood, stone, gems and early ores are findable from the start
+	IngredientReplacementsFindable: Replaced ingredients are found (not crafted) by the recipe's level
+	RecipesDoable: At least 85% of the randomized recipes can be made at their level
+	AvailabilityConsistent: Item availability only relies on raw sources
+	NoSelfIngredient: No recipe uses its own result
+	IngredientValueCoherent: Replaced ingredients keep about the same value
+	ProtectedIngredientsKept: Protected ingredients (progression materials...) are never replaced
+	RecipeGroupsSane: Every recipe group (any wood, any iron bar...) still has its ingredient
+	RecipePlanDeterminism: Ingredients and stations are the same after a rebuild
+	UntouchedRecipesIntact: Protected recipes keep their ingredients and stations
+	DecraftSafeWithIngredients: Shimmer decrafting never gives back more valuable ingredients
+	VanillaModeGuaranteed: In vanilla ingredient mode, every missing ingredient is placed on enemies
+	StationDag: No crafting station needs itself to be made
+	StationTierRespected: Recipes never need a station above their level, nor a themed one
+	HandCraftKept: Recipes made by hand stay made by hand
+	StationsVaried: A good share of recipes changed station
 	BagPlansValid: Every bag content is valid
 	BagsKeepCoins: Boss bags keep their coins
 	RecipesSafe: Recipes: no self-ingredient, value guard respected
@@ -886,6 +901,8 @@ Configs: {
 		Headers: {
 			Recipes: Recipes
 			Shimmer: Shimmer
+			Ingredients: "Recipe ingredients"
+			Stations: "Crafting stations of recipes"
 		}
 
 		RandomizeRecipes: {
@@ -908,9 +925,34 @@ Configs: {
 			Tooltip: "Chance that a recipe gives an item of any category (loot weights) instead of an item of the same kind as the original result."
 		}
 
+		IngredientMode: {
+			Label: "Ingredients"
+			Tooltip: "Randomized: ingredients that can't be found at the recipe's level (specific drops...) are replaced by materials you can find (world, drops of this world). Vanilla: ingredients are kept and each one is placed on enemies of the recipe's level."
+		}
+
 		IngredientWeights: {
 			Label: "Ingredient weights"
 			Tooltip: "Relative chance of each kind of item when a recipe ingredient is replaced. 0 = never."
+		}
+
+		IngredientVarietyChance: {
+			Label: "Ingredient variety (%)"
+			Tooltip: "Chance that a specific ingredient is replaced even when it can be found, for more varied recipes. Materials gathered in the world (wood, stone, ores...) are never replaced this way."
+		}
+
+		IngredientStackCap: {
+			Label: "Maximum amount of a replaced ingredient"
+			Tooltip: "The amount is adjusted to keep about the same value as the original ingredient, up to this limit."
+		}
+
+		RandomizeStations: {
+			Label: "Randomize crafting stations"
+			Tooltip: "Recipes may require another station of the same or a lower level. Recipes made by hand stay by hand, progression recipes keep theirs."
+		}
+
+		StationKeepChance: {
+			Label: "Station kept (%)"
+			Tooltip: "Chance that a recipe keeps its own station."
 		}
 
 		RandomizeShimmer: {
@@ -1111,6 +1153,19 @@ Configs: {
 
 		None: {
 			Label: "None"
+			Tooltip: ""
+		}
+	}
+
+	IngredientMode: {
+
+		Randomized: {
+			Label: "Randomized"
+			Tooltip: ""
+		}
+
+		Vanilla: {
+			Label: "Vanilla (guaranteed)"
 			Tooltip: ""
 		}
 	}

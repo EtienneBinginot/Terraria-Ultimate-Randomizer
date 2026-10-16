@@ -1,0 +1,372 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Terraria;
+using Terraria.ID;
+using UltimateRandomizer.Common.Configs;
+using UltimateRandomizer.Common.Core;
+
+namespace UltimateRandomizer.Common.Features
+{
+	// New ingredients and stations of the recipes in a world (null = the original ones)
+	public class RecipePlan
+	{
+		public (int type, int stack)[][] Ingredients;
+		public long[] IngredientValues;
+		public int[][] Tiles;
+		// Tier at which each item can be obtained (found or crafted), with this plan
+		public int[] Availability;
+	}
+
+	// Plans the ingredients and stations of the recipes from the seed and the settings only (the same on every machine,
+	// and independent of progression). Every recipe stays doable at its level:
+	// - an item is "available" from a tier if it can be found (Findability) or crafted from available items at an
+	//   available station; this is computed as a fixed point from the raw sources, so it never relies on a loop;
+	// - an ingredient is replaced only by a material that is found (not crafted) no later than the recipe was doable;
+	// - a station is replaced only by a station available no later than the original one.
+	public static class RecipePlanner
+	{
+		public const int Never = Findability.Never;
+
+		private static RecipePlan plan;
+
+		static RecipePlanner()
+		{
+			WorldCaches.Reset += () => plan = null;
+		}
+
+		public static RecipePlan Get() => plan ??= Build();
+
+		public static void Reset() => plan = null;
+
+		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
+
+		private static int Gated(int item)
+		{
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			return progression.TierGating ? Math.Max(0, ItemPool.TierOf(item) - progression.TierAllowance) : 0;
+		}
+
+		// The level of a recipe: its original result, and the level of its stations
+		public static int RecipeTier(int i)
+		{
+			int tier = ItemPool.TierOf(RecipeSystem.OriginalResult(i));
+			foreach (int tile in RecipeSystem.OriginalTiles(i))
+			{
+				Stations.StationInfo info = Stations.Info(tile);
+				if (info.Kind == StationKind.Progression) tier = Math.Max(tier, info.Tier);
+			}
+			return Tiers.Clamp(tier);
+		}
+
+		private static bool InGroup(Recipe recipe, int item, out RecipeGroup group)
+		{
+			foreach (int id in recipe.acceptedGroups)
+			{
+				if (RecipeGroup.recipeGroups.TryGetValue(id, out group) && group.ContainsItem(item)) return true;
+			}
+			group = null;
+			return false;
+		}
+
+		// Items placing each tile
+		private static Dictionary<int, List<int>> ItemsByTile()
+		{
+			Dictionary<int, List<int>> result = new();
+			foreach ((int type, Item item) in ContentSamples.ItemsByType)
+			{
+				if (item.createTile < TileID.Dirt) continue;
+				if (!result.TryGetValue(item.createTile, out List<int> list)) result[item.createTile] = list = new List<int>();
+				list.Add(type);
+			}
+			return result;
+		}
+
+		// Availability fixed point: found items, then items crafted from available ingredients at available stations.
+		// recipeTiers[i] = tier from which recipe i can be made (ingredients and stations only).
+		public static int[] Availability(Func<int, int> found, int[] results, (int type, int stack)[][] ingredients, int[][] tiles, out int[] recipeTiers)
+		{
+			int[] avail = new int[ItemPool.Info.Length];
+			for (int item = 1; item < avail.Length; item++) avail[item] = found(item);
+			Dictionary<int, List<int>> itemsByTile = ItemsByTile();
+			int TileAvail(int tile)
+			{
+				// Tiles without an item (Demon Altar...) are part of the world
+				if (!itemsByTile.TryGetValue(tile, out List<int> placers)) return 0;
+				int best = Never;
+				foreach (int placer in placers)
+				{
+					if (placer < avail.Length) best = Math.Min(best, avail[placer]);
+				}
+				return best;
+			}
+			int count = Count;
+			recipeTiers = new int[count];
+			Array.Fill(recipeTiers, Never);
+			bool changed = true;
+			for (int pass = 0; pass < 40 && changed; pass++)
+			{
+				changed = false;
+				for (int i = 0; i < count; i++)
+				{
+					Recipe recipe = Main.recipe[i];
+					if (recipe.Disabled) continue;
+					int tier = 0;
+					foreach ((int type, _) in ingredients[i])
+					{
+						int a = InGroup(recipe, type, out RecipeGroup group) ? group.ValidItems.Where(v => v < avail.Length).Select(v => avail[v]).DefaultIfEmpty(Never).Min() : (type < avail.Length ? avail[type] : Never);
+						tier = Math.Max(tier, a);
+						if (tier == Never) break;
+					}
+					foreach (int tile in tiles[i])
+					{
+						if (tier == Never) break;
+						tier = Math.Max(tier, TileAvail(tile));
+					}
+					if (tier == Never) continue;
+					recipeTiers[i] = Math.Min(recipeTiers[i], tier);
+					int result = results[i];
+					int resultTier = Math.Max(tier, Gated(result));
+					if (result > 0 && result < avail.Length && resultTier < avail[result])
+					{
+						avail[result] = resultTier;
+						changed = true;
+					}
+				}
+			}
+			return avail;
+		}
+
+		// Results once everything is unlocked (the plan must not depend on progression)
+		private static int[] LuckyResults((int type, int stack)[][] ingredients)
+		{
+			int count = Count;
+			int[] results = new int[count];
+			for (int i = 0; i < count; i++)
+			{
+				results[i] = RecipeSystem.Touchable(i)
+					? RecipeSystem.RollResult(i, ingredients[i].Select(x => x.type).ToList(), ingredients[i].Sum(x => x.stack), lucky: true).type
+					: RecipeSystem.OriginalResult(i);
+			}
+			return results;
+		}
+
+		private static (int, int)[][] OriginalIngredients() => Enumerable.Range(0, Count).Select(RecipeSystem.OriginalIngredients).ToArray();
+
+		private static int[][] OriginalTiles() => Enumerable.Range(0, Count).Select(RecipeSystem.OriginalTiles).ToArray();
+
+		private static RecipePlan Build()
+		{
+			int count = Count;
+			CraftingConfig cfg = CraftingConfig.Instance;
+			(int, int)[][] ingredients = OriginalIngredients();
+			int[][] tiles = OriginalTiles();
+			int[] results = LuckyResults(ingredients);
+			int[] avail = Availability(Findability.Tier, results, ingredients, tiles, out int[] recipeTiers);
+			RecipePlan result = new()
+			{
+				Ingredients = new (int, int)[count][],
+				IngredientValues = new long[count],
+				Tiles = new int[count][]
+			};
+			if (!cfg.RandomizeRecipes)
+			{
+				result.Availability = avail;
+				return result;
+			}
+			if (cfg.RandomizeStations) PlanStations(result, results, avail, recipeTiers);
+			if (cfg.IngredientMode == IngredientMode.Randomized) PlanIngredients(result, results, avail, recipeTiers);
+			result.Availability = Availability(Findability.Tier, results,
+				Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray(),
+				Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray(), out _);
+			return result;
+		}
+
+		// ---------------------------------------------------------------- Stations
+
+		// Stations a recipe may be given: basic and progression ones (not the Demon Altar, not themed or modded ones)
+		private static bool Assignable(int tile)
+		{
+			StationKind kind = Stations.Info(tile).Kind;
+			return tile != TileID.DemonAltar && (kind == StationKind.Basic || kind == StationKind.Progression);
+		}
+
+		private static void PlanStations(RecipePlan result, int[] results, int[] avail, int[] recipeTiers)
+		{
+			Dictionary<int, List<int>> itemsByTile = ItemsByTile();
+			int TileAvail(int tile) => itemsByTile.TryGetValue(tile, out List<int> placers) ? placers.Where(p => p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Never).Min() : 0;
+			// A fixed order of the stations: a recipe making a station only ever requires stations placed before it,
+			// so no station can end up needing itself
+			List<int> order = Stations.RequiredTiles().Where(Assignable)
+				.OrderBy(TileAvail).ThenBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(TileID.Search.GetName(t)))
+				.ToList();
+			Dictionary<int, int> position = order.Select((tile, index) => (tile, index)).ToDictionary(x => x.tile, x => x.index);
+			float keep = CraftingConfig.Instance.StationKeepChance / 100f;
+			for (int i = 0; i < Count; i++)
+			{
+				int[] original = RecipeSystem.OriginalTiles(i);
+				if (original.Length == 0 || !RecipeSystem.Touchable(i)) continue;
+				int bound = int.MaxValue;
+				foreach (int made in new[] { RecipeSystem.OriginalResult(i), results[i] })
+				{
+					if (Stations.PlacedTile(made, out int placed) && position.TryGetValue(placed, out int p)) bound = Math.Min(bound, p);
+				}
+				Random rng = DetRandom.Get(RollKey.Station, RecipeSystem.RecipeKey(i));
+				List<int> tiles = new();
+				foreach (int tile in original)
+				{
+					int chosen = tile;
+					if (Assignable(tile))
+					{
+						int limit = TileAvail(tile);
+						List<int> allowed = order.Where(s => TileAvail(s) <= limit && position[s] < bound).ToList();
+						bool keepOwn = allowed.Contains(tile) && rng.NextDouble() < keep;
+						if (!keepOwn && allowed.Count > 0) chosen = allowed[rng.Next(allowed.Count)];
+					}
+					if (!tiles.Contains(chosen)) tiles.Add(chosen);
+				}
+				if (!tiles.SequenceEqual(original)) result.Tiles[i] = tiles.ToArray();
+			}
+		}
+
+		// ---------------------------------------------------------------- Ingredients
+
+		private static readonly ItemCategory[] Unusable = { ItemCategory.Bag, ItemCategory.BossSummon };
+
+		// Materials found at each tier (by category), never crafted: a replaced ingredient only relies on raw sources
+		private static List<int>[,] FindableBuckets()
+		{
+			List<int>[,] buckets = new List<int>[ItemCategories.Count, Tiers.Count];
+			for (int c = 0; c < ItemCategories.Count; c++)
+			{
+				for (int t = 0; t < Tiers.Count; t++) buckets[c, t] = new List<int>();
+			}
+			HashSet<int> stationItems = Stations.Basic().Select(s => s.info.Item).ToHashSet();
+			for (int item = 1; item < ItemPool.Info.Length; item++)
+			{
+				if (!ItemPool.IsRandomizable(item) || stationItems.Contains(item)) continue;
+				ItemCategory category = ItemPool.Info[item].Category;
+				if (Unusable.Contains(category)) continue;
+				int tier = Findability.Tier(item);
+				if (tier < Tiers.Count) buckets[(int)category, tier].Add(item);
+			}
+			return buckets;
+		}
+
+		private static void PlanIngredients(RecipePlan result, int[] results, int[] avail, int[] recipeTiers)
+		{
+			CraftingConfig cfg = CraftingConfig.Instance;
+			List<int>[,] buckets = FindableBuckets();
+			HashSet<int> worldMaterials = Findability.WorldMaterialSet();
+			for (int i = 0; i < Count; i++)
+			{
+				if (!RecipeSystem.Touchable(i)) continue;
+				Recipe recipe = Main.recipe[i];
+				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
+				int rt = RecipeTier(i);
+				// Never later than the recipe was doable: other recipes may rely on its result from that tier
+				int cap = recipeTiers[i] < Never ? Math.Min(rt, recipeTiers[i]) : rt;
+				Random rng = DetRandom.Get(RollKey.RecipeIngredient, RecipeSystem.RecipeKey(i));
+				List<(int type, int stack)> planned = new();
+				bool changed = false;
+				for (int k = 0; k < original.Length; k++)
+				{
+					(int g, int n) = original[k];
+					bool variety = rng.NextDouble() * 100 < cfg.IngredientVarietyChance;
+					bool keep = InGroup(recipe, g, out _) || !ItemPool.IsRandomizable(g) || Unusable.Contains(ItemPool.Info[g].Category)
+						|| (g < avail.Length && avail[g] <= cap && (worldMaterials.Contains(g) || !variety));
+					int x = keep ? g : PickIngredient(buckets, cap, rng, i, results[i], planned, original, g);
+					if (x == g)
+					{
+						planned.Add((g, n));
+						continue;
+					}
+					changed = true;
+					long value = (long)Math.Max(StackRules.ValueOf(g), 1) * n;
+					int stack = (int)Math.Clamp((value + Math.Max(StackRules.ValueOf(x), 1) - 1) / Math.Max(StackRules.ValueOf(x), 1), 1, Math.Min(StackRules.MaxStackOf(x), cfg.IngredientStackCap));
+					planned.Add((x, stack));
+				}
+				if (!changed) continue;
+				// Two slots may now ask for the same item
+				(int type, int stack)[] merged = planned.GroupBy(p => p.type).Select(grp => (grp.Key, Math.Min(StackRules.MaxStackOf(grp.Key), grp.Sum(p => p.stack)))).ToArray();
+				result.Ingredients[i] = merged;
+				result.IngredientValues[i] = merged.Sum(p => (long)Math.Max(StackRules.ValueOf(p.Item1), 1) * p.Item2);
+			}
+		}
+
+		private static int PickIngredient(List<int>[,] buckets, int cap, Random rng, int recipe, int luckyResult, List<(int type, int stack)> planned, (int type, int stack)[] original, int current)
+		{
+			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
+			int originalResult = RecipeSystem.OriginalResult(recipe);
+			bool Usable(int x) => x != originalResult && x != luckyResult && !planned.Any(p => p.type == x) && !original.Any(o => o.type == x);
+			for (int attempt = 0; attempt < 12; attempt++)
+			{
+				// Categories that have something findable at or below the cap
+				int total = 0;
+				for (int c = 0; c < ItemCategories.Count; c++)
+				{
+					if (HasAny(buckets, c, cap)) total += weights.Get((ItemCategory)c);
+				}
+				if (total <= 0) break;
+				int roll = rng.Next(total);
+				int category = 0;
+				for (int c = 0; c < ItemCategories.Count; c++)
+				{
+					if (!HasAny(buckets, c, cap)) continue;
+					roll -= weights.Get((ItemCategory)c);
+					if (roll < 0)
+					{
+						category = c;
+						break;
+					}
+				}
+				int target = Math.Max(0, cap - rng.Next(2));
+				for (int t = target; t >= 0; t--)
+				{
+					List<int> bucket = buckets[category, t];
+					if (bucket.Count == 0) continue;
+					int x = bucket[rng.Next(bucket.Count)];
+					if (Usable(x)) return x;
+					break;
+				}
+			}
+			// Nothing suitable: the ingredient stays
+			return current;
+		}
+
+		private static bool HasAny(List<int>[,] buckets, int category, int cap)
+		{
+			for (int t = 0; t <= Math.Min(cap, Tiers.Max); t++)
+			{
+				if (buckets[category, t].Count > 0) return true;
+			}
+			return false;
+		}
+
+		// ---------------------------------------------------------------- Vanilla ingredients
+
+		// Vanilla mode: ingredients that can't be obtained at their recipe's tier, to be placed on enemies
+		public static IEnumerable<GuaranteedSources.Requirement> VanillaRequirements()
+		{
+			CraftingConfig cfg = CraftingConfig.Instance;
+			if (!cfg.RandomizeRecipes || cfg.IngredientMode != IngredientMode.Vanilla || RecipeSystem.RecipeCount == 0) yield break;
+			(int, int)[][] ingredients = OriginalIngredients();
+			int[] results = LuckyResults(ingredients);
+			int[] avail = Availability(Findability.BaseTier, results, ingredients, OriginalTiles(), out _);
+			Dictionary<int, int> needed = new();
+			for (int i = 0; i < Count; i++)
+			{
+				if (!RecipeSystem.Touchable(i)) continue;
+				Recipe recipe = Main.recipe[i];
+				int rt = RecipeTier(i);
+				foreach ((int g, _) in RecipeSystem.OriginalIngredients(i))
+				{
+					if (InGroup(recipe, g, out _) || !ItemPool.IsRandomizable(g) || Unusable.Contains(ItemPool.Info[g].Category)) continue;
+					if (g < avail.Length && avail[g] <= rt) continue;
+					needed[g] = Math.Min(needed.GetValueOrDefault(g, rt), rt);
+				}
+			}
+			foreach ((int item, int tier) in needed) yield return new GuaranteedSources.Requirement { Item = item, Tier = tier };
+		}
+	}
+}

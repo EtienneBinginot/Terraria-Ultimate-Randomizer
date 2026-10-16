@@ -170,6 +170,17 @@ namespace UltimateRandomizer.Common.Features
 			WorldCaches.Reset += Reset;
 		}
 
+		// Materials gathered directly in the world (never replaced for variety's sake), and ores
+		public static HashSet<int> WorldMaterialSet()
+		{
+			HashSet<int> set = WorldMaterials.Select(m => m.item).ToHashSet();
+			for (int type = 1; type < ItemPool.Info.Length; type++)
+			{
+				if (OreMap.IsOre(type)) set.Add(type);
+			}
+			return set;
+		}
+
 		// Including the guaranteed sources
 		public static int Tier(int item)
 		{
