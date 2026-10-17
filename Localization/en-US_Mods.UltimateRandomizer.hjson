@@ -299,11 +299,8 @@ Codex: {
 		PickTarget: Click an item to read its hints again.
 		Free: free
 		NoStation: no station
-		Around: "Look around: {0}."
-
-		Place: {
-			Known: "{0}, {1}"
-		}
+		Around: Look around: {0}.
+		Place.Known: "{0}, {1}"
 
 		Coin: {
 			Copper: "{0} copper"

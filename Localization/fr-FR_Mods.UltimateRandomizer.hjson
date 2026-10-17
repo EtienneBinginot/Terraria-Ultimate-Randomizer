@@ -300,10 +300,7 @@ Codex: {
 		Free: gratuit
 		NoStation: aucune station
 		Around: Cherche du côté de ces lieux : {0}.
-
-		Place: {
-			Known: "{0}, {1}"
-		}
+		Place.Known: "{0}, {1}"
 
 		Coin: {
 			Copper: "{0} cuivre"
