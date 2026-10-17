@@ -101,6 +101,8 @@ Tests: {
 	JackpotNotInEnemyDrops: Jackpots are not listed among the enemy's drops
 	JackpotRatesLower: Jackpots are a little rarer by default
 	JackpotDropsMarked: Drops above the limit are marked as jackpots
+	GiantBonusUseful: A giant's bonus item is useful, and five times as likely to be a jackpot
+	MiniBonusDrop: Minis and giants give one bonus item, boss minions never
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled
@@ -1812,7 +1814,12 @@ Configs: {
 
 		GiantBonusDrop: {
 			Label: Giants drop one more item
-			Tooltip: A giant always drops one more random item of its level.
+			Tooltip: A giant always drops one more useful item (equipment or a crafting station), a tier above its level within the progression limit, five times as likely to be a jackpot.
+		}
+
+		MiniBonusDrop: {
+			Label: Minis drop one more item
+			Tooltip: A mini (small, quick and dangerous) always drops one more random item of its level, twice as likely to be a jackpot.
 		}
 
 		RandomizeEnemySpawns: {

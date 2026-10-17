@@ -45,6 +45,8 @@ namespace UltimateRandomizer.Common.Core
 		// rng (WildRng, required): plans, findability and guarantees never set it, so they stay classic
 		public bool Wild;
 		public Random WildRng;
+		// Multiplies WildDropChance for this roll (0: 1), still with the runtime rng only (the giant and mini bonus drops)
+		public float WildChanceMultiplier;
 	}
 
 	// Every randomizable item sorted by category and tier. All features pick their items here.
@@ -241,7 +243,8 @@ namespace UltimateRandomizer.Common.Core
 			if (request.Wild && request.WildRng != null && limit < Tiers.Max && category is not (ItemCategory.Bag or ItemCategory.BossSummon))
 			{
 				// Only the runtime rng is used here: without a wild roll, the result is the same as without the flag
-				int wildTier = WildTier(limit, WildChanceOverride ?? progression.WildDropChance, progression.WildTierDecay, request.WildRng);
+				float wildChance = Math.Min(100f, (WildChanceOverride ?? progression.WildDropChance) * (request.WildChanceMultiplier > 0 ? request.WildChanceMultiplier : 1f));
+				int wildTier = WildTier(limit, wildChance, progression.WildTierDecay, request.WildRng);
 				if (wildTier > limit)
 				{
 					// Only something useful is a jackpot: a wild ore or block is no jackpot, the normal roll stands

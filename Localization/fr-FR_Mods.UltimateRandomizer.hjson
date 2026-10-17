@@ -101,6 +101,8 @@ Tests: {
 	JackpotNotInEnemyDrops: Les jackpots ne comptent pas parmi les drops de l'ennemi
 	JackpotRatesLower: Les jackpots sont un peu plus rares par défaut
 	JackpotDropsMarked: Les drops au-delà de la limite sont marqués comme jackpots
+	GiantBonusUseful: L'objet bonus d'un géant est utile, avec cinq fois plus de chances d'être un jackpot
+	MiniBonusDrop: Les minis et les géants donnent un objet bonus, jamais les sbires de boss
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés
@@ -1812,7 +1814,12 @@ Configs: {
 
 		GiantBonusDrop: {
 			Label: Les géants donnent un objet de plus
-			Tooltip: Un géant donne toujours un objet aléatoire de plus, de son niveau.
+			Tooltip: Un géant donne toujours un objet utile de plus (équipement ou station d'artisanat), d'un palier au-dessus de son niveau dans la limite de progression, avec cinq fois plus de chances d'être un jackpot.
+		}
+
+		MiniBonusDrop: {
+			Label: Les minis donnent un objet de plus
+			Tooltip: Un mini (petit, rapide et dangereux) donne toujours un objet aléatoire de plus, de son niveau, avec deux fois plus de chances d'être un jackpot.
 		}
 
 		RandomizeEnemySpawns: {

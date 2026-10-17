@@ -175,9 +175,12 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(3f)]
 		public float LootBonusCap;
 
-		// Giants always drop one more random item
+		// Giants always drop one more useful item, minis one more item of their level (MobLootFeature.BonusDrops)
 		[DefaultValue(true)]
 		public bool GiantBonusDrop;
+
+		[DefaultValue(true)]
+		public bool MiniBonusDrop;
 
 		[Header("EnemySwap")]
 		[DefaultValue(true)]

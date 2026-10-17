@@ -83,16 +83,34 @@ namespace UltimateRandomizer.Common.Features
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
 				DropMarked(npc, drop.Item, stack, drop.JackpotGap);
 			}
-			// A giant always gives one more random item, a bit above its level
-			if (EnemiesConfig.Instance.GiantBonusDrop && LootConfig.Instance.RandomizeMobDrops && npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Kind == EnemyKind.Giant
-				&& GiantBonusAllowed(netId, npc.type))
+			foreach ((int item, int stack, int gap) in BonusDrops(npc, netId, info.rng.Next(), DropHelper.RollLucky()))
 			{
-				int item = GiantDrop(npc, info.rng.Next());
-				int gap = ItemPool.LastJackpotGap;
-				int stack = info.rng.Next(StackRules.Range(item).min, StackRules.Range(item).max + 1);
-				DropMarked(npc, item, Math.Max(1, stack), gap);
+				DropMarked(npc, item, stack, gap);
 			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
+		}
+
+		// Giants: one more useful item a tier above their level, five times as likely to be a jackpot. Minis (small, agile and
+		// dangerous): one more item of their level, twice as likely. Never for boss minions and parts (GiantBonusAllowed).
+		// Rolled where the loot drops (server), with the runtime rng
+		public const float GiantWildMultiplier = 5f;
+		public const float MiniWildMultiplier = 2f;
+
+		public static List<(int item, int stack, int gap)> BonusDrops(NPC npc, int netId, int key, bool lucky)
+		{
+			List<(int, int, int)> drops = new();
+			if (!LootConfig.Instance.RandomizeMobDrops || !npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) || !GiantBonusAllowed(netId, npc.type)) return drops;
+			EnemiesConfig cfg = EnemiesConfig.Instance;
+			int owner = BossParts.Owner(npc.type);
+			int item;
+			if (individual.Kind == EnemyKind.Giant && cfg.GiantBonusDrop) item = GiantDrop(owner, key, lucky);
+			else if (individual.Kind == EnemyKind.Mini && cfg.MiniBonusDrop) item = MiniDrop(owner, key, lucky);
+			else return drops;
+			int gap = ItemPool.LastJackpotGap;
+			Random rng = new(key);
+			(int min, int max) = StackRules.Range(item);
+			drops.Add((item, Math.Max(1, rng.Next(min, Math.Max(min, max) + 1)), gap));
+			return drops;
 		}
 
 		// Drops an item, marked as a jackpot when it is one (the mark is set in JackpotItem.OnSpawn, during the call)
@@ -116,19 +134,47 @@ namespace UltimateRandomizer.Common.Features
 			return !BossParts.IsMinion(npcType) && !BossParts.IsMinion(owner) && CanHaveExtraDrops(owner, IsBossType(owner), LootSnapshot.ForNpc(netId));
 		}
 
-		public static int GiantDrop(NPC npc, int key)
+		// A giant's bonus item: always useful (ItemPool.IsJackpotWorthy: equipment that does something, a progression station),
+		// a tier above the giant's within the progression limit. Other categories are rolled again a few times; only the first
+		// roll may go wild, so the jackpot rate stays GiantWildMultiplier times the usual one
+		public const int GiantUsefulAttempts = 16;
+
+		public static int GiantDrop(int ownerType, int key, bool lucky, float wildMultiplier = GiantWildMultiplier)
+		{
+			int item = 0;
+			for (int attempt = 0; attempt < GiantUsefulAttempts; attempt++)
+			{
+				RollRequest request = new()
+				{
+					Keys = new[] { RollKey.GiantMini, key, attempt },
+					SourceTier = Tiers.Clamp(NpcTiers.EffectiveTier(ownerType) + 1),
+					OriginalItem = -1,
+					Policy = CategoryPolicy.Weighted,
+					IgnoreGating = lucky,
+					Wild = attempt == 0,
+					// Also the rng that checks a lucky roll above the limit (a jackpot, or rolled again within it)
+					WildRng = new Random(unchecked(key + attempt * 7919)),
+					WildChanceMultiplier = wildMultiplier
+				};
+				item = ItemPool.Roll(request);
+				if (ItemPool.IsJackpotWorthy(item)) return item;
+			}
+			return item;
+		}
+
+		// A mini's bonus item: any category, of its own level
+		public static int MiniDrop(int ownerType, int key, bool lucky, float wildMultiplier = MiniWildMultiplier)
 		{
 			RollRequest request = new()
 			{
-				Keys = new[] { RollKey.GiantMini, key },
-				SourceTier = NpcTiers.EffectiveTier(BossParts.Owner(npc.type)),
+				Keys = new[] { RollKey.GiantMini, key, 100 },
+				SourceTier = NpcTiers.EffectiveTier(ownerType),
 				OriginalItem = -1,
 				Policy = CategoryPolicy.Weighted,
-				TierJitterUp = 1,
-				AllowJackpot = true,
-				IgnoreGating = DropHelper.RollLucky(),
+				IgnoreGating = lucky,
 				Wild = true,
-				WildRng = new Random(key)
+				WildRng = new Random(key),
+				WildChanceMultiplier = wildMultiplier
 			};
 			return ItemPool.Roll(request);
 		}

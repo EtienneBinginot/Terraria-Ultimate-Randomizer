@@ -32,6 +32,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("JackpotNotInEnemyDrops", JackpotNotInEnemyDrops);
 			TestRunner.Register("JackpotRatesLower", JackpotRatesLower);
 			TestRunner.Register("JackpotDropsMarked", JackpotDropsMarked);
+			TestRunner.Register("GiantBonusUseful", GiantBonusUseful);
+			TestRunner.Register("MiniBonusDrop", MiniBonusDrop);
 		}
 
 		// Critters get a share (CritterDropFactor) of the small frequent drop, here at abundance 3
@@ -222,6 +224,91 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			Check.That(marked > 0, $"no marked jackpot in {slots.Count} drops of 40 kills");
 			Check.All(failures, "Jackpot drops");
+		}
+
+		// A giant's bonus item is useful (equipment that does something, a progression station) and within the limit unless it
+		// is a jackpot, which comes about GiantWildMultiplier times as often as with the usual madness chance (seeded rngs)
+		private static void GiantBonusUseful()
+		{
+			if (!LootConfig.Instance.RandomizeMobDrops || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("no random extra drops");
+			List<string> failures = new();
+			int limit = ItemPool.GatingLimit(0);
+			int useful = 0;
+			const int Rolls = 2000;
+			try
+			{
+				for (int i = 0; i < Rolls; i++)
+				{
+					int item = RandomNpcDropRule.GiantDrop(NPCID.Zombie, 5000 + i, false);
+					int gap = ItemPool.LastJackpotGap;
+					if (ItemPool.IsJackpotWorthy(item)) useful++;
+					if (gap == 0 && ProgressionConfig.Instance.TierGating && ItemPool.TierOf(item) > limit && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(item)} above the limit without a jackpot");
+				}
+				if (useful < Rolls * 0.98) failures.Add($"only {useful} useful items out of {Rolls}");
+				// The jackpot rate against the usual one, on the same rolls
+				if (ProgressionConfig.Instance.TierGating && ProgressionConfig.Instance.WildDropChance > 0 && limit < Tiers.Max)
+				{
+					int Jackpots(float multiplier)
+					{
+						int count = 0;
+						for (int i = 0; i < 4000; i++)
+						{
+							RandomNpcDropRule.GiantDrop(NPCID.Zombie, 9000 + i, false, multiplier);
+							if (ItemPool.LastJackpotGap > 0) count++;
+						}
+						return count;
+					}
+					int normal = Jackpots(1f);
+					int giant = Jackpots(RandomNpcDropRule.GiantWildMultiplier);
+					ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Giant jackpots: {giant} per 4000 bonus drops, {normal} with the usual madness chance");
+					double expected = RandomNpcDropRule.GiantWildMultiplier * normal;
+					if (normal >= 20 && (giant < expected * 0.7 || giant > expected * 1.3)) failures.Add($"{giant} giant jackpots, expected about {expected:0} ({normal} x {RandomNpcDropRule.GiantWildMultiplier})");
+				}
+			}
+			finally
+			{
+				ItemPool.ClearJackpot();
+			}
+			Check.All(failures, "Giant bonus drops");
+		}
+
+		// A mini gives one bonus item, a giant one useful item, an ordinary enemy none; a boss minion never does
+		private static void MiniBonusDrop()
+		{
+			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
+			EnemiesConfig cfg = EnemiesConfig.Instance;
+			List<string> failures = new();
+			int Count(int type, EnemyKind kind, out int item)
+			{
+				NPC npc = new();
+				npc.SetDefaults(type);
+				item = 0;
+				if (!npc.TryGetGlobalNPC(out EnemyIndividualNPC individual)) return -1;
+				individual.Kind = kind;
+				List<(int item, int stack, int gap)> drops = RandomNpcDropRule.BonusDrops(npc, npc.netID, 77, false);
+				if (drops.Count > 0) item = drops[0].item;
+				return drops.Count;
+			}
+			try
+			{
+				if (cfg.MiniBonusDrop && Count(NPCID.Zombie, EnemyKind.Mini, out _) != 1) failures.Add("a mini zombie gives no bonus item");
+				if (cfg.GiantBonusDrop)
+				{
+					if (Count(NPCID.Zombie, EnemyKind.Giant, out int item) != 1) failures.Add("a giant zombie gives no bonus item");
+					else if (!ItemPool.IsJackpotWorthy(item)) failures.Add($"a giant zombie gives {Lang.GetItemNameValue(item)}");
+				}
+				if (Count(NPCID.Zombie, EnemyKind.Normal, out _) != 0) failures.Add("an ordinary zombie gives a bonus item");
+				foreach (int minion in new int[] { NPCID.ServantofCthulhu, NPCID.Creeper, NPCID.Bee })
+				{
+					if (Count(minion, EnemyKind.Mini, out _) > 0 || Count(minion, EnemyKind.Giant, out _) > 0) failures.Add($"{Lang.GetNPCNameValue(minion)} gives a bonus item");
+				}
+			}
+			finally
+			{
+				ItemPool.ClearJackpot();
+			}
+			if (!cfg.MiniBonusDrop && !cfg.GiantBonusDrop) Check.Skip("giant and mini bonus drops are off");
+			Check.All(failures, "Giant and mini bonus drops");
 		}
 
 		// Jackpots rarer than in 1.2.0 (madness 12 %, luck 4 %) and 1.2.1 (9 %, 3 %, decay 3, allowance 3): items up to two
