@@ -170,9 +170,24 @@ namespace UltimateRandomizer.Common.Core
 			return progressionStations = list.ToArray();
 		}
 
-		// Worth a jackpot: equipment (weapons, armor, accessories, tools, mounts) or a progression station
+		// Worth a jackpot: equipment that does something (weapons, armor with defense, accessories, tools, mounts) or a
+		// progression station; never a music box (an accessory), vanity, a pet or light pet, nor a dye
 		public static bool IsJackpotWorthy(int type) =>
-			IsValid(type) && (ItemCategories.IsGear(Info[type].Category) || Array.IndexOf(ProgressionStations(), type) >= 0);
+			IsValid(type) && (ItemCategories.IsGear(Info[type].Category) && UsefulGear(type) || Array.IndexOf(ProgressionStations(), type) >= 0);
+
+		private static bool UsefulGear(int type)
+		{
+			if (!ContentSamples.ItemsByType.TryGetValue(type, out Item item)) return false;
+			if (item.vanity || item.dye > 0 || item.hairDye >= 0 || item.createTile == TileID.MusicBoxes) return false;
+			if (item.buffType > 0 && item.buffType < Main.vanityPet.Length && (Main.vanityPet[item.buffType] || Main.lightPet[item.buffType])) return false;
+			return Info[type].Category switch
+			{
+				ItemCategory.Armor => item.defense > 0,
+				ItemCategory.MountPet => item.mountType >= 0,
+				ItemCategory.WeaponMelee or ItemCategory.WeaponRanged or ItemCategory.WeaponMagic or ItemCategory.WeaponSummon or ItemCategory.WeaponOther => item.damage > 0,
+				_ => true
+			};
+		}
 
 		// The limit progression sets for a roll, whether or not this one ignores it
 		public static int GatingLimit(int minLimit)

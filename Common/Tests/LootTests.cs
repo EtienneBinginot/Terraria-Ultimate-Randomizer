@@ -136,6 +136,16 @@ namespace UltimateRandomizer.Common.Tests
 				ItemPool.ClearJackpot();
 			}
 			Check.That(jackpots > 0, "no jackpot in 3000 rolls above the limit");
+			// Never something without effect: music boxes (accessories), pets and light pets, dyes, vanity; real equipment is
+			int[] useless = { ItemID.MusicBoxOverworldDay, ItemID.Carrot, ItemID.FairyBell, ItemID.WispinaBottle, ItemID.BlackDye, ItemID.SummerHat };
+			foreach (int item in useless.Where(ItemPool.IsValid))
+			{
+				if (ItemPool.IsJackpotWorthy(item)) failures.Add($"{Lang.GetItemNameValue(item)} counts as a jackpot");
+			}
+			foreach (int item in new int[] { ItemID.Minishark, ItemID.HermesBoots }.Where(ItemPool.IsValid))
+			{
+				if (!ItemPool.IsJackpotWorthy(item)) failures.Add($"{Lang.GetItemNameValue(item)} is not worth a jackpot");
+			}
 			Check.All(failures, "Useless jackpots");
 		}
 
@@ -214,13 +224,16 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Jackpot drops");
 		}
 
-		// Jackpots a little rarer than in 1.2.0 (madness 12 %, luck 4 %)
+		// Jackpots rarer than in 1.2.0 (madness 12 %, luck 4 %) and 1.2.1 (9 %, 3 %, decay 3, allowance 3): items up to two
+		// tiers ahead already come normally
 		private static void JackpotRatesLower()
 		{
 			float Default(string field) => Convert.ToSingle(typeof(ProgressionConfig).GetField(field).GetCustomAttributes(typeof(System.ComponentModel.DefaultValueAttribute), false)
 				.OfType<System.ComponentModel.DefaultValueAttribute>().First().Value);
-			Check.Equal(9f, Default("WildDropChance"), "default WildDropChance");
-			Check.Equal(3f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
+			Check.Equal(5f, Default("WildDropChance"), "default WildDropChance");
+			Check.Equal(2f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
+			Check.Equal(4f, Default("WildTierDecay"), "default WildTierDecay");
+			Check.Equal(2f, Default("TierAllowance"), "default TierAllowance");
 		}
 
 		// Plans, findability and guarantees never use the madness tail: identical at 0 % and 50 %

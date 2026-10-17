@@ -14,17 +14,21 @@ using Terraria.ModLoader;
 namespace UltimateRandomizer.Common.Features
 {
 	// A jackpot is a runtime drop above the progression limit (ItemPool.LastJackpotGap): the server (or single player, or
-	// the client opening a bag) marks the item with its gap in tiers, the mark travels with the item (NetSend: world item
-	// syncs, but also inventories and chests), and every client shows it: a glow and sparkles while it lies on the ground,
-	// a burst, a popup, a sound and, from 2 tiers above, a chat line, all stronger the higher it is. The burst is shown
+	// the client opening a bag) marks the item with its gap above the limit (how strong the effects are) and its tiers above
+	// the unlocked tier (what the texts say: a Mythril sword at tier 0 is 4 tiers ahead, 2 above the limit), the mark
+	// travels with the item (NetSend: world item syncs, but also inventories and chests), and every client shows it: a
+	// glow, sparkles and a beam while it lies on the ground, a burst, a popup, a sound and a chat line, all stronger the
+	// higher it is. The burst is shown
 	// once, for a world item, just after the drop (a later sync, a join, an inventory or a thrown item says it is not
 	// fresh), from PostUpdate where the synced position is known. The codex does not count it as the enemy's drop.
 	public class JackpotItem : GlobalItem
 	{
 		public override bool InstancePerEntity => true;
 
-		// Tiers above the limit when it dropped (0: no jackpot)
+		// Tiers above the limit when it dropped (0: no jackpot): the strength of the effects
 		public byte Gap;
+		// Tiers above the unlocked tier when it dropped (at least Gap): what the texts show
+		public byte Above;
 		// When it was marked (GameUpdateCount of the machine that marked or received it): fresh for FreshTicks
 		public uint MarkedAt;
 		// Not synced: the burst is still to show (world items only, from PostUpdate)
@@ -37,6 +41,14 @@ namespace UltimateRandomizer.Common.Features
 
 		public static int GapOf(Item item) => item != null && !item.IsAir && item.TryGetGlobalItem(out JackpotItem jackpot) ? jackpot.Gap : 0;
 
+		public static int AboveOf(Item item) => item != null && !item.IsAir && item.TryGetGlobalItem(out JackpotItem jackpot) ? Math.Max(jackpot.Gap, jackpot.Above) : 0;
+
+		// Tiers of an item above the unlocked tier, for a jackpot of this gap (UnlockedTier follows the synced boss flags)
+		public static int AboveUnlocked(int type, int gap) => Math.Clamp(Math.Max(gap, Core.ItemPool.TierOf(type) - Core.ProgressionSystem.UnlockedTier), 0, 9);
+
+		// The name of an item's tier ("Hardmode"...)
+		public static string TierName(int type) => Language.GetTextValue($"Mods.UltimateRandomizer.Configs.Tier.{(Core.Tier)Core.Tiers.Clamp(Core.ItemPool.TierOf(type))}.Label");
+
 		public override void OnSpawn(Item item, IEntitySource source)
 		{
 			if (Next > 0) Mark(item, Next);
@@ -47,6 +59,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (gap <= 0 || item == null || item.IsAir || !item.TryGetGlobalItem(out JackpotItem jackpot)) return;
 			jackpot.Gap = (byte)Math.Min(gap, 9);
+			jackpot.Above = (byte)AboveUnlocked(item.type, gap);
 			jackpot.MarkedAt = Math.Max(1u, Main.GameUpdateCount);
 			jackpot.Pending = !Main.dedServ;
 		}
@@ -56,12 +69,14 @@ namespace UltimateRandomizer.Common.Features
 		public override void NetSend(Item item, BinaryWriter writer)
 		{
 			writer.Write(Gap);
+			writer.Write(Above);
 			writer.Write(Fresh);
 		}
 
 		public override void NetReceive(Item item, BinaryReader reader)
 		{
 			Gap = reader.ReadByte();
+			Above = reader.ReadByte();
 			bool fresh = reader.ReadBoolean();
 			MarkedAt = fresh ? Math.Max(1u, Main.GameUpdateCount) : 0;
 			// The position is not set yet here (message 21 reads the mod data first): shown from PostUpdate
@@ -75,7 +90,7 @@ namespace UltimateRandomizer.Common.Features
 			if (Pending)
 			{
 				Pending = false;
-				JackpotEffects.AnnounceOnce(item, Gap);
+				JackpotEffects.AnnounceOnce(item, Gap, Math.Max(Gap, Above));
 			}
 			JackpotEffects.Glow(item, Gap);
 		}
@@ -94,12 +109,12 @@ namespace UltimateRandomizer.Common.Features
 
 		public override void PostDrawInWorld(Item item, SpriteBatch spriteBatch, Color lightColor, Color alphaColor, float rotation, float scale, int whoAmI)
 		{
-			if (Gap >= 2) JackpotEffects.Beam(item, spriteBatch, Gap);
+			if (Gap >= 1) JackpotEffects.Beam(item, spriteBatch, Gap);
 		}
 
 		public override void ModifyTooltips(Item item, List<TooltipLine> tooltips)
 		{
-			if (Gap > 0) tooltips.Add(new TooltipLine(Mod, "Jackpot", Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Tooltip", Gap)) { OverrideColor = JackpotEffects.ColorOf(Gap) });
+			if (Gap > 0) tooltips.Add(new TooltipLine(Mod, "Jackpot", Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Tooltip", Math.Max(Gap, Above), TierName(item.type))) { OverrideColor = JackpotEffects.ColorOf(Gap) });
 		}
 	}
 
@@ -114,12 +129,12 @@ namespace UltimateRandomizer.Common.Features
 		private static readonly bool[] announced = new bool[Main.maxItems + 1];
 
 		// Once per world slot: the client opening a bag announces its own item, then the server's echo of it is ignored
-		public static void AnnounceOnce(Item item, int gap)
+		public static void AnnounceOnce(Item item, int gap, int above)
 		{
 			int slot = Array.IndexOf(Main.item, item);
 			if (slot < 0 || slot >= Main.maxItems || announced[slot]) return;
 			announced[slot] = true;
-			Announce(item, gap);
+			Announce(item, gap, above);
 		}
 
 		// Inactive slots may be reused by a new item
@@ -133,12 +148,14 @@ namespace UltimateRandomizer.Common.Features
 
 		public static void Clear() => Array.Clear(announced);
 
-		private static void Announce(Item item, int gap)
+		// The smallest jackpot already stands out (a dramatic popup, a magic sound, a chat line, a beam); the effects grow with
+		// the gap above the limit, the texts give the tiers above the unlocked tier and the item's tier
+		private static void Announce(Item item, int gap, int above)
 		{
 			Color color = ColorOf(gap);
-			string popup = Language.GetTextValue(gap >= 3 ? "Mods.UltimateRandomizer.Jackpot.PopupBig" : "Mods.UltimateRandomizer.Jackpot.Popup");
-			CombatText.NewText(item.Hitbox, color, popup, gap >= 2, false);
-			int dusts = 12 * gap;
+			string popup = Language.GetTextValue(gap >= 3 ? "Mods.UltimateRandomizer.Jackpot.PopupBig" : "Mods.UltimateRandomizer.Jackpot.Popup", above);
+			CombatText.NewText(item.Hitbox, color, popup, true, false);
+			int dusts = 20 + 12 * gap;
 			for (int i = 0; i < dusts; i++)
 			{
 				int type = gap >= 3 ? DustID.RainbowMk2 : i % 2 == 0 ? DustID.GoldCoin : DustID.TreasureSparkle;
@@ -146,10 +163,10 @@ namespace UltimateRandomizer.Common.Features
 				dust.velocity = Main.rand.NextVector2Circular(2f + gap, 2f + gap);
 				dust.noGravity = true;
 			}
-			SoundStyle sound = gap >= 3 ? SoundID.AchievementComplete : gap == 2 ? SoundID.Item4 : SoundID.CoinPickup;
-			SoundEngine.PlaySound(sound.WithVolumeScale(gap >= 3 ? 1.4f : 1f), item.Center);
-			if (gap < 2) return;
-			string line = Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Chat", Lang.GetItemNameValue(item.type), gap);
+			SoundStyle sound = gap >= 3 ? SoundID.AchievementComplete : SoundID.Item4;
+			SoundEngine.PlaySound(sound.WithVolumeScale(gap >= 3 ? 1.4f : gap == 2 ? 1.2f : 1f), item.Center);
+			if (gap == 1) SoundEngine.PlaySound(SoundID.CoinPickup, item.Center);
+			string line = Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Chat", Lang.GetItemNameValue(item.type), above, JackpotItem.TierName(item.type));
 			Main.NewText(gap >= 3 ? line.ToUpperInvariant() : line, color);
 		}
 
@@ -165,14 +182,14 @@ namespace UltimateRandomizer.Common.Features
 			dust.noGravity = true;
 		}
 
-		// A column of light above the item (2 tiers and more), wider and brighter from 3
+		// A column of light above the item, taller from 2 tiers, wider and brighter from 3
 		public static void Beam(Item item, SpriteBatch spriteBatch, int gap)
 		{
 			Vector2 bottom = item.Bottom - Main.screenPosition;
-			int width = gap >= 3 ? 10 : 4;
-			int height = gap >= 3 ? 420 : 200;
+			int width = gap >= 3 ? 10 : gap == 2 ? 6 : 4;
+			int height = gap >= 3 ? 420 : gap == 2 ? 260 : 150;
 			float pulse = 0.75f + 0.25f * (float)Math.Sin(Main.GlobalTimeWrappedHourly * 4f);
-			Color color = ColorOf(gap) * ((gap >= 3 ? 0.45f : 0.3f) * pulse);
+			Color color = ColorOf(gap) * ((gap >= 3 ? 0.45f : gap == 2 ? 0.35f : 0.28f) * pulse);
 			color.A = 0;
 			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle((int)bottom.X - width / 2, (int)bottom.Y - height, width, height), color);
 			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle((int)bottom.X - width, (int)bottom.Y - height / 3, width * 2, height / 3), color * 0.6f);

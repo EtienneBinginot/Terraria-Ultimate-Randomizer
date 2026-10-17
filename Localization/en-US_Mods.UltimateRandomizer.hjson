@@ -242,10 +242,10 @@ Tests: {
 Journal.Description: Opens the randomizer codex (also the J key)
 
 Jackpot: {
-	Popup: Jackpot!
-	PopupBig: JACKPOT!!!
-	Chat: Jackpot! {0} (+{1} tiers)
-	Tooltip: Jackpot: {0} tier(s) above your progression
+	Popup: Jackpot! +{0}
+	PopupBig: JACKPOT!!! +{0}
+	Chat: Jackpot! {0}: {1} tier(s) ahead of your progression ({2})
+	Tooltip: Jackpot: {0} tier(s) ahead of your progression ({1})
 }
 
 Codex: {
@@ -964,7 +964,7 @@ Configs: {
 
 		TierAllowance: {
 			Label: Tiers allowed above your progression
-			Tooltip: 0 = only tiers already unlocked. 3 = three tiers ahead (default), and so on. Adaptive power makes enemies stronger if your equipment gets ahead of the world.
+			Tooltip: 0 = only tiers already unlocked. 2 = two tiers ahead (default), and so on. Adaptive power makes enemies stronger if your equipment gets ahead of the world.
 		}
 
 		JackpotTierChance: {
@@ -984,7 +984,7 @@ Configs: {
 
 		WildTierDecay: {
 			Label: Madness: rarity per extra tier
-			Tooltip: How much rarer each tier above the limit is for madness drops: 3 = one tier above is 3 times more frequent than two tiers above. Higher = madness stays closer to the limit.
+			Tooltip: How much rarer each tier above the limit is for madness drops: 4 (default) = one tier above is 4 times more frequent than two tiers above. Higher = madness stays closer to the limit.
 		}
 
 		MechTierRequiresAllThree: {

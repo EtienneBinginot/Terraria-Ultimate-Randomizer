@@ -242,10 +242,10 @@ Tests: {
 Journal.Description: Ouvre le codex du randomizer (aussi avec la touche J)
 
 Jackpot: {
-	Popup: Jackpot !
-	PopupBig: JACKPOT !!!
-	Chat: Jackpot ! {0} (+{1} paliers)
-	Tooltip: Jackpot : {0} palier(s) au-dessus de ta progression
+	Popup: Jackpot ! +{0}
+	PopupBig: JACKPOT !!! +{0}
+	Chat: Jackpot ! {0} : {1} palier(s) d'avance sur ta progression ({2})
+	Tooltip: Jackpot : {0} palier(s) d'avance sur ta progression ({1})
 }
 
 Codex: {
@@ -964,7 +964,7 @@ Configs: {
 
 		TierAllowance: {
 			Label: Tiers autorisés au-dessus de ta progression
-			Tooltip: 0 = seulement les tiers déjà débloqués. 3 = trois tiers d'avance (par défaut), etc. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde.
+			Tooltip: 0 = seulement les tiers déjà débloqués. 2 = deux tiers d'avance (par défaut), etc. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde.
 		}
 
 		JackpotTierChance: {
@@ -984,7 +984,7 @@ Configs: {
 
 		WildTierDecay: {
 			Label: Folie : rareté par palier en plus
-			Tooltip: À quel point chaque palier au-delà de la limite est plus rare pour les drops de folie : 3 = un palier au-dessus est 3 fois plus fréquent que deux paliers au-dessus. Plus haut = la folie reste plus près de la limite.
+			Tooltip: À quel point chaque palier au-delà de la limite est plus rare pour les drops de folie : 4 (par défaut) = un palier au-dessus est 4 fois plus fréquent que deux paliers au-dessus. Plus haut = la folie reste plus près de la limite.
 		}
 
 		MechTierRequiresAllThree: {
