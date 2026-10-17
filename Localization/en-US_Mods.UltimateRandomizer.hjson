@@ -108,11 +108,11 @@ Tests: {
 	CodexRecipesFromGuide: The Guide discovers the recipes using the item and those giving it
 	CodexSaveLoad: The codex is saved and loaded with the world without loss
 	CodexSyncRoundTrip: Codex discoveries survive the network format (delta and full sync)
-	CodexUiBuilds: "Codex interface: every tab, item, enemy and craft tree page builds"
-	CodexHidesUndiscovered: "Codex interface: undiscovered recipes, enemies, items and bags stay hidden"
-	CodexManyItemsBounded: "Codex interface: 3000 items and 300 enemies only build the visible rows"
-	CodexTextsResolved: "Codex interface: no raw text key is shown"
-	CodexShowsChances: "Codex interface: discovered drops show their planned chance, biomes the spawn shares"
+	CodexUiBuilds: Codex interface: every tab, item, enemy and craft tree page builds
+	CodexHidesUndiscovered: Codex interface: undiscovered recipes, enemies, items and bags stay hidden
+	CodexManyItemsBounded: Codex interface: 3000 items and 300 enemies only build the visible rows
+	CodexTextsResolved: Codex interface: no raw text key is shown
+	CodexShowsChances: Codex interface: discovered drops show their planned chance, biomes the spawn shares
 	BiomeSlotsReachable: By biome: every spawn place of an enemy with several places can be reached
 	NegativeNetIdSwap: Swapping into a slime colour (Pinky) works and keeps the Blue Slime type
 	EvilSlotsShared: By biome: in a world with a single evil, the owners of the missing evil's places spawn through the present evil (20 seeds)
@@ -213,17 +213,15 @@ Tests: {
 	OtherTexts: Every message has a text
 	ConfigRanges: Settings are consistent
 	CacheSignatureScope: Saving an enemy stat setting keeps findability and the recipe plan; loot and swap pool settings rebuild them
-	ConfigResetDefaults: "Settings: the reset button restores every default and covers every config"
-	HintFactsTrue: "Hints say what the planners do: the host carries the item, the recipe makes it"
-	HintPriceScales: "Hint prices follow the formula and rise with the level and the tier"
-	HintPurchaseFlow: "Buying a hint takes the coins, raises its level, and is refused when coins are short"
-	HintSyncRoundTrip: "Hint levels survive the codex wire format, the save and the server checks"
-	HintTextsResolved: "Every hint sentence is a full sentence in this language"
+	ConfigResetDefaults: Settings: the reset button restores every default and covers every config
+	HintFactsTrue: Hints say what the planners do: the host carries the item, the recipe makes it
+	HintPriceScales: Hint prices follow the formula and rise with the level and the tier
+	HintPurchaseFlow: Buying a hint takes the coins, raises its level, and is refused when coins are short
+	HintSyncRoundTrip: Hint levels survive the codex wire format, the save and the server checks
+	HintTextsResolved: Every hint sentence is a full sentence in this language
 }
 
-Journal: {
-	Description: Opens the randomizer codex (also the J key)
-}
+Journal.Description: Opens the randomizer codex (also the J key)
 
 Codex: {
 	Title: Randomizer codex
@@ -234,25 +232,25 @@ Codex: {
 	TabBiomes: Biomes
 	TabHints: Hints
 	Search: Search...
-	Empty: "Nothing discovered here yet: kill enemies, open chests and bags, look at recipes!"
+	Empty: Nothing discovered here yet: kill enemies, open chests and bags, look at recipes!
 	NoMatch: Nothing matches the search.
 	Error: This page could not be built (see client.log).
 	Loading: Loading...
-	EnemiesCount: "Enemies killed: {0}"
-	Kills: "Kills: {0}"
-	Tier: "Tier {0}"
-	Life: "Base life: {0}"
-	SeenTimesIn: "Seen {0} times, in:"
+	EnemiesCount: Enemies killed: {0}
+	Kills: Kills: {0}
+	Tier: Tier {0}
+	Life: Base life: {0}
+	SeenTimesIn: Seen {0} times, in:
 	SpawnShareHover: Share of this enemy among the spawns seen in this biome
 	ChanceHover: Planned chance per kill (the loot bonus of strong enemies can raise it)
-	ChanceUnknown: "?"
+	ChanceUnknown: ?
 	Percent: "{0}%"
 	DropsFound: Drops found
 	NoDrops: Nothing dropped yet.
-	ToFind: "Drops still to find: {0}"
-	UnknownDrop: "Undiscovered drop: keep hunting!"
-	FilterCategory: "Category: {0}"
-	FilterTier: "Tier: {0}"
+	ToFind: Drops still to find: {0}
+	UnknownDrop: Undiscovered drop: keep hunting!
+	FilterCategory: Category: {0}
+	FilterTier: Tier: {0}
 	ItemsCount: "{0} / {1} items"
 	CraftedWith: Crafted with
 	UsedIn: Used in
@@ -260,236 +258,274 @@ Codex: {
 	OtherSources: Other sources
 	BagContents: Received from this bag
 	NoSource: No source found yet.
-	More: "... and {0} more"
+	More: ... and {0} more
 	OpenTree: Craft tree
 	ItemPage: Item page
 	At: at
 	PickItem: Pick an item to see how to craft it (discovered recipes only).
-	TreeOf: "How to craft {0}"
-	Cycle: "(already above)"
-	TooDeep: "(too deep)"
-	TreeTooBig: "The tree is too big: collapse some branches."
+	TreeOf: How to craft {0}
+	Cycle: (already above)
+	TooDeep: (too deep)
+	TreeTooBig: The tree is too big: collapse some branches.
 	NothingReceived: Nothing received yet.
 	SeenCount: "{0} enemies seen"
 
 	Hint: {
-		Syncing: "One moment: I am still catching up on what was bought in this world."
-		Refused: "I have already told you that much. Ask me about the next step."
-		Conditions: "Mind the place: {0}."
-		Button: "Hint"
-		Intro: "Stuck? For a few coins, I can put you on the right track. Pick what you are looking for, on the right."
-		Nothing: "Nothing to tell you for now: what you need is already within your reach."
-		TooPoor: "That will be {0}, and you do not have it. Come back with more coins."
-		PanelTitle: "The Guide's hints"
-		Money: "Your coins: {0}"
-		Buy: "Buy: {0}"
-		Repeat: "Say it again"
-		Level: "Hint {0}/{1}"
-		Found: "(found)"
-		Unknown: "???"
-		NoHint: "No hint bought yet."
-		NotAsked: "Not asked about yet"
-		TabIntro: "Hints bought from the Guide (talk to him, then Hint). They are shared by everyone in this world."
-		About: "Hints about {0}"
-		PickTarget: "Click an item to read its hints again."
-		Free: "free"
-		NoStation: "no station"
+		Syncing: One moment: I am still catching up on what was bought in this world.
+		Refused: I have already told you that much. Ask me about the next step.
+		Conditions: Mind the place: {0}.
+		Button: Hint
+		Intro: Stuck? For a few coins, I can put you on the right track. Pick what you are looking for, on the right.
+		Nothing: Nothing to tell you for now: what you need is already within your reach.
+		TooPoor: That will be {0}, and you do not have it. Come back with more coins.
+		PanelTitle: The Guide's hints
+		Money: Your coins: {0}
+		Buy: Buy: {0}
+		Repeat: Say it again
+		Level: Hint {0}/{1}
+		Found: (found)
+		Unknown: ???
+		NoHint: No hint bought yet.
+		NotAsked: Not asked about yet
+		TabIntro: Hints bought from the Guide (talk to him, then Hint). They are shared by everyone in this world.
+		About: Hints about {0}
+		PickTarget: Click an item to read its hints again.
+		Free: free
+		NoStation: no station
+
 		Coin: {
 			Copper: "{0} copper"
 			Silver: "{0} silver"
 			Gold: "{0} gold"
 			Platinum: "{0} platinum"
 		}
+
 		Station: {
-			Hand: "by hand, no station needed"
-			Bench: "at a workbench of some sort"
-			Anvil: "on an anvil"
-			Forge: "in the heat of a forge or a furnace"
-			Altar: "on a dark altar"
-			Furniture: "with the help of some furniture"
-			Brewing: "where potions or meals are prepared"
-			Magic: "with the help of magic"
-			Machine: "with some machine or craftsman's tool"
+			Hand: by hand, no station needed
+			Bench: at a workbench of some sort
+			Anvil: on an anvil
+			Forge: in the heat of a forge or a furnace
+			Altar: on a dark altar
+			Furniture: with the help of some furniture
+			Brewing: where potions or meals are prepared
+			Magic: with the help of magic
+			Machine: with some machine or craftsman's tool
 		}
+
 		Move: {
-			Ground: "A creature that walks"
-			Flying: "A creature that flies"
-			Water: "A creature that swims"
-			Critter: "A small harmless critter"
+			Ground: A creature that walks
+			Flying: A creature that flies
+			Water: A creature that swims
+			Critter: A small harmless critter
 		}
+
 		Time: {
-			Any: "at any hour"
-			Day: "by day"
-			Night: "at night"
+			Any: at any hour
+			Day: by day
+			Night: at night
 		}
+
 		Band: {
-			0: "early on, close to the surface"
-			1: "deeper down, around the time of the first great foes"
-			2: "once the world has hardened"
-			3: "late in your journey, in the darkest places"
+			0: early on, close to the surface
+			1: deeper down, around the time of the first great foes
+			2: once the world has hardened
+			3: late in your journey, in the darkest places
 		}
+
 		Kind: {
 			Creature: {
-				0: "A creature carries it. Hunt, and you will find it."
-				1: "No one crafts this one: a living thing drops it."
-				2: "It falls from the pockets of some creature."
+				0: A creature carries it. Hunt, and you will find it.
+				1: No one crafts this one: a living thing drops it.
+				2: It falls from the pockets of some creature.
 			}
+
 			Recipe: {
-				0: "It is crafted, {0}."
-				1: "No one finds it lying around: it is made {0}."
-				2: "A bit of skill will do: you craft it {0}."
+				0: It is crafted, {0}.
+				1: No one finds it lying around: it is made {0}.
+				2: A bit of skill will do: you craft it {0}.
 			}
+
 			Boss: {
-				0: "A great foe keeps it. You will have to fight for it."
-				1: "Only a mighty enemy holds this one."
-				2: "Defeat something big: it guards what you seek."
+				0: A great foe keeps it. You will have to fight for it.
+				1: Only a mighty enemy holds this one.
+				2: Defeat something big: it guards what you seek.
 			}
+
 			Bag: {
-				0: "It hides inside a bag or a crate."
-				1: "Open the right container and it will be there."
-				2: "Something you open, not something you hunt, gives it."
+				0: It hides inside a bag or a crate.
+				1: Open the right container and it will be there.
+				2: Something you open, not something you hunt, gives it.
 			}
+
 			Chest: {
-				0: "It hides in chests."
-				1: "Explore, and open the chests you find."
-				2: "Treasure hunters find it in chests."
+				0: It hides in chests.
+				1: Explore, and open the chests you find.
+				2: Treasure hunters find it in chests.
 			}
+
 			Pot: {
-				0: "It hides in pots."
-				1: "Break pots, lots of them."
-				2: "Pottery hides more than coins..."
+				0: It hides in pots.
+				1: Break pots, lots of them.
+				2: Pottery hides more than coins...
 			}
+
 			Shop: {
-				0: "Someone sells it."
-				1: "Money talks: a merchant has it."
-				2: "You will not find it, you will buy it."
+				0: Someone sells it.
+				1: Money talks: a merchant has it.
+				2: You will not find it, you will buy it.
 			}
 		}
+
 		Where: {
 			Creature: {
 				0: "{0} roams {2} around these places: {1}. It carries one."
-				1: "Look around these places, {2}: {1}. {0} there holds what you seek."
-				2: "I have heard of it near these places: {1}. {0}, out {2}, keeps one close."
+				1: Look around these places, {2}: {1}. {0} there holds what you seek.
+				2: I have heard of it near these places: {1}. {0}, out {2}, keeps one close.
 			}
+
 			Roaming: {
 				0: "{0} wanders the world {2}. It carries one."
-				1: "Nobody knows where it lives: {0}, seen {2}, keeps one."
+				1: Nobody knows where it lives: {0}, seen {2}, keeps one.
 				2: "{0} comes and goes {2}; it holds what you seek."
 			}
+
 			Recipe: {
-				0: "It is made from things found {0}."
-				1: "Its parts are gathered {0}."
-				2: "What it needs can be found {0}."
+				0: It is made from things found {0}.
+				1: Its parts are gathered {0}.
+				2: What it needs can be found {0}.
 			}
+
 			Boss: {
-				0: "A great foe met {0} keeps one."
-				1: "Defeat a mighty enemy, {0}, and you may get one."
-				2: "A fearsome creature you will face {0} guards it."
+				0: A great foe met {0} keeps one.
+				1: Defeat a mighty enemy, {0}, and you may get one.
+				2: A fearsome creature you will face {0} guards it.
 			}
+
 			Bag: {
-				0: "That bag or crate is found {0}."
-				1: "Look in the containers you get {0}."
-				2: "Such a bag comes your way {0}."
+				0: That bag or crate is found {0}.
+				1: Look in the containers you get {0}.
+				2: Such a bag comes your way {0}.
 			}
+
 			Chest: {
-				0: "Wooden chests, on the surface and in the caves, hide a few."
-				1: "Open the plain wooden chests of the world: some keep one."
-				2: "Simple wooden chests, nothing fancy: that is where to look."
+				0: Wooden chests, on the surface and in the caves, hide a few.
+				1: Open the plain wooden chests of the world: some keep one.
+				2: Simple wooden chests, nothing fancy: that is where to look.
 			}
+
 			Pot: {
-				0: "Pots broken {0} may give one."
-				1: "Smash pots, {0}; luck will do the rest."
-				2: "Keep breaking pots {0}: one of them will have it."
+				0: Pots broken {0} may give one.
+				1: Smash pots, {0}; luck will do the rest.
+				2: Keep breaking pots {0}: one of them will have it.
 			}
+
 			Shop: {
-				0: "Someone who settles in your town {0} sells it."
-				1: "A neighbour you will meet {0} has it on the shelf."
-				2: "Wait for the right resident; you will meet them {0}."
+				0: Someone who settles in your town {0} sells it.
+				1: A neighbour you will meet {0} has it on the shelf.
+				2: Wait for the right resident; you will meet them {0}.
 			}
 		}
+
 		Shape: {
 			Creature: {
-				0: "Here is its shape. Ring a bell?"
-				1: "I sketched it for you, as best I could:"
+				0: Here is its shape. Ring a bell?
+				1: I sketched it for you, as best I could:
 			}
+
 			Recipe: {
-				0: "These are the shapes of what you need:"
-				1: "Here is the recipe, in shadows:"
+				0: These are the shapes of what you need:
+				1: Here is the recipe, in shadows:
 			}
+
 			Boss: {
-				0: "Here is the shadow of that foe. Beware."
-				1: "Its silhouette alone is frightening:"
+				0: Here is the shadow of that foe. Beware.
+				1: Its silhouette alone is frightening:
 			}
+
 			Bag: {
-				0: "This is the shape of the container:"
-				1: "Look for something shaped like this:"
+				0: This is the shape of the container:
+				1: Look for something shaped like this:
 			}
+
 			Chest: {
-				0: "This is what you will find in them:"
-				1: "Its shape, so you know it when you see it:"
+				0: This is what you will find in them:
+				1: Its shape, so you know it when you see it:
 			}
+
 			Pot: {
-				0: "This is what will fall out of a pot:"
-				1: "Its shape, so you know it when you see it:"
+				0: This is what will fall out of a pot:
+				1: Its shape, so you know it when you see it:
 			}
+
 			Shop: {
-				0: "Here is the shape of the seller:"
-				1: "Look for this person in town:"
+				0: Here is the shape of the seller:
+				1: Look for this person in town:
 			}
 		}
+
 		Name: {
 			Creature: {
 				0: "{0} carries it."
-				1: "Hunt this one: {0}."
+				1: Hunt this one: {0}.
 			}
+
 			Recipe: {
-				0: "Here is the whole recipe, at: {0}."
-				1: "The full recipe ({0}):"
+				0: Here is the whole recipe, at: {0}.
+				1: The full recipe ({0}):
 			}
+
 			Boss: {
 				0: "{0} keeps it."
-				1: "Your target: {0}."
+				1: Your target: {0}.
 			}
+
 			Bag: {
-				0: "Open this: {0}."
-				1: "It is inside this: {0}."
+				0: Open this: {0}.
+				1: It is inside this: {0}.
 			}
+
 			Chest: {
 				0: "{0}: look in wooden chests."
-				1: "Open every wooden chest: {0} is waiting."
+				1: Open every wooden chest: {0} is waiting.
 			}
+
 			Pot: {
 				0: "{0}: break pots, it will come."
-				1: "Pots, again and again: {0} is in one of them."
+				1: Pots, again and again: {0} is in one of them.
 			}
+
 			Shop: {
 				0: "{0} sells it."
-				1: "Go and see {0}, purse in hand."
+				1: Go and see {0}, purse in hand.
 			}
 		}
+
 		World: {
 			TruffleWorm: {
-				Kind: "It is a living creature, caught rather than crafted."
-				Where: "It wriggles in the glowing mushroom fields, once the world has hardened."
-				Shape: "This is what it looks like:"
+				Kind: It is a living creature, caught rather than crafted.
+				Where: It wriggles in the glowing mushroom fields, once the world has hardened.
+				Shape: This is what it looks like:
 				Name: "{0}: catch it with a bug net in a glowing mushroom biome."
 			}
+
 			EmpressButterfly: {
-				Kind: "It is a living creature: catch it, don't craft it."
-				Where: "It flutters over the hallowed lands, at night, once the world has hardened."
-				Shape: "Its shape, shimmering:"
+				Kind: It is a living creature: catch it, don't craft it.
+				Where: It flutters over the hallowed lands, at night, once the world has hardened.
+				Shape: Its shape, shimmering:
 				Name: "{0}: catch it with a bug net in the Hallow, at night."
 			}
+
 			PowerCell: {
-				Kind: "It is found, not crafted."
-				Where: "Deep in the jungle, behind the walls of an ancient temple."
-				Shape: "This is what you are looking for:"
+				Kind: It is found, not crafted.
+				Where: Deep in the jungle, behind the walls of an ancient temple.
+				Shape: This is what you are looking for:
 				Name: "{0}: in the chests of the Lihzahrd Temple, or on its guardians."
 			}
+
 			GelatinCrystal: {
-				Kind: "It grows out of the ground, like a gem."
-				Where: "Under the hallowed lands, once the world has hardened."
-				Shape: "It glimmers like this:"
+				Kind: It grows out of the ground, like a gem.
+				Where: Under the hallowed lands, once the world has hardened.
+				Shape: It glimmers like this:
 				Name: "{0}: break it where it grows, in the underground Hallow."
 			}
 		}
@@ -741,8 +777,8 @@ Configs: {
 		}
 
 		ResetAll: {
-			Label: "Reset all settings (click twice)"
-			Tooltip: "Puts every setting of Ultimate Randomizer (all pages, client settings included) back to its default value. Click, then click again within a few seconds to confirm. In a world, the settings that need a reload are kept: reset from the main menu to reset them too. In multiplayer, only the host can do it."
+			Label: Reset all settings (click twice)
+			Tooltip: Puts every setting of Ultimate Randomizer (all pages, client settings included) back to its default value. Click, then click again within a few seconds to confirm. In a world, the settings that need a reload are kept: reset from the main menu to reset them too. In multiplayer, only the host can do it.
 		}
 	}
 
@@ -1666,7 +1702,7 @@ Configs: {
 		Headers: {
 			StartingKit: Starting kit
 			TownNpcs: Town NPCs
-			Hints: "Hints"
+			Hints: Hints
 		}
 
 		StartingKit: {
@@ -1700,8 +1736,8 @@ Configs: {
 		}
 
 		HintBasePrice: {
-			Label: "Base price of a hint (gold)"
-			Tooltip: "Price in gold coins of the first hint level about a tier 0 item, bought from the Guide (Hint button). Each tier adds 1.5 times this, each level costs 3 times the previous one: 2 gold gives 2, 6, 18 and 54 gold for a work bench. 0: free."
+			Label: Base price of a hint (gold)
+			Tooltip: Price in gold coins of the first hint level about a tier 0 item, bought from the Guide (Hint button). Each tier adds 1.5 times this, each level costs 3 times the previous one: 2 gold gives 2, 6, 18 and 54 gold for a work bench. 0: free.
 		}
 	}
 
