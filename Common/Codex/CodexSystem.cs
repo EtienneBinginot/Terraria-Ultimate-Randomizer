@@ -655,16 +655,16 @@ namespace UltimateRandomizer.Common.Codex
 			HashSet<string> sets = new();
 			foreach (CodexEntry e in entries)
 			{
-				if (e.Op is CodexOp.Kill or CodexOp.Drop or CodexOp.Source)
+				if (e.Op is CodexOp.Kill or CodexOp.Drop or CodexOp.Source or CodexOp.Sighting)
 				{
-					string key = $"{(int)e.Op}|{(int)e.Kind}|{e.From}|{e.Npc}|{e.Item}";
+					string key = $"{(int)e.Op}|{(int)e.Kind}|{e.From}|{e.Npc}|{e.Item}|{e.Biome}";
 					if (byKey.TryGetValue(key, out CodexEntry first))
 					{
 						first.Count = (int)Math.Min((long)first.Count + e.Count, int.MaxValue);
 						continue;
 					}
 					// A copy: the original may still be referenced elsewhere
-					CodexEntry copy = new() { Op = e.Op, Kind = e.Kind, Npc = e.Npc, From = e.From, Item = e.Item, Count = e.Count };
+					CodexEntry copy = new() { Op = e.Op, Kind = e.Kind, Npc = e.Npc, From = e.From, Item = e.Item, Biome = e.Biome, Count = e.Count };
 					byKey[key] = copy;
 					merged.Add(copy);
 				}
@@ -858,11 +858,29 @@ namespace UltimateRandomizer.Common.Codex
 		public static List<string> BiomesWhereSeen(int netId)
 		{
 			string npc = CodexNames.Npc(netId);
-			return Data.Sightings.Where(s => s.Value.Contains(npc)).Select(s => s.Key).ToList();
+			return Data.Sightings.Where(s => s.Value.ContainsKey(npc)).Select(s => s.Key).ToList();
 		}
 
 		public static List<int> NpcsSeenIn(string biome) =>
-			Data.Sightings.TryGetValue(biome, out HashSet<string> npcs) ? npcs.Select(CodexNames.NpcId).Where(id => id != 0).ToList() : new List<int>();
+			Data.Sightings.TryGetValue(biome, out Dictionary<string, int> npcs) ? npcs.Keys.Select(CodexNames.NpcId).Where(id => id != 0).ToList() : new List<int>();
+
+		// How many natural spawns of the enemy were seen, in all biomes
+		public static int SightingCount(int netId)
+		{
+			string npc = CodexNames.Npc(netId);
+			int total = 0;
+			foreach (Dictionary<string, int> npcs in Data.Sightings.Values) total += npcs.GetValueOrDefault(npc);
+			return total;
+		}
+
+		// Share of the enemy among the spawns seen in the biome (0 to 1; 0 when never seen there)
+		public static float SpawnShare(string biome, int netId)
+		{
+			if (!Data.Sightings.TryGetValue(biome, out Dictionary<string, int> npcs)) return 0f;
+			long total = 0;
+			foreach (int count in npcs.Values) total += count;
+			return total <= 0 ? 0f : npcs.GetValueOrDefault(CodexNames.Npc(netId)) / (float)total;
+		}
 
 		public static List<(int npc, int count)> NpcsDropping(int item) => Index().DroppedBy.TryGetValue(item, out List<(int, int)> list) ? list : new List<(int, int)>();
 

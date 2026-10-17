@@ -24,6 +24,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CodexHidesUndiscovered", CodexHidesUndiscovered);
 			TestRunner.Register("CodexManyItemsBounded", CodexManyItemsBounded);
 			TestRunner.Register("CodexTextsResolved", CodexTextsResolved);
+			TestRunner.Register("CodexShowsChances", CodexShowsChances);
 		}
 
 		private static IEnumerable<UIElement> Walk(UIElement element)
@@ -226,6 +227,76 @@ namespace UltimateRandomizer.Common.Tests
 				state.RestoreNavigation(saved);
 			}
 			Check.All(failures, "Codex pages too heavy");
+		}
+
+		// A discovered drop shows its planned chance per kill (an item planned twice: the chance of at least one), on the
+		// enemy page and on the item page; a drop outside the plan shows "?"; the biome card shows each enemy's share
+		private static void CodexShowsChances()
+		{
+			CodexUIState state = StateOrSkip();
+			if (!SeedSystem.WorldReady || !ItemPool.Ready) Check.Skip("no world");
+			int npc = 0;
+			List<PlannedDrop> plan = null;
+			foreach (int id in new[] { NPCID.BlueSlime, NPCID.Zombie, NPCID.DemonEye, NPCID.GreenSlime, NPCID.Skeleton })
+			{
+				plan = RandomNpcDropRule.Plan(id, Main.expertMode);
+				if (plan.Exists(d => d.Item > ItemID.None))
+				{
+					npc = id;
+					break;
+				}
+			}
+			if (npc == 0) Check.Skip("no enemy with planned drops");
+			int planned = plan.First(d => d.Item > ItemID.None).Item;
+			float miss = 1f;
+			foreach (PlannedDrop drop in plan.Where(d => d.Item == planned)) miss *= 1f - Math.Clamp(drop.Chance, 0f, 1f);
+			string expected = CodexStats.Percent(1f - miss);
+			int outside = Enumerable.Range(1, ItemLoader.ItemCount - 1).First(t => !plan.Exists(d => d.Item == t) && ItemPool.IsValid(t));
+			string slime = CodexNames.Npc(npc);
+			CodexData savedData = CodexSystem.Data;
+			var saved = state.SaveNavigation();
+			List<string> failures = new();
+			try
+			{
+				CodexData fresh = new() { Seed = SeedSystem.WorldSeed, HasSeed = true };
+				fresh.Apply(CodexEntry.Kill(slime, 4));
+				fresh.Apply(CodexEntry.Drop(slime, CodexNames.Item(planned), 2));
+				fresh.Apply(CodexEntry.Drop(slime, CodexNames.Item(outside), 1));
+				fresh.Apply(CodexEntry.Sighting("Forest", slime, 3));
+				fresh.Apply(CodexEntry.Sighting("Forest", CodexNames.Npc(NPCID.Bunny), 1));
+				CodexSystem.Data = fresh;
+				CodexSystem.RefreshIndex();
+				state.ClearFilters();
+
+				string Caption(IEnumerable<UIElement> elements, Func<UIElement, bool> inner) =>
+					elements.OfType<CodexCaptioned>().FirstOrDefault(c => inner(c.Inner))?.Caption.Text;
+
+				state.Navigate(CodexPage.NpcPage(npc));
+				state.BuildNow();
+				List<UIElement> page = WalkAll(state.Content).ToList();
+				string shown = Caption(page, e => e is CodexItemIcon icon && icon.Type == planned);
+				if (shown != expected) failures.Add($"enemy page: {Lang.GetItemNameValue(planned)} shows {shown ?? "nothing"}, planned {expected}");
+				string unknown = Caption(page, e => e is CodexItemIcon icon && icon.Type == outside);
+				if (unknown != CodexStats.Percent(null)) failures.Add($"enemy page: a drop outside the plan shows {unknown ?? "nothing"}");
+
+				state.Navigate(CodexPage.ItemPage(planned));
+				state.BuildNow();
+				shown = Caption(WalkAll(state.Content), e => e is CodexNpcPortrait portrait && portrait.NetId == npc);
+				if (shown != expected) failures.Add($"item page: shows {shown ?? "nothing"}, planned {expected}");
+
+				state.Navigate(new CodexPage(CodexPageKind.Biomes));
+				state.BuildNow();
+				shown = Caption(WalkAll(state.Content), e => e is CodexNpcPortrait portrait && portrait.NetId == npc);
+				if (shown != CodexStats.Percent(0.75f)) failures.Add($"biome card: share {shown ?? "nothing"}, expected {CodexStats.Percent(0.75f)}");
+				if (CodexSystem.SightingCount(npc) != 3) failures.Add($"seen {CodexSystem.SightingCount(npc)} times, expected 3");
+			}
+			finally
+			{
+				CodexSystem.Data = savedData;
+				CodexSystem.RefreshIndex();
+				state.RestoreNavigation(saved);
+			}
+			Check.All(failures, "Chances shown");
 		}
 
 		// No text of the codex (window, tabs, every tab's page, an item and an enemy page) is a raw localization key

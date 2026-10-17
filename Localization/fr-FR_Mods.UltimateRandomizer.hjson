@@ -112,6 +112,7 @@ Tests: {
 	CodexHidesUndiscovered: "Interface du codex : recettes, ennemis, objets et sacs non découverts restent cachés"
 	CodexManyItemsBounded: "Interface du codex : avec 3000 objets et 300 ennemis, seules les lignes visibles sont construites"
 	CodexTextsResolved: "Interface du codex : aucune clé de texte brute n'est affichée"
+	CodexShowsChances: "Interface du codex : le butin découvert affiche sa chance prévue, les biomes la part des apparitions"
 	BiomeSlotsReachable: Par biome : chaque lieu d'apparition d'un ennemi qui en a plusieurs peut être atteint
 	NegativeNetIdSwap: Le remplacement par une couleur de slime (Pinky) fonctionne et garde le type Slime bleu
 	EvilSlotsShared: Par biome : dans un monde à un seul mal, les ennemis des lieux du mal absent apparaissent dans le mal présent (20 graines)
@@ -212,6 +213,7 @@ Tests: {
 	OtherTexts: Chaque message a un texte
 	ConfigRanges: Les réglages sont cohérents
 	CacheSignatureScope: Sauvegarder un réglage de stats d'ennemis garde la trouvabilité et le plan des recettes ; les réglages de butin et du pool d'échanges les recalculent
+	ConfigResetDefaults: "Réglages : le bouton de réinitialisation remet chaque valeur par défaut, sur toutes les pages"
 	HintFactsTrue: "Les indices disent ce que prévoient les planificateurs : l'hôte porte l'objet, la recette le fabrique"
 	HintPriceScales: "Le prix des indices suit la formule et monte avec le niveau et le palier"
 	HintPurchaseFlow: "Acheter un indice prend les pièces, monte son niveau, et est refusé sans assez de pièces"
@@ -240,7 +242,11 @@ Codex: {
 	Kills: "Vaincus : {0}"
 	Tier: "Palier {0}"
 	Life: "Vie de base : {0}"
-	SeenIn: "Vu dans :"
+	SeenTimesIn: "Vu {0} fois, dans :"
+	SpawnShareHover: Part de cet ennemi parmi les apparitions vues dans ce biome
+	ChanceHover: Chance prévue par ennemi vaincu (le bonus de butin des ennemis renforcés peut l'augmenter)
+	ChanceUnknown: "?"
+	Percent: "{0} %"
 	DropsFound: Butin trouvé
 	NoDrops: Rien obtenu pour l'instant.
 	ToFind: "Butin encore à trouver : {0}"
@@ -529,6 +535,11 @@ Codex: {
 
 Chat: {
 	ConfigHostOnly: Seul l'hôte peut modifier les réglages d'Ultimate Randomizer.
+	ResetConfirm: Cliquez à nouveau pour confirmer : tous les réglages reprennent leur valeur par défaut
+	ResetDone: Tous les réglages ont repris leur valeur par défaut.
+	ResetSent: Réinitialisation envoyée au serveur.
+	ResetKeptReload: Les réglages qui demandent un rechargement ont été conservés (réinitialisez depuis le menu principal pour les remettre aussi).
+	ResetNeedsReload: Certains réglages demandent un rechargement et n'ont pas été réinitialisés.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer est aussi activé : le loot est randomisé deux fois. N'active qu'un seul des deux randomizers dans Manage Mods."
 	StartingKit: Ultimate Randomizer : tu as reçu un kit de départ aléatoire pour ce monde !
 	PowerUp: Ton équipement a de l'avance sur le monde : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts.
@@ -727,6 +738,11 @@ Configs: {
 		ExcludedMods: {
 			Label: Mods exclus
 			Tooltip: Noms internes des mods dont les objets sont ignorés par le randomizer (par exemple CalamityMod).
+		}
+
+		ResetAll: {
+			Label: "Réinitialiser tous les réglages (cliquer deux fois)"
+			Tooltip: "Remet chaque réglage d'Ultimate Randomizer (toutes les pages, réglages client compris) à sa valeur par défaut. Cliquez, puis cliquez à nouveau dans les secondes qui suivent pour confirmer. Dans un monde, les réglages qui demandent un rechargement sont conservés : réinitialisez depuis le menu principal pour les remettre aussi. En multijoueur, seul l'hôte peut le faire."
 		}
 	}
 

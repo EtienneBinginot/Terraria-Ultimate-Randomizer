@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
+using Newtonsoft.Json;
 using Terraria.ModLoader;
 using Terraria.ModLoader.Config;
 
@@ -25,6 +26,14 @@ namespace UltimateRandomizer.Common.Configs
 	public class GeneralConfig : RandomizerConfig
 	{
 		public static GeneralConfig Instance => ModContent.GetInstance<GeneralConfig>();
+
+		// A button (ResetAllElement), not a setting: never saved, so not part of the config signatures
+		[JsonIgnore]
+		[ShowDespiteJsonIgnore]
+		[CustomModConfigItem(typeof(ResetAllElement))]
+		[BackgroundColor(150, 60, 60)]
+		[DefaultValue(false)]
+		public bool ResetAll;
 
 		[Header("Mode")]
 		[DefaultValue(RandomizerMode.Coherent)]

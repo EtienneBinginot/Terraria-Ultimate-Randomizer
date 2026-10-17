@@ -19,6 +19,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 	{
 		private const float Icon = 44;
 		private const float Portrait = 76;
+		// Item icon with a caption under it: wide enough for "<0.01%"
+		private const float CaptionedIcon = 60;
 		private const int MaxRecipesShown = 40;
 		private const int MaxTreeDepth = 6;
 		private const int MaxTreeRows = 400;
@@ -115,23 +117,32 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			header.Add(info);
 			Add(header);
 
+			// Where it was seen, with its share of the spawns seen in each biome
 			List<string> biomes = CodexSystem.BiomesWhereSeen(netId);
 			if (biomes.Count > 0)
 			{
 				CodexRow seen = new(40);
-				seen.Add(new CodexLabel(CodexText.Get("SeenIn"), 0.85f, CodexDraw.Muted), 8);
+				seen.Add(new CodexLabel(CodexText.Get("SeenTimesIn", CodexSystem.SightingCount(netId)), 0.85f, CodexDraw.Muted), 8);
+				string shareHover = CodexText.Get("SpawnShareHover");
 				foreach (string biome in biomes.OrderBy(BiomeSlots.BiomeDisplayName))
 				{
 					seen.Add(new CodexBiomeIcon(biome), 2);
-					seen.Add(new CodexLabel(BiomeSlots.BiomeDisplayName(biome), 0.8f), 12);
+					string text = $"{BiomeSlots.BiomeDisplayName(biome)} {CodexStats.Percent(CodexSystem.SpawnShare(biome, netId))}";
+					seen.Add(new CodexLabel(text, 0.8f) { HoverText = shareHover }, 12);
 				}
 				Add(seen);
 			}
 
+			// Each drop found with its planned chance per kill
 			List<(int item, int count)> drops = CodexSystem.DropsOf(netId);
 			Section(CodexText.Get("DropsFound"));
 			if (drops.Count == 0) Text(CodexText.Get("NoDrops"), CodexDraw.Muted);
-			else Grid(drops, d => new CodexItemIcon(d.item, d.count, Icon), Icon, Icon);
+			else
+			{
+				string chanceHover = CodexText.Get("ChanceHover");
+				Grid(drops, d => new CodexCaptioned(new CodexItemIcon(d.item, d.count, Icon), CodexStats.DropChanceText(netId, d.item), CaptionedIcon, chanceHover),
+					CaptionedIcon, Icon + CodexCaptioned.CaptionHeight);
+			}
 
 			// Only how many: the planned items stay secret until they drop
 			HashSet<int> found = drops.Select(d => d.item).ToHashSet();
@@ -235,7 +246,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			{
 				any = true;
 				Section(CodexText.Get("DroppedBy"));
-				Grid(droppedBy.OrderByDescending(d => d.count).ToList(), d => new CodexNpcPortrait(d.npc, 64, 64, false, d.count), 64, 64);
+				string chanceHover = CodexText.Get("ChanceHover");
+				Grid(droppedBy.OrderByDescending(d => d.count).ToList(), d => new CodexCaptioned(new CodexNpcPortrait(d.npc, 64, 64, false, d.count),
+					CodexStats.DropChanceText(d.npc, type), 64, chanceHover), 64, 64 + CodexCaptioned.CaptionHeight);
 			}
 			List<(CodexSource kind, int from, int count)> sources = CodexSystem.SourcesOf(type);
 			if (sources.Count > 0)
@@ -434,7 +447,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				header.Add(new CodexLabel(biomeName, 1f, CodexDraw.Gold), 12);
 				header.Add(new CodexLabel(CodexText.Get("SeenCount", npcs.Count), 0.8f, CodexDraw.Muted));
 				Add(header);
-				Grid(npcs, id => new CodexNpcPortrait(id, 64, 64, false, CodexSystem.KillCount(id)), 64, 64, 20);
+				string shareHover = CodexText.Get("SpawnShareHover");
+				Grid(npcs, id => new CodexCaptioned(new CodexNpcPortrait(id, 64, 64, false, CodexSystem.KillCount(id)), CodexStats.Percent(CodexSystem.SpawnShare(biome, id)), 64, shareHover),
+					64, 64 + CodexCaptioned.CaptionHeight, 20);
 			}
 			if (!any) Empty(biomes.Count == 0);
 		}

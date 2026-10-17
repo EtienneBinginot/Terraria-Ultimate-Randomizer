@@ -17,6 +17,10 @@ namespace UltimateRandomizer.Common.Configs
 			return false;
 		}
 
-		public override void OnChanged() => SeedSystem.NotifyConfigSaved();
+		// A reset of every config refreshes the world once, at its end
+		public override void OnChanged()
+		{
+			if (!ConfigReset.Batching) SeedSystem.NotifyConfigSaved();
+		}
 	}
 }

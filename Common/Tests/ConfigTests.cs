@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 using Terraria.Localization;
@@ -51,6 +52,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("OtherTexts", OtherTexts);
 			TestRunner.Register("ConfigRanges", ConfigRanges);
 			TestRunner.Register("CacheSignatureScope", CacheSignatureScope);
+			TestRunner.Register("ConfigResetDefaults", ConfigResetDefaults);
 		}
 
 		private static readonly Type[] ConfigTypes =
@@ -103,6 +105,42 @@ namespace UltimateRandomizer.Common.Tests
 				if (!Language.Exists("Mods.UltimateRandomizer.Tests." + id)) missing.Add("Tests." + id);
 			}
 			Check.All(missing, "Missing texts");
+		}
+
+		// The reset button gives every setting (nested weight tables too) its [DefaultValue], keeps the settings needing a
+		// reload when asked to, covers every config of the mod, and is never saved itself. Checked on copies.
+		private static void ConfigResetDefaults()
+		{
+			List<string> failures = new();
+			void Compare(string where, object target)
+			{
+				foreach (FieldInfo field in target.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance))
+				{
+					object value = field.GetValue(target);
+					DefaultValueAttribute attribute = field.GetCustomAttribute<DefaultValueAttribute>();
+					if (attribute != null && (field.FieldType.IsPrimitive || field.FieldType.IsEnum))
+					{
+						object expected = field.FieldType.IsEnum ? Enum.ToObject(field.FieldType, attribute.Value) : Convert.ChangeType(attribute.Value, field.FieldType);
+						if (!Equals(expected, value)) failures.Add($"{where}.{field.Name}: {value}, default {expected}");
+					}
+					else if (value is WeightTable or StackCaps) Compare(where + "." + field.Name, value);
+				}
+			}
+			foreach (ModConfig config in ConfigReset.All) Compare(config.Name, ConfigReset.Defaults(config, false));
+
+			string Json(object value) => Newtonsoft.Json.JsonConvert.SerializeObject(value, ConfigManager.serializerSettings);
+			GeneralConfig general = GeneralConfig.Instance;
+			GeneralConfig kept = (GeneralConfig)ConfigReset.Defaults(general, true);
+			if (Json(kept.ExcludedItems) != Json(general.ExcludedItems)) failures.Add("excluded items (reload needed) not kept");
+			if (ReferenceEquals(kept.ExcludedItems, general.ExcludedItems)) failures.Add("the copy shares its list with the live config");
+			if (Json(general).Contains(nameof(GeneralConfig.ResetAll))) failures.Add("the reset button is saved with the config");
+
+			HashSet<Type> listed = ConfigReset.All.Select(c => c.GetType()).ToHashSet();
+			foreach (Type type in typeof(ConfigReset).Assembly.GetTypes().Where(t => typeof(ModConfig).IsAssignableFrom(t) && !t.IsAbstract))
+			{
+				if (!listed.Contains(type)) failures.Add($"{type.Name} is not reset");
+			}
+			Check.All(failures, "Reset");
 		}
 
 		private static void ConfigRanges()

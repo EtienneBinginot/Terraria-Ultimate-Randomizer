@@ -188,7 +188,7 @@ namespace UltimateRandomizer.Common.Tests
 				CodexEntry.Source(CodexSource.Tile, CodexNames.Tile(TileID.Dirt), gel, 1),
 				CodexEntry.Recipe(123456),
 				CodexEntry.Seen(gel),
-				CodexEntry.Sighting("Forest", slime),
+				CodexEntry.Sighting("Forest", slime, 3),
 				CodexEntry.Sighting("Forest", pinky),
 				CodexEntry.Chest(CodexEntry.ChestPosition(100, 200), new List<(string, int)> { (wood, 50), (gel, 9) })
 			};
@@ -224,6 +224,7 @@ namespace UltimateRandomizer.Common.Tests
 			Check.Equal(data.Signature(), loaded.Signature(), "content");
 			Check.That(loaded.Sources[(int)CodexSource.Bag].ContainsKey(CodexNames.Item(ItemID.EyeOfCthulhuBossBag)), "an opened bag without content survives");
 			Check.Equal(59, loaded.Sources[(int)CodexSource.Chest][""].Values.Sum(), "chest content");
+			Check.Equal(3, loaded.Sightings["Forest"][CodexNames.Npc(NPCID.BlueSlime)], "sightings counted");
 		}
 
 		private static void CodexSyncRoundTrip()

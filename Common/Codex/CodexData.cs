@@ -43,7 +43,8 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static CodexEntry Seen(string item) => new() { Op = CodexOp.Seen, Item = item };
 
-		public static CodexEntry Sighting(string biome, string npc) => new() { Op = CodexOp.Sighting, Biome = biome, Npc = npc };
+		// Count: how many times it was seen there (spawn shares of the codex)
+		public static CodexEntry Sighting(string biome, string npc, int count = 1) => new() { Op = CodexOp.Sighting, Biome = biome, Npc = npc, Count = count };
 
 		public static CodexEntry Chest(int position, List<(string item, int count)> items) => new() { Op = CodexOp.Chest, Key = position, Items = items ?? new() };
 
@@ -57,7 +58,6 @@ namespace UltimateRandomizer.Common.Codex
 		{
 			CodexOp.Recipe => "r" + Key,
 			CodexOp.Seen => "s" + Item,
-			CodexOp.Sighting => "g" + Biome + "|" + Npc,
 			CodexOp.Chest => "c" + Key,
 			CodexOp.SourceKey => "k" + (int)Kind + "|" + From,
 			CodexOp.Hint => "h" + Item + "|" + Count,
@@ -127,7 +127,8 @@ namespace UltimateRandomizer.Common.Codex
 		public readonly Dictionary<string, Dictionary<string, int>>[] Sources;
 		public readonly HashSet<int> Recipes = new();
 		public readonly HashSet<string> ItemsSeen = new();
-		public readonly Dictionary<string, HashSet<string>> Sightings = new();
+		// By biome, then by enemy: how many natural spawns were seen there
+		public readonly Dictionary<string, Dictionary<string, int>> Sightings = new();
 		public readonly HashSet<int> OpenedChests = new();
 		// Hint levels bought from the Guide, by item (shared by the whole world)
 		public readonly Dictionary<string, int> Hints = new();
@@ -191,14 +192,14 @@ namespace UltimateRandomizer.Common.Codex
 				case CodexOp.Seen:
 					return !string.IsNullOrEmpty(e.Item) && ItemsSeen.Count < MaxSetSize && ItemsSeen.Add(e.Item) ? Change.Key : Change.None;
 				case CodexOp.Sighting:
-					if (string.IsNullOrEmpty(e.Biome) || string.IsNullOrEmpty(e.Npc)) return Change.None;
-					if (!Sightings.TryGetValue(e.Biome, out HashSet<string> npcs))
+					if (string.IsNullOrEmpty(e.Biome) || string.IsNullOrEmpty(e.Npc) || e.Count <= 0) return Change.None;
+					if (!Sightings.TryGetValue(e.Biome, out Dictionary<string, int> npcs))
 					{
 						if (Sightings.Count >= MaxKeys) return Change.None;
-						npcs = new HashSet<string>();
+						npcs = new Dictionary<string, int>();
 						Sightings[e.Biome] = npcs;
 					}
-					return npcs.Count < MaxPerKey && npcs.Add(e.Npc) ? Change.Key : Change.None;
+					return AddCount(npcs, e.Npc, e.Count, MaxPerKey);
 				case CodexOp.Chest:
 					if (OpenedChests.Count >= MaxSetSize || !OpenedChests.Add(e.Key)) return Change.None;
 					if (e.Items != null)
@@ -229,7 +230,6 @@ namespace UltimateRandomizer.Common.Codex
 			CodexOp.SourceKey => (int)e.Kind < SourceKinds && !Sources[(int)e.Kind].ContainsKey(e.From),
 			CodexOp.Recipe => !Recipes.Contains(e.Key),
 			CodexOp.Seen => !ItemsSeen.Contains(e.Item),
-			CodexOp.Sighting => !Sightings.TryGetValue(e.Biome, out HashSet<string> npcs) || !npcs.Contains(e.Npc),
 			CodexOp.Chest => !OpenedChests.Contains(e.Key),
 			CodexOp.Hint => e.Count > HintLevel(e.Item),
 			_ => true
@@ -280,9 +280,9 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			foreach (int key in Recipes) yield return CodexEntry.Recipe(key);
 			foreach (string item in ItemsSeen) yield return CodexEntry.Seen(item);
-			foreach ((string biome, HashSet<string> npcs) in Sightings)
+			foreach ((string biome, Dictionary<string, int> npcs) in Sightings)
 			{
-				foreach (string npc in npcs) yield return CodexEntry.Sighting(biome, npc);
+				foreach ((string npc, int count) in npcs) yield return CodexEntry.Sighting(biome, npc, count);
 			}
 			// Their content is already in the chest source above
 			foreach (int position in OpenedChests) yield return CodexEntry.Chest(position, null);
@@ -355,16 +355,19 @@ namespace UltimateRandomizer.Common.Codex
 			tag["recipes"] = Recipes.ToList();
 			tag["seen"] = ItemsSeen.ToList();
 			List<string> sightBiome = new(), sightNpc = new();
-			foreach ((string biome, HashSet<string> npcs) in Sightings)
+			List<int> sightCount = new();
+			foreach ((string biome, Dictionary<string, int> npcs) in Sightings)
 			{
-				foreach (string npc in npcs)
+				foreach ((string npc, int count) in npcs)
 				{
 					sightBiome.Add(biome);
 					sightNpc.Add(npc);
+					sightCount.Add(count);
 				}
 			}
 			tag["sightBiome"] = sightBiome;
 			tag["sightNpc"] = sightNpc;
+			tag["sightCount"] = sightCount;
 			tag["chests"] = OpenedChests.ToList();
 			tag["hintItem"] = Hints.Keys.ToList();
 			tag["hintLevel"] = Hints.Values.ToList();
@@ -401,7 +404,12 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (string item in tag.GetList<string>("seen")) data.ItemsSeen.Add(item);
 			IList<string> sightBiome = tag.GetList<string>("sightBiome");
 			IList<string> sightNpc = tag.GetList<string>("sightNpc");
-			for (int i = 0; i < sightBiome.Count && i < sightNpc.Count; i++) data.ApplyInner(CodexEntry.Sighting(sightBiome[i], sightNpc[i]));
+			// Saves of 1.1.2 and before have no counts: each sighting counts once
+			IList<int> sightCount = tag.GetList<int>("sightCount");
+			for (int i = 0; i < sightBiome.Count && i < sightNpc.Count; i++)
+			{
+				data.ApplyInner(CodexEntry.Sighting(sightBiome[i], sightNpc[i], i < sightCount.Count ? sightCount[i] : 1));
+			}
 			foreach (int position in tag.GetList<int>("chests")) data.OpenedChests.Add(position);
 			IList<string> hintItem = tag.GetList<string>("hintItem");
 			IList<int> hintLevel = tag.GetList<int>("hintLevel");
@@ -472,6 +480,7 @@ namespace UltimateRandomizer.Common.Codex
 				case CodexOp.Sighting:
 					w.Write(e.Biome ?? "");
 					w.Write(npc);
+					w.Write7BitEncodedInt(e.Count);
 					break;
 				case CodexOp.Chest:
 					w.Write(e.Key);
@@ -532,7 +541,8 @@ namespace UltimateRandomizer.Common.Codex
 				case CodexOp.Sighting:
 				{
 					string biome = r.ReadString();
-					return CodexEntry.Sighting(biome, CodexNames.Npc(r.ReadInt32()));
+					string npc = CodexNames.Npc(r.ReadInt32());
+					return CodexEntry.Sighting(biome, npc, r.Read7BitEncodedInt());
 				}
 				case CodexOp.Chest:
 				{

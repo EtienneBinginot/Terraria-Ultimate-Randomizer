@@ -112,6 +112,7 @@ Tests: {
 	CodexHidesUndiscovered: "Codex interface: undiscovered recipes, enemies, items and bags stay hidden"
 	CodexManyItemsBounded: "Codex interface: 3000 items and 300 enemies only build the visible rows"
 	CodexTextsResolved: "Codex interface: no raw text key is shown"
+	CodexShowsChances: "Codex interface: discovered drops show their planned chance, biomes the spawn shares"
 	BiomeSlotsReachable: By biome: every spawn place of an enemy with several places can be reached
 	NegativeNetIdSwap: Swapping into a slime colour (Pinky) works and keeps the Blue Slime type
 	EvilSlotsShared: By biome: in a world with a single evil, the owners of the missing evil's places spawn through the present evil (20 seeds)
@@ -212,6 +213,7 @@ Tests: {
 	OtherTexts: Every message has a text
 	ConfigRanges: Settings are consistent
 	CacheSignatureScope: Saving an enemy stat setting keeps findability and the recipe plan; loot and swap pool settings rebuild them
+	ConfigResetDefaults: "Settings: the reset button restores every default and covers every config"
 	HintFactsTrue: "Hints say what the planners do: the host carries the item, the recipe makes it"
 	HintPriceScales: "Hint prices follow the formula and rise with the level and the tier"
 	HintPurchaseFlow: "Buying a hint takes the coins, raises its level, and is refused when coins are short"
@@ -240,7 +242,11 @@ Codex: {
 	Kills: "Kills: {0}"
 	Tier: "Tier {0}"
 	Life: "Base life: {0}"
-	SeenIn: "Seen in:"
+	SeenTimesIn: "Seen {0} times, in:"
+	SpawnShareHover: Share of this enemy among the spawns seen in this biome
+	ChanceHover: Planned chance per kill (the loot bonus of strong enemies can raise it)
+	ChanceUnknown: "?"
+	Percent: "{0}%"
 	DropsFound: Drops found
 	NoDrops: Nothing dropped yet.
 	ToFind: "Drops still to find: {0}"
@@ -529,6 +535,11 @@ Codex: {
 
 Chat: {
 	ConfigHostOnly: Only the host can change the Ultimate Randomizer settings.
+	ResetConfirm: Click again to confirm: every setting goes back to its default
+	ResetDone: Every setting is back to its default value.
+	ResetSent: Reset sent to the server.
+	ResetKeptReload: The settings that need a reload were kept (reset from the main menu to reset them too).
+	ResetNeedsReload: Some settings need a reload and were not reset.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
 	StartingKit: Ultimate Randomizer: you received a random starting kit for this world!
 	PowerUp: Your equipment is ahead of the world: new enemies get x{0} health and x{1} damage.
@@ -727,6 +738,11 @@ Configs: {
 		ExcludedMods: {
 			Label: Excluded mods
 			Tooltip: Internal names of mods whose items are left out of the randomizer (for example CalamityMod).
+		}
+
+		ResetAll: {
+			Label: "Reset all settings (click twice)"
+			Tooltip: "Puts every setting of Ultimate Randomizer (all pages, client settings included) back to its default value. Click, then click again within a few seconds to confirm. In a world, the settings that need a reload are kept: reset from the main menu to reset them too. In multiplayer, only the host can do it."
 		}
 	}
 

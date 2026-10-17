@@ -475,6 +475,27 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		}
 	}
 
+	// A cell of a grid with a small caption under its icon or portrait (drop chance, spawn share)
+	public class CodexCaptioned : UIElement
+	{
+		public const float CaptionHeight = 18;
+		public readonly UIElement Inner;
+		public readonly CodexLabel Caption;
+
+		public CodexCaptioned(UIElement inner, string caption, float width, string hover = null)
+		{
+			Inner = inner;
+			Width.Set(width, 0);
+			Height.Set(inner.Height.Pixels + CaptionHeight, 0);
+			inner.HAlign = 0.5f;
+			Append(inner);
+			Caption = new CodexLabel(caption, 0.7f, CodexDraw.Muted) { HoverText = hover };
+			Caption.HAlign = 0.5f;
+			Caption.Top.Set(inner.Height.Pixels, 0);
+			Append(Caption);
+		}
+	}
+
 	// A section title with a line under it
 	public class CodexSection : UIElement
 	{
