@@ -26,6 +26,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CrittersDrop", CrittersDrop);
 			TestRunner.Register("WildTail", WildTail);
 			TestRunner.Register("PlansIgnoreWild", PlansIgnoreWild);
+			TestRunner.Register("DropTableLength", DropTableLength);
 		}
 
 		// Critters get a share (CritterDropFactor) of the small frequent drop, here at abundance 3
@@ -139,6 +140,43 @@ namespace UltimateRandomizer.Common.Tests
 				ValidatePlan(NpcName(netId), RandomNpcDropRule.Plan(netId, Main.expertMode), failures);
 			}
 			Check.All(failures, "Invalid enemy drop tables");
+		}
+
+		// Long drop tables: with explicit ranges (2 to 7 against the former 1 to 4, abundance 3), the average slot count of
+		// the common enemies follows the skewed roll (about 1.85 times more), and the plans really use that count
+		private static void DropTableLength()
+		{
+			float factor = (float)Math.Sqrt(3);
+			List<int> enemies = new();
+			for (int type = 1; type < NPCID.Count; type++)
+			{
+				if (NPCID.Sets.CountsAsCritter[type] || RandomNpcDropRule.IsBossType(type)) continue;
+				if (RandomNpcDropRule.CanHaveExtraDrops(type, false, LootSnapshot.ForNpc(type))) enemies.Add(type);
+			}
+			if (enemies.Count < 50) Check.Skip($"only {enemies.Count} enemies can get extra drops with these settings");
+			double before = enemies.Average(t => RandomNpcDropRule.SlotCount(DetRandom.NpcKey(t), false, false, 1, 4, DropTableStyle.VanillaLike, factor));
+			double after = enemies.Average(t => RandomNpcDropRule.SlotCount(DetRandom.NpcKey(t), false, false, 2, 7, DropTableStyle.VanillaLike, factor));
+			double skew = RandomNpcDropRule.SlotSkew(false, DropTableStyle.VanillaLike);
+			double expected = RandomNpcDropRule.ExpectedSlots(2, 7, skew) * factor;
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop tables: {before:0.00} slots per enemy with 1-4, {after:0.00} with 2-7 (expected {expected:0.00}), {enemies.Count} enemies");
+			List<string> failures = new();
+			if (Math.Abs(after - expected) > expected * 0.15) failures.Add($"{after:0.00} slots per enemy with 2 to 7, expected about {expected:0.00}");
+			if (after < before * 1.6) failures.Add($"2 to 7 slots give {after / before:0.00} times the slots of 1 to 4, expected about 1.85");
+
+			// The plans use that count: the extra drops are the slots plus the small frequent drops
+			LootConfig cfg = LootConfig.Instance;
+			if (cfg.RandomizeMobDrops && cfg.DropTableStyle != DropTableStyle.MirrorOriginal && GeneralConfig.Instance.RandomizerMode != RandomizerMode.Shuffle)
+			{
+				int commons = 0;
+				for (float total = cfg.CommonDropChance / 100f * 3f; total > 0.0001f && commons < 20; total -= 1f) commons++;
+				foreach (int type in enemies.Take(40))
+				{
+					int slots = RandomNpcDropRule.SlotCount(DetRandom.NpcKey(type), false, false, cfg.DropSlotsMin, cfg.DropSlotsMax, cfg.DropTableStyle, factor);
+					int planned = RandomNpcDropRule.ExtraDrops(type, type, Main.expertMode, false, 3f).Count - commons;
+					if (planned != slots) failures.Add($"{NpcName(type)}: {planned} random slots planned, {slots} expected");
+				}
+			}
+			Check.All(failures, "Drop table length");
 		}
 
 		// Explicit abundance values (not the config): more random items per kill, chances at most 100 %, guaranteed drops unchanged

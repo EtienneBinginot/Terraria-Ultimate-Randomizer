@@ -45,6 +45,59 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		}
 	}
 
+	// The slow part of showing a page the first time is not building it but the cold work of its first frames:
+	// every bestiary icon clone runs NPC.SetDefaults (all mods' hooks), and every NPC or item texture not drawn yet is
+	// read from disk at once (Main.LoadNPC / LoadItem). A tab of a hundred portraits did all of it in one frame. Here at
+	// most PerFrame of these happen per frame drawn; the others wait (drawn as "...") and come on the next frames.
+	public static class CodexBudget
+	{
+		public const int PerFrame = 8;
+		private static int left = PerFrame;
+
+		// Something waited in the last frame: the codex shows "Loading..."
+		public static bool Deferred { get; private set; }
+		private static bool deferredNow;
+
+		public static void NewFrame()
+		{
+			Deferred = deferredNow;
+			deferredNow = false;
+			left = PerFrame;
+		}
+
+		public static bool TrySpend()
+		{
+			if (left > 0)
+			{
+				left--;
+				return true;
+			}
+			deferredNow = true;
+			return false;
+		}
+
+		public static bool NpcTexture(int type)
+		{
+			if (type <= 0 || type >= TextureAssets.Npc.Length || TextureAssets.Npc[type].IsLoaded) return true;
+			if (!TrySpend()) return false;
+			Main.instance.LoadNPC(type);
+			return true;
+		}
+
+		public static bool ItemTexture(int type)
+		{
+			if (type <= 0 || type >= TextureAssets.Item.Length || TextureAssets.Item[type].IsLoaded) return true;
+			if (!TrySpend()) return false;
+			Main.instance.LoadItem(type);
+			return true;
+		}
+
+		public static void DrawWaiting(SpriteBatch spriteBatch, Rectangle r)
+		{
+			Utils.DrawBorderString(spriteBatch, "...", r.Center.ToVector2(), CodexDraw.Muted, 0.8f, 0.5f, 0.5f, -1);
+		}
+	}
+
 	public static class CodexDraw
 	{
 		public static readonly Color Gold = new(255, 217, 102);
@@ -108,9 +161,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (item == null) back = new Color(120, 120, 140);
 			if (IsMouseHovering) back = Color.Lerp(back, Color.White, 0.5f);
 			spriteBatch.Draw(TextureAssets.InventoryBack.Value, r, back * (IsMouseHovering ? 1f : 0.85f));
-			if (item != null)
+			if (item != null && !CodexBudget.ItemTexture(item.type))
 			{
-				Main.instance.LoadItem(item.type);
+				CodexBudget.DrawWaiting(spriteBatch, r);
+			}
+			else if (item != null)
+			{
 				ItemSlot.DrawItemIcon(item, 31, spriteBatch, d.Center(), 1f, d.Width * 0.62f, Color.White);
 				if (count > 1)
 				{
@@ -206,19 +262,39 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private sealed class NpcDrawer : UIElement
 		{
 			private readonly int netId;
+			private readonly int type;
 			private readonly BestiaryEntry entry;
 			private readonly bool big;
 			private IEntryIcon icon;
+			// The clone is made on the first frames drawn, within the codex budget (CodexBudget)
+			private bool iconResolved;
 
 			public NpcDrawer(int netId, BestiaryEntry entry, bool big)
 			{
 				this.netId = netId;
 				this.entry = entry;
 				this.big = big;
+				type = ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : 0;
 				Width.Set(0, 1f);
 				Height.Set(0, 1f);
 				IgnoresMouseInteraction = true;
-				icon = CodexUIState.Instance?.BestiaryIcon(netId, big, entry);
+			}
+
+			// The icon and the texture are ready to use (the bestiary icon reads the texture when it updates)
+			private bool Ready()
+			{
+				if (!iconResolved)
+				{
+					CodexUIState codex = CodexUIState.Instance;
+					if (codex == null) iconResolved = true;
+					else
+					{
+						icon = codex.BestiaryIcon(netId, big, entry, out bool deferred);
+						iconResolved = !deferred;
+					}
+					if (!iconResolved) return false;
+				}
+				return CodexBudget.NpcTexture(type);
 			}
 
 			private BestiaryUICollectionInfo Info => new() { OwnerEntry = entry, UnlockState = BestiaryEntryUnlockState.CanShowDropsWithDropRates_4 };
@@ -237,10 +313,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			public override void Update(GameTime gameTime)
 			{
 				base.Update(gameTime);
-				if (icon == null) return;
 				Rectangle box = GetDimensions().ToRectangle();
 				UIElement view = CodexUIState.Instance?.Content;
 				if (view != null && !view.GetDimensions().ToRectangle().Intersects(box)) return;
+				if (!Ready() || icon == null) return;
 				try
 				{
 					icon.Update(Info, box, Settings(box));
@@ -254,6 +330,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			protected override void DrawSelf(SpriteBatch spriteBatch)
 			{
 				Rectangle box = GetDimensions().ToRectangle();
+				if (!Ready())
+				{
+					CodexBudget.DrawWaiting(spriteBatch, box);
+					return;
+				}
 				if (icon != null)
 				{
 					try

@@ -84,6 +84,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		public bool CloseRequested;
 
 		private UIPanel panel;
+		private UIText title;
 		private CodexList list;
 		private UIScrollbar scrollbar;
 		private UIPanel searchPanel;
@@ -112,7 +113,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			panel.BackgroundColor = new Color(33, 43, 79) * 0.96f;
 			Append(panel);
 
-			UIText title = new(CodexText.Live("Title"), 0.75f, true);
+			title = new UIText(CodexText.Live("Title"), 0.75f, true);
 			title.Top.Set(2, 0);
 			panel.Append(title);
 
@@ -397,7 +398,14 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		public override void Draw(SpriteBatch spriteBatch)
 		{
 			CodexHover.Clear();
+			CodexBudget.NewFrame();
 			base.Draw(spriteBatch);
+			// Icons still waiting for their clone or texture (first opening): a short notice after the title
+			if (CodexBudget.Deferred)
+			{
+				CalculatedStyle d = title.GetDimensions();
+				Utils.DrawBorderString(spriteBatch, CodexText.Get("Loading"), new Vector2(d.X + d.Width + 14, d.Y + d.Height / 2), CodexDraw.Muted, 0.8f, 0, 0.5f, -1);
+			}
 			CodexHover.Draw();
 		}
 
@@ -426,11 +434,18 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private readonly Dictionary<(int netId, bool big), List<IEntryIcon>> icons = new();
 		private readonly Dictionary<(int netId, bool big), int> iconUses = new();
 
-		public IEntryIcon BestiaryIcon(int netId, bool big, BestiaryEntry entry)
+		// deferred: a new clone was needed but this frame's budget is spent (CodexBudget), ask again on the next one
+		public IEntryIcon BestiaryIcon(int netId, bool big, BestiaryEntry entry, out bool deferred)
 		{
+			deferred = false;
 			(int, bool) key = (netId, big);
 			if (!icons.TryGetValue(key, out List<IEntryIcon> clones)) icons[key] = clones = new List<IEntryIcon>();
 			iconUses.TryGetValue(key, out int use);
+			if (use >= clones.Count && !CodexBudget.TrySpend())
+			{
+				deferred = true;
+				return null;
+			}
 			iconUses[key] = use + 1;
 			if (use < clones.Count) return clones[use];
 			IEntryIcon clone;

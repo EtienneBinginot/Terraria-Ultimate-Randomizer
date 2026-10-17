@@ -63,7 +63,7 @@ namespace UltimateRandomizer.Common.Configs
 		// tier WildTierDecay times rarer. Never used by plans, findability or guarantees.
 		[Range(0f, 50f)]
 		[Increment(0.5f)]
-		[DefaultValue(8f)]
+		[DefaultValue(12f)]
 		public float WildDropChance;
 
 		[Range(1.5f, 10f)]

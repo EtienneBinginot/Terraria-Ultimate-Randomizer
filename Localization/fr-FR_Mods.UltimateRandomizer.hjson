@@ -95,6 +95,7 @@ Tests: {
 	SnapshotsCaptured: Les tables de loot d'origine ont été lues
 	MobPlansValid: Toutes les tables de loot des ennemis sont valides
 	LootAbundanceScales: L'abondance du butin multiplie les drops des ennemis, pas les drops garantis
+	DropTableLength: Les ennemis ont de longues tables de loot (2 à 7 emplacements : environ 1,85 fois les anciens 1 à 4)
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés
@@ -227,6 +228,7 @@ Codex: {
 	Empty: "Rien de découvert ici pour l'instant : tue des ennemis, ouvre des coffres et des sacs, regarde les recettes !"
 	NoMatch: Rien ne correspond à la recherche.
 	Error: Impossible d'afficher cette page (voir client.log).
+	Loading: Chargement...
 	EnemiesCount: "Ennemis vaincus : {0}"
 	Kills: "Vaincus : {0}"
 	Tier: "Palier {0}"

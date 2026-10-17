@@ -175,17 +175,9 @@ namespace UltimateRandomizer.Common.Features
 			int npcKey = DetRandom.NpcKey(type);
 			int sourceTier = NpcTiers.EffectiveTier(type);
 			bool critter = NPCID.Sets.CountsAsCritter[type];
-			Random slotRng = DetRandom.Get(RollKey.MobDropSlots, npcKey);
-			int minSlots = isBoss ? cfg.BossDropSlotsMin : cfg.DropSlotsMin;
-			int maxSlots = Math.Max(minSlots, isBoss ? cfg.BossDropSlotsMax : cfg.DropSlotsMax);
-			// Critters: at most 2 slots before abundance (scaled below like everyone's)
-			if (critter) maxSlots = Math.Min(maxSlots, Math.Max(minSlots, 2));
-			// Skewed towards few drops for normal enemies: most drop little, a few drop a lot
-			double skew = isBoss || cfg.DropTableStyle == DropTableStyle.Simple ? 1.0 : 1.8;
-			int slots = Math.Min(maxSlots, minSlots + (int)Math.Floor((maxSlots - minSlots + 1) * Math.Pow(slotRng.NextDouble(), skew)));
-			// Abundance: rounded up or down from the same per-type roll, so the plan stays fixed for the world
-			double scaledSlots = slots * slotFactor;
-			slots = (int)Math.Floor(scaledSlots) + (slotRng.NextDouble() < scaledSlots - Math.Floor(scaledSlots) ? 1 : 0);
+			int slots = isBoss
+				? SlotCount(npcKey, true, critter, cfg.BossDropSlotsMin, cfg.BossDropSlotsMax, cfg.DropTableStyle, slotFactor)
+				: SlotCount(npcKey, false, critter, cfg.DropSlotsMin, cfg.DropSlotsMax, cfg.DropTableStyle, slotFactor);
 
 			for (int slot = 0; slot < slots; slot++)
 			{
@@ -239,6 +231,32 @@ namespace UltimateRandomizer.Common.Features
 				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = Math.Min(1f, commonTotal), Extra = true });
 			}
 			return drops;
+		}
+
+		// Number of random extra slots of an enemy type, with explicit settings (the DropTableLength test compares ranges)
+		public static int SlotCount(int npcKey, bool isBoss, bool critter, int minSlots, int maxSlots, DropTableStyle style, float slotFactor)
+		{
+			Random slotRng = DetRandom.Get(RollKey.MobDropSlots, npcKey);
+			maxSlots = Math.Max(minSlots, maxSlots);
+			// Critters: at most 2 slots before abundance (scaled below like everyone's)
+			if (critter) maxSlots = Math.Min(maxSlots, Math.Max(minSlots, 2));
+			int slots = Math.Min(maxSlots, minSlots + (int)Math.Floor((maxSlots - minSlots + 1) * Math.Pow(slotRng.NextDouble(), SlotSkew(isBoss, style))));
+			// Abundance: rounded up or down from the same per-type roll, so the plan stays fixed for the world
+			double scaledSlots = slots * slotFactor;
+			return (int)Math.Floor(scaledSlots) + (slotRng.NextDouble() < scaledSlots - Math.Floor(scaledSlots) ? 1 : 0);
+		}
+
+		// Skewed towards few drops for normal enemies: most drop little, a few drop a lot
+		public static double SlotSkew(bool isBoss, DropTableStyle style) => isBoss || style == DropTableStyle.Simple ? 1.0 : 1.8;
+
+		// Average SlotCount before abundance, over a uniform per-type roll: floor(n * u^skew) >= k when u >= (k/n)^(1/skew)
+		public static double ExpectedSlots(int minSlots, int maxSlots, double skew)
+		{
+			maxSlots = Math.Max(minSlots, maxSlots);
+			int n = maxSlots - minSlots + 1;
+			double expected = minSlots;
+			for (int k = 1; k < n; k++) expected += 1 - Math.Pow(k / (double)n, 1 / skew);
+			return expected;
 		}
 
 		private static int Wild(RollRequest request, int planned, Random wildRng)

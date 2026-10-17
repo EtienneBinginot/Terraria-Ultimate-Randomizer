@@ -9,15 +9,17 @@ using UltimateRandomizer.Common.Features;
 
 namespace UltimateRandomizer.Common.Tests
 {
-	// How often random equipment is found in an early hour of play. With the default settings (LootAbundance 3) the model
-	// expects about 33 pieces per hour (25.5 at abundance 2, 47.7 measured at 5: kills scale, pots/chests/trees don't):
-	// target 25 to 42, and about 2.85 items per kill (2.2 at abundance 2, 3.97 measured at 5)
+	// How often random equipment is found in an early hour of play, with the default settings (LootAbundance 3).
+	// Measured with 1 to 4 slots (v0.9.3): 29.1 pieces per hour, 2.90 items per kill; about 20 of those pieces and 0.3
+	// items per kill come from the extra slots, the rest from chests, surprises, original and small frequent drops.
+	// With 2 to 7 slots the average slot count goes from 2.00 to 3.70 per type (x1.85, MobLootFeature.ExpectedSlots):
+	// about 46 pieces per hour (target 34 to 62) and 3.2 items per kill
 	public static class PacingTests
 	{
-		public const double MinGearPerHour = 25;
-		public const double MaxGearPerHour = 42;
-		// Half the expected 2.85 items per kill
-		public const double MinItemsPerKill = 1.4;
+		public const double MinGearPerHour = 34;
+		public const double MaxGearPerHour = 62;
+		// Half the expected 3.2 items per kill
+		public const double MinItemsPerKill = 1.6;
 
 		public static void Register()
 		{
@@ -65,7 +67,7 @@ namespace UltimateRandomizer.Common.Tests
 			Log($"Pacing: {result.GearPerHour:0.0} pieces of equipment per hour (deviation {result.StandardDeviation:0.0}), {result.DistinctPerHour:0.0} different");
 			RequireDefaults();
 			Check.That(result.GearPerHour >= MinGearPerHour && result.GearPerHour <= MaxGearPerHour,
-				$"{result.GearPerHour:0.0} pieces of equipment per hour, expected {MinGearPerHour} to {MaxGearPerHour} (about 33 with LootAbundance 3)");
+				$"{result.GearPerHour:0.0} pieces of equipment per hour, expected {MinGearPerHour} to {MaxGearPerHour} (about 46 with LootAbundance 3)");
 		}
 
 		private static void PacingSimulation()
@@ -84,7 +86,7 @@ namespace UltimateRandomizer.Common.Tests
 			Log($"Drops: {result.ItemsPerKill:0.00} items per kill");
 			RequireDefaults();
 			if (!IsDefault(LootConfig.Instance, "CommonDropChance")) Check.Skip("CommonDropChance is not at its default value");
-			Check.That(result.ItemsPerKill >= MinItemsPerKill, $"only {result.ItemsPerKill:0.00} items per kill, expected at least {MinItemsPerKill} (about 2.85 with LootAbundance 3)");
+			Check.That(result.ItemsPerKill >= MinItemsPerKill, $"only {result.ItemsPerKill:0.00} items per kill, expected at least {MinItemsPerKill} (about 3.2 with LootAbundance 3)");
 		}
 
 		// The first work bench is a small quest: 15 to 30 minutes on average (guaranteed drops: LootAbundance does not change it)

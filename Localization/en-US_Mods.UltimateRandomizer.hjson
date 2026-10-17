@@ -95,6 +95,7 @@ Tests: {
 	SnapshotsCaptured: Original drop tables were read
 	MobPlansValid: Every enemy drop table is valid
 	LootAbundanceScales: Loot abundance scales enemy drops, not guaranteed ones
+	DropTableLength: Enemies get long drop tables (2 to 7 slots: about 1.85 times the former 1 to 4)
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled
@@ -227,6 +228,7 @@ Codex: {
 	Empty: "Nothing discovered here yet: kill enemies, open chests and bags, look at recipes!"
 	NoMatch: Nothing matches the search.
 	Error: This page could not be built (see client.log).
+	Loading: Loading...
 	EnemiesCount: "Enemies killed: {0}"
 	Kills: "Kills: {0}"
 	Tier: "Tier {0}"
