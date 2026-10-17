@@ -315,9 +315,12 @@ namespace UltimateRandomizer.Common.Features
 			return moddedBiomes.FirstOrDefault(b => b.FullName == biomeName)?.ModBiomeBestiaryInfoElement;
 		}
 
+		// Vanilla biomes have our own names (Codex.Biome.*.Name): the bestiary calls the Forest "Surface", which reads like the
+		// whole surface of the world
 		public static string BiomeDisplayName(string biomeName)
 		{
 			if (string.IsNullOrEmpty(biomeName)) return "";
+			if (!biomeName.Contains('/') && Enum.TryParse(biomeName, out SpawnBiome vanillaBiome)) return Codex.Interface.CodexText.Get($"Biome.{vanillaBiome}.Name");
 			EnsureTags();
 			ModBiome modded = biomeName.Contains('/') ? moddedBiomes.FirstOrDefault(b => b.FullName == biomeName) : null;
 			// A biome its mod did not name would show its raw key
@@ -327,6 +330,13 @@ namespace UltimateRandomizer.Common.Features
 				return Terraria.Localization.Language.GetTextValue(filter.GetDisplayNameKey());
 			}
 			return Codex.Interface.CodexText.Readable(biomeName);
+		}
+
+		// What a vanilla biome covers, in a few words (empty for modded biomes)
+		public static string BiomeDescription(string biomeName)
+		{
+			if (string.IsNullOrEmpty(biomeName) || biomeName.Contains('/') || !Enum.TryParse(biomeName, out SpawnBiome biome)) return "";
+			return Codex.Interface.CodexText.Get($"Biome.{biome}.Description");
 		}
 
 		// The type of an owner (slime colours are Blue Slimes)

@@ -65,7 +65,7 @@ namespace UltimateRandomizer.Common.Codex
 		// Text families ("Codex.Hint." + family + "." + variant) and their variant counts; tools/py/check_loc.py reads this list
 		public static readonly string[] HintTexts =
 		{
-			"Kind.Creature/3", "Kind.Recipe/3", "Kind.Boss/3", "Kind.Bag/3", "Kind.Chest/3", "Kind.Pot/3", "Kind.Shop/3",
+			"Kind.Creature/3", "Kind.Roaming/3", "Kind.Recipe/3", "Kind.Boss/3", "Kind.Bag/3", "Kind.Chest/3", "Kind.Pot/3", "Kind.Shop/3",
 			"Where.Creature/3", "Where.Roaming/3", "Where.Recipe/3", "Where.Boss/3", "Where.Bag/3", "Where.Chest/3", "Where.Pot/3", "Where.Shop/3",
 			"Shape.Creature/2", "Shape.Roaming/2", "Shape.Recipe/2", "Shape.Boss/2", "Shape.Bag/2", "Shape.Chest/2", "Shape.Pot/2", "Shape.Shop/2",
 			"Name.Creature/2", "Name.Roaming/2", "Name.Recipe/2", "Name.Boss/2", "Name.Bag/2", "Name.Chest/2", "Name.Pot/2", "Name.Shop/2"
@@ -552,7 +552,7 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static string LevelFamily(HintFact fact, int level) => level switch
 		{
-			1 => "Kind." + fact.Kind,
+			1 => Roaming(fact) ? "Kind.Roaming" : "Kind." + fact.Kind,
 			2 => Roaming(fact) ? "Where.Roaming" : "Where." + fact.Kind,
 			3 => Roaming(fact) ? "Shape.Roaming" : "Shape." + fact.Kind,
 			_ => Roaming(fact) ? "Name.Roaming" : "Name." + fact.Kind
@@ -584,8 +584,9 @@ namespace UltimateRandomizer.Common.Codex
 			string key = $"Hint.{family}.{Variant(fact, family)}";
 			string text = level switch
 			{
-				1 => CodexText.Get(key, StationPhrase(fact)),
-				2 => CodexText.Get(key, WherePhrase(fact), BiomeList(fact), TimePhrase(fact)),
+				// The best biome from the first level on: without it, the other levels are a long hunt
+				1 => CodexText.Get(key, StationPhrase(fact), BestBiomeName(fact)),
+				2 => CodexText.Get(key, WherePhrase(fact), BiomeList(fact), TimePhrase(fact), SharePhrase(fact)),
 				3 => CodexText.Get(key, PlacePhrase(fact)),
 				_ => CodexText.Get(key, NamePhrase(fact), BestBiomeName(fact), CodexStats.Percent(fact.Chance))
 			};
@@ -636,6 +637,10 @@ namespace UltimateRandomizer.Common.Codex
 
 		private static string BiomeList(HintFact fact) => string.Join(", ", fact.Biomes.Select(BiomeSlots.BiomeDisplayName));
 
+		// How much of its best biome's spawns the creature makes (empty when unknown)
+		private static string SharePhrase(HintFact fact) => fact.Kind == HintKind.Creature && fact.Share > 0 && fact.Biomes.Count > 0
+			? CodexText.Get("Hint.Share", CodexStats.Percent((float)fact.Share), BestBiomeName(fact)) : "";
+
 		private static string BestBiomeName(HintFact fact) => fact.Biomes.Count > 0 ? BiomeSlots.BiomeDisplayName(fact.Biomes[0]) : "";
 
 		// The biomes and the time (only used when they are known)
@@ -675,6 +680,7 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (string group in StationGroups) yield return "Hint.Station." + group;
 			yield return "Hint.Around";
 			yield return "Hint.Place.Known";
+			yield return "Hint.Share";
 			foreach (string move in Movements) yield return "Hint.Move." + move;
 			for (int b = 0; b < 4; b++) yield return "Hint.Band." + b;
 			foreach (SlotTime time in Enum.GetValues<SlotTime>()) yield return "Hint.Time." + time;

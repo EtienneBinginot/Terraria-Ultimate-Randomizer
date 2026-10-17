@@ -613,7 +613,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				image.IgnoresMouseInteraction = true;
 				Append(image);
 			}
-			hover = Features.BiomeSlots.BiomeDisplayName(biome);
+			string description = Features.BiomeSlots.BiomeDescription(biome);
+			hover = Features.BiomeSlots.BiomeDisplayName(biome) + (description.Length > 0 ? "\n" + description : "");
 		}
 
 		private readonly string hover;

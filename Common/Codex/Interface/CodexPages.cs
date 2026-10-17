@@ -447,6 +447,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				header.Add(new CodexLabel(biomeName, 1f, CodexDraw.Gold), 12);
 				header.Add(new CodexLabel(CodexText.Get("SeenCount", npcs.Count), 0.8f, CodexDraw.Muted));
 				Add(header);
+				// What the biome covers (the Forest is the surface outside the other biomes, not the whole surface)
+				string description = BiomeSlots.BiomeDescription(biome);
+				if (description.Length > 0) Text(description, CodexDraw.Muted);
 				string shareHover = CodexText.Get("SpawnShareHover");
 				Grid(npcs, id => new CodexCaptioned(new CodexNpcPortrait(id, 64, 64, false, CodexSystem.KillCount(id)), CodexStats.Percent(CodexSystem.SpawnShare(biome, id)), 64, shareHover),
 					64, 64 + CodexCaptioned.CaptionHeight, 20);

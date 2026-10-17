@@ -71,6 +71,9 @@ for lang in ("en-US","fr-FR"):
         m=re.search(arr+r" = \{([^}]*)\}",hints)
         for val in re.findall(r'"(\w+)"',m.group(1) if m else ""):
             if f"Codex.Hint.{group}.{val}" not in keys: missing.append(f"Codex.Hint.{group}.{val}")
+    for val in enum_values("SpawnBiome"):
+        for part in ("Name","Description"):
+            if f"Codex.Biome.{val}.{part}" not in keys: missing.append(f"Codex.Biome.{val}.{part} (enum SpawnBiome)")
     for val in enum_values("SlotTime"):
         if f"Codex.Hint.Time.{val}" not in keys: missing.append(f"Codex.Hint.Time.{val} (enum SlotTime)")
     for k in ["Codex.Hint.Band."+str(b) for b in range(4)]+["Codex.Hint.Coin."+c for c in ("Copper","Silver","Gold","Platinum")]:

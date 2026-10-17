@@ -137,7 +137,7 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Targets without a frequent hint");
 		}
 
-		// Levels 2 to 4 of a creature hint name its best biome
+		// Every level of a creature hint names its best biome
 		private static void HintBiomeEveryLevel()
 		{
 			List<HintFact> facts = CreatureFacts().Where(f => f.Biomes.Count > 0).ToList();
@@ -146,7 +146,7 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (HintFact fact in facts)
 			{
 				string biome = BiomeSlots.BiomeDisplayName(fact.Biomes[0]);
-				for (int level = 2; level <= HintFacts.MaxLevel; level++)
+				for (int level = 1; level <= HintFacts.MaxLevel; level++)
 				{
 					if (!HintFacts.Text(fact, level).Contains(biome)) failures.Add($"{HintFacts.ItemName(fact.Item)} level {level} without {biome}");
 				}

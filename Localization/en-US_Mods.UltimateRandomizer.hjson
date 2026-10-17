@@ -295,6 +295,117 @@ Codex: {
 	NothingReceived: Nothing received yet.
 	SeenCount: "{0} enemies seen"
 
+	Biome: {
+		Forest: {
+			Name: Forest
+			Description: The starting surface area, around your spawn point, outside every other biome
+		}
+		Snow: {
+			Name: Snow
+			Description: The frozen lands of the surface
+		}
+		Desert: {
+			Name: Desert
+			Description: The sands of the surface, oases included
+		}
+		Jungle: {
+			Name: Jungle
+			Description: The surface of the jungle, all mud and mahogany
+		}
+		Ocean: {
+			Name: Ocean
+			Description: The beaches and the sea, at both edges of the world
+		}
+		Corruption: {
+			Name: Corruption
+			Description: The surface of the Corruption, with its chasms
+		}
+		Crimson: {
+			Name: Crimson
+			Description: The surface of the Crimson, red and fleshy
+		}
+		Hallow: {
+			Name: Hallow
+			Description: The surface of the Hallow, which appears in hardmode
+		}
+		Mushroom: {
+			Name: Glowing Mushroom
+			Description: A field of glowing mushrooms on the surface
+		}
+		Graveyard: {
+			Name: Graveyard
+			Description: Around a cluster of tombstones, under a misty sky
+		}
+		Meteor: {
+			Name: Meteorite
+			Description: Around a fallen meteorite
+		}
+		Sky: {
+			Name: Sky
+			Description: High above the surface, among the floating islands
+		}
+		Underground: {
+			Name: Underground
+			Description: The dirt layer, just below the surface
+		}
+		Caverns: {
+			Name: Caverns
+			Description: The deep stone caves, between the dirt layer and the Underworld
+		}
+		UndergroundSnow: {
+			Name: Ice Caves
+			Description: Below the snow: the ice caves
+		}
+		UndergroundDesert: {
+			Name: Underground Desert
+			Description: Below the desert: the sandstone caves
+		}
+		UndergroundJungle: {
+			Name: Underground Jungle
+			Description: Below the jungle: the mud caves
+		}
+		UndergroundCorruption: {
+			Name: Underground Corruption
+			Description: The Corruption below the surface
+		}
+		UndergroundCrimson: {
+			Name: Underground Crimson
+			Description: The Crimson below the surface
+		}
+		UndergroundHallow: {
+			Name: Underground Hallow
+			Description: The Hallow below the surface (hardmode)
+		}
+		UndergroundMushroom: {
+			Name: Underground Mushroom
+			Description: Glowing mushroom caves, below the surface
+		}
+		Underworld: {
+			Name: Underworld
+			Description: The burning bottom of the world
+		}
+		Dungeon: {
+			Name: Dungeon
+			Description: Inside the dungeon, past its guardian
+		}
+		Temple: {
+			Name: Jungle Temple
+			Description: Inside the Lihzahrd temple, deep in the jungle
+		}
+		Granite: {
+			Name: Granite Cave
+			Description: A cave of dark blue granite, underground
+		}
+		Marble: {
+			Name: Marble Cave
+			Description: A cave of white marble, underground
+		}
+		SpiderNest: {
+			Name: Spider Nest
+			Description: A cave covered in cobwebs, underground
+		}
+	}
+
 	Hint: {
 		Syncing: One moment: I am still catching up on what was bought in this world.
 		Refused: I have already told you that much. Ask me about the next step.
@@ -324,6 +435,7 @@ Codex: {
 		NoStation: no station
 		Around: Look around: {0}.
 		Place.Known: "{0}, {1}"
+		Share: " (about {0} of the creatures of this place: {1})"
 
 		Coin: {
 			Copper: "{0} copper"
@@ -366,6 +478,12 @@ Codex: {
 
 		Kind: {
 			Creature: {
+				0: A creature carries it. Hunt here and you will find it: {1}.
+				1: No one crafts this one: a living thing drops it, mostly here: {1}.
+				2: It falls from the pockets of a creature that lives here: {1}.
+			}
+
+			Roaming: {
 				0: A creature carries it. Hunt, and you will find it.
 				1: No one crafts this one: a living thing drops it.
 				2: It falls from the pockets of some creature.
@@ -410,9 +528,9 @@ Codex: {
 
 		Where: {
 			Creature: {
-				0: "{0} roams {2}, mostly here: {1}. It carries one."
-				1: Look around these places, {2}, the first one above all: {1}. {0} there holds what you seek.
-				2: I have heard of it near these places: {1}. {0}, out {2}, keeps one close.
+				0: "{0} roams {2}, mostly here: {1}{3}. It carries one."
+				1: Look around these places, {2}, the first one above all: {1}{3}. {0} there holds what you seek.
+				2: I have heard of it near these places: {1}{3}. {0}, out {2}, keeps one close.
 			}
 
 			Roaming: {

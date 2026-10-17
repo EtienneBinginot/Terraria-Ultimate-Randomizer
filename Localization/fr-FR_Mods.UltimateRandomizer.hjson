@@ -295,6 +295,117 @@ Codex: {
 	NothingReceived: Rien obtenu pour l'instant.
 	SeenCount: "{0} ennemis vus"
 
+	Biome: {
+		Forest: {
+			Name: Forêt
+			Description: La surface hors des autres biomes, autour du point de départ
+		}
+		Snow: {
+			Name: Neige
+			Description: Les terres gelées de la surface
+		}
+		Desert: {
+			Name: Désert
+			Description: Les sables de la surface, oasis comprises
+		}
+		Jungle: {
+			Name: Jungle
+			Description: La surface de la jungle, faite de boue et d'acajou
+		}
+		Ocean: {
+			Name: Océan
+			Description: Les plages et la mer, aux deux bords du monde
+		}
+		Corruption: {
+			Name: Corruption
+			Description: La surface de la Corruption et ses gouffres
+		}
+		Crimson: {
+			Name: Carmin
+			Description: La surface du Carmin, rouge et charnue
+		}
+		Hallow: {
+			Name: Sacré
+			Description: La surface du Sacré, qui apparaît en mode difficile
+		}
+		Mushroom: {
+			Name: Champignons lumineux
+			Description: Un champ de champignons lumineux à la surface
+		}
+		Graveyard: {
+			Name: Cimetière
+			Description: Autour d'un amas de pierres tombales, sous un ciel brumeux
+		}
+		Meteor: {
+			Name: Météorite
+			Description: Autour d'une météorite tombée
+		}
+		Sky: {
+			Name: Ciel (îles flottantes)
+			Description: Très haut au-dessus de la surface, parmi les îles flottantes
+		}
+		Underground: {
+			Name: Souterrain (couche de terre)
+			Description: La couche de terre, juste sous la surface
+		}
+		Caverns: {
+			Name: Cavernes
+			Description: Les grottes de pierre profondes, entre la couche de terre et l'Enfer
+		}
+		UndergroundSnow: {
+			Name: Grottes de glace
+			Description: Sous la neige : les grottes de glace
+		}
+		UndergroundDesert: {
+			Name: Désert souterrain
+			Description: Sous le désert : les grottes de grès
+		}
+		UndergroundJungle: {
+			Name: Jungle souterraine
+			Description: Sous la jungle : les grottes de boue
+		}
+		UndergroundCorruption: {
+			Name: Corruption souterraine
+			Description: La Corruption sous la surface
+		}
+		UndergroundCrimson: {
+			Name: Carmin souterrain
+			Description: Le Carmin sous la surface
+		}
+		UndergroundHallow: {
+			Name: Sacré souterrain
+			Description: Le Sacré sous la surface (mode difficile)
+		}
+		UndergroundMushroom: {
+			Name: Champignons souterrains
+			Description: Les grottes de champignons lumineux, sous la surface
+		}
+		Underworld: {
+			Name: Enfer
+			Description: Le fond brûlant du monde
+		}
+		Dungeon: {
+			Name: Donjon
+			Description: À l'intérieur du donjon, passé son gardien
+		}
+		Temple: {
+			Name: Temple de la jungle
+			Description: À l'intérieur du temple lihzahrd, au fond de la jungle
+		}
+		Granite: {
+			Name: Grotte de granit
+			Description: Une grotte de granit bleu sombre, sous terre
+		}
+		Marble: {
+			Name: Grotte de marbre
+			Description: Une grotte de marbre blanc, sous terre
+		}
+		SpiderNest: {
+			Name: Nid d'araignées
+			Description: Une grotte couverte de toiles, sous terre
+		}
+	}
+
 	Hint: {
 		Syncing: Un instant : je me renseigne encore sur ce qui a déjà été acheté dans ce monde.
 		Refused: Je t'ai déjà dit tout ça. Demande-moi plutôt la suite.
@@ -324,6 +435,7 @@ Codex: {
 		NoStation: aucune station
 		Around: Cherche du côté de ces lieux : {0}.
 		Place.Known: "{0}, {1}"
+		Share: " (environ {0} des créatures de ce lieu : {1})"
 
 		Coin: {
 			Copper: "{0} cuivre"
@@ -366,6 +478,12 @@ Codex: {
 
 		Kind: {
 			Creature: {
+				0: Une créature le transporte. Chasse par ici et tu le trouveras : {1}.
+				1: Personne ne fabrique celui-ci : un être vivant le lâche, surtout par ici : {1}.
+				2: Il tombe des poches d'une créature qui vit par ici : {1}.
+			}
+
+			Roaming: {
 				0: Une créature le transporte. Chasse, et tu le trouveras.
 				1: Personne ne fabrique celui-ci : un être vivant le lâche.
 				2: Il tombe des poches d'une créature.
@@ -410,9 +528,9 @@ Codex: {
 
 		Where: {
 			Creature: {
-				0: "{0} rôde {2}, surtout dans ces contrées : {1}. Elle en porte un exemplaire."
-				1: Cherche du côté de ces lieux, {2}, le premier avant tout : {1}. {0} y garde ce que tu cherches.
-				2: On m'en a parlé près de ces lieux : {1}. {0}, de sortie {2}, en garde un exemplaire.
+				0: "{0} rôde {2}, surtout dans ces contrées : {1}{3}. Elle en porte un exemplaire."
+				1: Cherche du côté de ces lieux, {2}, le premier avant tout : {1}{3}. {0} y garde ce que tu cherches.
+				2: On m'en a parlé près de ces lieux : {1}{3}. {0}, de sortie {2}, en garde un exemplaire.
 			}
 
 			Roaming: {
