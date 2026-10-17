@@ -93,6 +93,7 @@ namespace UltimateRandomizer.Common.Codex
 		public override void ClearWorld()
 		{
 			pendingReveals.Clear();
+			pendingFound.Clear();
 			revealedVersion = -1;
 			Data = new CodexData();
 			outbox.Clear();
@@ -177,6 +178,7 @@ namespace UltimateRandomizer.Common.Codex
 			if (!Data.Apply(e)) return;
 			if (Main.netMode == NetmodeID.Server) outbox.Add(e);
 			if (e.Op == CodexOp.Hint) QueueReveal(e);
+			if (e.Op == CodexOp.Seen) QueueFound(e);
 		}
 
 		// ---- Reveals: the last level of a hint counts as discovering the enemy it names ----
@@ -193,6 +195,37 @@ namespace UltimateRandomizer.Common.Codex
 		}
 
 		public static int PendingRevealCount => pendingReveals.Count;
+
+		// Server (or single player): items seen in this world whose hint may not be fully known yet. A hint target found
+		// anyway needs no hint: its last level is recorded for free (saved, synced, and its source revealed like a bought
+		// one). The server only trusts its own codex: what it saw, or what a client reported seeing like any discovery
+		private static readonly HashSet<string> pendingFound = new();
+
+		public static void QueueFound(CodexEntry seen)
+		{
+			if (seen.Op == CodexOp.Seen && Main.netMode != NetmodeID.MultiplayerClient && !string.IsNullOrEmpty(seen.Item)) pendingFound.Add(seen.Item);
+		}
+
+		public static int PendingFoundCount => pendingFound.Count;
+
+		// A hint target already seen: shown as fully known, never sold
+		public static bool IsFound(int item) => HasSeen(item) && HintFacts.Ready && HintFacts.RawTarget(item) != null;
+
+		// The level the interface shows: the last one for a found target
+		public static int ShownHintLevel(int item) => IsFound(item) ? HintFacts.MaxLevel : HintLevel(item);
+
+		private static void UnlockFound()
+		{
+			if (pendingFound.Count == 0) return;
+			List<string> items = pendingFound.OrderBy(i => i, StringComparer.Ordinal).ToList();
+			pendingFound.Clear();
+			foreach (string name in items)
+			{
+				int item = CodexNames.ItemType(name);
+				if (item <= 0 || !Data.ItemsSeen.Contains(name) || HintFacts.RawTarget(item) == null || Data.HintLevel(name) >= HintFacts.MaxLevel) continue;
+				Submit(CodexEntry.Hint(name, HintFacts.MaxLevel));
+			}
+		}
 
 		// Each tick on the server or in single player: warms the hint facts, then reveals what is waiting. force: build the
 		// facts at once (tests)
@@ -215,7 +248,10 @@ namespace UltimateRandomizer.Common.Codex
 				{
 					if (level >= HintFacts.MaxLevel) pendingReveals.Add(item);
 				}
+				// Old saves, and targets that changed with the tier or the settings
+				pendingFound.UnionWith(Data.ItemsSeen);
 			}
+			UnlockFound();
 			if (pendingReveals.Count == 0) return;
 			List<string> items = pendingReveals.OrderBy(i => i, StringComparer.Ordinal).ToList();
 			pendingReveals.Clear();
@@ -232,8 +268,7 @@ namespace UltimateRandomizer.Common.Codex
 				int item = CodexNames.ItemType(itemName);
 				HintFact fact = item > 0 ? HintFacts.For(item) : null;
 				if (fact == null || fact.Kind is not (HintKind.Creature or HintKind.Boss) || fact.Npc == 0) return;
-				int key = fact.Kind == HintKind.Boss ? (BossParts.IsPart(fact.Npc) ? BossParts.Owner(fact.Npc) : IsTwin(fact.Npc) ? NPCID.Retinazer : fact.Npc) : fact.Npc;
-				string npc = CodexNames.Npc(key);
+				string npc = CodexNames.Npc(RevealKey(fact));
 				Submit(CodexEntry.Reveal(npc, itemName));
 				string biome = fact.Biomes.FirstOrDefault();
 				if (!string.IsNullOrEmpty(biome) && !(Data.Sightings.TryGetValue(biome, out Dictionary<string, int> seen) && seen.ContainsKey(npc))) Submit(CodexEntry.Sighting(biome, npc, 1));
@@ -243,6 +278,11 @@ namespace UltimateRandomizer.Common.Codex
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Could not reveal the source of {itemName}: {e}");
 			}
 		}
+
+		// The codex key of the enemy or boss a hint names (a boss for its parts, Retinazer for both Twins)
+		public static int RevealKey(HintFact fact) => fact.Kind == HintKind.Boss
+			? (BossParts.IsPart(fact.Npc) ? BossParts.Owner(fact.Npc) : IsTwin(fact.Npc) ? NPCID.Retinazer : fact.Npc)
+			: fact.Npc;
 
 		private static bool IsEaterSegment(int type) => type is NPCID.EaterofWorldsHead or NPCID.EaterofWorldsBody or NPCID.EaterofWorldsTail;
 
@@ -865,6 +905,7 @@ namespace UltimateRandomizer.Common.Codex
 					}
 					outbox.Add(e);
 					if (e.Op == CodexOp.Hint) QueueReveal(e);
+					if (e.Op == CodexOp.Seen) QueueFound(e);
 				}
 				else
 				{

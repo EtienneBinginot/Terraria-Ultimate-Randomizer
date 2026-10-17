@@ -12,6 +12,7 @@ using UltimateRandomizer.Common.Codex.Interface;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
+using UltimateRandomizer.Common.Journal;
 
 namespace UltimateRandomizer.Common.Tests
 {
@@ -30,6 +31,9 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintBiomeEveryLevel", HintBiomeEveryLevel);
 			TestRunner.Register("HintRevealDiscovers", HintRevealDiscovers);
 			TestRunner.Register("PlannedShareSums", PlannedShareSums);
+			TestRunner.Register("HintSortedByProgress", HintSortedByProgress);
+			TestRunner.Register("HintFoundUnlocks", HintFoundUnlocks);
+			TestRunner.Register("HintClickOpensCodex", HintClickOpensCodex);
 		}
 
 		private static List<HintFact> CreatureFacts() => TargetsOrSkip().Select(t => HintFacts.For(t.Item)).Where(f => f != null && f.Kind == HintKind.Creature).ToList();
@@ -233,6 +237,125 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			if (compared == 0) failures.Add("no biome with both a rare and a common owner to compare");
 			Check.All(failures, "Planned shares");
+		}
+
+		// Targets come by tier, then by the tier of their hinted source; the two tabs split them: to buy (offered now, not
+		// fully known) and known (the last level, bought or found)
+		private static void HintSortedByProgress()
+		{
+			List<HintTarget> sorted = HintFacts.ByProgress(TargetsOrSkip());
+			List<string> failures = new();
+			for (int i = 1; i < sorted.Count; i++)
+			{
+				HintTarget a = sorted[i - 1], b = sorted[i];
+				int fa = HintFacts.For(a.Item)?.Tier ?? Findability.Never, fb = HintFacts.For(b.Item)?.Tier ?? Findability.Never;
+				if (a.Tier > b.Tier || a.Tier == b.Tier && fa > fb) failures.Add($"{HintFacts.ItemName(a.Item)} (tier {a.Tier}/{fa}) before {HintFacts.ItemName(b.Item)} (tier {b.Tier}/{fb})");
+			}
+			Check.That(HintFacts.ByProgress(sorted.AsEnumerable().Reverse()).Select(t => t.Item).SequenceEqual(sorted.Select(t => t.Item)), "the order depends on the input order");
+			List<HintTarget> toBuy = HintPanelState.TabTargets(false), known = HintPanelState.TabTargets(true);
+			HashSet<int> offered = HintFacts.Targets().Select(t => t.Item).ToHashSet();
+			foreach (HintTarget t in toBuy)
+			{
+				if (!offered.Contains(t.Item)) failures.Add($"{HintFacts.ItemName(t.Item)} to buy but not offered");
+				if (CodexSystem.ShownHintLevel(t.Item) >= HintFacts.MaxLevel) failures.Add($"{HintFacts.ItemName(t.Item)} to buy but fully known");
+			}
+			foreach (HintTarget t in known)
+			{
+				if (CodexSystem.ShownHintLevel(t.Item) < HintFacts.MaxLevel) failures.Add($"{HintFacts.ItemName(t.Item)} known at level {CodexSystem.ShownHintLevel(t.Item)}");
+			}
+			if (toBuy.Any(t => known.Contains(t))) failures.Add("a target in both tabs");
+			Check.All(failures, "Hints out of order");
+		}
+
+		// A target found in the world counts as fully known: shown at the last level, never sold, and the server records the
+		// last level (and its reveal) without any coin. On an empty copy of the codex, restored afterwards
+		private static void HintFoundUnlocks()
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (the server records it)");
+			HintTarget target = TargetsOrSkip().FirstOrDefault(t => HintFacts.For(t.Item) != null);
+			if (target == null) Check.Skip("no target with a hint");
+			CodexSystem.ProcessReveals(force: true);
+			CodexData saved = CodexSystem.Data;
+			Player player = Main.LocalPlayer;
+			long CoinsOf() => Utils.CoinsCount(out _, player.inventory) + Utils.CoinsCount(out _, player.bank.item);
+			long coins = CoinsOf();
+			try
+			{
+				CodexSystem.Data = new CodexData { Seed = saved.Seed, HasSeed = saved.HasSeed, RecipeStamp = saved.RecipeStamp, HasRecipeStamp = saved.HasRecipeStamp };
+				string name = CodexNames.Item(target.Item);
+				Check.Equal(0, CodexSystem.ShownHintLevel(target.Item), "level before it is found");
+				CodexSystem.Submit(CodexEntry.Seen(name));
+				Check.Equal(HintFacts.MaxLevel, CodexSystem.ShownHintLevel(target.Item), "level shown once found");
+				Check.That(HintShop.TryBuy(player, target, 1, out _) == HintPurchase.NotNext, "a found target is still sold");
+				CodexSystem.ProcessReveals(force: true);
+				Check.Equal(HintFacts.MaxLevel, CodexSystem.Data.HintLevel(name), "level recorded once found");
+				Check.Equal(0, CodexSystem.PendingFoundCount, "found items waiting");
+				HintFact fact = HintFacts.For(target.Item);
+				if (fact.Kind is HintKind.Creature or HintKind.Boss) Check.That(CodexSystem.KnownNpcs().Contains(CodexSystem.RevealKey(fact)), "the source of a found target is not revealed");
+				Check.Equal(coins, CoinsOf(), "coins after finding the target");
+			}
+			finally
+			{
+				CodexSystem.Data = saved;
+				CodexSystem.RefreshIndex();
+			}
+		}
+
+		// Clicking a hint opens the codex where it leads: the enemy or boss once known, the craft tree of a recipe, the bag,
+		// else the target's own page; and those pages build
+		private static void HintClickOpensCodex()
+		{
+			List<HintTarget> targets = TargetsOrSkip();
+			List<string> failures = new();
+			List<CodexPage> pages = new();
+			foreach (HintTarget target in targets)
+			{
+				int item = target.Item;
+				HintFact fact = HintFacts.For(item);
+				string name = HintFacts.ItemName(item);
+				if (!HintNavigation.Target(item, fact, HintFacts.MaxLevel - 1, new List<int>()).Equals(CodexPage.ItemPage(item))) failures.Add($"{name}: level 3 does not lead to its page");
+				List<int> known = fact != null && fact.Kind is HintKind.Creature or HintKind.Boss ? new List<int> { CodexSystem.RevealKey(fact) } : new List<int>();
+				CodexPage page = HintNavigation.Target(item, fact, HintFacts.MaxLevel, known);
+				CodexPage expected = fact?.Kind switch
+				{
+					HintKind.Creature or HintKind.Boss => CodexPage.NpcPage(CodexSystem.RevealKey(fact)),
+					HintKind.Recipe => CodexPage.TreePage(item),
+					HintKind.Bag when fact.Bag > 0 => CodexPage.ItemPage(fact.Bag),
+					_ => CodexPage.ItemPage(item)
+				};
+				if (!page.Equals(expected)) failures.Add($"{name}: {page.Kind} {page.Id}, expected {expected.Kind} {expected.Id}");
+				if (fact != null && fact.Kind is HintKind.Creature or HintKind.Boss && !HintNavigation.Target(item, fact, HintFacts.MaxLevel, new List<int>()).Equals(CodexPage.ItemPage(item)))
+				{
+					failures.Add($"{name}: leads to an enemy not known yet");
+				}
+				if (!pages.Contains(page) && pages.Count < 8) pages.Add(page);
+			}
+			CodexUIState state = JournalSystem.State;
+			if (state != null && state.Content != null)
+			{
+				var saved = state.SaveNavigation();
+				try
+				{
+					state.ClearFilters();
+					foreach (CodexPage page in pages)
+					{
+						try
+						{
+							state.Navigate(page);
+							state.BuildNow();
+						}
+						catch (Exception e)
+						{
+							failures.Add($"{page.Kind} {page.Id}: {e.GetType().Name} {e.Message}");
+						}
+					}
+				}
+				finally
+				{
+					state.RestoreNavigation(saved);
+				}
+			}
+			Check.All(failures, "Hints leading to the wrong codex page");
 		}
 
 		private static List<HintTarget> TargetsOrSkip()

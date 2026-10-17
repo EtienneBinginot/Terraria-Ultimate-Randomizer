@@ -145,6 +145,9 @@ Tests: {
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
 	GuaranteedLoadBalanced: Aucun ennemi ne porte trop d'objets garantis
 	GuaranteedSeveralSeeds: Chaque objet garanti a tous ses porteurs avec d'autres graines
+	HintSortedByProgress: Les indices sont triés par avancement, en deux onglets
+	HintFoundUnlocks: L'indice d'un objet trouvé est entièrement connu, gratuitement
+	HintClickOpensCodex: Cliquer sur un indice ouvre la bonne page du codex
 	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
@@ -287,6 +290,11 @@ Codex: {
 		Nothing: Rien à te dire pour l'instant : ce qu'il te faut est déjà à ta portée.
 		TooPoor: Ce sera {0}, et tu ne les as pas. Reviens avec plus de pièces.
 		PanelTitle: Les indices du Guide
+		TabToBuy: À acheter
+		TabKnown: Achetés ou trouvés
+		NothingKnown: Aucun indice entièrement connu pour l'instant : achète-en tous les niveaux, ou trouve l'objet.
+		OpenCodex: "{0} : clique pour ouvrir sa page dans le codex"
+		SeeInCodex: Voir dans le codex
 		Money: Tes pièces : {0}
 		Buy: Acheter : {0}
 		Repeat: Répéter

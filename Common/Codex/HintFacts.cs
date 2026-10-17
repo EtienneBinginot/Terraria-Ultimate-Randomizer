@@ -168,6 +168,16 @@ namespace UltimateRandomizer.Common.Codex
 			return candidates;
 		}
 
+		// Targets in the order progression reaches them: their tier, then the tier of the source the hint names, then when
+		// the recipe plan makes them available, then the order of AllTargets (kind, name)
+		public static List<HintTarget> ByProgress(IEnumerable<HintTarget> targets)
+		{
+			RecipePlan plan = RecipePlanner.Get();
+			List<HintTarget> all = AllTargets();
+			return targets.OrderBy(t => t.Tier).ThenBy(t => For(t.Item)?.Tier ?? Findability.Never).ThenBy(t => Availability(plan, t.Item))
+				.ThenBy(t => all.IndexOf(t)).ToList();
+		}
+
 		// Targets offered now: up to one tier above the unlocked one
 		public static List<HintTarget> Targets(int unlockedTier) => AllTargets().Where(t => t.Tier <= unlockedTier + 1).ToList();
 

@@ -11,6 +11,33 @@ using UltimateRandomizer.Common.Features;
 
 namespace UltimateRandomizer.Common.Codex.Interface
 {
+	// Where a hint leads in the codex: its source once the last level is known (the enemy's page when the enemy is known,
+	// the craft tree of a recipe, the bag's page), else the target's own page
+	public static class HintNavigation
+	{
+		public static CodexPage Target(int item) => Target(item, HintFacts.For(item), CodexSystem.ShownHintLevel(item), CodexSystem.KnownNpcs());
+
+		public static CodexPage Target(int item, HintFact fact, int level, ICollection<int> knownNpcs)
+		{
+			if (fact != null && level >= HintFacts.MaxLevel)
+			{
+				switch (fact.Kind)
+				{
+					case HintKind.Creature:
+					case HintKind.Boss:
+						int key = CodexSystem.RevealKey(fact);
+						if (knownNpcs.Contains(key)) return CodexPage.NpcPage(key);
+						break;
+					case HintKind.Recipe:
+						return CodexPage.TreePage(item);
+					case HintKind.Bag when fact.Bag > 0:
+						return CodexPage.ItemPage(fact.Bag);
+				}
+			}
+			return CodexPage.ItemPage(item);
+		}
+	}
+
 	// The rows showing what the bought levels of a hint reveal: the Guide's sentences, then the shapes (level 3) or
 	// the real thing (level 4). Shared by the Guide's panel and the codex Hints tab.
 	public static class HintView

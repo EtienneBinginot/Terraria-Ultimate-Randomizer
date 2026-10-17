@@ -457,7 +457,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 	public partial class CodexUIState
 	{
-		// ---- Hints: what was bought from the Guide (shared by the world), then the targets not asked about yet ----
+		// ---- Hints: two tabs like the Guide's panel. To buy: what was bought of the targets offered now, then those not asked
+		// about yet; known: the targets bought to the end or found, sorted by progression ----
+
+		private bool hintsKnownTab;
 
 		private void BuildHints()
 		{
@@ -467,27 +470,39 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				Empty(true);
 				return;
 			}
-			List<HintTarget> offered = HintFacts.Targets();
-			List<HintTarget> bought = HintFacts.AllTargets().Where(t => CodexSystem.HintLevel(t.Item) > 0 && Matches(HintFacts.ItemName(t.Item))).ToList();
+			CodexRow tabs = new(40);
+			tabs.Add(new CodexButton(CodexText.Get("Hint.TabToBuy"), 220, () => ShowHintTab(false), 0.8f) { Active = !hintsKnownTab });
+			tabs.Add(new CodexButton(CodexText.Get("Hint.TabKnown"), 220, () => ShowHintTab(true), 0.8f) { Active = hintsKnownTab });
+			Add(tabs);
+			List<HintTarget> shown = HintPanelState.TabTargets(hintsKnownTab).Where(t => Matches(HintFacts.ItemName(t.Item))).ToList();
+			List<HintTarget> bought = shown.Where(t => CodexSystem.ShownHintLevel(t.Item) > 0).ToList();
 			foreach (HintTarget target in bought)
 			{
-				int level = CodexSystem.HintLevel(target.Item);
+				int level = CodexSystem.ShownHintLevel(target.Item);
 				bool found = CodexSystem.HasSeen(target.Item);
 				CodexRow header = new(48);
-				header.Add(new CodexItemIcon(target.Item, 0, 42) { Silhouette = !found, HoverText = found ? null : HintFacts.ItemName(target.Item) }, 10);
+				int item = target.Item;
+				header.Add(new CodexItemIcon(item, 0, 42, () => Navigate(HintNavigation.Target(item))) { Silhouette = !found, HoverText = CodexText.Get("Hint.OpenCodex", HintFacts.ItemName(item)) }, 10);
 				header.Add(new CodexLabel(HintFacts.ItemName(target.Item), 1f, CodexDraw.Gold), 12);
 				header.Add(new CodexLabel(CodexText.Get("Hint.Level", level, HintFacts.MaxLevel), 0.8f, CodexDraw.Muted), 12);
 				if (found) header.Add(new CodexLabel(CodexText.Get("Hint.Found"), 0.8f, new Color(140, 230, 140)));
 				Add(header);
 				pending.AddRange(HintView.Rows(HintFacts.For(target.Item), level, ListWidth, inCodex: true));
 			}
-			List<HintTarget> waiting = offered.Where(t => CodexSystem.HintLevel(t.Item) == 0 && Matches(HintFacts.ItemName(t.Item))).ToList();
+			List<HintTarget> waiting = shown.Where(t => CodexSystem.ShownHintLevel(t.Item) == 0).ToList();
 			if (waiting.Count > 0)
 			{
 				Section(CodexText.Get("Hint.NotAsked"));
 				Grid(waiting, t => new CodexItemIcon(t.Item, 0, Icon) { Silhouette = !CodexSystem.HasSeen(t.Item), HoverText = HintFacts.ItemName(t.Item) }, Icon, Icon);
 			}
-			if (bought.Count == 0 && waiting.Count == 0) Empty(offered.Count == 0);
+			if (bought.Count == 0 && waiting.Count == 0) Empty(HintFacts.Targets().Count == 0);
+		}
+
+		private void ShowHintTab(bool known)
+		{
+			if (hintsKnownTab == known) return;
+			hintsKnownTab = known;
+			MarkDirty(false);
 		}
 	}
 

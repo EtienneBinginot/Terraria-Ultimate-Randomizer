@@ -61,6 +61,18 @@ namespace UltimateRandomizer.Common.Journal
 			}
 		}
 
+		// Opens the codex (if closed) on a page
+		public static void OpenAt(CodexPage page)
+		{
+			if (userInterface == null) return;
+			if (userInterface.CurrentState == null)
+			{
+				State.Refresh();
+				userInterface.SetState(state);
+			}
+			state.Navigate(page);
+		}
+
 		public override void OnWorldUnload()
 		{
 			if (IsOpen) Toggle();

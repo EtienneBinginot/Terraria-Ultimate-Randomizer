@@ -13,6 +13,7 @@ using Terraria.Localization;
 using Terraria.ModLoader;
 using Terraria.UI;
 using Terraria.UI.Chat;
+using System.Linq;
 using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Codex.Interface
@@ -31,7 +32,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (target == null) return HintPurchase.NoTarget;
 			// Joining: the levels already bought by others are not known yet
 			if (!CodexSystem.CanBuyHints) return HintPurchase.NotSynced;
-			if (level < 1 || level > HintFacts.MaxLevel || level != CodexSystem.HintLevel(target.Item) + 1) return HintPurchase.NotNext;
+			// A target already found needs no hint (its last level is given for free)
+			if (CodexSystem.IsFound(target.Item) || level < 1 || level > HintFacts.MaxLevel || level != CodexSystem.HintLevel(target.Item) + 1) return HintPurchase.NotNext;
 			if (price > 0 && !player.BuyItem(price, -1)) return HintPurchase.TooPoor;
 			HintFact fact = HintFacts.For(target.Item);
 			// The last level shows the recipe: discovered in the codex once the level is accepted
@@ -103,6 +105,18 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		{
 			userInterface?.SetState(null);
 			hovered = false;
+		}
+
+		// Leaves the Guide (panel and dialog) for the codex page about a hint target
+		public static void OpenInCodex(int item)
+		{
+			CodexPage page = HintNavigation.Target(item);
+			Close();
+			Player player = Main.LocalPlayer;
+			if (player != null && player.talkNPC >= 0) player.SetTalkNPC(-1);
+			Main.npcChatText = "";
+			Main.npcChatCornerItem = 0;
+			Journal.JournalSystem.OpenAt(page);
 		}
 
 		public override void OnWorldUnload()
@@ -215,6 +229,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private CodexList targets;
 		private CodexList detail;
 		private int selected;
+		// The tab shown: targets still to buy, or those fully known (bought to the end, or found)
+		private bool knownTab;
+		private CodexButton toBuyButton, knownButton;
 		private bool dirty = true;
 		private (long structure, int pending, int tier, int caches, bool synced) built = (-1, -1, -1, -1, false);
 		private int timer;
@@ -245,7 +262,19 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			close.Left.Set(-36, 1f);
 			panel.Append(close);
 
-			targets = MakeList(56, 0f, -60, 0.5f);
+			toBuyButton = new CodexButton(CodexText.Live("Hint.TabToBuy"), 0, () => ShowTab(false), 0.8f);
+			toBuyButton.Width.Set(-4, 0.5f);
+			toBuyButton.Top.Set(54, 0);
+			toBuyButton.Height.Set(30, 0);
+			panel.Append(toBuyButton);
+			knownButton = new CodexButton(CodexText.Live("Hint.TabKnown"), 0, () => ShowTab(true), 0.8f);
+			knownButton.Width.Set(-4, 0.5f);
+			knownButton.Left.Set(4, 0.5f);
+			knownButton.Top.Set(54, 0);
+			knownButton.Height.Set(30, 0);
+			panel.Append(knownButton);
+
+			targets = MakeList(90, 0f, -94, 0.5f);
 			detail = MakeList(4, 0.5f, -8, 0.5f);
 		}
 
@@ -306,6 +335,20 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			CloseRequested = false;
 		}
 
+		private void ShowTab(bool known)
+		{
+			if (knownTab == known) return;
+			knownTab = known;
+			targets.ViewPosition = 0;
+			dirty = true;
+		}
+
+		// The targets of a tab, in the order progression reaches them: to buy, those offered now and not fully known; known,
+		// every target bought to the end or found
+		public static List<HintTarget> TabTargets(bool known) => known
+			? HintFacts.ByProgress(HintFacts.AllTargets().Where(t => CodexSystem.ShownHintLevel(t.Item) >= HintFacts.MaxLevel))
+			: HintFacts.ByProgress(HintFacts.Targets().Where(t => CodexSystem.ShownHintLevel(t.Item) < HintFacts.MaxLevel));
+
 		private (long, int, int, int, bool) Key() => (CodexSystem.StructureVersion, CodexSystem.PendingHintCount, ProgressionSystem.UnlockedTier, HintFacts.CacheVersion, CodexSystem.CanBuyHints);
 
 		private void Build()
@@ -315,9 +358,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			float scroll = targets.ViewPosition;
 			targets.Clear();
 			List<UIElement> rows = new();
-			List<HintTarget> list = HintFacts.Targets();
+			toBuyButton.Active = !knownTab;
+			knownButton.Active = knownTab;
+			List<HintTarget> list = TabTargets(knownTab);
 			if (!CodexSystem.CanBuyHints) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get("Hint.Syncing"), 0.8f, CodexDraw.Muted));
-			if (list.Count == 0) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get("Hint.Nothing"), 0.8f, CodexDraw.Muted));
+			if (list.Count == 0) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get(knownTab ? "Hint.NothingKnown" : "Hint.Nothing"), 0.8f, CodexDraw.Muted));
 			foreach (HintTarget target in list) rows.Add(TargetRow(target));
 			targets.AddRange(rows);
 			targets.Recalculate();
@@ -328,10 +373,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private UIElement TargetRow(HintTarget target)
 		{
 			int item = target.Item;
-			int level = CodexSystem.HintLevel(item);
+			int level = CodexSystem.ShownHintLevel(item);
 			bool found = CodexSystem.HasSeen(item);
 			CodexRow row = new(44, 2) { Highlight = true };
-			CodexItemIcon icon = new(item, 0, 40, () => Select(item, true)) { Silhouette = !found, HoverText = found ? null : HintFacts.ItemName(item) };
+			// The row shows its hints below; its icon leads to the codex
+			row.OnLeftClick += (_, _) => Select(item, true);
+			CodexItemIcon icon = new(item, 0, 40, () => HintSystem.OpenInCodex(item)) { Silhouette = !found, HoverText = CodexText.Get("Hint.OpenCodex", HintFacts.ItemName(item)) };
 			row.Add(icon, 6);
 			float nameWidth = panelWidth - 330;
 			string name = HintFacts.ItemName(item);
@@ -355,8 +402,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		private void Select(int item, bool speak)
 		{
+			// The click that opened the codex reaches the row too
+			if (!HintSystem.IsOpen) return;
 			selected = item;
-			int level = CodexSystem.HintLevel(item);
+			int level = CodexSystem.ShownHintLevel(item);
 			HintFact fact = HintFacts.For(item);
 			if (speak && fact != null && level > 0) HintShop.Say(HintFacts.Text(fact, level));
 			BuildDetail();
@@ -366,7 +415,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		{
 			HintFact fact = HintFacts.For(target.Item);
 			if (fact == null) return;
-			int level = CodexSystem.HintLevel(target.Item);
+			int level = CodexSystem.ShownHintLevel(target.Item);
 			if (level >= HintFacts.MaxLevel)
 			{
 				Select(target.Item, true);
@@ -399,11 +448,15 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			detail.Clear();
 			List<UIElement> rows = new();
 			HintFact fact = selected > 0 ? HintFacts.For(selected) : null;
-			int level = selected > 0 ? CodexSystem.HintLevel(selected) : 0;
+			int level = selected > 0 ? CodexSystem.ShownHintLevel(selected) : 0;
 			if (fact == null) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get("Hint.PickTarget"), 0.8f, CodexDraw.Muted));
 			else
 			{
 				rows.Add(new CodexSection(CodexText.Get("Hint.About", HintFacts.ItemName(selected))));
+				int item = selected;
+				CodexRow open = new(36, 4);
+				open.Add(new CodexButton(CodexText.Get("Hint.SeeInCodex"), 220, () => HintSystem.OpenInCodex(item), 0.75f));
+				rows.Add(open);
 				if (level == 0) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get("Hint.NoHint"), 0.8f, CodexDraw.Muted));
 				rows.AddRange(HintView.Rows(fact, level, panelWidth - 40, inCodex: false));
 			}

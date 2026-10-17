@@ -145,6 +145,9 @@ Tests: {
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier
 	GuaranteedLoadBalanced: No enemy carries too many guaranteed items
 	GuaranteedSeveralSeeds: Every guaranteed item gets all its hosts with other seeds
+	HintSortedByProgress: Hints are sorted by progression, in two tabs
+	HintFoundUnlocks: A found item's hint is fully known for free
+	HintClickOpensCodex: Clicking a hint opens the right codex page
 	GuaranteedHostsNotEvents: Guaranteed drops are never on invasion, moon, seasonal or weather enemies
 	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
 	FindabilityDeterminism: Findability of items is the same after a rebuild
@@ -287,6 +290,11 @@ Codex: {
 		Nothing: Nothing to tell you for now: what you need is already within your reach.
 		TooPoor: That will be {0}, and you do not have it. Come back with more coins.
 		PanelTitle: The Guide's hints
+		TabToBuy: To buy
+		TabKnown: Bought or found
+		NothingKnown: No hint fully known yet: buy every level of one, or find the item.
+		OpenCodex: "{0}: click to open its page in the codex"
+		SeeInCodex: See in the codex
 		Money: Your coins: {0}
 		Buy: Buy: {0}
 		Repeat: Say it again
