@@ -225,6 +225,27 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
+		// Tests: plans with another map as this world's until disposed (the map must be built for this world's evil)
+		public static IDisposable WithMap(BiomeSlotMap map)
+		{
+			BiomeSlotMap saved = current;
+			current = map;
+			return new Restore(() => current = saved);
+		}
+
+		private sealed class Restore : IDisposable
+		{
+			private Action undo;
+
+			public Restore(Action undo) => this.undo = undo;
+
+			public void Dispose()
+			{
+				undo?.Invoke();
+				undo = null;
+			}
+		}
+
 		public static WorldEvil CurrentEvil => Main.drunkWorld || Main.zenithWorld ? WorldEvil.Both : WorldGen.crimson ? WorldEvil.Crimson : WorldEvil.Corruption;
 
 		// One line for the log and /rdebug biomes
@@ -781,6 +802,27 @@ namespace UltimateRandomizer.Common.Features
 				if (share > 0) result.Add((biome, share, SteadyShare(biome, type, tier), TimeOf(table.Times[(biome, type)])));
 			}
 			return result.OrderByDescending(b => b.steady).ThenByDescending(b => b.share).ThenBy(b => b.biome).Select(b => (b.biome, b.share, b.time)).ToList();
+		}
+
+		// A biome holding many enemies gives each a small share (25 enemies in the Forest: 4 % each): an enemy counts as met
+		// often there with half the average share of the biome's enemy types, or the cap when that is lower
+		public const double RelativeFrequentShare = 0.5;
+
+		public static double FrequentShare(int biome, int tier, double cap)
+		{
+			int band = BandOf(Tiers.Clamp(tier));
+			HashSet<int> types = new();
+			void From(BiomeSlotMap map)
+			{
+				if (Table(map, band).ByBiome.TryGetValue(biome, out Dictionary<int, double> byType)) types.UnionWith(byType.Keys);
+			}
+			if (!Active) From(Vanilla);
+			else
+			{
+				From(Current);
+				if (VanillaKeep > 0) From(Vanilla);
+			}
+			return types.Count == 0 ? cap : Math.Min(cap, RelativeFrequentShare / types.Count);
 		}
 
 		// The biome where a type is met the most at a tier, steadily first (biome -1: it spawns nowhere)

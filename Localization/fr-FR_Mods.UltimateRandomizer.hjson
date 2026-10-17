@@ -144,6 +144,7 @@ Tests: {
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
 	GuaranteedLoadBalanced: Aucun ennemi ne porte trop d'objets garantis
+	GuaranteedSeveralSeeds: Chaque objet garanti a tous ses porteurs avec d'autres graines
 	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction

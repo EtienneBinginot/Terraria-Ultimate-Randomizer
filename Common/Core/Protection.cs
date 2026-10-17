@@ -46,11 +46,22 @@ namespace UltimateRandomizer.Common.Core
 			[ItemID.CelestialSigil] = NPCID.MoonLordCore
 		};
 
-		// The tier a summon is needed at: its own tier, but never later than the tier before the one its boss opens (the
-		// Suspicious Looking Eye is needed before the Eye of Cthulhu is beaten)
+		// Event summons (and the Guide Voodoo Doll, useless before the Underworld) are needed once vanilla makes their event
+		// or boss relevant, not from the start: the classifier puts the Pirate Map or the Snow Globe at tier 0, and their
+		// guaranteed drops then filled the early hosts the basic stations need
+		private static readonly Dictionary<int, Tier> NeededFrom = new()
+		{
+			[ItemID.GoblinBattleStandard] = Tier.PostEyeOfCthulhu, [ItemID.BloodMoonStarter] = Tier.PostEyeOfCthulhu,
+			[ItemID.GuideVoodooDoll] = Tier.PostEvilBoss, [ItemID.PirateMap] = Tier.Hardmode, [ItemID.SnowGlobe] = Tier.Hardmode,
+			[ItemID.SolarTablet] = Tier.PostMechBoss, [ItemID.PumpkinMoonMedallion] = Tier.PostPlantera, [ItemID.NaughtyPresent] = Tier.PostPlantera
+		};
+
+		// The tier a summon is needed at: its own tier (event summons: not before their event matters), but never later than
+		// the tier before the one its boss opens (the Suspicious Looking Eye is needed before the Eye of Cthulhu is beaten)
 		public static int SummonTier(int item)
 		{
 			int tier = ItemPool.TierOf(item);
+			if (NeededFrom.TryGetValue(item, out Tier from)) tier = Math.Max(tier, (int)from);
 			if (SummonedBoss.TryGetValue(item, out int boss)) tier = Math.Min(tier, NpcTiers.BaseTier(boss) - 1);
 			return Tiers.Clamp(tier);
 		}

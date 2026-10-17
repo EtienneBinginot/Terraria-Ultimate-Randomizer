@@ -369,6 +369,8 @@ namespace UltimateRandomizer.Common.Codex
 		// A creature fact must lead to an enemy met often enough, with a decent chance: never a rare slot, never 0.01 %
 		public const double MinHostShare = GuaranteedSources.MinHostShare;
 		public const float MinCreatureChance = 0.01f;
+		// A boss source must give the item at least once in four fights (a guaranteed creature source is easier otherwise)
+		public const float MinBossChance = 0.25f;
 
 		// The preference between sources of the same tier: recipes and creatures, then bosses, bags, shops (and world
 		// sources), then chests and pots as a last resort
@@ -401,7 +403,7 @@ namespace UltimateRandomizer.Common.Codex
 		};
 
 		// A creature source the hint may lead to, judged at a tier: no rare enemy, a planned chance of 1 % or more, and at
-		// least MinHostShare of the steady spawns (slots neither rare nor conditional) of its best biome. Enemies without
+		// least GuaranteedSources.MinShare of the steady spawns (slots neither rare nor conditional) of its best biome. Enemies without
 		// any slot (modded), and every enemy when spawns are swapped another way, are judged by their rarity only.
 		// A source failing these is returned as a fallback (null: no chance at all)
 		private static HintFact CreatureFact(int item, int npc, int tier, int judgeTier, float chance)
@@ -414,7 +416,7 @@ namespace UltimateRandomizer.Common.Codex
 			{
 				(int biome, _, _) = BiomeSlots.BestBiome(type, judgeTier);
 				share = biome >= 0 ? BiomeSlots.SteadyShare(biome, type, judgeTier) : 0;
-				ok &= share >= MinHostShare;
+				ok &= biome >= 0 && share >= GuaranteedSources.MinShare(biome, judgeTier);
 			}
 			return new HintFact { Item = item, Kind = HintKind.Creature, Npc = npc, Tier = tier, Band = Band(tier), Chance = chance, Share = share, Fallback = !ok };
 		}
@@ -429,6 +431,8 @@ namespace UltimateRandomizer.Common.Codex
 			EnsureIndexes();
 			List<HintFact> options = new();
 			List<HintFact> rejected = new();
+			// Bosses that seldom give it: a fight for little, only better than a chest or a pot
+			List<HintFact> weak = new();
 			void AddCreature(HintFact fact)
 			{
 				if (fact != null) (fact.Fallback ? rejected : options).Add(fact);
@@ -459,7 +463,10 @@ namespace UltimateRandomizer.Common.Codex
 				{
 					// The chance the codex shows too: every planned entry of the item together
 					float chance = CodexStats.LuckyChance(npc, item);
-					if (RandomNpcDropRule.IsBossType(BossParts.Owner(npc))) options.Add(new HintFact { Item = item, Kind = HintKind.Boss, Npc = npc, Tier = tier, Band = Band(tier), Chance = chance });
+					if (RandomNpcDropRule.IsBossType(BossParts.Owner(npc)))
+					{
+						(chance >= MinBossChance - 1e-6f ? options : weak).Add(new HintFact { Item = item, Kind = HintKind.Boss, Npc = npc, Tier = tier, Band = Band(tier), Chance = chance });
+					}
 					else AddCreature(CreatureFact(item, npc, tier, tier, chance));
 				}
 			}
@@ -491,8 +498,9 @@ namespace UltimateRandomizer.Common.Codex
 			// The source reached first; between equal tiers, the preferred kind (chests and pots only when nothing else gives
 			// it at that tier), then the easiest, then a fixed key
 			HintFact best = Best(options);
-			// Nothing but a chest or a pot: the best creature that failed the frequency rules says more
-			if ((best == null || best.Kind is HintKind.Chest or HintKind.Pot) && rejected.Count > 0) best = Best(rejected);
+			// Nothing but a chest or a pot: the best creature that failed the frequency rules (or a boss that seldom gives
+			// it) says more
+			if ((best == null || best.Kind is HintKind.Chest or HintKind.Pot) && rejected.Count + weak.Count > 0) best = Best(rejected.Concat(weak).ToList());
 			if (best == null) return null;
 			if (best.Kind is HintKind.Creature or HintKind.Boss or HintKind.Shop) FillPlaces(best);
 			return best;
@@ -502,7 +510,7 @@ namespace UltimateRandomizer.Common.Codex
 			.ThenBy(StableKey, StringComparer.Ordinal).ThenBy(o => (int)o.Kind).FirstOrDefault();
 
 		// Where the host spawns, from the planned shares at the fact's tier (the redistributed slots, else the vanilla ones):
-		// its best biome first, then up to two more where it makes at least MinHostShare of the spawns; the time of the best
+		// its best biome first, then up to two more where it is met often (GuaranteedSources.MinShare); the time of the best
 		// biome's slots
 		private static void FillPlaces(HintFact fact)
 		{
@@ -511,7 +519,7 @@ namespace UltimateRandomizer.Common.Codex
 			List<(int biome, double share, SlotTime time)> biomes = BiomeSlots.SpawnsPlanned ? BiomeSlots.PlannedBiomes(type, fact.Tier) : new();
 			if (biomes.Count > 0)
 			{
-				fact.Biomes = biomes.Where((b, i) => i == 0 || BiomeSlots.SteadyShare(b.biome, type, fact.Tier) >= MinHostShare).Take(3).Select(b => BiomeSlots.BiomeName(b.biome)).ToList();
+				fact.Biomes = biomes.Where((b, i) => i == 0 || BiomeSlots.SteadyShare(b.biome, type, fact.Tier) >= GuaranteedSources.MinShare(b.biome, fact.Tier)).Take(3).Select(b => BiomeSlots.BiomeName(b.biome)).ToList();
 				fact.Time = biomes[0].time;
 				List<BiomeSlot> slots = BiomeSlots.SpawnMap.Slots.Where(s => s.Biome == biomes[0].biome && SpawnsIn(s, type)).ToList();
 				if (slots.Count > 0) fact.Movement = Math.Min(3, slots.GroupBy(s => s.Movement).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key);

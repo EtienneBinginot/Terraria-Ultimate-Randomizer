@@ -22,6 +22,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BasicStationsFindable", BasicStationsFindable);
 			TestRunner.Register("GuaranteedReachability", GuaranteedReachability);
 			TestRunner.Register("GuaranteedLoadBalanced", GuaranteedLoadBalanced);
+			TestRunner.Register("GuaranteedSeveralSeeds", GuaranteedSeveralSeeds);
 			TestRunner.Register("GuaranteedHostsNotEvents", GuaranteedHostsNotEvents);
 			TestRunner.Register("GuaranteedDeterminism", GuaranteedDeterminism);
 			TestRunner.Register("FindabilityDeterminism", FindabilityDeterminism);
@@ -123,8 +124,8 @@ namespace UltimateRandomizer.Common.Tests
 				bool Good(int host)
 				{
 					if (NpcTiers.BaseTier(host) > tier || GuaranteedSources.IsEventEnemy(host) || ContentSamples.NpcsByNetId[host].rarity > 0) return false;
-					(double share, bool common, bool anySlot) = SlotShare(host, tier);
-					if (anySlot && BiomeSlots.SpawnsPlanned && (share < GuaranteedSources.MinHostShare - 0.005 || !common)) return false;
+					(double share, int biome, bool common, bool anySlot) = SlotShare(host, tier);
+					if (anySlot && BiomeSlots.SpawnsPlanned && (biome < 0 || share < GuaranteedSources.MinShare(biome, tier) - 0.005 || !common)) return false;
 					return RandomNpcDropRule.Plan(host, Main.expertMode).Any(d => d.Guaranteed && d.Item == item && d.Chance >= 0.01f - 1e-6f);
 				}
 				if (!hosts.Any(Good))
@@ -181,9 +182,9 @@ namespace UltimateRandomizer.Common.Tests
 			return result;
 		}
 
-		// A type's best share among the biomes at a tier (BiomeVanillaChance mixed in by biome), whether a slot that is not
-		// rare holds it, and whether any slot mentions it at all
-		private static (double share, bool common, bool anySlot) SlotShare(int type, int tier)
+		// A type's best share among the biomes at a tier (BiomeVanillaChance mixed in by biome) and that biome, whether a slot
+		// that is not rare holds it, and whether any slot mentions it at all
+		private static (double share, int biome, bool common, bool anySlot) SlotShare(int type, int tier)
 		{
 			int band = BiomeSlots.BandOf(tier);
 			BiomeSlotMap map = BiomeSlots.Active ? BiomeSlots.Current : BiomeSlots.Vanilla;
@@ -191,17 +192,22 @@ namespace UltimateRandomizer.Common.Tests
 			Dictionary<int, Dictionary<int, double>> planned = SlotShares(map, band);
 			Dictionary<int, Dictionary<int, double>> vanilla = keep > 0 ? SlotShares(BiomeSlots.Vanilla, band) : null;
 			double best = 0;
-			foreach ((int biome, Dictionary<int, double> byType) in planned)
+			int bestBiome = -1;
+			foreach ((int biome, Dictionary<int, double> byType) in planned.OrderBy(pair => pair.Key))
 			{
 				double share = (1 - keep) * byType.GetValueOrDefault(type);
 				if (vanilla != null && vanilla.TryGetValue(biome, out Dictionary<int, double> v)) share += keep * v.GetValueOrDefault(type);
-				best = System.Math.Max(best, share);
+				if (share > best)
+				{
+					best = share;
+					bestBiome = biome;
+				}
 			}
 			bool Holds(BiomeSlot s) => BiomeSlots.TypeOf(s.Owner) == type || s.Extra != 0 && BiomeSlots.TypeOf(s.Extra) == type
 				|| s.EvilShared != null && s.EvilShared.Any(id => BiomeSlots.TypeOf(id) == type);
 			bool common = map.Slots.Any(s => !s.Critter && !s.AbsentEvil && s.Band <= band && !s.Rare && Holds(s));
 			bool anySlot = map.Slots.Any(s => Holds(s) || BiomeSlots.TypeOf(s.Original) == type);
-			return (best, common, anySlot);
+			return (best, bestBiome, common, anySlot);
 		}
 
 		// The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) and the
@@ -258,16 +264,64 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Guaranteed items unreachable");
 		}
 
+		// At most MaxPerHost items per enemy, except the overflows the planner counted (every host of a tier was full); and
+		// every requirement has all its hosts
 		private static void GuaranteedLoadBalanced()
 		{
 			Dictionary<int, int> load = new();
+			List<string> failures = new();
 			foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements)
 			{
-				foreach (int host in GuaranteedSources.HostsOf(requirement.Item)) load[host] = load.GetValueOrDefault(host) + 1;
+				List<int> hosts = GuaranteedSources.HostsOf(requirement.Item).ToList();
+				if (hosts.Count != GuaranteedSources.HostsPerItem) failures.Add($"{Name(requirement.Item)}: {hosts.Count} host(s)");
+				foreach (int host in hosts) load[host] = load.GetValueOrDefault(host) + 1;
 			}
-			List<string> failures = load.Where(pair => pair.Value > GuaranteedSources.MaxPerHost)
-				.Select(pair => $"{ContentSamples.NpcsByNetId[pair.Key].TypeName}: {pair.Value}").ToList();
+			int excess = load.Values.Sum(v => System.Math.Max(0, v - GuaranteedSources.MaxPerHost));
+			if (excess > GuaranteedSources.Overflows)
+			{
+				failures.AddRange(load.Where(pair => pair.Value > GuaranteedSources.MaxPerHost).Select(pair => $"{ContentSamples.NpcsByNetId[pair.Key].TypeName}: {pair.Value}"));
+			}
+			if (GuaranteedSources.Missing > 0) failures.Add($"{GuaranteedSources.Missing} host(s) missing");
+			if (GuaranteedSources.Overflows > 0) ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed: {GuaranteedSources.Overflows} host(s) above {GuaranteedSources.MaxPerHost} items");
 			Check.All(failures, "Enemies carrying too many guaranteed items");
+		}
+
+		private static int Seed(int i) => 2000 + i * 7919;
+
+		// Planned with other seeds (and their spawn maps) without touching this world: every requirement gets all its hosts,
+		// none later than its tier, and the critical stations a host in the Forest's critical slots by day and by night
+		private static void GuaranteedSeveralSeeds()
+		{
+			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
+			if (requirements.Count == 0) Check.Skip("nothing is guaranteed");
+			const int Seeds = 4;
+			List<string> failures = new();
+			int overflows = 0;
+			for (int i = 0; i < Seeds; i++)
+			{
+				int seed = Seed(i);
+				BiomeSlotMap map = BiomeSlots.Active ? BiomeSlots.Build(seed, EnemiesConfig.Instance.BiomeExtraEnemies) : BiomeSlots.SpawnMap;
+				Dictionary<int, List<PlannedDrop>> plan = GuaranteedSources.PlanWith(seed, map, out int over, out int missing);
+				overflows += over;
+				if (missing > 0) failures.Add($"seed {seed}: {missing} host(s) missing");
+				HashSet<int> day = new(), night = new();
+				if (BiomeSlots.Active)
+				{
+					day = map.Slots.Where(s => s.Critical && BiomeSlots.CriticalDayOriginals.Contains(s.Original)).Select(s => BiomeSlots.TypeOf(s.Owner)).ToHashSet();
+					night = map.Slots.Where(s => s.Critical && BiomeSlots.CriticalNightOriginals.Contains(s.Original)).Select(s => BiomeSlots.TypeOf(s.Owner)).ToHashSet();
+				}
+				foreach (GuaranteedSources.Requirement requirement in requirements)
+				{
+					List<int> hosts = plan.Where(pair => pair.Value.Any(d => d.Item == requirement.Item)).Select(pair => pair.Key).ToList();
+					if (hosts.Count != GuaranteedSources.HostsPerItem) failures.Add($"seed {seed}: {Name(requirement.Item)} has {hosts.Count} host(s)");
+					if (hosts.Any(h => NpcTiers.BaseTier(h) > requirement.Tier)) failures.Add($"seed {seed}: {Name(requirement.Item)} on a later enemy");
+					if (!requirement.Critical || !BiomeSlots.Active) continue;
+					if (day.Count > 0 && !hosts.Any(day.Contains)) failures.Add($"seed {seed}: {Name(requirement.Item)} without a Forest host by day");
+					if (night.Count > 0 && !hosts.Any(night.Contains)) failures.Add($"seed {seed}: {Name(requirement.Item)} without a Forest host by night");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed over {Seeds} seeds: {requirements.Count} requirements, {overflows} host(s) above {GuaranteedSources.MaxPerHost} items");
+			Check.All(failures, "Guaranteed sources with other seeds");
 		}
 
 		private static string Snapshot() => string.Join(";", GuaranteedSources.Requirements.Select(r => r.Item + ":" + string.Join(",", GuaranteedSources.HostsOf(r.Item).OrderBy(h => h))));

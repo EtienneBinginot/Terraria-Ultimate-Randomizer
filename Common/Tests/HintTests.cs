@@ -85,7 +85,8 @@ namespace UltimateRandomizer.Common.Tests
 				int tier = requirement.Item == fact.Item && GuaranteedSources.HostsOf(fact.Item).Contains(fact.Npc) ? Math.Max(fact.Tier, requirement.Tier) : fact.Tier;
 				Dictionary<int, double> steady = SteadyFromSlots(type, tier);
 				double best = steady.Values.DefaultIfEmpty(0).Max();
-				if (best < GuaranteedSources.MinHostShare - 0.005) failures.Add($"{name}: {best:P1} of the steady spawns of its best biome");
+				int bestBiome = steady.Count == 0 ? -1 : steady.OrderByDescending(p => p.Value).ThenBy(p => p.Key).First().Key;
+				if (bestBiome < 0 || best < GuaranteedSources.MinShare(bestBiome, tier) - 0.005) failures.Add($"{name}: {best:P1} of the steady spawns of its best biome");
 				if (fact.Biomes.Count == 0) failures.Add($"{name}: no biome named");
 				else if (steady.Where(p => BiomeSlots.BiomeName(p.Key) == fact.Biomes[0]).Select(p => p.Value).DefaultIfEmpty(0).First() < best - 0.005)
 				{
@@ -103,8 +104,9 @@ namespace UltimateRandomizer.Common.Tests
 			return info != null && Equals(Convert.ChangeType(value, info.FieldType.IsEnum ? Enum.GetUnderlyingType(info.FieldType) : info.FieldType), Convert.ChangeType(info.GetValue(config), info.FieldType.IsEnum ? Enum.GetUnderlyingType(info.FieldType) : info.FieldType));
 		}
 
-		// Every station or summon target with guaranteed hosts has a creature or recipe hint; with the default settings,
-		// never a creature kept only because nothing else than a chest or a pot gives it
+		// Every station or summon target with guaranteed hosts has a creature or recipe hint (or a boss or bag giving it at
+		// least once in four, a shop, a world source); with the default settings, never a creature kept only because nothing
+		// else than a chest or a pot gives it
 		private static void HintTargetsHaveSource()
 		{
 			List<HintTarget> targets = TargetsOrSkip().Where(t => t.Kind is HintTargetKind.Station or HintTargetKind.Summon && GuaranteedSources.HostsOf(t.Item).Any()).ToList();
@@ -118,7 +120,9 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				HintFact fact = HintFacts.For(target.Item);
 				string name = HintFacts.ItemName(target.Item);
-				if (fact == null || fact.Kind is not (HintKind.Creature or HintKind.Recipe)) failures.Add($"{name}: {(fact == null ? "no hint" : fact.Kind.ToString())}");
+				bool good = fact != null && (fact.Kind is HintKind.Creature or HintKind.Recipe or HintKind.Shop or HintKind.World
+					|| fact.Kind is HintKind.Boss or HintKind.Bag && fact.Chance >= HintFacts.MinBossChance - 1e-6f);
+				if (!good) failures.Add($"{name}: {(fact == null ? "no hint" : $"{fact.Kind} ({fact.Chance:P1})")}");
 				else if (fact.Fallback)
 				{
 					fallbacks++;
