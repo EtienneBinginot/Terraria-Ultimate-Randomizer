@@ -172,7 +172,25 @@ namespace UltimateRandomizer.Common.Codex
 				outbox.Add(e);
 				return;
 			}
-			if (Data.Apply(e) && Main.netMode == NetmodeID.Server) outbox.Add(e);
+			if (!Data.Apply(e)) return;
+			if (Main.netMode == NetmodeID.Server) outbox.Add(e);
+			if (e.Op == CodexOp.Hint) RevealHinted(e);
+		}
+
+		// Server (or single player), once the last level of a hint is accepted: the enemy or boss it names counts as
+		// discovered, through the usual entries (saved, and sent to everyone): its page and portrait open (no kill is
+		// counted), the item shows among its drops, and it is seen in its best biome (once, if it never was there)
+		public static void RevealHinted(CodexEntry hint)
+		{
+			if (hint.Count < HintFacts.MaxLevel || Main.netMode == NetmodeID.MultiplayerClient) return;
+			int item = CodexNames.ItemType(hint.Item);
+			HintFact fact = item > 0 ? HintFacts.For(item) : null;
+			if (fact == null || fact.Kind is not (HintKind.Creature or HintKind.Boss) || fact.Npc == 0) return;
+			int key = fact.Kind == HintKind.Boss ? (BossParts.IsPart(fact.Npc) ? BossParts.Owner(fact.Npc) : IsTwin(fact.Npc) ? NPCID.Retinazer : fact.Npc) : fact.Npc;
+			string npc = CodexNames.Npc(key);
+			Submit(CodexEntry.Reveal(npc, hint.Item));
+			string biome = fact.Biomes.FirstOrDefault();
+			if (!string.IsNullOrEmpty(biome) && !(Data.Sightings.TryGetValue(biome, out Dictionary<string, int> seen) && seen.ContainsKey(npc))) Submit(CodexEntry.Sighting(biome, npc, 1));
 		}
 
 		private static bool IsEaterSegment(int type) => type is NPCID.EaterofWorldsHead or NPCID.EaterofWorldsBody or NPCID.EaterofWorldsTail;
@@ -791,6 +809,7 @@ namespace UltimateRandomizer.Common.Codex
 						continue;
 					}
 					outbox.Add(e);
+					if (e.Op == CodexOp.Hint) RevealHinted(e);
 				}
 				else
 				{
@@ -838,8 +857,26 @@ namespace UltimateRandomizer.Common.Codex
 		// NPCs killed at least once (net ids; a boss's parts and both Twins are counted under the boss / Retinazer)
 		public static List<int> KilledNpcs() => Data.Kills.Where(k => k.Value > 0).Select(k => CodexNames.NpcId(k.Key)).Where(id => id != 0).ToList();
 
-		public static List<(int item, int count)> DropsOf(int netId) =>
-			Data.Drops.TryGetValue(CodexNames.Npc(netId), out Dictionary<string, int> items) ? ToTypes(items) : new List<(int, int)>();
+		// Enemies killed or revealed by a hint (their page opens; a revealed one shows 0 kills)
+		public static List<int> KnownNpcs() => KilledNpcs().Concat(Data.Revealed.Keys.Select(CodexNames.NpcId).Where(id => id != 0)).Distinct().ToList();
+
+		public static bool IsRevealed(int netId) => Data.Revealed.ContainsKey(CodexNames.Npc(netId));
+
+		// Drops found, then those a hint revealed (count 0)
+		public static List<(int item, int count)> DropsOf(int netId)
+		{
+			string npc = CodexNames.Npc(netId);
+			List<(int item, int count)> drops = Data.Drops.TryGetValue(npc, out Dictionary<string, int> items) ? ToTypes(items) : new List<(int, int)>();
+			if (Data.Revealed.TryGetValue(npc, out HashSet<string> revealed))
+			{
+				foreach (string name in revealed.OrderBy(n => n, StringComparer.Ordinal))
+				{
+					int type = CodexNames.ItemType(name);
+					if (type > 0 && !drops.Any(d => d.item == type)) drops.Add((type, 0));
+				}
+			}
+			return drops;
+		}
 
 		public static bool HasOpenedBag(int bag) => Data.Sources[(int)CodexSource.Bag].ContainsKey(CodexNames.Item(bag));
 
@@ -947,6 +984,16 @@ namespace UltimateRandomizer.Common.Codex
 				{
 					int item = CodexNames.ItemType(itemName);
 					if (item > 0) Add(q.DroppedBy, item, (npc, count));
+				}
+			}
+			foreach ((string npcName, HashSet<string> items) in d.Revealed)
+			{
+				int npc = CodexNames.NpcId(npcName);
+				if (npc == 0) continue;
+				foreach (string itemName in items)
+				{
+					int item = CodexNames.ItemType(itemName);
+					if (item > 0 && !(q.DroppedBy.TryGetValue(item, out List<(int, int)> by) && by.Any(b => b.Item1 == npc))) Add(q.DroppedBy, item, (npc, 0));
 				}
 			}
 			for (int kind = 0; kind < CodexData.SourceKinds; kind++)

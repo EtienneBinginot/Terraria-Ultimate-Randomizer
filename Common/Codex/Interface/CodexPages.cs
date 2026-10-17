@@ -83,7 +83,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		private void BuildEnemies()
 		{
-			List<int> killed = Cached("killed", () => CodexSystem.KilledNpcs().Distinct().OrderBy(CodexDraw.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList());
+			List<int> killed = Cached("killed", () => CodexSystem.KnownNpcs().OrderBy(CodexDraw.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList());
 			List<int> shown = Filtered("killed", killed, id => Matches(CodexDraw.NpcName(id)));
 			Text(CodexText.Get("EnemiesCount", killed.Count), CodexDraw.Gold);
 			if (shown.Count == 0)

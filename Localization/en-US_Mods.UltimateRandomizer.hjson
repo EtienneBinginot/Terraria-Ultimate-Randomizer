@@ -221,6 +221,10 @@ Tests: {
 	HintPurchaseFlow: Buying a hint takes the coins, raises its level, and is refused when coins are short
 	HintSyncRoundTrip: Hint levels survive the codex wire format, the save and the server checks
 	HintTextsResolved: Every hint sentence is a full sentence in this language
+	HintSourceFrequent: Creature hints lead to an enemy met often (5 % of a biome or more) with a 1 % chance or more
+	HintBiomeEveryLevel: Levels 2 to 4 of a creature hint name its best biome
+	HintRevealDiscovers: The last level of a hint reveals the enemy in the codex (page, drop, biome), saved and synced
+	PlannedShareSums: The planned spawn shares of each biome sum to 100 %, rare enemies get less
 }
 
 Journal.Description: Opens the randomizer codex (also the J key)
@@ -294,6 +298,12 @@ Codex: {
 		PickTarget: Click an item to read its hints again.
 		Free: free
 		NoStation: no station
+		Around: "Look around: {0}."
+
+		Place: {
+			Known: "{0}, {1}"
+			Anywhere: all over the world
+		}
 
 		Coin: {
 			Copper: "{0} copper"
@@ -380,8 +390,8 @@ Codex: {
 
 		Where: {
 			Creature: {
-				0: "{0} roams {2} around these places: {1}. It carries one."
-				1: Look around these places, {2}: {1}. {0} there holds what you seek.
+				0: "{0} roams {2}, mostly here: {1}. It carries one."
+				1: Look around these places, {2}, the first one above all: {1}. {0} there holds what you seek.
 				2: I have heard of it near these places: {1}. {0}, out {2}, keeps one close.
 			}
 
@@ -430,8 +440,8 @@ Codex: {
 
 		Shape: {
 			Creature: {
-				0: Here is its shape. Ring a bell?
-				1: I sketched it for you, as best I could:
+				0: Here is its shape. It lives here: {0}. Ring a bell?
+				1: I sketched it for you, as best I could ({0}):
 			}
 
 			Recipe: {
@@ -467,8 +477,8 @@ Codex: {
 
 		Name: {
 			Creature: {
-				0: "{0} carries it."
-				1: Hunt this one: {0}.
+				0: "{0} carries it: look here, {1}. About {2} of them drop it."
+				1: Hunt this one: {0}, in this place: {1} ({2} chance per kill).
 			}
 
 			Recipe: {
@@ -477,8 +487,8 @@ Codex: {
 			}
 
 			Boss: {
-				0: "{0} keeps it."
-				1: Your target: {0}.
+				0: "{0} keeps it ({2} chance)."
+				1: Your target: {0} ({2} chance per victory).
 			}
 
 			Bag: {

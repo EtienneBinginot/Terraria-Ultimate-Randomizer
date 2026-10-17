@@ -221,6 +221,10 @@ Tests: {
 	HintPurchaseFlow: Acheter un indice prend les pièces, monte son niveau, et est refusé sans assez de pièces
 	HintSyncRoundTrip: Les niveaux d'indice survivent au format réseau du codex, à la sauvegarde et aux vérifications du serveur
 	HintTextsResolved: Chaque phrase d'indice est une vraie phrase dans cette langue
+	HintSourceFrequent: Les indices de créature mènent à un ennemi fréquent (5 % d'un biome ou plus) avec 1 % de chances ou plus
+	HintBiomeEveryLevel: Les niveaux 2 à 4 d'un indice de créature nomment son meilleur biome
+	HintRevealDiscovers: Le dernier niveau d'un indice révèle l'ennemi dans le codex (page, butin, biome), sauvegardé et synchronisé
+	PlannedShareSums: Les parts d'apparition prévues de chaque biome font 100 %, les ennemis rares en ont moins
 }
 
 Journal.Description: Ouvre le codex du randomizer (aussi avec la touche J)
@@ -294,6 +298,12 @@ Codex: {
 		PickTarget: Clique sur un objet pour relire ses indices.
 		Free: gratuit
 		NoStation: aucune station
+		Around: Cherche du côté de ces lieux : {0}.
+
+		Place: {
+			Known: "{0}, {1}"
+			Anywhere: un peu partout dans le monde
+		}
 
 		Coin: {
 			Copper: "{0} cuivre"
@@ -380,8 +390,8 @@ Codex: {
 
 		Where: {
 			Creature: {
-				0: "{0} rôde {2} dans ces contrées : {1}. Elle en porte un exemplaire."
-				1: Cherche du côté de ces lieux, {2} : {1}. {0} y garde ce que tu cherches.
+				0: "{0} rôde {2}, surtout dans ces contrées : {1}. Elle en porte un exemplaire."
+				1: Cherche du côté de ces lieux, {2}, le premier avant tout : {1}. {0} y garde ce que tu cherches.
 				2: On m'en a parlé près de ces lieux : {1}. {0}, de sortie {2}, en garde un exemplaire.
 			}
 
@@ -430,8 +440,8 @@ Codex: {
 
 		Shape: {
 			Creature: {
-				0: Voici sa silhouette. Ça te dit quelque chose ?
-				1: Je te l'ai dessinée du mieux que j'ai pu :
+				0: Voici sa silhouette. Elle vit par ici : {0}. Ça te dit quelque chose ?
+				1: Je te l'ai dessinée du mieux que j'ai pu ({0}) :
 			}
 
 			Recipe: {
@@ -467,8 +477,8 @@ Codex: {
 
 		Name: {
 			Creature: {
-				0: Cette créature le transporte : {0}.
-				1: Ta cible : {0}.
+				0: Cette créature le transporte : {0}. Va la chercher ici : {1}. Elle le lâche dans {2} des cas.
+				1: Ta cible : {0}, à cet endroit : {1} ({2} de chances par créature tuée).
 			}
 
 			Recipe: {
@@ -477,8 +487,8 @@ Codex: {
 			}
 
 			Boss: {
-				0: Cet ennemi le garde : {0}.
-				1: Ta cible : {0}.
+				0: Cet ennemi le garde : {0} ({2} de chances).
+				1: Ta cible : {0} ({2} de chances par victoire).
 			}
 
 			Bag: {

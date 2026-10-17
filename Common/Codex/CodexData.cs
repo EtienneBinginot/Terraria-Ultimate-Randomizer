@@ -13,7 +13,7 @@ namespace UltimateRandomizer.Common.Codex
 	// Where an item was received, besides enemy drops
 	public enum CodexSource : byte { Chest, Pot, Tile, Tree, Bag, Fishing, Extractinator, Shimmer }
 
-	public enum CodexOp : byte { Kill, Drop, Source, SourceKey, Recipe, Seen, Sighting, Chest, Hint }
+	public enum CodexOp : byte { Kill, Drop, Source, SourceKey, Recipe, Seen, Sighting, Chest, Hint, Reveal }
 
 	// One discovery. Counts are increments; a full sync is the whole codex as entries applied to an empty one.
 	// Npc, From and Item are full names (stable across mod changes); From is the bag (bags) or the shimmered item (shimmer).
@@ -51,6 +51,9 @@ namespace UltimateRandomizer.Common.Codex
 		// A hint level bought from the Guide (Count is the level)
 		public static CodexEntry Hint(string item, int level) => new() { Op = CodexOp.Hint, Item = item, Count = level };
 
+		// An enemy and one of its drops revealed by the last level of a hint: known like a discovery, without a kill
+		public static CodexEntry Reveal(string npc, string item) => new() { Op = CodexOp.Reveal, Npc = npc, Item = item };
+
 		public static int ChestPosition(int x, int y) => (x & 0xFFFF) | (y << 16);
 
 		// Identity of a set-like discovery, so a client does not send it twice while waiting for the server
@@ -61,6 +64,7 @@ namespace UltimateRandomizer.Common.Codex
 			CodexOp.Chest => "c" + Key,
 			CodexOp.SourceKey => "k" + (int)Kind + "|" + From,
 			CodexOp.Hint => "h" + Item + "|" + Count,
+			CodexOp.Reveal => "v" + Npc + "|" + Item,
 			_ => null
 		};
 	}
@@ -132,6 +136,8 @@ namespace UltimateRandomizer.Common.Codex
 		public readonly HashSet<int> OpenedChests = new();
 		// Hint levels bought from the Guide, by item (shared by the whole world)
 		public readonly Dictionary<string, int> Hints = new();
+		// Enemies revealed by a hint, with the drops it named: their page opens as if seen (no kill counted)
+		public readonly Dictionary<string, HashSet<string>> Revealed = new();
 
 		public CodexData()
 		{
@@ -149,6 +155,7 @@ namespace UltimateRandomizer.Common.Codex
 			Sightings.Clear();
 			OpenedChests.Clear();
 			Hints.Clear();
+			Revealed.Clear();
 			Bump(Change.Key);
 			Bump(Change.Recipe);
 		}
@@ -220,6 +227,16 @@ namespace UltimateRandomizer.Common.Codex
 					Hints[e.Item] = e.Count;
 					return Change.Key;
 				}
+				case CodexOp.Reveal:
+				{
+					if (string.IsNullOrEmpty(e.Npc) || string.IsNullOrEmpty(e.Item)) return Change.None;
+					if (!Revealed.TryGetValue(e.Npc, out HashSet<string> items))
+					{
+						if (Revealed.Count >= MaxKeys) return Change.None;
+						Revealed[e.Npc] = items = new HashSet<string>();
+					}
+					return items.Count < MaxPerKey && items.Add(e.Item) ? Change.Key : Change.None;
+				}
 			}
 			return Change.None;
 		}
@@ -232,8 +249,11 @@ namespace UltimateRandomizer.Common.Codex
 			CodexOp.Seen => !ItemsSeen.Contains(e.Item),
 			CodexOp.Chest => !OpenedChests.Contains(e.Key),
 			CodexOp.Hint => e.Count > HintLevel(e.Item),
+			CodexOp.Reveal => !IsRevealed(e.Npc, e.Item),
 			_ => true
 		};
+
+		public bool IsRevealed(string npc, string item) => npc != null && Revealed.TryGetValue(npc, out HashSet<string> items) && items.Contains(item);
 
 		public int HintLevel(string item) => !string.IsNullOrEmpty(item) && Hints.TryGetValue(item, out int level) ? level : 0;
 
@@ -287,6 +307,10 @@ namespace UltimateRandomizer.Common.Codex
 			// Their content is already in the chest source above
 			foreach (int position in OpenedChests) yield return CodexEntry.Chest(position, null);
 			foreach ((string item, int level) in Hints) yield return CodexEntry.Hint(item, level);
+			foreach ((string npc, HashSet<string> items) in Revealed)
+			{
+				foreach (string item in items) yield return CodexEntry.Reveal(npc, item);
+			}
 		}
 
 		// Sorted dump of the content, to compare two codexes (tests)
@@ -371,6 +395,17 @@ namespace UltimateRandomizer.Common.Codex
 			tag["chests"] = OpenedChests.ToList();
 			tag["hintItem"] = Hints.Keys.ToList();
 			tag["hintLevel"] = Hints.Values.ToList();
+			List<string> revealNpc = new(), revealItem = new();
+			foreach ((string npc, HashSet<string> items) in Revealed)
+			{
+				foreach (string item in items)
+				{
+					revealNpc.Add(npc);
+					revealItem.Add(item);
+				}
+			}
+			tag["revealNpc"] = revealNpc;
+			tag["revealItem"] = revealItem;
 		}
 
 		public static CodexData Load(TagCompound tag)
@@ -414,6 +449,10 @@ namespace UltimateRandomizer.Common.Codex
 			IList<string> hintItem = tag.GetList<string>("hintItem");
 			IList<int> hintLevel = tag.GetList<int>("hintLevel");
 			for (int i = 0; i < hintItem.Count && i < hintLevel.Count; i++) data.ApplyInner(CodexEntry.Hint(hintItem[i], hintLevel[i]));
+			// Saves of 1.1.x have none
+			IList<string> revealNpc = tag.GetList<string>("revealNpc");
+			IList<string> revealItem = tag.GetList<string>("revealItem");
+			for (int i = 0; i < revealNpc.Count && i < revealItem.Count; i++) data.ApplyInner(CodexEntry.Reveal(revealNpc[i], revealItem[i]));
 			return data;
 		}
 
@@ -429,6 +468,7 @@ namespace UltimateRandomizer.Common.Codex
 					if (npc == 0) return false;
 					break;
 				case CodexOp.Drop:
+				case CodexOp.Reveal:
 					npc = CodexNames.NpcId(e.Npc);
 					item = CodexNames.ItemType(e.Item);
 					if (npc == 0 || item == 0) return false;
@@ -476,6 +516,10 @@ namespace UltimateRandomizer.Common.Codex
 				case CodexOp.Hint:
 					w.Write7BitEncodedInt(item);
 					w.Write((byte)Math.Clamp(e.Count, 0, 255));
+					break;
+				case CodexOp.Reveal:
+					w.Write(npc);
+					w.Write7BitEncodedInt(item);
 					break;
 				case CodexOp.Sighting:
 					w.Write(e.Biome ?? "");
@@ -537,6 +581,11 @@ namespace UltimateRandomizer.Common.Codex
 				{
 					string item = CodexNames.Item(r.Read7BitEncodedInt());
 					return CodexEntry.Hint(item, r.ReadByte());
+				}
+				case CodexOp.Reveal:
+				{
+					string npc = CodexNames.Npc(r.ReadInt32());
+					return CodexEntry.Reveal(npc, CodexNames.Item(r.Read7BitEncodedInt()));
 				}
 				case CodexOp.Sighting:
 				{

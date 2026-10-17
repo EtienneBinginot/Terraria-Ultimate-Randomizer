@@ -785,6 +785,10 @@ namespace UltimateRandomizer.Common.Features
 			return (info.Biome, share, info.Time);
 		}
 
+		// Every type's share of the enemy spawns of a biome in a map (no vanilla mix), for the tests
+		public static Dictionary<int, double> SharesIn(BiomeSlotMap map, int biome, int tier = Tiers.Max) =>
+			Table(map, BandOf(Tiers.Clamp(tier))).ByBiome.TryGetValue(biome, out Dictionary<int, double> byType) ? new Dictionary<int, double>(byType) : new Dictionary<int, double>();
+
 		// Does a type spawn in at least one slot that is not rare, at a tier?
 		public static bool SpawnsInCommonSlot(int type, int tier = Tiers.Max) =>
 			Table(SpawnMap, BandOf(Tiers.Clamp(tier))).ByType.TryGetValue(type, out SpawnInfo info) && info.CommonSlot;

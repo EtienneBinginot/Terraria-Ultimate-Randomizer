@@ -25,6 +25,139 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintPurchaseFlow", HintPurchaseFlow);
 			TestRunner.Register("HintSyncRoundTrip", HintSyncRoundTrip);
 			TestRunner.Register("HintTextsResolved", HintTextsResolved);
+			TestRunner.Register("HintSourceFrequent", HintSourceFrequent);
+			TestRunner.Register("HintBiomeEveryLevel", HintBiomeEveryLevel);
+			TestRunner.Register("HintRevealDiscovers", HintRevealDiscovers);
+			TestRunner.Register("PlannedShareSums", PlannedShareSums);
+		}
+
+		private static List<HintFact> CreatureFacts() => TargetsOrSkip().Select(t => HintFacts.For(t.Item)).Where(f => f != null && f.Kind == HintKind.Creature).ToList();
+
+		// A creature hint leads to an enemy met often (at least 5 % of the spawns of its best biome, in a slot that is not
+		// rare, no rare enemy) that really drops the item with a planned chance of 1 % or more
+		private static void HintSourceFrequent()
+		{
+			List<HintFact> facts = CreatureFacts();
+			if (facts.Count == 0) Check.Skip("no creature hint in this world");
+			List<string> failures = new();
+			foreach (HintFact fact in facts)
+			{
+				string name = $"{HintFacts.ItemName(fact.Item)} on {HintFacts.NpcName(fact.Npc)}";
+				int type = BiomeSlots.TypeOf(fact.Npc);
+				if (ContentSamples.NpcsByNetId[fact.Npc].rarity > 0) failures.Add($"{name}: a rare enemy");
+				if (fact.Chance < 0.01f - 1e-6f) failures.Add($"{name}: {fact.Chance:P2} chance");
+				// The chance the fact states is a real planned drop of that enemy (its guaranteed drop, or its lucky plan)
+				float planned = RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true).Where(d => d.Item == fact.Item).Select(d => d.Chance).DefaultIfEmpty(0).Max();
+				if (planned < fact.Chance - 1e-4f) failures.Add($"{name}: states {fact.Chance:P2}, planned {planned:P2}");
+				if (!BiomeSlots.HasAnySlot(type)) continue;
+				(int biome, double share, _) = BiomeSlots.BestBiome(type, fact.Tier);
+				if (biome < 0 || share < GuaranteedSources.MinHostShare - 1e-9) failures.Add($"{name}: {share:P1} of its best biome");
+				if (!BiomeSlots.SpawnsInCommonSlot(type, fact.Tier)) failures.Add($"{name}: only in rare slots");
+				if (fact.Biomes.Count == 0 || fact.Biomes[0] != BiomeSlots.BiomeName(biome)) failures.Add($"{name}: the first biome named is not its best one");
+				foreach (string named in fact.Biomes.Skip(1))
+				{
+					int key = BiomeSlots.SpawnMap.Slots.Where(s => BiomeSlots.BiomeName(s.Biome) == named).Select(s => s.Biome).DefaultIfEmpty(-1).First();
+					if (BiomeSlots.PlannedShare(key, type, fact.Tier) < GuaranteedSources.MinHostShare - 1e-9) failures.Add($"{name}: {named} named with a small share");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Hint sources: {facts.Count} creature hints, lowest chance {facts.Min(f => f.Chance):P1}, lowest share {facts.Min(f => f.Share):P1}");
+			Check.All(failures, "Creature hints on rare sources");
+		}
+
+		// Levels 2 to 4 of a creature hint name its best biome
+		private static void HintBiomeEveryLevel()
+		{
+			List<HintFact> facts = CreatureFacts().Where(f => f.Biomes.Count > 0).ToList();
+			if (facts.Count == 0) Check.Skip("no creature hint with a known biome");
+			List<string> failures = new();
+			foreach (HintFact fact in facts)
+			{
+				string biome = BiomeSlots.BiomeDisplayName(fact.Biomes[0]);
+				for (int level = 2; level <= HintFacts.MaxLevel; level++)
+				{
+					if (!HintFacts.Text(fact, level).Contains(biome)) failures.Add($"{HintFacts.ItemName(fact.Item)} level {level} without {biome}");
+				}
+				if (!HintFacts.Text(fact, 4).Contains(Codex.Interface.CodexStats.Percent(fact.Chance))) failures.Add($"{HintFacts.ItemName(fact.Item)} level 4 without its chance");
+			}
+			Check.All(failures, "Hint levels without the biome");
+		}
+
+		// Buying the last level of a creature or boss hint reveals the enemy: known in the codex with 0 kills, the item among
+		// its drops, seen in its best biome. On an empty copy of the codex, restored afterwards
+		private static void HintRevealDiscovers()
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (the server records the reveal)");
+			HintFact fact = TargetsOrSkip().Select(t => HintFacts.For(t.Item)).FirstOrDefault(f => f != null && f.Kind is HintKind.Creature or HintKind.Boss);
+			if (fact == null) Check.Skip("no creature or boss hint in this world");
+			CodexData saved = CodexSystem.Data;
+			try
+			{
+				CodexSystem.Data = new CodexData { Seed = saved.Seed, HasSeed = saved.HasSeed, RecipeStamp = saved.RecipeStamp, HasRecipeStamp = saved.HasRecipeStamp };
+				string item = CodexNames.Item(fact.Item);
+				CodexSystem.RevealHinted(CodexEntry.Hint(item, HintFacts.MaxLevel - 1));
+				Check.Equal(0, CodexSystem.KnownNpcs().Count, "enemies known after level 3");
+				CodexSystem.RevealHinted(CodexEntry.Hint(item, HintFacts.MaxLevel));
+				CodexSystem.RefreshIndex();
+				List<int> known = CodexSystem.KnownNpcs();
+				Check.That(known.Count == 1, $"{known.Count} enemies known after the reveal");
+				int npc = known[0];
+				Check.Equal(0, CodexSystem.KillCount(npc), "kills of the revealed enemy");
+				Check.That(CodexSystem.DropsOf(npc).Any(d => d.item == fact.Item && d.count == 0), "the item is not among its drops");
+				Check.That(CodexSystem.NpcsDropping(fact.Item).Any(d => d.npc == npc), "the item page does not list the enemy");
+				if (fact.Biomes.Count > 0)
+				{
+					Check.That(CodexSystem.BiomesWhereSeen(npc).Contains(fact.Biomes[0]), $"not seen in {fact.Biomes[0]}");
+					Check.Equal(1, CodexSystem.SightingCount(npc), "sightings of the revealed enemy");
+				}
+				// Saved and synced like any discovery
+				TagCompound tag = new();
+				CodexSystem.Data.Save(tag);
+				Check.Equal(CodexSystem.Data.Signature(), CodexData.Load(tag).Signature(), "the reveal after a save");
+				CodexData copy = new();
+				foreach ((int count, byte[] bytes) in CodexSystem.SplitEntries(CodexSystem.Data.AllEntries(), CodexSystem.PacketBytes))
+				{
+					using BinaryReader reader = new(new MemoryStream(bytes));
+					for (int i = 0; i < count; i++) copy.Apply(CodexData.Read(reader));
+				}
+				Check.Equal(CodexSystem.Data.Signature(), copy.Signature(), "the reveal after a network round trip");
+			}
+			finally
+			{
+				CodexSystem.Data = saved;
+				CodexSystem.RefreshIndex();
+			}
+		}
+
+		// The planned shares of every biome sum to 1, on several seeds and both world evils; a rare owner gets less of a
+		// biome than a common one (single-slot owners without extra in the same biome)
+		private static void PlannedShareSums()
+		{
+			List<string> failures = new();
+			int compared = 0;
+			for (int i = 0; i < 6; i++)
+			{
+				int seed = 2000 + i * 7919;
+				foreach (WorldEvil evil in new[] { WorldEvil.Corruption, WorldEvil.Crimson })
+				{
+					BiomeSlotMap map = BiomeSlots.Build(seed, 8f, evil);
+					foreach (int biome in map.Slots.Where(s => !s.Critter && !s.AbsentEvil).Select(s => s.Biome).Distinct())
+					{
+						Dictionary<int, double> shares = BiomeSlots.SharesIn(map, biome);
+						double sum = shares.Values.Sum();
+						if (Math.Abs(sum - 1) > 1e-6) failures.Add($"seed {seed} ({evil}): {BiomeSlots.BiomeName(biome)} sums to {sum:0.0000}");
+						List<BiomeSlot> alone = map.Slots.Where(s => s.Biome == biome && !s.Critter && !s.AbsentEvil && s.Extra == 0 && s.EvilShared == null && !s.Conditional
+							&& map.Slots.Count(o => o.Biome == biome && !o.AbsentEvil && BiomeSlots.Spawners(o).Any(id => BiomeSlots.TypeOf(id) == BiomeSlots.TypeOf(s.Owner))) == 1).ToList();
+						BiomeSlot rare = alone.FirstOrDefault(s => s.Rare);
+						BiomeSlot common = alone.FirstOrDefault(s => !s.Rare);
+						if (rare == null || common == null) continue;
+						compared++;
+						double r = shares.GetValueOrDefault(BiomeSlots.TypeOf(rare.Owner)), c = shares.GetValueOrDefault(BiomeSlots.TypeOf(common.Owner));
+						if (r >= c) failures.Add($"seed {seed}: in {BiomeSlots.BiomeName(biome)}, rare {Lang.GetNPCNameValue(BiomeSlots.TypeOf(rare.Owner))} {r:P1} >= common {c:P1}");
+					}
+				}
+			}
+			if (compared == 0) failures.Add("no biome with both a rare and a common owner to compare");
+			Check.All(failures, "Planned shares");
 		}
 
 		private static List<HintTarget> TargetsOrSkip()
