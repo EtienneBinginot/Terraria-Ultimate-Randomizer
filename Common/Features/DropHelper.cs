@@ -19,6 +19,8 @@ namespace UltimateRandomizer.Common.Features
 		// surprise happens (surpriseRng null = never, for the journal and the tests). wildRng: runtime drops only (madness)
 		public static int Replacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky, Random surpriseRng = null, Random wildRng = null)
 		{
+			// ItemPool.LastJackpotGap then says whether this replacement is a jackpot
+			ItemPool.ClearJackpot();
 			if (KeepOriginal(originalItem)) return originalItem;
 			RollRequest request = new()
 			{

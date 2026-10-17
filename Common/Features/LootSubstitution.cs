@@ -24,7 +24,9 @@ namespace UltimateRandomizer.Common.Features
 					System.Random dropRng = new(Main.rand.Next());
 					int replacement = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(owner), item.type,
 						NpcTiers.EffectiveTier(owner), isBoss ? NpcTiers.BaseTier(owner) : 0, DropHelper.RollLucky(), dropRng, dropRng);
+					int gap = ItemPool.LastJackpotGap;
 					DropHelper.ChangeSpawnedItem(item, replacement, StackRules.Scaled(item.type, item.stack, replacement));
+					JackpotItem.Mark(item, gap);
 					break;
 
 				case EntitySource_ItemOpen open when IsBag(open.ItemType) && BagEnabled(open.ItemType, cfg):
@@ -32,7 +34,9 @@ namespace UltimateRandomizer.Common.Features
 					System.Random bagRng = new(Main.rand.Next());
 					int bagReplacement = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(open.ItemType), item.type,
 						bagTier, ItemID.Sets.BossBag[open.ItemType] ? bagTier : 0, DropHelper.RollLucky(), bagRng, bagRng);
+					int bagGap = ItemPool.LastJackpotGap;
 					DropHelper.ChangeSpawnedItem(item, bagReplacement, StackRules.Scaled(item.type, item.stack, bagReplacement));
+					JackpotItem.Mark(item, bagGap);
 					break;
 			}
 		}

@@ -542,11 +542,13 @@ namespace UltimateRandomizer.Common.Codex
 			{
 				case EntitySource_Loot loot when loot.Entity is NPC npc:
 					if (!authority || IsPickupOrCoin(item.type) || !Credited(npc) || !LootSubstitutionItem.IsDeathLoot(npc, original)) return;
+					// A jackpot is luck, not what this enemy drops (the item is still seen once picked up)
+					if (!CountsAsDrop(item)) return;
 					if (noBroadcast && Main.netMode == NetmodeID.Server && !FirstInstance(npc, original)) return;
 					RecordDrop(FightKey(npc), item.type, item.stack);
 					break;
 				case EntitySource_ItemOpen open when LootSubstitutionItem.IsBag(open.ItemType):
-					if (IsPickupOrCoin(item.type)) return;
+					if (IsPickupOrCoin(item.type) || !CountsAsDrop(item)) return;
 					RecordSource(CodexSource.Bag, open.ItemType, item.type, item.stack);
 					break;
 				case EntitySource_ShakeTree:
@@ -567,6 +569,9 @@ namespace UltimateRandomizer.Common.Codex
 					break;
 			}
 		}
+
+		// Jackpots are not recorded as what an enemy or a bag gives
+		public static bool CountsAsDrop(Item item) => JackpotItem.GapOf(item) == 0;
 
 		// Tile breaks also come from walls, item frames, racks, mannequins, pylons, broken chests: only the tiles whose
 		// drop the mod changes count (ores and gems, herbs). The tile is still there while its drops spawn.

@@ -97,6 +97,9 @@ Tests: {
 	MobPlansValid: Toutes les tables de loot des ennemis sont valides
 	LootAbundanceScales: L'abondance du butin multiplie les drops des ennemis, pas les drops garantis
 	DropTableLength: Les ennemis ont de longues tables de loot (2 à 7 emplacements : environ 1,85 fois les anciens 1 à 4)
+	JackpotUseful: Les jackpots sont toujours des objets utiles
+	JackpotNotInEnemyDrops: Les jackpots ne comptent pas parmi les drops de l'ennemi
+	JackpotRatesLower: Les jackpots sont un peu plus rares par défaut
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés
@@ -234,6 +237,13 @@ Tests: {
 }
 
 Journal.Description: Ouvre le codex du randomizer (aussi avec la touche J)
+
+Jackpot: {
+	Popup: Jackpot !
+	PopupBig: JACKPOT !!!
+	Chat: "Jackpot ! {0} (+{1} paliers)"
+	Tooltip: "Jackpot : {0} palier(s) au-dessus de ta progression"
+}
 
 Codex: {
 	Title: Codex du randomizer
@@ -843,12 +853,12 @@ Configs: {
 
 		RuntimeJackpotChance: {
 			Label: Chance de drop chanceux (%)
-			Tooltip: Chance, à chaque kill, d'ignorer le blocage par progression et d'obtenir directement le vrai objet.
+			Tooltip: Chance, à chaque kill, d'ignorer le blocage par progression et d'obtenir directement le vrai objet. Au-delà de la limite, c'est un jackpot : toujours un équipement utile ou une station d'artisanat, signalé par de la lumière et un son.
 		}
 
 		WildDropChance: {
 			Label: Folie : drops au-delà de la limite (%)
-			Tooltip: Part des drops aléatoires des ennemis et des sacs qui dépassent la limite de progression, à tout moment. Chaque palier plus haut est plus rare (voir le réglage suivant) : un Zénith en début de partie est possible, mais rarissime. Les ennemis s'adaptent ensuite à votre équipement (puissance adaptative). 0 = progression classique.
+			Tooltip: Part des drops aléatoires des ennemis et des sacs qui dépassent la limite de progression, à tout moment. Chaque palier plus haut est plus rare (voir le réglage suivant) : un Zénith en début de partie est possible, mais rarissime. Ces jackpots sont toujours utiles (équipement, stations de progression), d'autant plus visibles qu'ils sont hauts, et ne comptent pas parmi les drops de l'ennemi. Les ennemis s'adaptent ensuite à votre équipement (puissance adaptative). 0 = progression classique.
 		}
 
 		WildTierDecay: {

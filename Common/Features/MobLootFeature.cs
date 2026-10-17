@@ -33,6 +33,8 @@ namespace UltimateRandomizer.Common.Features
 		public bool Extra;
 		// Placed so that an item is findable (basic stations, vanilla ingredients)
 		public bool Guaranteed;
+		// Kill time only: a jackpot, this many tiers above the progression limit (JackpotItem)
+		public int JackpotGap;
 	}
 
 	// Categories of the frequent small drop of every enemy
@@ -79,17 +81,32 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (info.rng.NextFloat() >= Math.Min(1f, drop.Chance * (drop.Guaranteed ? guaranteedBonus : bonus))) continue;
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
-				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), drop.Item, stack, false);
+				DropMarked(npc, drop.Item, stack, drop.JackpotGap);
 			}
 			// A giant always gives one more random item, a bit above its level
 			if (EnemiesConfig.Instance.GiantBonusDrop && LootConfig.Instance.RandomizeMobDrops && npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) && individual.Kind == EnemyKind.Giant
 				&& GiantBonusAllowed(netId, npc.type))
 			{
 				int item = GiantDrop(npc, info.rng.Next());
+				int gap = ItemPool.LastJackpotGap;
 				int stack = info.rng.Next(StackRules.Range(item).min, StackRules.Range(item).max + 1);
-				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), item, Math.Max(1, stack), false);
+				DropMarked(npc, item, Math.Max(1, stack), gap);
 			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
+		}
+
+		// Drops an item, marked as a jackpot when it is one (the mark is set in JackpotItem.OnSpawn, during the call)
+		private static void DropMarked(NPC npc, int item, int stack, int jackpotGap)
+		{
+			JackpotItem.Next = jackpotGap;
+			try
+			{
+				CommonCode.DropItem(npc.Hitbox, new Terraria.DataStructures.EntitySource_Loot(npc, DropHelper.ExtraDropContext), item, stack, false);
+			}
+			finally
+			{
+				JackpotItem.Next = 0;
+			}
 		}
 
 		// Same anti-farm protection as the extra drops: a giant boss minion (or a town NPC...) gives nothing more
@@ -206,8 +223,9 @@ namespace UltimateRandomizer.Common.Features
 					chance = Math.Min(1f, cfg.DropRateMultiplier * slotFactor / denominator);
 				}
 				item = Wild(request, item, wildRng);
+				int gap = wildRng != null ? ItemPool.LastJackpotGap : 0;
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
-				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true });
+				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap });
 			}
 
 			// Small frequent drops (material, potion, ammo...), so that most kills give something. Abundance scales the
@@ -227,8 +245,9 @@ namespace UltimateRandomizer.Common.Features
 					IgnoreGating = lucky
 				};
 				int item = Wild(common, ItemPool.Roll(common), wildRng);
+				int gap = wildRng != null ? ItemPool.LastJackpotGap : 0;
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000 + c, item));
-				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = Math.Min(1f, commonTotal), Extra = true });
+				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = Math.Min(1f, commonTotal), Extra = true, JackpotGap = gap });
 			}
 			return drops;
 		}

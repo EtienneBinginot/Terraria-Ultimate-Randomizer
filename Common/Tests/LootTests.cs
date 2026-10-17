@@ -5,6 +5,7 @@ using Terraria;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.ModLoader;
+using UltimateRandomizer.Common.Codex;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
@@ -27,6 +28,9 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("WildTail", WildTail);
 			TestRunner.Register("PlansIgnoreWild", PlansIgnoreWild);
 			TestRunner.Register("DropTableLength", DropTableLength);
+			TestRunner.Register("JackpotUseful", JackpotUseful);
+			TestRunner.Register("JackpotNotInEnemyDrops", JackpotNotInEnemyDrops);
+			TestRunner.Register("JackpotRatesLower", JackpotRatesLower);
 		}
 
 		// Critters get a share (CritterDropFactor) of the small frequent drop, here at abundance 3
@@ -81,6 +85,86 @@ namespace UltimateRandomizer.Common.Tests
 			for (int i = 0; i < 10000; i++) if (ItemPool.WildTier(limit, 0f, 3f, rng) != limit) none++;
 			if (none > 0) failures.Add($"{none} rolls above the limit with a chance of 0 %");
 			Check.All(failures, "Wild tier tail");
+		}
+
+		// Every runtime roll above the progression limit (madness or luck) is useful: equipment or a progression station,
+		// never an ore, a block or a material; its gap is its tier above the limit
+		private static void JackpotUseful()
+		{
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			if (!progression.TierGating) Check.Skip("no progression limit");
+			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only the coherent mode rolls jackpots");
+			int limit = ItemPool.GatingLimit(0);
+			if (limit >= Tiers.Max) Check.Skip("the limit is already the last tier");
+			List<string> failures = new();
+			int jackpots = 0;
+			try
+			{
+				ItemPool.WildChanceOverride = 100f;
+				for (int i = 0; i < 3000; i++)
+				{
+					bool lucky = i % 2 == 1;
+					RollRequest request = new()
+					{
+						Keys = new[] { 4242, i },
+						SourceTier = lucky ? Tiers.Max : 0,
+						OriginalItem = -1,
+						Policy = CategoryPolicy.Weighted,
+						TierJitterDown = 1,
+						IgnoreGating = lucky,
+						Wild = !lucky,
+						WildRng = new Random(i)
+					};
+					int item = ItemPool.Roll(request);
+					int gap = ItemPool.LastJackpotGap;
+					if (ItemPool.TierOf(item) > limit && gap == 0) failures.Add($"{Lang.GetItemNameValue(item)} above the limit without a jackpot mark");
+					if (gap == 0) continue;
+					jackpots++;
+					if (!ItemPool.IsJackpotWorthy(item)) failures.Add($"{Lang.GetItemNameValue(item)} ({ItemPool.Info[item].Category}) as a jackpot");
+					if (gap != ItemPool.TierOf(item) - limit) failures.Add($"{Lang.GetItemNameValue(item)}: gap {gap}, tier {ItemPool.TierOf(item)}, limit {limit}");
+					if (failures.Count > 20) break;
+				}
+				// Plans never roll jackpots
+				RollRequest planned = new() { Keys = new[] { 4243, 1 }, SourceTier = Tiers.Max, OriginalItem = -1, Policy = CategoryPolicy.Weighted, IgnoreGating = true };
+				ItemPool.Roll(planned);
+				if (ItemPool.LastJackpotGap != 0) failures.Add("a roll without the runtime rng is a jackpot");
+			}
+			finally
+			{
+				ItemPool.WildChanceOverride = null;
+				ItemPool.ClearJackpot();
+			}
+			Check.That(jackpots > 0, "no jackpot in 3000 rolls above the limit");
+			Check.All(failures, "Useless jackpots");
+		}
+
+		// A jackpot is not recorded as the enemy's (or the bag's) drop, its mark follows a copy of the item, and no planned
+		// drop (journal, codex, hints) is a jackpot
+		private static void JackpotNotInEnemyDrops()
+		{
+			Item item = new(ItemID.Zenith);
+			Check.That(CodexSystem.CountsAsDrop(item), "an ordinary drop is not recorded");
+			Check.That(item.TryGetGlobalItem(out JackpotItem jackpot), "no jackpot data on items");
+			// Set directly: Mark would also show the effects
+			jackpot.Gap = 3;
+			Check.Equal(3, JackpotItem.GapOf(item), "gap of a marked item");
+			Check.That(!CodexSystem.CountsAsDrop(item), "a jackpot is recorded as a drop");
+			Check.Equal(3, JackpotItem.GapOf(item.Clone()), "gap of a copy (picked up)");
+			List<string> failures = new();
+			foreach (int npc in LootSnapshot.Npcs.Keys.OrderBy(k => k).Where((_, i) => i % 10 == 0))
+			{
+				if (RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true).Any(d => d.JackpotGap > 0)) failures.Add(Lang.GetNPCNameValue(npc));
+			}
+			Check.All(failures, "Planned drops marked as jackpots");
+		}
+
+		// Jackpots a little rarer than in 1.2.0 (madness 12 %, luck 4 %)
+		private static void JackpotRatesLower()
+		{
+			float Default(string field) => Convert.ToSingle(typeof(ProgressionConfig).GetField(field).GetCustomAttributes(typeof(System.ComponentModel.DefaultValueAttribute), false)
+				.OfType<System.ComponentModel.DefaultValueAttribute>().First().Value);
+			Check.Equal(9f, Default("WildDropChance"), "default WildDropChance");
+			Check.Equal(3f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
 		}
 
 		// Plans, findability and guarantees never use the madness tail: identical at 0 % and 50 %
