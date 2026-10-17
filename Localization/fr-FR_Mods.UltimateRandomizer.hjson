@@ -242,8 +242,8 @@ Journal.Description: Ouvre le codex du randomizer (aussi avec la touche J)
 Jackpot: {
 	Popup: Jackpot !
 	PopupBig: JACKPOT !!!
-	Chat: "Jackpot ! {0} (+{1} paliers)"
-	Tooltip: "Jackpot : {0} palier(s) au-dessus de ta progression"
+	Chat: Jackpot ! {0} (+{1} paliers)
+	Tooltip: Jackpot : {0} palier(s) au-dessus de ta progression
 }
 
 Codex: {

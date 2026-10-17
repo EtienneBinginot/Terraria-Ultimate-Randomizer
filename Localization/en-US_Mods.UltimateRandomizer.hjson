@@ -242,8 +242,8 @@ Journal.Description: Opens the randomizer codex (also the J key)
 Jackpot: {
 	Popup: Jackpot!
 	PopupBig: JACKPOT!!!
-	Chat: "Jackpot! {0} (+{1} tiers)"
-	Tooltip: "Jackpot: {0} tier(s) above your progression"
+	Chat: Jackpot! {0} (+{1} tiers)
+	Tooltip: Jackpot: {0} tier(s) above your progression
 }
 
 Codex: {
