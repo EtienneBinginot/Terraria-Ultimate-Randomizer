@@ -120,6 +120,41 @@ namespace UltimateRandomizer.Common.Debug
 			foreach ((int item, int stack) in kit) player.QuickSpawnItem(source, item, stack);
 		}
 
+		// Everything to test the late game at once: the four lunar armors, the best weapon of each class, endgame accessories,
+		// tools, mounts, buff potions, ammo and coins (what does not fit in the inventory falls at the player's feet)
+		private static readonly (int item, int stack)[] EndgameKit =
+		{
+			(ItemID.SolarFlareHelmet, 1), (ItemID.SolarFlareBreastplate, 1), (ItemID.SolarFlareLeggings, 1),
+			(ItemID.VortexHelmet, 1), (ItemID.VortexBreastplate, 1), (ItemID.VortexLeggings, 1),
+			(ItemID.NebulaHelmet, 1), (ItemID.NebulaBreastplate, 1), (ItemID.NebulaLeggings, 1),
+			(ItemID.StardustHelmet, 1), (ItemID.StardustBreastplate, 1), (ItemID.StardustLeggings, 1),
+			(ItemID.Zenith, 1), (ItemID.Meowmere, 1), (ItemID.StarWrath, 1), (ItemID.DayBreak, 1), (ItemID.SolarEruption, 1),
+			(ItemID.SDMG, 1), (ItemID.Celeb2, 1), (ItemID.VortexBeater, 1), (ItemID.Phantasm, 1),
+			(ItemID.LastPrism, 1), (ItemID.LunarFlareBook, 1), (ItemID.NebulaArcanum, 1), (ItemID.NebulaBlaze, 1),
+			(ItemID.EmpressBlade, 1), (ItemID.StardustDragonStaff, 1), (ItemID.RainbowCrystalStaff, 1), (ItemID.MoonlordTurretStaff, 1),
+			(ItemID.CelestialShell, 1), (ItemID.AnkhShield, 1), (ItemID.Shellphone, 1), (ItemID.LongRainbowTrailWings, 1), (ItemID.WingsSolar, 1),
+			(ItemID.MasterNinjaGear, 1), (ItemID.EmpressFlightBooster, 1), (ItemID.TerrasparkBoots, 1), (ItemID.CelestialEmblem, 1),
+			(ItemID.DestroyerEmblem, 1), (ItemID.AvengerEmblem, 1), (ItemID.FireGauntlet, 1), (ItemID.MoltenQuiver, 1), (ItemID.SniperScope, 1),
+			(ItemID.CelestialCuffs, 1), (ItemID.PapyrusScarab, 1), (ItemID.StarVeil, 1), (ItemID.GravityGlobe, 1),
+			(ItemID.SolarFlarePickaxe, 1), (ItemID.DrillContainmentUnit, 1), (ItemID.LunarHamaxeSolar, 1), (ItemID.LaserRuler, 1), (ItemID.LunarHook, 1),
+			(ItemID.RodofDiscord, 1), (ItemID.RodOfHarmony, 1), (ItemID.SuperAbsorbantSponge, 1), (ItemID.BottomlessBucket, 1),
+			(ItemID.CosmicCarKey, 1), (ItemID.ShrimpyTruffle, 1),
+			(ItemID.SuperHealingPotion, 99), (ItemID.SuperManaPotion, 99), (ItemID.IronskinPotion, 30), (ItemID.EndurancePotion, 30),
+			(ItemID.RagePotion, 30), (ItemID.WrathPotion, 30), (ItemID.RegenerationPotion, 30), (ItemID.SwiftnessPotion, 30),
+			(ItemID.LifeforcePotion, 30), (ItemID.HeartreachPotion, 30), (ItemID.SummoningPotion, 30), (ItemID.MagicPowerPotion, 30),
+			(ItemID.ArcheryPotion, 30), (ItemID.AmmoReservationPotion, 30), (ItemID.InfernoPotion, 30), (ItemID.TitanPotion, 30),
+			(ItemID.FlaskofIchor, 30), (ItemID.SeafoodDinner, 30),
+			(ItemID.MoonlordBullet, 9999), (ItemID.MoonlordArrow, 9999), (ItemID.PlatinumCoin, 100)
+		};
+
+		public static void GiveEndgameKit()
+		{
+			if (!Guard()) return;
+			Player player = Main.LocalPlayer;
+			IEntitySource source = player.GetSource_Misc("UltimateRandomizer_Debug");
+			foreach ((int item, int stack) in EndgameKit) player.QuickSpawnItem(source, item, stack);
+		}
+
 		public static void GiveBossBags()
 		{
 			if (!Guard()) return;

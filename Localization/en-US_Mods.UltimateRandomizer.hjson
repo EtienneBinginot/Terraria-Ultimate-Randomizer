@@ -66,6 +66,7 @@ Debug: {
 	ToggleGodMode: Invincible on/off
 	CycleSpawnRate: Spawn rate
 	GiveKit: Test kit
+	GiveEndgameKit: Endgame kit
 	World: World
 	Day: day
 	Night: night

@@ -209,7 +209,7 @@ namespace UltimateRandomizer.Common.Debug
 		private void BuildTools()
 		{
 			Text($"[c/FFD966:{T("Player")}]   {T("GodMode")}: {OnOff(DebugTools.GodMode)}   {T("SpawnRate")}: {T("SpawnRate" + DebugTools.SpawnRate)}");
-			Buttons((T("ToggleGodMode"), DebugTools.ToggleGodMode), (T("CycleSpawnRate"), DebugTools.CycleSpawnRate), (T("GiveKit"), DebugTools.GiveTestKit));
+			Buttons((T("ToggleGodMode"), DebugTools.ToggleGodMode), (T("CycleSpawnRate"), DebugTools.CycleSpawnRate), (T("GiveKit"), DebugTools.GiveTestKit), (T("GiveEndgameKit"), DebugTools.GiveEndgameKit));
 			Text($"[c/FFD966:{T("World")}]   {(Main.dayTime ? T("Day") : T("Night"))}");
 			Buttons((T("SpawnEnemies"), () => DebugTools.SpawnEnemies(5)), (T("KillHostiles"), DebugTools.KillHostiles), (T("ToggleDay"), DebugTools.ToggleDay));
 			Buttons((T("GiveBags"), DebugTools.GiveBossBags), (T("OpenJournal"), DebugTools.OpenJournal), (T("NewSeed"), DebugTools.NewSeed));
