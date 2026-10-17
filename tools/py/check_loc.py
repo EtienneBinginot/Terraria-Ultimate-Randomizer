@@ -58,6 +58,23 @@ for lang in ("en-US","fr-FR"):
     for group,enum in (("Source","CodexSource"),("Category","ItemCategory")):
         for val in enum_values(enum):
             if f"Codex.{group}.{val}" not in keys: missing.append(f"Codex.{group}.{val} (enum {enum})")
+    # Hint sentences (HintFacts): every variant of each family, the world sources, and the phrases built from names
+    hints=src.get(os.path.join(ROOT,"Common","Codex","HintFacts.cs"),"")
+    m=re.search(r"string\[\] HintTexts =\s*\{([^}]*)\}",hints)
+    for fam,n in re.findall(r'"([\w.]+)/(\d+)"',m.group(1) if m else ""):
+        for v in range(int(n)):
+            if f"Codex.Hint.{fam}.{v}" not in keys: missing.append(f"Codex.Hint.{fam}.{v}")
+    for key in re.findall(r'\(ItemID\.\w+, "(\w+)", ',hints):
+        for part in ("Kind","Where","Shape","Name"):
+            if f"Codex.Hint.World.{key}.{part}" not in keys: missing.append(f"Codex.Hint.World.{key}.{part}")
+    for arr,group in (("StationGroups","Station"),("Movements","Move")):
+        m=re.search(arr+r" = \{([^}]*)\}",hints)
+        for val in re.findall(r'"(\w+)"',m.group(1) if m else ""):
+            if f"Codex.Hint.{group}.{val}" not in keys: missing.append(f"Codex.Hint.{group}.{val}")
+    for val in enum_values("SlotTime"):
+        if f"Codex.Hint.Time.{val}" not in keys: missing.append(f"Codex.Hint.Time.{val} (enum SlotTime)")
+    for k in ["Codex.Hint.Band."+str(b) for b in range(4)]+["Codex.Hint.Coin."+c for c in ("Copper","Silver","Gold","Platinum")]:
+        if k not in keys: missing.append(k)
     # Tab buttons: "Tab" + each CodexPageKind of CodexUIState.Tabs; debug tabs: "Debug." + each name of its tabs array
     m=re.search(r"CodexPageKind\[\] Tabs = \{([^}]*)\}",code)
     for val in re.findall(r"CodexPageKind\.(\w+)",m.group(1) if m else ""):

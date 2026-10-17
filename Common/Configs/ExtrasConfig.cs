@@ -31,5 +31,11 @@ namespace UltimateRandomizer.Common.Configs
 		[Header("TownNpcs")]
 		[DefaultValue(true)]
 		public bool RandomizeTownNpcOrder;
+
+		// Gold coins for the first hint level of a tier 0 item (x 1 + 1.5 per tier, x 3 per level); 0: free
+		[Header("Hints")]
+		[Range(0, 100)]
+		[DefaultValue(2)]
+		public int HintBasePrice;
 	}
 }

@@ -84,6 +84,7 @@ namespace UltimateRandomizer.Common.Tests
 			AdaptivePowerTests.Register();
 			CodexTests.Register();
 			CodexUiTests.Register();
+			HintTests.Register();
 		}
 
 		public static List<TestResult> RunAll()

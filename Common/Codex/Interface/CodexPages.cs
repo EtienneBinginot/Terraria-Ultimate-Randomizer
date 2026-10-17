@@ -40,6 +40,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				case CodexPageKind.Crafts: BuildCraftPicker(); break;
 				case CodexPageKind.Bags: BuildBags(); break;
 				case CodexPageKind.Biomes: BuildBiomes(); break;
+				case CodexPageKind.Hints: BuildHints(); break;
 				case CodexPageKind.Npc: BuildNpc(page.Id); break;
 				case CodexPageKind.Item: BuildItem(page.Id); break;
 				case CodexPageKind.Tree: BuildTree(page.Id); break;
@@ -436,6 +437,42 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				Grid(npcs, id => new CodexNpcPortrait(id, 64, 64, false, CodexSystem.KillCount(id)), 64, 64, 20);
 			}
 			if (!any) Empty(biomes.Count == 0);
+		}
+	}
+
+	public partial class CodexUIState
+	{
+		// ---- Hints: what was bought from the Guide (shared by the world), then the targets not asked about yet ----
+
+		private void BuildHints()
+		{
+			Text(CodexText.Get("Hint.TabIntro"), CodexDraw.Muted);
+			if (!HintFacts.Ready)
+			{
+				Empty(true);
+				return;
+			}
+			List<HintTarget> offered = HintFacts.Targets();
+			List<HintTarget> bought = HintFacts.AllTargets().Where(t => CodexSystem.HintLevel(t.Item) > 0 && Matches(HintFacts.ItemName(t.Item))).ToList();
+			foreach (HintTarget target in bought)
+			{
+				int level = CodexSystem.HintLevel(target.Item);
+				bool found = CodexSystem.HasSeen(target.Item);
+				CodexRow header = new(48);
+				header.Add(new CodexItemIcon(target.Item, 0, 42) { Silhouette = !found, HoverText = found ? null : HintFacts.ItemName(target.Item) }, 10);
+				header.Add(new CodexLabel(HintFacts.ItemName(target.Item), 1f, CodexDraw.Gold), 12);
+				header.Add(new CodexLabel(CodexText.Get("Hint.Level", level, HintFacts.MaxLevel), 0.8f, CodexDraw.Muted), 12);
+				if (found) header.Add(new CodexLabel(CodexText.Get("Hint.Found"), 0.8f, new Color(140, 230, 140)));
+				Add(header);
+				pending.AddRange(HintView.Rows(HintFacts.For(target.Item), level, ListWidth, inCodex: true));
+			}
+			List<HintTarget> waiting = offered.Where(t => CodexSystem.HintLevel(t.Item) == 0 && Matches(HintFacts.ItemName(t.Item))).ToList();
+			if (waiting.Count > 0)
+			{
+				Section(CodexText.Get("Hint.NotAsked"));
+				Grid(waiting, t => new CodexItemIcon(t.Item, 0, Icon) { Silhouette = !CodexSystem.HasSeen(t.Item), HoverText = HintFacts.ItemName(t.Item) }, Icon, Icon);
+			}
+			if (bought.Count == 0 && waiting.Count == 0) Empty(offered.Count == 0);
 		}
 	}
 

@@ -4,7 +4,7 @@ using UltimateRandomizer.Common.Codex;
 
 namespace UltimateRandomizer
 {
-	public enum PacketType : byte { CodexRequestFull, CodexEntries, CodexReset }
+	public enum PacketType : byte { CodexRequestFull, CodexEntries, CodexReset, CodexFullDone, HintRefused }
 
 	public class UltimateRandomizer : Mod
 	{
@@ -16,6 +16,8 @@ namespace UltimateRandomizer
 				case PacketType.CodexRequestFull:
 				case PacketType.CodexEntries:
 				case PacketType.CodexReset:
+				case PacketType.CodexFullDone:
+				case PacketType.HintRefused:
 					CodexSystem.HandlePacket(type, reader, whoAmI);
 					break;
 				default:

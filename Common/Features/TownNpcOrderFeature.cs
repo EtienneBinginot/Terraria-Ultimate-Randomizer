@@ -62,6 +62,25 @@ namespace UltimateRandomizer.Common.Features
 		// Town NPC types in condition order, and who arrives with each condition (for the debug tools and tests)
 		public static int[] ConditionOwners => MoveInNpcs.Select(p => p.type).ToArray();
 
+		// Tier from which each condition of MoveInNpcs is usually met (money and items early, then the bosses)
+		private static readonly int[] ConditionTiers = { 0, 0, 0, 1, 0, 3, 0, 0, 0, 0, 2, 5, 4, 6 };
+
+		// Tier at which a town NPC moves in, with this world's arrival order (-1: not one of the shuffled NPCs)
+		public static int ArrivalTier(int npcType)
+		{
+			int index;
+			if (ExtrasConfig.Instance.RandomizeTownNpcOrder)
+			{
+				EnsureArrivals();
+				index = Array.IndexOf(arrivals, npcType);
+			}
+			else
+			{
+				index = Array.FindIndex(MoveInNpcs, p => p.type == npcType);
+			}
+			return index >= 0 && index < ConditionTiers.Length ? ConditionTiers[index] : -1;
+		}
+
 		public static int[] Arrivals()
 		{
 			EnsureArrivals();

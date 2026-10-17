@@ -65,7 +65,7 @@ namespace UltimateRandomizer.Common.Codex
 		// Entries a client may send: what happens only on its machine (the rest is recorded by the server)
 		public static bool ClientMayRecord(CodexEntry e) => e.Op switch
 		{
-			CodexOp.Recipe or CodexOp.Seen or CodexOp.Chest => true,
+			CodexOp.Recipe or CodexOp.Seen or CodexOp.Chest or CodexOp.Hint => true,
 			CodexOp.Source or CodexOp.SourceKey => e.Kind is CodexSource.Bag or CodexSource.Fishing or CodexSource.Extractinator,
 			_ => false
 		};
@@ -86,6 +86,8 @@ namespace UltimateRandomizer.Common.Codex
 			Data = new CodexData();
 			outbox.Clear();
 			sent.Clear();
+			pendingHints.Clear();
+			FullReceived = true;
 		}
 
 		public override void ClearWorld()
@@ -93,6 +95,8 @@ namespace UltimateRandomizer.Common.Codex
 			Data = new CodexData();
 			outbox.Clear();
 			sent.Clear();
+			pendingHints.Clear();
+			FullReceived = true;
 			flushTimer = 0;
 			Array.Clear(fullSent);
 			Array.Clear(sightState);
@@ -215,6 +219,136 @@ namespace UltimateRandomizer.Common.Codex
 		}
 
 		public static void RecordBagOpened(int bag) => Submit(CodexEntry.SourceKey(CodexSource.Bag, CodexNames.Item(bag)));
+
+		// ---- Hints (bought on the client that talks to the Guide, after it paid) ----
+
+		// Client: a level bought and sent, not confirmed by the server yet. A second click must not pay the same level
+		// twice; a level the server refuses (or never confirms) is refunded, so the client never stays ahead of it.
+		private sealed class PendingHint
+		{
+			public int Level;
+			public long Price;
+			public uint Tick;
+			public Action Accepted;
+		}
+
+		private static readonly Dictionary<string, List<PendingHint>> pendingHints = new();
+		public const int HintTimeoutTicks = 180;
+
+		// Client: the server's full codex arrived since joining (hint levels are known); always true elsewhere
+		public static bool FullReceived { get; private set; } = true;
+
+		public static bool CanBuyHints => Main.netMode != NetmodeID.MultiplayerClient || FullReceived;
+
+		public static int PendingHintCount => pendingHints.Values.Sum(list => list.Count);
+
+		public static int HintLevel(int item)
+		{
+			string name = CodexNames.Item(item);
+			int level = Data.HintLevel(name);
+			if (pendingHints.TryGetValue(name, out List<PendingHint> list))
+			{
+				foreach (PendingHint pending in list) level = Math.Max(level, pending.Level);
+			}
+			return level;
+		}
+
+		// accepted runs once the level is recorded (at once in single player, on the server's echo in multiplayer)
+		public static void RecordHint(int item, int level, long price = 0, Action accepted = null)
+		{
+			if (item <= ItemID.None) return;
+			string name = CodexNames.Item(item);
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+			{
+				if (!pendingHints.TryGetValue(name, out List<PendingHint> list)) pendingHints[name] = list = new List<PendingHint>();
+				list.Add(new PendingHint { Level = level, Price = price, Tick = Main.GameUpdateCount, Accepted = accepted });
+				Submit(CodexEntry.Hint(name, level));
+				return;
+			}
+			Submit(CodexEntry.Hint(name, level));
+			if (Data.HintLevel(name) >= level) accepted?.Invoke();
+		}
+
+		// Client: the server's level arrived; pending levels up to it are confirmed
+		private static void ConfirmHints(string name, int serverLevel, bool refundOthers)
+		{
+			if (!pendingHints.TryGetValue(name, out List<PendingHint> list)) return;
+			foreach (PendingHint pending in list.ToList())
+			{
+				if (pending.Level <= serverLevel)
+				{
+					list.Remove(pending);
+					pending.Accepted?.Invoke();
+				}
+				else if (refundOthers)
+				{
+					list.Remove(pending);
+					DropPending(name, pending);
+				}
+			}
+			if (list.Count == 0) pendingHints.Remove(name);
+		}
+
+		private static void DropPending(string name, PendingHint pending)
+		{
+			sent.Remove(CodexEntry.Hint(name, pending.Level).SetKey);
+			Refund(pending.Price);
+		}
+
+		// The coins paid for a refused level, back to the local player
+		public static void Refund(long price)
+		{
+			if (price <= 0 || Main.dedServ) return;
+			Player player = Main.LocalPlayer;
+			int[] split = Utils.CoinsSplit(price);
+			int[] coins = { ItemID.CopperCoin, ItemID.SilverCoin, ItemID.GoldCoin, ItemID.PlatinumCoin };
+			for (int i = 0; i < coins.Length; i++)
+			{
+				if (split[i] > 0) player.QuickSpawnItem(player.GetSource_Misc("HintRefund"), coins[i], split[i]);
+			}
+		}
+
+		// Client: levels the server never confirmed are refunded
+		private static void ExpireHints()
+		{
+			foreach (string name in pendingHints.Keys.ToList())
+			{
+				List<PendingHint> list = pendingHints[name];
+				foreach (PendingHint pending in list.Where(p => Main.GameUpdateCount - p.Tick > HintTimeoutTicks).ToList())
+				{
+					list.Remove(pending);
+					DropPending(name, pending);
+				}
+				if (list.Count == 0) pendingHints.Remove(name);
+			}
+		}
+
+		private static void RefundAllHints()
+		{
+			foreach ((string name, List<PendingHint> list) in pendingHints.ToList())
+			{
+				foreach (PendingHint pending in list) DropPending(name, pending);
+			}
+			pendingHints.Clear();
+		}
+
+		private static void SendHintRefused(int toClient, CodexEntry e)
+		{
+			int item = CodexNames.ItemType(e.Item);
+			if (item <= 0 || toClient < 0 || toClient >= Main.maxPlayers) return;
+			ModPacket packet = NewPacket(PacketType.HintRefused);
+			packet.Write7BitEncodedInt(item);
+			packet.Write((byte)Math.Clamp(Data.HintLevel(e.Item), 0, 255));
+			packet.Send(toClient);
+		}
+
+		// The last hint level shows the recipe: it counts as discovered (its result is not marked as seen)
+		public static void RecordRecipeOnly(int recipeIndex)
+		{
+			if (recipeIndex < 0 || recipeIndex >= RecipeSystem.RecipeCount || recipeIndex >= Recipe.numRecipes) return;
+			int key = RecipeSystem.RecipeKey(recipeIndex);
+			if (!Data.Recipes.Contains(key)) Submit(CodexEntry.Recipe(key));
+		}
 
 		public static void RecordSeen(int item)
 		{
@@ -491,6 +625,7 @@ namespace UltimateRandomizer.Common.Codex
 			if (!SeedSystem.WorldReady) return;
 			if (Main.netMode != NetmodeID.MultiplayerClient) UpdateSightings();
 			if (Main.netMode == NetmodeID.SinglePlayer) return;
+			if (Main.netMode == NetmodeID.MultiplayerClient && pendingHints.Count > 0) ExpireHints();
 			if (++flushTimer < (Main.netMode == NetmodeID.Server ? ServerFlushTicks : ClientFlushTicks)) return;
 			flushTimer = 0;
 			Flush();
@@ -594,6 +729,7 @@ namespace UltimateRandomizer.Common.Codex
 		public static void RequestFull()
 		{
 			if (Main.netMode != NetmodeID.MultiplayerClient) return;
+			FullReceived = false;
 			NewPacket(PacketType.CodexRequestFull).Send();
 		}
 
@@ -610,14 +746,26 @@ namespace UltimateRandomizer.Common.Codex
 						Flush();
 						SendReset(whoAmI);
 						SendEntries(Data.AllEntries(), whoAmI, -1);
+						NewPacket(PacketType.CodexFullDone).Send(whoAmI);
 						break;
 					case PacketType.CodexReset when Main.netMode == NetmodeID.MultiplayerClient:
+						RefundAllHints();
 						Data.Clear();
 						sent.Clear();
 						outbox.Clear();
 						break;
+					case PacketType.CodexFullDone when Main.netMode == NetmodeID.MultiplayerClient:
+						FullReceived = true;
+						break;
+					case PacketType.HintRefused when Main.netMode == NetmodeID.MultiplayerClient:
+					{
+						string name = CodexNames.Item(reader.Read7BitEncodedInt());
+						int level = reader.ReadByte();
+						ConfirmHints(name, Math.Max(level, Data.HintLevel(name)), refundOthers: true);
+						break;
+					}
 					case PacketType.CodexEntries:
-						ReceiveEntries(reader);
+						ReceiveEntries(reader, whoAmI);
 						break;
 				}
 			}
@@ -627,7 +775,7 @@ namespace UltimateRandomizer.Common.Codex
 			}
 		}
 
-		private static void ReceiveEntries(BinaryReader reader)
+		private static void ReceiveEntries(BinaryReader reader, int whoAmI)
 		{
 			int count = reader.Read7BitEncodedInt();
 			if (count < 0 || count > MaxEntriesPerPacket) throw new InvalidDataException("Codex packet with " + count + " entries");
@@ -636,14 +784,20 @@ namespace UltimateRandomizer.Common.Codex
 				CodexEntry e = CodexData.Read(reader);
 				if (Main.netMode == NetmodeID.Server)
 				{
-					if (!AcceptFromClient(e)) continue;
-					if (Data.Apply(e)) outbox.Add(e);
+					// A refused hint level is answered, so that its buyer gets the coins back
+					if (!AcceptFromClient(e) || !Data.Apply(e))
+					{
+						if (e.Op == CodexOp.Hint) SendHintRefused(whoAmI, e);
+						continue;
+					}
+					outbox.Add(e);
 				}
 				else
 				{
 					Data.Apply(e);
 					string key = e.SetKey;
 					if (key != null) sent.Remove(key);
+					if (e.Op == CodexOp.Hint) ConfirmHints(e.Item, Data.HintLevel(e.Item), refundOthers: false);
 				}
 			}
 		}
@@ -654,7 +808,18 @@ namespace UltimateRandomizer.Common.Codex
 			if (!ClientMayRecord(e)) return false;
 			Sanitize(e);
 			if (e.Op == CodexOp.Chest && Chest.FindChest(e.Key & 0xFFFF, e.Key >> 16) < 0) return false;
+			if (e.Op == CodexOp.Hint && !AcceptHint(e, Data, ProgressionSystem.UnlockedTier)) return false;
 			return true;
+		}
+
+		// A hint level: the next one of a target offered now (the client paid for it, like it pays in shops)
+		public static bool AcceptHint(CodexEntry e, CodexData data, int unlockedTier)
+		{
+			int item = CodexNames.ItemType(e.Item);
+			if (item <= 0 || e.Count != data.HintLevel(e.Item) + 1 || e.Count > HintFacts.MaxLevel) return false;
+			// Only the tier: no fact is built on the server for a purchase
+			HintTarget target = HintFacts.RawTarget(item);
+			return target != null && target.Tier <= unlockedTier + 1;
 		}
 
 		// A client's stacks: never more than a few thousand per entry

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Terraria;
 using Terraria.ID;
@@ -21,11 +22,55 @@ namespace UltimateRandomizer.Common.Features
 			if (LootConfig.Instance.RandomizeChests) RandomizeAllChests(existingWorld: false);
 		}
 
-		public override void ClearWorld() => ChestsRandomized = false;
+		// Stations really hidden in chests (hints only point to chests for these), saved and sent with the world data
+		private static readonly HashSet<int> placedStations = new();
 
-		public override void SaveWorldData(TagCompound tag) => tag["chestsRandomized"] = ChestsRandomized;
+		public static bool StationInChests(int item) => placedStations.Contains(item);
 
-		public override void LoadWorldData(TagCompound tag) => ChestsRandomized = tag.GetBool("chestsRandomized");
+		// Changes what the hints know (HintFacts listens)
+		public static event Action OnStationsChanged;
+
+		public override void ClearWorld()
+		{
+			ChestsRandomized = false;
+			placedStations.Clear();
+		}
+
+		public override void Unload() => OnStationsChanged = null;
+
+		public override void SaveWorldData(TagCompound tag)
+		{
+			tag["chestsRandomized"] = ChestsRandomized;
+			tag["chestStations"] = placedStations.Select(DetRandom.ItemName).ToList();
+		}
+
+		public override void LoadWorldData(TagCompound tag)
+		{
+			ChestsRandomized = tag.GetBool("chestsRandomized");
+			placedStations.Clear();
+			foreach (string name in tag.GetList<string>("chestStations"))
+			{
+				if (ContentSamples.ItemNetIdsByPersistentIds.TryGetValue(name, out int type)) placedStations.Add(type);
+			}
+			OnStationsChanged?.Invoke();
+		}
+
+		public override void NetSend(BinaryWriter writer)
+		{
+			writer.Write7BitEncodedInt(placedStations.Count);
+			foreach (int type in placedStations) writer.Write7BitEncodedInt(type);
+		}
+
+		public override void NetReceive(BinaryReader reader)
+		{
+			int count = reader.Read7BitEncodedInt();
+			HashSet<int> received = new();
+			for (int i = 0; i < count; i++) received.Add(reader.Read7BitEncodedInt());
+			if (received.SetEquals(placedStations)) return;
+			placedStations.Clear();
+			placedStations.UnionWith(received);
+			OnStationsChanged?.Invoke();
+		}
 
 		// Returns the number of chests changed. On an existing world, chests near houses and the spawn point are skipped:
 		// they are probably the players' storage
@@ -66,6 +111,8 @@ namespace UltimateRandomizer.Common.Features
 			}
 			PlaceGuaranteedStations(existingWorld);
 			ChestsRandomized = true;
+			OnStationsChanged?.Invoke();
+			if (Main.netMode == NetmodeID.Server) NetMessage.SendData(MessageID.WorldData);
 			return changed;
 		}
 
@@ -102,6 +149,7 @@ namespace UltimateRandomizer.Common.Features
 						int slot = Array.FindIndex(chest.item, item => item == null || item.IsAir);
 						if (slot < 0) continue;
 						chest.item[slot] = new Item(station);
+						placedStations.Add(station);
 						break;
 					}
 				}

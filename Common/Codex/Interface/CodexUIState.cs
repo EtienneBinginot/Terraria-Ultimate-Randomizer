@@ -16,7 +16,7 @@ using UltimateRandomizer.Common.Journal;
 
 namespace UltimateRandomizer.Common.Codex.Interface
 {
-	public enum CodexPageKind : byte { Enemies, Items, Crafts, Bags, Biomes, Npc, Item, Tree }
+	public enum CodexPageKind : byte { Enemies, Items, Crafts, Bags, Biomes, Hints, Npc, Item, Tree }
 
 	public readonly struct CodexPage : IEquatable<CodexPage>
 	{
@@ -44,7 +44,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			_ => Kind
 		};
 
-		public bool IsTab => Kind <= CodexPageKind.Biomes;
+		public bool IsTab => Kind <= CodexPageKind.Hints;
 
 		public bool Equals(CodexPage other) => Kind == other.Kind && Id == other.Id;
 
@@ -68,7 +68,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		}
 
 		private const int MaxHistory = 60;
-		private static readonly CodexPageKind[] Tabs = { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes };
+		private static readonly CodexPageKind[] Tabs = { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes, CodexPageKind.Hints };
 
 		private readonly List<HistoryEntry> history = new();
 		private int historyIndex = -1;
@@ -152,8 +152,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			{
 				CodexPageKind tab = Tabs[i];
 				CodexButton button = new(CodexText.Live("Tab" + tab), 0, () => OpenTab(tab));
-				button.Width.Set(-6, 0.2f);
-				button.Left.Set(0, i * 0.2f);
+				button.Width.Set(-6, 1f / Tabs.Length);
+				button.Left.Set(0, i / (float)Tabs.Length);
 				button.Top.Set(40, 0);
 				button.Height.Set(36, 0);
 				panel.Append(button);

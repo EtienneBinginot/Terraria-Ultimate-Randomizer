@@ -121,6 +121,19 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		public static string NpcName(int netId) => ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.TypeName : "?";
 
 		public static string ItemName(int type) => type > 0 && type < ItemLoader.ItemCount ? Lang.GetItemNameValue(type) : "?";
+
+		// A black shape with a faint outline (hints): what it is, without its colours
+		public static void Silhouette(SpriteBatch spriteBatch, Texture2D texture, Vector2 center, Rectangle source, float scale, SpriteEffects effects = SpriteEffects.None)
+		{
+			Vector2 origin = source.Size() / 2f;
+			Color outline = Color.White * 0.35f;
+			for (int i = 0; i < 4; i++)
+			{
+				Vector2 offset = new(i == 0 ? -2 : i == 1 ? 2 : 0, i == 2 ? -2 : i == 3 ? 2 : 0);
+				spriteBatch.Draw(texture, center + offset, source, outline, 0f, origin, scale, effects, 0f);
+			}
+			spriteBatch.Draw(texture, center, source, Color.Black, 0f, origin, scale, effects, 0f);
+		}
 	}
 
 	// An item icon: slot tinted by rarity, stack count, vanilla tooltip on hover, click opens the item page.
@@ -133,6 +146,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private readonly Item item;
 		public string HoverText;
 		public Color Tint = Color.White;
+		// Drawn as a black shape: no colours, no name, no click to its page (hints)
+		public bool Silhouette;
 
 		public CodexItemIcon(int type, int count = 0, float size = 44, Action onClick = null)
 		{
@@ -143,7 +158,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			Height.Set(size, 0);
 			if (type > 0 && ContentSamples.ItemsByType.TryGetValue(type, out Item sample)) item = sample;
 			if (onClick != null) OnLeftClick += (_, _) => Click(onClick);
-			else if (item != null) OnLeftClick += (_, _) => Click(() => CodexUIState.Open(CodexPage.ItemPage(Type)));
+			else if (item != null) OnLeftClick += (_, _) =>
+			{
+				if (!Silhouette) Click(() => CodexUIState.Open(CodexPage.ItemPage(Type)));
+			};
 		}
 
 		private static void Click(Action action)
@@ -157,7 +175,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			CalculatedStyle d = GetDimensions();
 			Rectangle r = d.ToRectangle();
 			Color back = Tint;
-			if (item != null && item.rare != ItemRarityID.White) back = Color.Lerp(back, ItemRarity.GetColor(item.rare), 0.3f);
+			if (item != null && item.rare != ItemRarityID.White && !Silhouette) back = Color.Lerp(back, ItemRarity.GetColor(item.rare), 0.3f);
 			if (item == null) back = new Color(120, 120, 140);
 			if (IsMouseHovering) back = Color.Lerp(back, Color.White, 0.5f);
 			spriteBatch.Draw(TextureAssets.InventoryBack.Value, r, back * (IsMouseHovering ? 1f : 0.85f));
@@ -167,7 +185,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 			else if (item != null)
 			{
-				ItemSlot.DrawItemIcon(item, 31, spriteBatch, d.Center(), 1f, d.Width * 0.62f, Color.White);
+				if (Silhouette) DrawSilhouette(spriteBatch, d);
+				else ItemSlot.DrawItemIcon(item, 31, spriteBatch, d.Center(), 1f, d.Width * 0.62f, Color.White);
 				if (count > 1)
 				{
 					float scale = d.Width < 40 ? 0.65f : 0.75f;
@@ -184,8 +203,19 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (IsMouseHovering)
 			{
 				if (!string.IsNullOrEmpty(HoverText)) CodexHover.Text = HoverText;
+				else if (Silhouette) CodexHover.Text = CodexText.Get("Hint.Unknown");
 				else if (item != null) CodexHover.Item = item;
 			}
+		}
+
+		private void DrawSilhouette(SpriteBatch spriteBatch, CalculatedStyle d)
+		{
+			if (Type <= 0 || Type >= TextureAssets.Item.Length) return;
+			Texture2D texture = TextureAssets.Item[Type].Value;
+			Rectangle source = Type < Main.itemAnimations.Length && Main.itemAnimations[Type] != null ? Main.itemAnimations[Type].GetFrame(texture, -1) : texture.Frame();
+			float limit = d.Width * 0.62f;
+			float scale = Math.Min(1f, limit / Math.Max(1, Math.Max(source.Width, source.Height)));
+			CodexDraw.Silhouette(spriteBatch, texture, d.Center(), source, scale);
 		}
 	}
 
@@ -199,6 +229,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private readonly bool big;
 		private readonly Asset BackgroundAsset;
 		public string HoverText;
+		// A black shape: no background, no name, no click to its page (hints)
+		public readonly bool Silhouette;
 
 		private sealed class Asset
 		{
@@ -206,9 +238,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			public Color Color;
 		}
 
-		public CodexNpcPortrait(int netId, float width, float height, bool big = false, int count = 0, bool clickable = true)
+		// textureOnly: its texture frames instead of a bestiary clone (portraits outside the codex window)
+		public CodexNpcPortrait(int netId, float width, float height, bool big = false, int count = 0, bool clickable = true, bool silhouette = false, bool textureOnly = false)
 		{
 			NetId = netId;
+			Silhouette = silhouette;
 			this.count = count;
 			countText = "x" + CodexDraw.Count(count);
 			this.big = big;
@@ -216,7 +250,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			Height.Set(height, 0);
 			OverflowHidden = true;
 			BestiaryEntry entry = Main.BestiaryDB?.FindEntryByNPCID(netId);
-			if (big && entry?.Info != null)
+			if (big && !silhouette && entry?.Info != null)
 			{
 				foreach (IBestiaryBackgroundImagePathAndColorProvider provider in entry.Info.OfType<IBestiaryBackgroundImagePathAndColorProvider>())
 				{
@@ -226,8 +260,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 					break;
 				}
 			}
-			Append(new NpcDrawer(netId, entry, big));
-			if (clickable)
+			Append(new NpcDrawer(netId, silhouette || textureOnly ? null : entry, big, silhouette));
+			if (clickable && !silhouette)
 			{
 				OnLeftClick += (_, _) =>
 				{
@@ -242,7 +276,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			Rectangle r = GetDimensions().ToRectangle();
 			CodexDraw.Fill(spriteBatch, r, IsMouseHovering ? new Color(60, 74, 140) : new Color(33, 40, 82));
 			if (BackgroundAsset != null && BackgroundAsset.Texture.IsLoaded) spriteBatch.Draw(BackgroundAsset.Texture.Value, r, BackgroundAsset.Color);
-			if (IsMouseHovering)
+			if (IsMouseHovering && Silhouette)
+			{
+				CodexHover.Text = HoverText ?? CodexText.Get("Hint.Unknown");
+			}
+			else if (IsMouseHovering)
 			{
 				string text = HoverText ?? CodexDraw.NpcName(NetId);
 				int kills = CodexSystem.KillCount(NetId);
@@ -265,15 +303,18 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			private readonly int type;
 			private readonly BestiaryEntry entry;
 			private readonly bool big;
+			private readonly bool silhouette;
 			private IEntryIcon icon;
 			// The clone is made on the first frames drawn, within the codex budget (CodexBudget)
 			private bool iconResolved;
 
-			public NpcDrawer(int netId, BestiaryEntry entry, bool big)
+			// entry null: drawn from its texture (no bestiary clone)
+			public NpcDrawer(int netId, BestiaryEntry entry, bool big, bool silhouette)
 			{
 				this.netId = netId;
 				this.entry = entry;
 				this.big = big;
+				this.silhouette = silhouette;
 				type = ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : 0;
 				Width.Set(0, 1f);
 				Height.Set(0, 1f);
@@ -286,7 +327,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				if (!iconResolved)
 				{
 					CodexUIState codex = CodexUIState.Instance;
-					if (codex == null) iconResolved = true;
+					if (codex == null || entry == null) iconResolved = true;
 					else
 					{
 						icon = codex.BestiaryIcon(netId, big, entry, out bool deferred);
@@ -362,6 +403,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				int frame = (int)(Main.GameUpdateCount / 8 % frames);
 				Rectangle source = new(0, frame * frameHeight, texture.Width, frameHeight);
 				float scale = Math.Min(1f, Math.Min(box.Width / (float)texture.Width, box.Height / (float)frameHeight) * 0.9f);
+				if (silhouette)
+				{
+					CodexDraw.Silhouette(spriteBatch, texture, box.Center.ToVector2(), source, scale);
+					return;
+				}
 				spriteBatch.Draw(texture, box.Center.ToVector2(), source, sample.color == default ? Color.White : sample.color, 0f, source.Size() / 2f, scale, SpriteEffects.None, 0f);
 			}
 		}

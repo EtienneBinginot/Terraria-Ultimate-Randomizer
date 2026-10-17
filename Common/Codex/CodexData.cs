@@ -13,7 +13,7 @@ namespace UltimateRandomizer.Common.Codex
 	// Where an item was received, besides enemy drops
 	public enum CodexSource : byte { Chest, Pot, Tile, Tree, Bag, Fishing, Extractinator, Shimmer }
 
-	public enum CodexOp : byte { Kill, Drop, Source, SourceKey, Recipe, Seen, Sighting, Chest }
+	public enum CodexOp : byte { Kill, Drop, Source, SourceKey, Recipe, Seen, Sighting, Chest, Hint }
 
 	// One discovery. Counts are increments; a full sync is the whole codex as entries applied to an empty one.
 	// Npc, From and Item are full names (stable across mod changes); From is the bag (bags) or the shimmered item (shimmer).
@@ -47,6 +47,9 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static CodexEntry Chest(int position, List<(string item, int count)> items) => new() { Op = CodexOp.Chest, Key = position, Items = items ?? new() };
 
+		// A hint level bought from the Guide (Count is the level)
+		public static CodexEntry Hint(string item, int level) => new() { Op = CodexOp.Hint, Item = item, Count = level };
+
 		public static int ChestPosition(int x, int y) => (x & 0xFFFF) | (y << 16);
 
 		// Identity of a set-like discovery, so a client does not send it twice while waiting for the server
@@ -57,6 +60,7 @@ namespace UltimateRandomizer.Common.Codex
 			CodexOp.Sighting => "g" + Biome + "|" + Npc,
 			CodexOp.Chest => "c" + Key,
 			CodexOp.SourceKey => "k" + (int)Kind + "|" + From,
+			CodexOp.Hint => "h" + Item + "|" + Count,
 			_ => null
 		};
 	}
@@ -125,6 +129,8 @@ namespace UltimateRandomizer.Common.Codex
 		public readonly HashSet<string> ItemsSeen = new();
 		public readonly Dictionary<string, HashSet<string>> Sightings = new();
 		public readonly HashSet<int> OpenedChests = new();
+		// Hint levels bought from the Guide, by item (shared by the whole world)
+		public readonly Dictionary<string, int> Hints = new();
 
 		public CodexData()
 		{
@@ -141,6 +147,7 @@ namespace UltimateRandomizer.Common.Codex
 			ItemsSeen.Clear();
 			Sightings.Clear();
 			OpenedChests.Clear();
+			Hints.Clear();
 			Bump(Change.Key);
 			Bump(Change.Recipe);
 		}
@@ -203,6 +210,15 @@ namespace UltimateRandomizer.Common.Codex
 						}
 					}
 					return Change.Key;
+				case CodexOp.Hint:
+				{
+					// Levels only go up, one bought after the other
+					if (string.IsNullOrEmpty(e.Item) || e.Count < 1 || e.Count > HintFacts.MaxLevel) return Change.None;
+					int old = Hints.GetValueOrDefault(e.Item);
+					if (e.Count <= old || (old == 0 && Hints.Count >= MaxKeys)) return Change.None;
+					Hints[e.Item] = e.Count;
+					return Change.Key;
+				}
 			}
 			return Change.None;
 		}
@@ -215,8 +231,11 @@ namespace UltimateRandomizer.Common.Codex
 			CodexOp.Seen => !ItemsSeen.Contains(e.Item),
 			CodexOp.Sighting => !Sightings.TryGetValue(e.Biome, out HashSet<string> npcs) || !npcs.Contains(e.Npc),
 			CodexOp.Chest => !OpenedChests.Contains(e.Key),
+			CodexOp.Hint => e.Count > HintLevel(e.Item),
 			_ => true
 		};
+
+		public int HintLevel(string item) => !string.IsNullOrEmpty(item) && Hints.TryGetValue(item, out int level) ? level : 0;
 
 		private static Dictionary<string, int> Inner(Dictionary<string, Dictionary<string, int>> table, string key)
 		{
@@ -267,6 +286,7 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			// Their content is already in the chest source above
 			foreach (int position in OpenedChests) yield return CodexEntry.Chest(position, null);
+			foreach ((string item, int level) in Hints) yield return CodexEntry.Hint(item, level);
 		}
 
 		// Sorted dump of the content, to compare two codexes (tests)
@@ -346,6 +366,8 @@ namespace UltimateRandomizer.Common.Codex
 			tag["sightBiome"] = sightBiome;
 			tag["sightNpc"] = sightNpc;
 			tag["chests"] = OpenedChests.ToList();
+			tag["hintItem"] = Hints.Keys.ToList();
+			tag["hintLevel"] = Hints.Values.ToList();
 		}
 
 		public static CodexData Load(TagCompound tag)
@@ -381,6 +403,9 @@ namespace UltimateRandomizer.Common.Codex
 			IList<string> sightNpc = tag.GetList<string>("sightNpc");
 			for (int i = 0; i < sightBiome.Count && i < sightNpc.Count; i++) data.ApplyInner(CodexEntry.Sighting(sightBiome[i], sightNpc[i]));
 			foreach (int position in tag.GetList<int>("chests")) data.OpenedChests.Add(position);
+			IList<string> hintItem = tag.GetList<string>("hintItem");
+			IList<int> hintLevel = tag.GetList<int>("hintLevel");
+			for (int i = 0; i < hintItem.Count && i < hintLevel.Count; i++) data.ApplyInner(CodexEntry.Hint(hintItem[i], hintLevel[i]));
 			return data;
 		}
 
@@ -407,6 +432,7 @@ namespace UltimateRandomizer.Common.Codex
 					if (e.Op == CodexOp.Source && (item = CodexNames.ItemType(e.Item)) == 0) return false;
 					break;
 				case CodexOp.Seen:
+				case CodexOp.Hint:
 					item = CodexNames.ItemType(e.Item);
 					if (item == 0) return false;
 					break;
@@ -438,6 +464,10 @@ namespace UltimateRandomizer.Common.Codex
 					break;
 				case CodexOp.Seen:
 					w.Write7BitEncodedInt(item);
+					break;
+				case CodexOp.Hint:
+					w.Write7BitEncodedInt(item);
+					w.Write((byte)Math.Clamp(e.Count, 0, 255));
 					break;
 				case CodexOp.Sighting:
 					w.Write(e.Biome ?? "");
@@ -494,6 +524,11 @@ namespace UltimateRandomizer.Common.Codex
 					return CodexEntry.Recipe(r.ReadInt32());
 				case CodexOp.Seen:
 					return CodexEntry.Seen(CodexNames.Item(r.Read7BitEncodedInt()));
+				case CodexOp.Hint:
+				{
+					string item = CodexNames.Item(r.Read7BitEncodedInt());
+					return CodexEntry.Hint(item, r.ReadByte());
+				}
 				case CodexOp.Sighting:
 				{
 					string biome = r.ReadString();

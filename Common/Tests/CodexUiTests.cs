@@ -75,7 +75,7 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			try
 			{
-				foreach (CodexPageKind tab in new[] { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes })
+				foreach (CodexPageKind tab in new[] { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes, CodexPageKind.Hints })
 				{
 					Build(state, new CodexPage(tab), failures);
 				}
@@ -97,7 +97,7 @@ namespace UltimateRandomizer.Common.Tests
 				{
 					if (!Language.Exists("Mods.UltimateRandomizer.Codex.Category." + (ItemCategory)c)) failures.Add("missing text Codex.Category." + (ItemCategory)c);
 				}
-				foreach (CodexPageKind tab in new[] { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes })
+				foreach (CodexPageKind tab in new[] { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes, CodexPageKind.Hints })
 				{
 					if (!Language.Exists($"Mods.UltimateRandomizer.Codex.Tab{tab}")) failures.Add("missing text Codex.Tab" + tab);
 				}
@@ -252,7 +252,7 @@ namespace UltimateRandomizer.Common.Tests
 			try
 			{
 				Look("window", Walk(state));
-				List<CodexPage> pages = new[] { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes }.Select(t => new CodexPage(t)).ToList();
+				List<CodexPage> pages = new[] { CodexPageKind.Enemies, CodexPageKind.Items, CodexPageKind.Crafts, CodexPageKind.Bags, CodexPageKind.Biomes, CodexPageKind.Hints }.Select(t => new CodexPage(t)).ToList();
 				foreach (int item in CodexSystem.ItemsSeen().Take(5).Append(ItemID.WoodenSword)) pages.Add(CodexPage.ItemPage(item));
 				foreach (int npc in CodexSystem.KilledNpcs().Take(3).Append(NPCID.BlueSlime)) pages.Add(CodexPage.NpcPage(npc));
 				foreach (CodexPage page in pages)

@@ -212,6 +212,11 @@ Tests: {
 	OtherTexts: Chaque message a un texte
 	ConfigRanges: Les réglages sont cohérents
 	CacheSignatureScope: Sauvegarder un réglage de stats d'ennemis garde la trouvabilité et le plan des recettes ; les réglages de butin et du pool d'échanges les recalculent
+	HintFactsTrue: "Les indices disent ce que prévoient les planificateurs : l'hôte porte l'objet, la recette le fabrique"
+	HintPriceScales: "Le prix des indices suit la formule et monte avec le niveau et le palier"
+	HintPurchaseFlow: "Acheter un indice prend les pièces, monte son niveau, et est refusé sans assez de pièces"
+	HintSyncRoundTrip: "Les niveaux d'indice survivent au format réseau du codex, à la sauvegarde et aux vérifications du serveur"
+	HintTextsResolved: "Chaque phrase d'indice est une vraie phrase dans cette langue"
 }
 
 Journal: {
@@ -225,6 +230,7 @@ Codex: {
 	TabCrafts: Arbre d'artisanat
 	TabBags: Sacs
 	TabBiomes: Biomes
+	TabHints: Indices
 	Search: Rechercher...
 	Empty: "Rien de découvert ici pour l'instant : tue des ennemis, ouvre des coffres et des sacs, regarde les recettes !"
 	NoMatch: Rien ne correspond à la recherche.
@@ -259,6 +265,229 @@ Codex: {
 	TreeTooBig: "L'arbre est trop grand : replie quelques branches."
 	NothingReceived: Rien obtenu pour l'instant.
 	SeenCount: "{0} ennemis vus"
+
+	Hint: {
+		Syncing: "Un instant : je me renseigne encore sur ce qui a déjà été acheté dans ce monde."
+		Refused: "Je t'ai déjà dit tout ça. Demande-moi plutôt la suite."
+		Conditions: "Attention à l'endroit : {0}."
+		Button: "Indice"
+		Intro: "Bloqué ? Pour quelques pièces, je peux te mettre sur la piste. Choisis ce que tu cherches, à droite."
+		Nothing: "Rien à te dire pour l'instant : ce qu'il te faut est déjà à ta portée."
+		TooPoor: "Ce sera {0}, et tu ne les as pas. Reviens avec plus de pièces."
+		PanelTitle: "Les indices du Guide"
+		Money: "Tes pièces : {0}"
+		Buy: "Acheter : {0}"
+		Repeat: "Répéter"
+		Level: "Indice {0}/{1}"
+		Found: "(trouvé)"
+		Unknown: "???"
+		NoHint: "Aucun indice acheté pour l'instant."
+		NotAsked: "Pas encore demandé"
+		TabIntro: "Les indices achetés au Guide (parle-lui, puis Indice). Ils sont partagés par tout le monde dans ce monde."
+		About: "Indices : {0}"
+		PickTarget: "Clique sur un objet pour relire ses indices."
+		Free: "gratuit"
+		NoStation: "aucune station"
+		Coin: {
+			Copper: "{0} cuivre"
+			Silver: "{0} argent"
+			Gold: "{0} or"
+			Platinum: "{0} platine"
+		}
+		Station: {
+			Hand: "à la main, sans aucune station"
+			Bench: "sur un établi quelconque"
+			Anvil: "sur une enclume"
+			Forge: "dans la chaleur d'une forge ou d'un fourneau"
+			Altar: "sur un autel maléfique"
+			Furniture: "à l'aide d'un meuble"
+			Brewing: "là où l'on prépare potions et repas"
+			Magic: "grâce à la magie"
+			Machine: "avec une machine ou un outil d'artisan"
+		}
+		Move: {
+			Ground: "Une créature qui marche"
+			Flying: "Une créature qui vole"
+			Water: "Une créature qui nage"
+			Critter: "Une petite bestiole inoffensive"
+		}
+		Time: {
+			Any: "à toute heure"
+			Day: "le jour"
+			Night: "la nuit"
+		}
+		Band: {
+			0: "tôt, près de la surface"
+			1: "plus en profondeur, à l'époque des premiers grands ennemis"
+			2: "une fois le monde endurci"
+			3: "tard dans ton aventure, dans les recoins les plus sombres"
+		}
+		Kind: {
+			Creature: {
+				0: "Une créature le transporte. Chasse, et tu le trouveras."
+				1: "Personne ne fabrique celui-ci : un être vivant le lâche."
+				2: "Il tombe des poches d'une créature."
+			}
+			Recipe: {
+				0: "Ça se fabrique, {0}."
+				1: "Personne ne le trouve par terre : on le fabrique {0}."
+				2: "Un peu d'adresse suffit : tu le fabriques {0}."
+			}
+			Boss: {
+				0: "Un grand ennemi le garde. Il faudra te battre pour l'avoir."
+				1: "Seul un puissant ennemi détient celui-ci."
+				2: "Abats quelque chose de gros : il garde ce que tu cherches."
+			}
+			Bag: {
+				0: "Il se cache dans un sac ou une caisse."
+				1: "Ouvre le bon contenant et il sera là."
+				2: "Ce n'est pas une chasse : c'est quelque chose qu'on ouvre qui le donne."
+			}
+			Chest: {
+				0: "Il se cache dans des coffres."
+				1: "Explore, et ouvre les coffres que tu trouves."
+				2: "Les chasseurs de trésors le trouvent dans des coffres."
+			}
+			Pot: {
+				0: "Il se cache dans des pots."
+				1: "Brise des pots, beaucoup de pots."
+				2: "Les poteries cachent plus que des pièces..."
+			}
+			Shop: {
+				0: "Quelqu'un le vend."
+				1: "L'argent ouvre bien des portes : un marchand l'a."
+				2: "Tu ne le trouveras pas, tu l'achèteras."
+			}
+		}
+		Where: {
+			Creature: {
+				0: "{0} rôde {2} dans ces contrées : {1}. Elle en porte un exemplaire."
+				1: "Cherche du côté de ces lieux, {2} : {1}. {0} y garde ce que tu cherches."
+				2: "On m'en a parlé près de ces lieux : {1}. {0}, de sortie {2}, en garde un exemplaire."
+			}
+			Roaming: {
+				0: "{0} erre de par le monde {2}. Elle en porte un exemplaire."
+				1: "Personne ne sait où elle vit : {0}, aperçue {2}, en garde un exemplaire."
+				2: "{0} va et vient {2} ; elle détient ce que tu cherches."
+			}
+			Recipe: {
+				0: "On le fabrique avec des choses trouvées {0}."
+				1: "Ses composants se récoltent {0}."
+				2: "Ce qu'il faut pour le faire se trouve {0}."
+			}
+			Boss: {
+				0: "Un grand ennemi rencontré {0} en garde un exemplaire."
+				1: "Vaincs un puissant ennemi, {0}, et tu pourrais l'obtenir."
+				2: "Une créature redoutable que tu affronteras {0} le garde."
+			}
+			Bag: {
+				0: "Ce sac ou cette caisse s'obtient {0}."
+				1: "Cherche dans les contenants que tu obtiens {0}."
+				2: "Ce genre de sac te tombera entre les mains {0}."
+			}
+			Chest: {
+				0: "Les coffres en bois, en surface et dans les grottes, en cachent quelques-uns."
+				1: "Ouvre les simples coffres en bois du monde : certains en gardent un."
+				2: "De simples coffres en bois, rien de luxueux : c'est là qu'il faut chercher."
+			}
+			Pot: {
+				0: "Les pots brisés {0} peuvent en donner un."
+				1: "Casse des pots, {0} ; la chance fera le reste."
+				2: "Continue de briser des pots {0} : l'un d'eux l'aura."
+			}
+			Shop: {
+				0: "Quelqu'un qui s'installe dans ta ville {0} le vend."
+				1: "Un voisin que tu rencontreras {0} l'a en rayon."
+				2: "Attends le bon habitant ; tu le rencontreras {0}."
+			}
+		}
+		Shape: {
+			Creature: {
+				0: "Voici sa silhouette. Ça te dit quelque chose ?"
+				1: "Je te l'ai dessinée du mieux que j'ai pu :"
+			}
+			Recipe: {
+				0: "Voici les silhouettes de ce qu'il te faut :"
+				1: "Voici la recette, en ombres chinoises :"
+			}
+			Boss: {
+				0: "Voici l'ombre de cet ennemi. Méfie-toi."
+				1: "Sa silhouette seule fait peur :"
+			}
+			Bag: {
+				0: "Voici la forme du contenant :"
+				1: "Cherche quelque chose de cette forme :"
+			}
+			Chest: {
+				0: "Voici ce que tu y trouveras :"
+				1: "Sa forme, pour le reconnaître quand tu le verras :"
+			}
+			Pot: {
+				0: "Voici ce qui tombera d'un pot :"
+				1: "Sa forme, pour le reconnaître quand tu le verras :"
+			}
+			Shop: {
+				0: "Voici la silhouette du vendeur :"
+				1: "Cherche cette personne en ville :"
+			}
+		}
+		Name: {
+			Creature: {
+				0: "Cette créature le transporte : {0}."
+				1: "Ta cible : {0}."
+			}
+			Recipe: {
+				0: "Voici la recette complète, sur : {0}."
+				1: "La recette complète ({0}) :"
+			}
+			Boss: {
+				0: "Cet ennemi le garde : {0}."
+				1: "Ta cible : {0}."
+			}
+			Bag: {
+				0: "Ouvre ceci : {0}."
+				1: "Il est dans ceci : {0}."
+			}
+			Chest: {
+				0: "{0} : regarde dans les coffres en bois."
+				1: "Ouvre chaque coffre en bois : {0} t'attend."
+			}
+			Pot: {
+				0: "{0} : casse des pots, il finira par tomber."
+				1: "Des pots, encore et encore : {0} est dans l'un d'eux."
+			}
+			Shop: {
+				0: "Ce marchand le vend : {0}."
+				1: "Va voir ce marchand, bourse en main : {0}."
+			}
+		}
+		World: {
+			TruffleWorm: {
+				Kind: "C'est une créature vivante, qu'on attrape plutôt qu'on fabrique."
+				Where: "Elle se tortille dans les champs de champignons luisants, une fois le monde endurci."
+				Shape: "Voici à quoi elle ressemble :"
+				Name: "{0} : attrape-la avec un filet à insectes dans un biome de champignons luisants."
+			}
+			EmpressButterfly: {
+				Kind: "C'est une créature vivante : attrape-la, ne la fabrique pas."
+				Where: "Elle virevolte au-dessus des terres sacrées, la nuit, une fois le monde endurci."
+				Shape: "Sa silhouette, chatoyante :"
+				Name: "{0} : attrape-la avec un filet à insectes dans les terres sacrées, la nuit."
+			}
+			PowerCell: {
+				Kind: "Ça se trouve, ça ne se fabrique pas."
+				Where: "Au fond de la jungle, derrière les murs d'un temple ancien."
+				Shape: "Voici ce que tu cherches :"
+				Name: "{0} : dans les coffres du temple lihzahrd, ou sur ses gardiens."
+			}
+			GelatinCrystal: {
+				Kind: "Ça pousse dans le sol, comme une gemme."
+				Where: "Sous les terres sacrées, une fois le monde endurci."
+				Shape: "Il scintille comme ceci :"
+				Name: "{0} : brise-le là où il pousse, dans les profondeurs des terres sacrées."
+			}
+		}
+	}
 
 	Source: {
 		Chest: Coffres
@@ -1421,6 +1650,7 @@ Configs: {
 		Headers: {
 			StartingKit: Kit de départ
 			TownNpcs: PNJ de ville
+			Hints: "Indices"
 		}
 
 		StartingKit: {
@@ -1451,6 +1681,11 @@ Configs: {
 		RandomizeTownNpcOrder: {
 			Label: Ordre d'arrivée aléatoire des PNJ
 			Tooltip: Chaque condition d'arrivée amène un autre PNJ : le Sorcier peut venir avec 50 pièces d'argent, le Marchand après Skeletron... Fixe pour le monde. Les PNJ à sauver (Gobelin, Mécanicienne...) ne sont pas concernés.
+		}
+
+		HintBasePrice: {
+			Label: "Prix de base d'un indice (or)"
+			Tooltip: "Prix en pièces d'or du premier niveau d'indice sur un objet de palier 0, acheté au Guide (bouton Indice). Chaque palier ajoute 1,5 fois ce prix, chaque niveau coûte 3 fois le précédent : 2 or donne 2, 6, 18 et 54 or pour un établi. 0 : gratuit."
 		}
 	}
 
