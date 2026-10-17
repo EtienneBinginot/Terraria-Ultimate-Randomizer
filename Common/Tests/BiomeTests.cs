@@ -21,6 +21,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CriticalHostsInForest", CriticalHostsInForest);
 			TestRunner.Register("BiomeSlotsReachable", BiomeSlotsReachable);
 			TestRunner.Register("NegativeNetIdSwap", NegativeNetIdSwap);
+			TestRunner.Register("EvilSlotsShared", EvilSlotsShared);
 		}
 
 		private static string Name(int id) => Lang.GetNPCNameValue(id);
@@ -30,8 +31,9 @@ namespace UltimateRandomizer.Common.Tests
 		private static int Seed(int i) => 1000 + i * 7919;
 
 		// Every natural enemy keeps exactly its vanilla number of slots (at least one), with or without extras. Owners only
-		// move inside their class (movement, rarity, condition, critter) and keep their tier; in a merged class (too few
-		// owners in a tier) an owner may be one tier above the slot or any tier below, never across the hardmode line.
+		// move inside their class (movement, rarity, condition, critter) and their tier pair (0-1, 2-3...), unless the pair was
+		// merged with a neighbour (too few owners); an owner is never more than one tier above the slot (none above in the
+		// critical slots), never across the hardmode or Plantera line.
 		// The big tier 0 ground class (most Forest slots) is never left vanilla.
 		private static void BiomeRedistributionComplete()
 		{
@@ -39,6 +41,7 @@ namespace UltimateRandomizer.Common.Tests
 			if (vanilla.Count == 0) Check.Skip("no natural enemy has a bestiary biome");
 			List<string> failures = new();
 			int changedSeeds = 0;
+			long sameBiome = 0, totalSlots = 0;
 			foreach (int id in new[] { NPCID.BlueSlime, NPCID.Zombie, NPCID.DemonEye, NPCID.Pinky, NPCID.Tim, NPCID.LostGirl, NPCID.DoctorBones })
 			{
 				if (!vanilla.ContainsKey(id)) failures.Add($"{Name(id)} is not a natural enemy");
@@ -64,8 +67,8 @@ namespace UltimateRandomizer.Common.Tests
 					{
 						failures.Add($"seed {seed}: {Name(slot.Owner)} in the {BiomeSlots.BiomeName(slot.Biome)} slot of {Name(slot.Original)} (another class)");
 					}
-					else if (owner.tier != slot.Tier && (!slot.Merged || owner.tier > slot.Tier + 1 || BiomeSlots.BandOf(owner.tier) > slot.Band
-						|| slot.Critical && owner.tier > slot.Tier))
+					else if (owner.tier > slot.Tier + 1 || BiomeSlots.BandOf(owner.tier) > slot.Band || slot.Critical && owner.tier > slot.Tier
+						|| !slot.Merged && owner.tier / 2 != slot.TierGroup)
 					{
 						failures.Add($"seed {seed}: {Name(slot.Owner)} (tier {owner.tier}) in the tier {slot.Tier} slot of {Name(slot.Original)}{(slot.Merged ? " (merged)" : "")}");
 					}
@@ -73,6 +76,8 @@ namespace UltimateRandomizer.Common.Tests
 				List<BiomeSlot> forestGround = map.Slots.Where(s => s.Biome == (int)SpawnBiome.Forest && s.Movement == 0 && s.Tier == 0 && !s.Rare && !s.Conditional && !s.Critter).ToList();
 				if (forestGround.Count > 1 && forestGround.All(s => s.Owner == s.Original)) failures.Add($"seed {seed}: the tier 0 ground enemies of the Forest stay vanilla");
 				if (map.Slots.Any(s => s.Owner != s.Original)) changedSeeds++;
+				sameBiome += map.SameBiome;
+				totalSlots += map.Slots.Count;
 				// Same seed, same map
 				BiomeSlotMap again = BiomeSlots.Build(seed, 0f);
 				if (!again.Slots.Select(s => s.Owner).SequenceEqual(map.Slots.Select(s => s.Owner))) failures.Add($"seed {seed}: the map is not deterministic");
@@ -82,6 +87,8 @@ namespace UltimateRandomizer.Common.Tests
 				if (!withExtras.Slots.Select(s => s.Owner).SequenceEqual(map.Slots.Select(s => s.Owner))) failures.Add($"seed {seed}: extras changed the owners");
 				if (i == 0) Log($"Biome classes: {map.Classes}, {map.ClassesKeptVanilla} kept vanilla, {map.Slots.Count(s => s.Merged)} merged slots, {map.Slots.Count(s => s.Owner != s.Original)}/{map.Slots.Count} slots changed");
 			}
+			// Information only: an owner may land in a biome where it also lives in vanilla
+			Log($"Biome same-biome owners: {100.0 * sameBiome / System.Math.Max(1, totalSlots):0.0}% of the slots over {Seeds} seeds");
 			Check.That(changedSeeds == Seeds, $"only {changedSeeds}/{Seeds} seeds change any slot");
 			Check.All(failures, "Enemies lost or moved across classes");
 		}
@@ -196,6 +203,59 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int biome in own.Where(b => !reached.Contains(b))) failures.Add($"{Name(original)} in {BiomeSlots.BiomeName(biome)}");
 			}
 			Check.All(failures, "Slots never reached");
+		}
+
+		// Without both evils, the slots of the missing one never open: each of their owners spawns through a present-evil slot
+		// (its owner, or shared with it), within the tier rule, and Pick returns the shared owners half of the time. Drunk
+		// worlds share nothing. The sharing never changes the owners.
+		private static void EvilSlotsShared()
+		{
+			List<string> failures = new();
+			int absentSlots = 0, unshared = 0;
+			for (int i = 0; i < Seeds; i++)
+			{
+				int seed = Seed(i);
+				BiomeSlotMap both = BiomeSlots.Build(seed, DefaultExtras, WorldEvil.Both);
+				if (both.Slots.Any(s => s.AbsentEvil || s.EvilShared != null)) failures.Add($"seed {seed}: evil slots shared in a world with both evils");
+				foreach (WorldEvil evil in new[] { WorldEvil.Corruption, WorldEvil.Crimson })
+				{
+					BiomeSlotMap map = BiomeSlots.Build(seed, DefaultExtras, evil);
+					if (!map.Slots.Select(s => s.Owner).SequenceEqual(both.Slots.Select(s => s.Owner))) failures.Add($"seed {seed} ({evil}): the sharing changed the owners");
+					SpawnBiome surface = evil == WorldEvil.Crimson ? SpawnBiome.Crimson : SpawnBiome.Corruption;
+					SpawnBiome underground = evil == WorldEvil.Crimson ? SpawnBiome.UndergroundCrimson : SpawnBiome.UndergroundCorruption;
+					List<BiomeSlot> hosts = map.Slots.Where(s => s.Biome == (int)surface || s.Biome == (int)underground).ToList();
+					if (hosts.Any(s => s.AbsentEvil)) failures.Add($"seed {seed} ({evil}): a present-evil slot is marked absent");
+					foreach (BiomeSlot slot in map.Slots.Where(s => s.AbsentEvil))
+					{
+						absentSlots++;
+						if (!hosts.Any(h => BiomeSlots.Spawners(h).Contains(slot.Owner)))
+						{
+							unshared++;
+							failures.Add($"seed {seed} ({evil}): {Name(slot.Owner)} ({BiomeSlots.BiomeName(slot.Biome)} slot of {Name(slot.Original)}) never spawns");
+						}
+					}
+					foreach (BiomeSlot host in hosts.Where(h => h.EvilShared != null))
+					{
+						if (host.Critical || host.Extra != 0) failures.Add($"seed {seed} ({evil}): the {BiomeSlots.BiomeName(host.Biome)} slot of {Name(host.Original)} is also critical or shared with an extra");
+						foreach (int owner in host.EvilShared)
+						{
+							int tier = BiomeSlots.TierOf(owner);
+							if (tier > host.Tier + 1 || BiomeSlots.BandOf(tier) > host.Band)
+							{
+								failures.Add($"seed {seed} ({evil}): {Name(owner)} (tier {tier}) shares the tier {host.Tier} slot of {Name(host.Original)}");
+							}
+						}
+						Check.Equal(host.EvilShared[0], BiomeSlots.Pick(host, 0.0), "Pick at 0");
+						Check.Equal(host.Owner, BiomeSlots.Pick(host, BiomeSlots.EvilShare), "Pick at the evil share");
+						Check.Equal(host.Owner, BiomeSlots.Pick(host, 0.999), "Pick near 1");
+					}
+					if (i == 0) Log($"Biome evil ({evil}): {map.EvilSharedSlots} absent-evil slots shared, {map.EvilUnshared} without a partner, "
+						+ $"{hosts.Count(h => h.EvilShared != null)}/{hosts.Count} present-evil slots shared");
+				}
+			}
+			if (absentSlots == 0) Check.Skip("no natural enemy lives in an evil biome");
+			Log($"Biome evil: {unshared}/{absentSlots} absent-evil slots unreachable over {Seeds} seeds");
+			Check.All(failures, "Absent-evil owners");
 		}
 
 		// A slot owner may be a slime colour (negative net ID): the swap must index sets by type, not crash

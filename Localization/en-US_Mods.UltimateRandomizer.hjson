@@ -114,7 +114,8 @@ Tests: {
 	CodexTextsResolved: "Codex interface: no raw text key is shown"
 	BiomeSlotsReachable: By biome: every spawn place of an enemy with several places can be reached
 	NegativeNetIdSwap: Swapping into a slime colour (Pinky) works and keeps the Blue Slime type
-	BiomeRedistributionComplete: By biome: every natural enemy keeps its number of spawn places, inside its class and never in a lower tier (20 seeds)
+	EvilSlotsShared: By biome: in a world with a single evil, the owners of the missing evil's places spawn through the present evil (20 seeds)
+	BiomeRedistributionComplete: By biome: every natural enemy keeps its number of spawn places, inside its class and its tier pair, never more than one tier above the place (20 seeds)
 	BiomeSlotsRespectDaylight: By biome: no enemy that flees or dies in daylight (Gnome) in a day surface place
 	BiomeExtrasShare: By biome: 8% of the spawn places are shared with event enemies
 	CriticalHostsInForest: By biome: the basic stations drop from enemies of the early Forest

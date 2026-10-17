@@ -40,6 +40,7 @@ namespace UltimateRandomizer.Common.Core
 		public const int GiantMini = 31;
 		public const int BiomeSlots = 32;
 		public const int BiomeExtras = 33;
+		public const int BiomeEvil = 34;
 		public const int Fallback = 0xFA11;
 	}
 

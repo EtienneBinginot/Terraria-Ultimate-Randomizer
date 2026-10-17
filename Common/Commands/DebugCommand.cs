@@ -139,7 +139,7 @@ namespace UltimateRandomizer.Common.Commands
 			if (!BiomeSlots.Active) caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Debug.BiomesOff"), Color.Yellow);
 			BiomeSlotMap map = BiomeSlots.Current;
 			string Name(int id) => Lang.GetNPCNameValue(id);
-			StringBuilder sb = new($"Enemies by biome (seed {SeedSystem.WorldSeed}): {map.Slots.Count} slots, {map.Classes} classes ({map.ClassesKeptVanilla} kept vanilla), {map.Slots.Count(s => s.Extra != 0)}/{map.ExtraTarget} shared with extras\n");
+			StringBuilder sb = new($"{BiomeSlots.Summary(map)} (seed {SeedSystem.WorldSeed}, {map.ExtraTarget} extras wanted)\n");
 			foreach (IGrouping<int, BiomeSlot> biome in map.Slots.GroupBy(s => s.Biome).OrderBy(g => g.Key))
 			{
 				int enemies = biome.Count(s => !s.Critter);
@@ -153,6 +153,8 @@ namespace UltimateRandomizer.Common.Commands
 					string tags = $" tier {slot.Tier}" + (slot.Merged ? " merged" : "") + (slot.Rare ? " rare" : "") + (slot.Conditional ? " conditional" : "") + (slot.Critter ? " critter" : "")
 						+ (slot.Time != SlotTime.Any ? " " + slot.Time.ToString().ToLowerInvariant() : "") + (slot.DaySurface ? " day-surface" : "");
 					string shared = slot.Extra != 0 ? $" + {Name(slot.Extra)} (shared, {BiomeSlots.ExtraShare:P0})" : "";
+					if (slot.EvilShared != null) shared += $" + {string.Join(", ", slot.EvilShared.Select(Name))} (absent evil, {BiomeSlots.EvilShare:P0})";
+					if (slot.AbsentEvil) tags += " absent-evil";
 					sb.Append($"    {Name(slot.Original)} -> {Name(slot.Owner)}{shared}{band}{tags}\n");
 				}
 			}

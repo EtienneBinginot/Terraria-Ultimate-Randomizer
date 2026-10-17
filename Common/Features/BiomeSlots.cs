@@ -39,7 +39,8 @@ namespace UltimateRandomizer.Common.Features
 		public SlotTime Time;
 		public int Movement;
 		// Tier of the original (NpcTiers), raised to hardmode in hardmode-only biomes and to post-Plantera in the Temple:
-		// owners never come from a higher tier, so progression stays classic
+		// owners are never more than one tier above it (none in critical slots) nor across the hardmode or Plantera line,
+		// so progression stays classic
 		public int Tier;
 		public bool Rare;
 		// Open only with a weather, a season or an event (rain, sandstorm, Halloween...)
@@ -51,15 +52,26 @@ namespace UltimateRandomizer.Common.Features
 		public bool Critical;
 		// An enemy without a natural biome (event enemy) sharing this slot: each spawn picks it half of the time (0: none)
 		public int Extra;
-		// Its class had too few owners and was merged with a neighbouring tier: it may get an owner one tier above or any
-		// tier below (never across the hardmode or Plantera line)
+		// Its tier pair had too few owners and was merged with a neighbouring pair (owners still at most one tier above,
+		// never across the hardmode or Plantera line)
 		public bool Merged;
+		// A slot of the evil biome this world doesn't have (Corruption in a Crimson world): its owner spawns through a slot
+		// of the present evil instead (EvilShared there)
+		public bool AbsentEvil;
+		// Owners of absent-evil slots sharing this present-evil slot: each spawn picks one of them EvilShare of the time (null: none)
+		public List<int> EvilShared;
 
 		// 0 pre-hardmode, 1 hardmode, 2 post-Plantera (when the slot opens)
 		public int Band => BiomeSlots.BandOf(Tier);
 
-		public int ClassKey => Movement * 100 + (Rare ? 50 : 0) + (Conditional ? 20 : 0) + Tier;
+		// Tiers go by pairs (0-1, 2-3, 4-5, 6-7, 8-9): bigger classes, and no pair straddles the hardmode or Plantera line
+		public int TierGroup => Tier / 2;
+
+		public int ClassKey => Movement * 100 + (Rare ? 50 : 0) + (Conditional ? 20 : 0) + TierGroup;
 	}
+
+	// The evil biomes of a world: both in drunk (and zenith) worlds, else only the one it was generated with
+	public enum WorldEvil { Both, Corruption, Crimson }
 
 	public class BiomeSlotMap
 	{
@@ -69,6 +81,12 @@ namespace UltimateRandomizer.Common.Features
 		public int Classes;
 		public int ClassesKeptVanilla;
 		public int ExtraTarget;
+		public WorldEvil Evil;
+		// Slots whose owner also lives in that biome in vanilla (information: the redistribution doesn't forbid it)
+		public int SameBiome;
+		// Absent-evil slots whose owner got a present-evil slot to share, and those that found none
+		public int EvilSharedSlots;
+		public int EvilUnshared;
 		// For each type (slime colours are Blue Slimes): the tier from which it spawns somewhere, as an owner or an extra
 		public readonly Dictionary<int, int> SpawnTier = new();
 
@@ -85,7 +103,10 @@ namespace UltimateRandomizer.Common.Features
 		// Share of the spawns of a shared slot that are its extra
 		public const double ExtraShare = 0.5;
 
-		// A class with fewer distinct owners is merged with the class of the tier below
+		// Share of the spawns of a present-evil slot that are one of its absent-evil owners
+		public const double EvilShare = 0.5;
+
+		// A class with fewer distinct owners is merged with the class of the tier pair below
 		public const int MinClassOwners = 3;
 
 		// Slime colours vanilla spawns directly (SetDefaults right after NewNPC); the other negative IDs are size variants
@@ -171,13 +192,20 @@ namespace UltimateRandomizer.Common.Features
 		{
 			get
 			{
-				if (current != null) return current;
-				current = Build(SeedSystem.WorldSeed, EnemiesConfig.Instance.BiomeExtraEnemies);
-				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Enemies by biome: {current.Slots.Count} slots, {current.Classes} classes, {current.ClassesKeptVanilla} kept vanilla, "
-					+ $"{current.Slots.Count(s => s.Extra != 0)} shared with extras; raised to hardmode: {string.Join(", ", raisedToHardmode.Select(Lang.GetNPCNameValue))}");
+				// The world evil is synced with the world data; a map built before it arrived is rebuilt
+				if (current != null && current.Evil == CurrentEvil) return current;
+				current = Build(SeedSystem.WorldSeed, EnemiesConfig.Instance.BiomeExtraEnemies, CurrentEvil);
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info(Summary(current) + $"; raised to hardmode: {string.Join(", ", raisedToHardmode.Select(Lang.GetNPCNameValue))}");
 				return current;
 			}
 		}
+
+		public static WorldEvil CurrentEvil => Main.drunkWorld || Main.zenithWorld ? WorldEvil.Both : WorldGen.crimson ? WorldEvil.Crimson : WorldEvil.Corruption;
+
+		// One line for the log and /rdebug biomes
+		public static string Summary(BiomeSlotMap map) => $"Enemies by biome: {map.Slots.Count} slots, {map.Classes} classes, {map.ClassesKeptVanilla} kept vanilla, "
+			+ $"{map.Slots.Count(s => s.Owner != s.Original)} changed, same-biome {map.SameBiome}, {map.Slots.Count(s => s.Extra != 0)} shared with extras, "
+			+ $"evil {map.Evil}: {map.EvilSharedSlots} absent-evil slots shared ({map.EvilUnshared} without a partner)";
 
 		public static int BandOf(int tier) => tier >= (int)Tier.PostPlantera ? 2 : tier >= (int)Tier.Hardmode ? 1 : 0;
 
@@ -246,9 +274,11 @@ namespace UltimateRandomizer.Common.Features
 		// The type of an owner (slime colours are Blue Slimes)
 		public static int TypeOf(int id) => id < 0 && ContentSamples.NpcsByNetId.TryGetValue(id, out NPC sample) ? sample.type : id;
 
-		public static BiomeSlotMap Build(int seed, float extraPercent)
+		public static BiomeSlotMap Build(int seed, float extraPercent) => Build(seed, extraPercent, CurrentEvil);
+
+		public static BiomeSlotMap Build(int seed, float extraPercent, WorldEvil evil)
 		{
-			BiomeSlotMap map = new();
+			BiomeSlotMap map = new() { Evil = evil };
 			List<Natural> naturals = Catalog();
 			Dictionary<int, Natural> byId = naturals.ToDictionary(n => n.Id);
 			foreach (Natural n in naturals)
@@ -268,18 +298,19 @@ namespace UltimateRandomizer.Common.Features
 				: DetRandom.NpcKey(a.Original) != DetRandom.NpcKey(b.Original) ? DetRandom.NpcKey(a.Original).CompareTo(DetRandom.NpcKey(b.Original)) : a.Original.CompareTo(b.Original));
 
 			bool Intolerant(int id) => byId.TryGetValue(id, out Natural n) ? n.Intolerant : EnemySwapPool.DaylightIntolerant(id);
-			// Never an owner of a higher tier than the slot, except one tier above in merged classes, never across the
-			// hardmode or Plantera line
+			// Never an owner more than one tier above the slot, never across the hardmode or Plantera line
 			bool Accepts(BiomeSlot slot, int owner)
 			{
 				int tier = byId[owner].Tier;
 				// Critical slots never get a stronger owner: the first work bench must drop from weak enemies
-				int above = slot.Merged && !slot.Critical ? 1 : 0;
+				int above = slot.Critical ? 0 : 1;
 				return (!slot.DaySurface || !Intolerant(owner)) && tier <= slot.Tier + above && BandOf(tier) <= slot.Band;
 			}
 
+			Dictionary<BiomeSlot, int> groupOf = new();
 			foreach ((int groupKey, List<BiomeSlot> slots) in Groups(map))
 			{
+				foreach (BiomeSlot slot in slots) groupOf[slot] = groupKey;
 				map.Classes++;
 				// Too small to permute, even merged: stays vanilla
 				if (slots.Select(s => s.Original).Distinct().Count() < MinClassOwners)
@@ -301,6 +332,8 @@ namespace UltimateRandomizer.Common.Features
 				}
 				for (int i = 0; i < slots.Count; i++) slots[i].Owner = owners[i];
 			}
+			map.SameBiome = map.Slots.Count(s => byId[s.Owner].Biomes.Contains(s.Biome));
+			if (evil != WorldEvil.Both) ShareAbsentEvil(map, seed, Accepts, groupOf);
 
 			int enemySlots = map.Slots.Count(s => !s.Critter);
 			map.ExtraTarget = (int)Math.Round(enemySlots * Math.Clamp(extraPercent, 0f, 100f) / 100f);
@@ -308,7 +341,8 @@ namespace UltimateRandomizer.Common.Features
 
 			foreach (BiomeSlot slot in map.Slots)
 			{
-				foreach (int id in slot.Extra != 0 ? new[] { slot.Owner, slot.Extra } : new[] { slot.Owner })
+				// An absent-evil owner spawns through the present-evil slot it shares (counted there)
+				foreach (int id in Spawners(slot).Where(id => !slot.AbsentEvil || id != slot.Owner))
 				{
 					// Never earlier than its own tier, nor than the slot opens
 					int type = TypeOf(id);
@@ -348,8 +382,8 @@ namespace UltimateRandomizer.Common.Features
 
 		private static int OwnerCount(List<BiomeSlot> slots) => slots.Select(s => s.Original).Distinct().Count();
 
-		// Permutation groups: same movement, rarity and condition, same tier. A class with fewer than MinClassOwners owners
-		// joins the group of the tier below; the lowest one joins the group above.
+		// Permutation groups: same movement, rarity and condition, same tier pair. A class with fewer than MinClassOwners
+		// owners joins the group of the pair below; the lowest one joins the group above.
 		private static List<(int key, List<BiomeSlot> slots)> Groups(BiomeSlotMap map)
 		{
 			List<(int key, List<BiomeSlot> slots)> groups = new();
@@ -357,7 +391,7 @@ namespace UltimateRandomizer.Common.Features
 				.OrderBy(f => f.Key.Movement).ThenBy(f => f.Key.Rare).ThenBy(f => f.Key.Conditional))
 			{
 				List<List<BiomeSlot>> merged = new();
-				foreach (IGrouping<int, BiomeSlot> tier in family.GroupBy(s => s.Tier).OrderBy(t => t.Key))
+				foreach (IGrouping<int, BiomeSlot> tier in family.GroupBy(s => s.TierGroup).OrderBy(t => t.Key))
 				{
 					List<BiomeSlot> slots = tier.ToList();
 					if (merged.Count > 0 && OwnerCount(slots) < MinClassOwners)
@@ -377,6 +411,57 @@ namespace UltimateRandomizer.Common.Features
 				foreach (List<BiomeSlot> slots in merged) groups.Add((slots[0].ClassKey, slots));
 			}
 			return groups;
+		}
+
+		private static bool IsCorruption(int biome) => biome == (int)SpawnBiome.Corruption || biome == (int)SpawnBiome.UndergroundCorruption;
+
+		private static bool IsCrimson(int biome) => biome == (int)SpawnBiome.Crimson || biome == (int)SpawnBiome.UndergroundCrimson;
+
+		// The same layer in the other evil (Corruption <-> Crimson, underground too)
+		private static int MirrorEvil(int biome) => (SpawnBiome)biome switch
+		{
+			SpawnBiome.Corruption => (int)SpawnBiome.Crimson,
+			SpawnBiome.Crimson => (int)SpawnBiome.Corruption,
+			SpawnBiome.UndergroundCorruption => (int)SpawnBiome.UndergroundCrimson,
+			SpawnBiome.UndergroundCrimson => (int)SpawnBiome.UndergroundCorruption,
+			_ => -1
+		};
+
+		// The slots of the evil this world lacks never open (nobody stands in a Corruption of a Crimson world), so their owners
+		// would never appear: each one shares a present-evil slot of its class (same layer first), the least shared first.
+		// The corrupt/crimson desert and ice keys are merged into Desert and the snow caverns, which every world has.
+		private static void ShareAbsentEvil(BiomeSlotMap map, int seed, Func<BiomeSlot, int, bool> accepts, Dictionary<BiomeSlot, int> groupOf)
+		{
+			Func<int, bool> absent = map.Evil == WorldEvil.Crimson ? IsCorruption : IsCrimson;
+			Func<int, bool> present = map.Evil == WorldEvil.Crimson ? IsCrimson : IsCorruption;
+			List<BiomeSlot> hosts = map.Slots.Where(s => present(s.Biome) && !s.Critical).ToList();
+			Random rng = new(DetRandom.Hash(seed, RollKey.BiomeEvil, (int)map.Evil));
+			foreach (BiomeSlot slot in map.Slots.Where(s => absent(s.Biome)))
+			{
+				slot.AbsentEvil = true;
+				int owner = slot.Owner;
+				List<BiomeSlot> fit = hosts.Where(h => h.Critter == slot.Critter && h.Movement == slot.Movement && accepts(h, owner)).ToList();
+				// Same class and layer, same class, same rarity and condition, then only the same movement
+				List<BiomeSlot> options = new[]
+				{
+					fit.Where(h => groupOf[h] == groupOf[slot] && h.Biome == MirrorEvil(slot.Biome)).ToList(),
+					fit.Where(h => groupOf[h] == groupOf[slot]).ToList(),
+					fit.Where(h => h.Rare == slot.Rare && h.Conditional == slot.Conditional).ToList(),
+					fit
+				}.FirstOrDefault(list => list.Count > 0);
+				if (options == null)
+				{
+					map.EvilUnshared++;
+					continue;
+				}
+				map.EvilSharedSlots++;
+				// Already reachable through one of them (an owner of two absent slots)
+				if (options.Any(h => h.Owner == owner || h.EvilShared != null && h.EvilShared.Contains(owner))) continue;
+				int least = options.Min(h => h.EvilShared?.Count ?? 0);
+				List<BiomeSlot> best = options.Where(h => (h.EvilShared?.Count ?? 0) == least).ToList();
+				BiomeSlot host = best[rng.Next(best.Count)];
+				(host.EvilShared ??= new List<int>()).Add(owner);
+			}
 		}
 
 		// Extras (enemies without any natural biome) share a few slots with their owners: nobody loses a slot. Same tier
@@ -414,9 +499,11 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// An extra fits a free slot of its movement and rarity, of its tier (or above when sameTier is false), never a
-		// critter, critical or conditional slot (it should come outside events), never a day surface slot if it flees daylight
+		// critter, critical or conditional slot (it should come outside events), never a day surface slot if it flees daylight;
+		// never an evil slot that never opens or is already shared with the absent evil
 		private static bool Fits(BiomeSlot slot, Natural extra, bool sameTier) =>
-			!slot.Critter && slot.Extra == 0 && !slot.Critical && !slot.Conditional && slot.Movement == extra.Movement && slot.Rare == extra.Rare
+			!slot.Critter && slot.Extra == 0 && !slot.Critical && !slot.Conditional && !slot.AbsentEvil && slot.EvilShared == null
+			&& slot.Movement == extra.Movement && slot.Rare == extra.Rare
 			&& (sameTier ? slot.Tier == extra.Tier : slot.Tier >= extra.Tier) && (!slot.DaySurface || !extra.Intolerant);
 
 		// Slots that could still take an extra (the tests: below the target, every place an extra fits must be taken)
@@ -431,8 +518,26 @@ namespace UltimateRandomizer.Common.Features
 			return tiers.TryGetValue(id, out int tier) ? tier : -1;
 		}
 
-		// Who spawns in a slot: its owner, or half of the time its extra
-		public static int Pick(BiomeSlot slot, double roll) => slot.Extra != 0 && roll < ExtraShare ? slot.Extra : slot.Owner;
+		// Who spawns in a slot: its owner, half of the time its extra, and in a present-evil slot shared with absent-evil
+		// owners, one of them half of the time (roll in [0, 1))
+		public static int Pick(BiomeSlot slot, double roll)
+		{
+			if (slot.EvilShared is { Count: > 0 } shared)
+			{
+				if (roll < EvilShare) return shared[Math.Min(shared.Count - 1, (int)(roll / EvilShare * shared.Count))];
+				roll = (roll - EvilShare) / (1 - EvilShare);
+			}
+			return slot.Extra != 0 && roll < ExtraShare ? slot.Extra : slot.Owner;
+		}
+
+		// Everyone Pick can return for a slot (owner first)
+		public static IEnumerable<int> Spawners(BiomeSlot slot)
+		{
+			yield return slot.Owner;
+			if (slot.Extra != 0) yield return slot.Extra;
+			if (slot.EvilShared == null) yield break;
+			foreach (int id in slot.EvilShared) yield return id;
+		}
 
 		// Is this slot open now? Hardmode slots only once hardmode starts, post-Plantera ones once Plantera is dead
 		public static bool SlotActive(BiomeSlot slot) => slot.Band switch
