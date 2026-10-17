@@ -35,11 +35,14 @@ namespace UltimateRandomizer.Common.Features
 		// hosts changed
 		public const double CriticalTargetMinutes = 22;
 		// The chance of a station, summon or tool follows from how often its host is met: about this many kills in the host's
-		// best biome before it drops (1 / (share x chance)), within StationChance and MaxStationChance. A host of a crowded
-		// biome (the Forest: 2 to 4 % of its spawns each) hits the cap and takes longer, one of a small biome less
+		// best biome before it drops (1 / (share x chance)), within StationChance and MaxStationChance. Stations stay a small
+		// quest: a host of a crowded biome (the Forest: 2 to 4 % of its spawns each) hits the cap and takes 170 to 330 kills
+		// there, one of a small biome (10 % and more) 50 to 70
 		public const double StationTargetKills = 50;
 		public const float StationChance = 1 / 50f;
-		public const float MaxStationChance = 0.3f;
+		public const float MaxStationChance = 0.15f;
+		// Critical stations follow the pacing model instead, up to this (their hosts may be few among the early kills)
+		public const float MaxCriticalChance = 0.3f;
 		// Materials: a few biome kills per drop, from MaterialChance to MaxMaterialChance
 		public const double MaterialTargetKills = 8;
 		public const float MaterialChance = 1 / 6f;
@@ -50,8 +53,11 @@ namespace UltimateRandomizer.Common.Features
 		public const int MaxPerHost = 3;
 		// Stations, summons and tools are never rarer than this, whatever GuaranteedDropMultiplier says
 		public const float MinStationChance = 0.01f;
-		// GuaranteedFindTime: the easiest host of a station, summon or tool gives it within this many kills of its best biome
-		public const double MaxFindKills = 300;
+		// GuaranteedFindTime: the easiest host of a station, summon or tool gives it within this many kills of its best biome,
+		// or within 1 / (MaxStationChance x MinShare) for a host of a crowded biome (frequent there with a smaller share);
+		// a critical station within MaxCriticalMinutes of the pacing model
+		public const double MaxFindKills = 150;
+		public const double MaxCriticalMinutes = 30;
 		// A frequent host makes at least this share of the spawns of its best biome (BiomeSlots.PlannedShare), or half the
 		// average share of that biome's enemies when it holds many (MinShare)
 		public const double MinHostShare = 0.05;
@@ -250,7 +256,7 @@ namespace UltimateRandomizer.Common.Features
 				{
 					int host;
 					List<int> forest = requirement.Critical && h < CriticalHostSets
-						? CriticalHosts(h).Where(n => Free(n) && IsNaturalHost(n, requirement.Tier)).ToList()
+						? CriticalHosts(h).Where(n => Free(n) && IsNaturalHost(n, requirement.Tier) && NpcTiers.BaseTier(n) <= requirement.Tier).ToList()
 						: null;
 					if (forest != null && forest.Count > 0)
 					{
@@ -355,21 +361,37 @@ namespace UltimateRandomizer.Common.Features
 		{
 			HashSet<int> set = hosts.ToHashSet();
 			double share = PacingModel.EarlyKillShare(set.Contains);
-			if (share <= 0) return MaxStationChance;
-			return (float)Math.Clamp(1 / (CriticalTargetMinutes * PacingModel.KillsPerMinute * share), MinStationChance, MaxStationChance);
+			if (share <= 0) return MaxCriticalChance;
+			return (float)Math.Clamp(1 / (CriticalTargetMinutes * PacingModel.KillsPerMinute * share), MinStationChance, MaxCriticalChance);
 		}
 
-		// Expected kills in the best biome of the easiest host before the item drops (infinity: no host with a known share)
-		public static double FindKills(int item, int tier)
+		// Expected kills in the best biome of the easiest host before the item drops, and the bound GuaranteedFindTime allows
+		// that host (infinity: no host with a known share)
+		public static (double kills, double bound) FindKills(int item, int tier)
 		{
-			double best = double.PositiveInfinity;
+			(double kills, double bound) best = (double.PositiveInfinity, MaxFindKills);
 			foreach (int host in HostsOf(item))
 			{
 				double share = HostShare(host, tier);
 				float chance = For(host).Where(d => d.Item == item).Sum(d => d.Chance);
-				if (share > 0 && chance > 0) best = Math.Min(best, 1 / (share * chance));
+				if (share <= 0 || chance <= 0 || 1 / (share * chance) >= best.kills) continue;
+				(int biome, _, _) = BiomeSlots.BestBiome(host, tier);
+				best = (1 / (share * chance), Math.Max(MaxFindKills, biome >= 0 ? 1 / (MaxStationChance * MinShare(biome, tier)) : MaxFindKills));
 			}
 			return best;
+		}
+
+		// Minutes of the pacing model's early kills before a critical station drops (infinity: none of them meets its hosts)
+		public static double FindMinutes(int item)
+		{
+			List<int> hosts = HostsOf(item).ToList();
+			double rate = 0;
+			foreach (int host in hosts)
+			{
+				float chance = For(host).Where(d => d.Item == item).Sum(d => d.Chance);
+				rate += PacingModel.KillsPerMinute * PacingModel.EarlyKillShare(k => k == host) * chance;
+			}
+			return rate > 0 ? 1 / rate : double.PositiveInfinity;
 		}
 
 		// Plans the hosts again with another seed and its spawn map, without touching this world's (tests)
@@ -411,6 +433,13 @@ namespace UltimateRandomizer.Common.Features
 		{
 			BiomeSlotMap map = BiomeSlots.SpawnMap;
 			if (frequentMap == map) return;
+			// Another map than the one the hosts were planned with (the world evil arrived, a test planned another seed):
+			// the hosts and the tiers found through them are planned again
+			if (frequentMap != null)
+			{
+				byNpc = null;
+				Findability.Reset();
+			}
 			frequent.Clear();
 			shares.Clear();
 			hostTiers = null;
@@ -425,6 +454,13 @@ namespace UltimateRandomizer.Common.Features
 			// whose slots never open in this world is never met
 			if (!BiomeSlots.SpawnsPlanned || !BiomeSlots.HasAnySlot(npc)) return true;
 			// Met on an ordinary day: the share of its best biome from slots neither rare nor conditional
+			(int biome, _, _) = BiomeSlots.BestBiome(npc, tier);
+			return biome >= 0 && BiomeSlots.SteadyShare(biome, npc, tier) >= MinShare(biome, tier);
+		}
+
+		// The share part of ComputeFrequent, without the natural-host check (HostTiers relies on it)
+		private static bool FrequentAt(int npc, int tier)
+		{
 			(int biome, _, _) = BiomeSlots.BestBiome(npc, tier);
 			return biome >= 0 && BiomeSlots.SteadyShare(biome, npc, tier) >= MinShare(biome, tier);
 		}
@@ -458,6 +494,9 @@ namespace UltimateRandomizer.Common.Features
 				{
 					int met = BiomeSlots.MeetTier(npc);
 					if (met >= 0 && met < result[npc]) result[npc] = met;
+					// The vanilla spawns mixed in (BiomeVanillaChance) only count where the enemy is met often there
+					int vanilla = BiomeSlots.VanillaMeetTier(npc);
+					if (vanilla >= 0 && vanilla < result[npc] && FrequentAt(npc, vanilla)) result[npc] = vanilla;
 				}
 			}
 			hostTiers = result;

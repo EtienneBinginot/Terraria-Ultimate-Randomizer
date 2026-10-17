@@ -184,11 +184,12 @@ namespace UltimateRandomizer.Common.Features
 		// has its own Forest slot and the plain Zombie's and Demon Eye's are only a few of them (the armed zombies of expert
 		// mode and the torch zombies of the very first nights left aside). The critical stations' night hosts are the enemies
 		// of all these slots (GuaranteedSources.CriticalHosts, PacingModel)
-		public static readonly int[] ForestNightFamily =
+		public static readonly int[] ForestZombieKinds =
 		{
-			NPCID.Zombie, NPCID.BaldZombie, NPCID.PincushionZombie, NPCID.SlimedZombie, NPCID.SwampZombie, NPCID.TwiggyZombie, NPCID.FemaleZombie,
-			NPCID.DemonEye, NPCID.CataractEye, NPCID.SleepyEye, NPCID.DialatedEye, NPCID.GreenEye, NPCID.PurpleEye
+			NPCID.Zombie, NPCID.BaldZombie, NPCID.PincushionZombie, NPCID.SlimedZombie, NPCID.SwampZombie, NPCID.TwiggyZombie, NPCID.FemaleZombie
 		};
+		public static readonly int[] ForestEyeKinds = { NPCID.DemonEye, NPCID.CataractEye, NPCID.SleepyEye, NPCID.DialatedEye, NPCID.GreenEye, NPCID.PurpleEye };
+		public static readonly int[] ForestNightFamily = ForestZombieKinds.Concat(ForestEyeKinds).ToArray();
 
 		private class Natural
 		{
@@ -938,19 +939,13 @@ namespace UltimateRandomizer.Common.Features
 				.Select(TypeOf).Distinct().OrderBy(t => t).ToList();
 		}
 
-		// The tier from which a type is met in a map's slots (-1: in none). Like SpawnTier (its own tier, never below the
-		// slot's), except in the starting Forest, where every enemy of the first band is met from the first day or night: one
-		// tier below its own there (a Demon Eye, tier 1 for its 18 damage, is a first-night enemy)
-		public static int MeetTier(int type)
-		{
-			int tier = MeetTiers(SpawnMap).GetValueOrDefault(type, -1);
-			if (Active && VanillaKeep > 0)
-			{
-				int vanillaTier = MeetTiers(Vanilla).GetValueOrDefault(type, -1);
-				if (vanillaTier >= 0 && (tier < 0 || vanillaTier < tier)) tier = vanillaTier;
-			}
-			return tier;
-		}
+		// The tier from which a type is met in the spawn map's slots (-1: in none). Like SpawnTier (its own tier, never below
+		// the slot's), except in the steady slots of the starting Forest, where the enemies of the first band are met from the
+		// first day or night: one tier below their own there (a Demon Eye, tier 1 for its 18 damage, is a first-night enemy)
+		public static int MeetTier(int type) => MeetTiers(SpawnMap).GetValueOrDefault(type, -1);
+
+		// The same in the vanilla slots mixed in by biome (BiomeVanillaChance), -1 when there are none
+		public static int VanillaMeetTier(int type) => Active && VanillaKeep > 0 ? MeetTiers(Vanilla).GetValueOrDefault(type, -1) : -1;
 
 		private static Dictionary<int, int> MeetTiers(BiomeSlotMap map)
 		{
@@ -959,7 +954,7 @@ namespace UltimateRandomizer.Common.Features
 			foreach (BiomeSlot slot in map.Slots)
 			{
 				if (slot.Critter || slot.AbsentEvil) continue;
-				bool forest = slot.Biome == (int)SpawnBiome.Forest && slot.Band == 0;
+				bool forest = slot.Biome == (int)SpawnBiome.Forest && slot.Band == 0 && !slot.Rare && !slot.Conditional;
 				foreach (int id in Spawners(slot))
 				{
 					int type = TypeOf(id);

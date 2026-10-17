@@ -295,7 +295,8 @@ namespace UltimateRandomizer.Common.Tests
 				if (cfg.GiantBonusDrop)
 				{
 					if (Count(NPCID.Zombie, EnemyKind.Giant, out int item) != 1) failures.Add("a giant zombie gives no bonus item");
-					else if (!ItemPool.IsJackpotWorthy(item)) failures.Add($"a giant zombie gives {Lang.GetItemNameValue(item)}");
+					// Only the coherent mode rolls by category (Chaos picks anything)
+					else if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Coherent && !ItemPool.IsJackpotWorthy(item)) failures.Add($"a giant zombie gives {Lang.GetItemNameValue(item)}");
 				}
 				if (Count(NPCID.Zombie, EnemyKind.Normal, out _) != 0) failures.Add("an ordinary zombie gives a bonus item");
 				foreach (int minion in new int[] { NPCID.ServantofCthulhu, NPCID.Creeper, NPCID.Bee })

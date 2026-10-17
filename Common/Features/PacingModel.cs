@@ -26,8 +26,8 @@ namespace UltimateRandomizer.Common.Features
 	{
 		// A typical early hour: the enemies killed, before the random enemy swap, and where they spawn. A zombie or a demon
 		// eye is one of their kinds at random, as vanilla spawns them (each kind has its own Forest slot)
-		private static readonly int[] Zombies = BiomeSlots.ForestNightFamily.Take(7).ToArray();
-		private static readonly int[] DemonEyes = BiomeSlots.ForestNightFamily.Skip(7).ToArray();
+		private static readonly int[] Zombies = BiomeSlots.ForestZombieKinds;
+		private static readonly int[] DemonEyes = BiomeSlots.ForestEyeKinds;
 
 		private static readonly (int[] npcs, int count, SpawnBiome biome)[] EarlyKills =
 		{

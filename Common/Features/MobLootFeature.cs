@@ -107,7 +107,8 @@ namespace UltimateRandomizer.Common.Features
 			else if (individual.Kind == EnemyKind.Mini && cfg.MiniBonusDrop) item = MiniDrop(owner, key, lucky);
 			else return drops;
 			int gap = ItemPool.LastJackpotGap;
-			Random rng = new(key);
+			// Not the WildRng seed of the roll
+			Random rng = new(unchecked(key * 31 + 17));
 			(int min, int max) = StackRules.Range(item);
 			drops.Add((item, Math.Max(1, rng.Next(min, Math.Max(min, max) + 1)), gap));
 			return drops;

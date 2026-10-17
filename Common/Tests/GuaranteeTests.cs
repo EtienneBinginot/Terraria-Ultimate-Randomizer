@@ -329,7 +329,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Every station, summon and tool drops from one of its hosts within MaxFindKills kills of that host's best biome
-		// (1 / (share x chance)); the worst ones are logged
+		// (1 / (share x chance); more in a crowded biome, see FindKills), critical stations within MaxCriticalMinutes of
+		// early kills; the worst ones are logged
 		private static void GuaranteedFindTime()
 		{
 			if (!BiomeSlots.SpawnsPlanned) Check.Skip("enemies are swapped without biomes");
@@ -338,16 +339,23 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements.Where(r => r.Station || r.Tool))
 			{
-				double kills = GuaranteedSources.FindKills(requirement.Item, requirement.Tier);
+				// Critical stations get their chance from the pacing model: judged in its minutes
+				if (requirement.Critical)
+				{
+					double minutes = GuaranteedSources.FindMinutes(requirement.Item);
+					if (minutes > GuaranteedSources.MaxCriticalMinutes) failures.Add($"{Name(requirement.Item)}: {minutes:0} minutes of early kills");
+					continue;
+				}
+				(double kills, double bound) = GuaranteedSources.FindKills(requirement.Item, requirement.Tier);
 				// Hosts without any slot (modded enemies without a biome) have no share to judge
 				if (double.IsInfinity(kills)) continue;
 				times.Add((Name(requirement.Item), kills));
-				if (kills > GuaranteedSources.MaxFindKills) failures.Add($"{Name(requirement.Item)}: {kills:0} kills ({string.Join(", ", GuaranteedSources.HostsOf(requirement.Item).Select(h => $"{Lang.GetNPCNameValue(h)} {GuaranteedSources.HostShare(h, requirement.Tier):P1}"))})");
+				if (kills > bound) failures.Add($"{Name(requirement.Item)}: {kills:0} kills, at most {bound:0} ({string.Join(", ", GuaranteedSources.HostsOf(requirement.Item).Select(h => $"{Lang.GetNPCNameValue(h)} {GuaranteedSources.HostShare(h, requirement.Tier):P1}"))})");
 			}
 			if (times.Count == 0) Check.Skip("no station, summon or tool is guaranteed");
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed find time: median {times.Select(t => t.kills).OrderBy(k => k).ElementAt(times.Count / 2):0} biome kills, worst "
 				+ string.Join(", ", times.OrderByDescending(t => t.kills).Take(5).Select(t => $"{t.name} {t.kills:0}")));
-			Check.All(failures, $"Stations, summons or tools longer than {GuaranteedSources.MaxFindKills} kills to find");
+			Check.All(failures, "Stations, summons or tools too long to find");
 		}
 
 		private static int Seed(int i) => 2000 + i * 7919;

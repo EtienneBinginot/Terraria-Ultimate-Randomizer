@@ -27,7 +27,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// Tiers above the limit when it dropped (0: no jackpot): the strength of the effects
 		public byte Gap;
-		// Tiers above the unlocked tier when it dropped (at least Gap): what the texts show
+		// Tiers above the unlocked tier when it dropped (at least Gap): what the popup and the chat line show (the tooltip
+		// reads the tier unlocked now)
 		public byte Above;
 		// When it was marked (GameUpdateCount of the machine that marked or received it): fresh for FreshTicks
 		public uint MarkedAt;
@@ -40,8 +41,6 @@ namespace UltimateRandomizer.Common.Features
 		public static int Next;
 
 		public static int GapOf(Item item) => item != null && !item.IsAir && item.TryGetGlobalItem(out JackpotItem jackpot) ? jackpot.Gap : 0;
-
-		public static int AboveOf(Item item) => item != null && !item.IsAir && item.TryGetGlobalItem(out JackpotItem jackpot) ? Math.Max(jackpot.Gap, jackpot.Above) : 0;
 
 		// Tiers of an item above the unlocked tier, for a jackpot of this gap (UnlockedTier follows the synced boss flags)
 		public static int AboveUnlocked(int type, int gap) => Math.Clamp(Math.Max(gap, Core.ItemPool.TierOf(type) - Core.ProgressionSystem.UnlockedTier), 0, 9);
@@ -114,7 +113,7 @@ namespace UltimateRandomizer.Common.Features
 
 		public override void ModifyTooltips(Item item, List<TooltipLine> tooltips)
 		{
-			if (Gap > 0) tooltips.Add(new TooltipLine(Mod, "Jackpot", Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Tooltip", Math.Max(Gap, Above), TierName(item.type))) { OverrideColor = JackpotEffects.ColorOf(Gap) });
+			if (Gap > 0) tooltips.Add(new TooltipLine(Mod, "Jackpot", Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Tooltip", Math.Max(0, Core.ItemPool.TierOf(item.type) - Core.ProgressionSystem.UnlockedTier), TierName(item.type))) { OverrideColor = JackpotEffects.ColorOf(Gap) });
 		}
 	}
 
