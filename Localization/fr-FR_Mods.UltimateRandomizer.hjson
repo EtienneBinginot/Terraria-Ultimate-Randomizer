@@ -150,6 +150,8 @@ Tests: {
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
 	GuaranteedLoadBalanced: Aucun ennemi ne porte trop d'objets garantis
 	GuaranteedSeveralSeeds: Chaque objet garanti a tous ses porteurs avec d'autres graines
+	GuaranteedSpread: Les objets garantis sont répartis sur de nombreux ennemis courants
+	GuaranteedFindTime: Chaque station, invocation et outil garanti tombe en quelques centaines de victimes dans le biome
 	HintSortedByProgress: Les indices sont triés par avancement, en deux onglets
 	HintFoundUnlocks: L'indice d'un objet trouvé est entièrement connu, gratuitement
 	HintClickOpensCodex: Cliquer sur un indice ouvre la bonne page du codex

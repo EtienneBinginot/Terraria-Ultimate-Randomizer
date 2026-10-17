@@ -150,6 +150,8 @@ Tests: {
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier
 	GuaranteedLoadBalanced: No enemy carries too many guaranteed items
 	GuaranteedSeveralSeeds: Every guaranteed item gets all its hosts with other seeds
+	GuaranteedSpread: Guaranteed items are spread over many common enemies
+	GuaranteedFindTime: Every guaranteed station, summon and tool drops within a few hundred biome kills
 	HintSortedByProgress: Hints are sorted by progression, in two tabs
 	HintFoundUnlocks: A found item's hint is fully known for free
 	HintClickOpensCodex: Clicking a hint opens the right codex page

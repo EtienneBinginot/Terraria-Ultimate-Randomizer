@@ -150,8 +150,9 @@ namespace UltimateRandomizer.Common.Tests
 			if (critical.Count == 0) Check.Skip("no critical station is randomized");
 			BiomeSlotMap map = BiomeSlots.Current;
 			List<string> failures = new();
-			HashSet<int> day = map.Slots.Where(s => s.Critical && s.Time != SlotTime.Night).Select(s => BiomeSlots.TypeOf(s.Owner)).ToHashSet();
-			HashSet<int> night = map.Slots.Where(s => s.Critical && s.Time == SlotTime.Night).Select(s => BiomeSlots.TypeOf(s.Owner)).ToHashSet();
+			// The enemies of the Forest slots of the day slimes, and of every kind of zombie and demon eye by night
+			HashSet<int> day = BiomeSlots.ForestFamilyHosts(map, true).ToHashSet();
+			HashSet<int> night = BiomeSlots.ForestFamilyHosts(map, false).ToHashSet();
 			if (day.Count == 0 || night.Count == 0) failures.Add("no critical Forest slot by day or by night");
 			if (map.Slots.Any(s => s.Critical && s.Extra != 0)) failures.Add("a critical Forest slot is shared with an extra");
 			foreach (GuaranteedSources.Requirement requirement in critical)

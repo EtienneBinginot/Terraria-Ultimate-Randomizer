@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using Terraria;
 using Terraria.ID;
 using System.ComponentModel;
 using System.Reflection;
@@ -95,7 +97,12 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			if (!GuaranteedSources.StationRequirements().Any(r => r.Item == ItemID.WorkBench)) Check.Skip("the work bench is protected");
 			double minutes = PacingModel.MinutesToFirstWorkBench(400, 45);
-			Log($"First work bench: {minutes:0} minutes on average");
+			List<int> hosts = GuaranteedSources.HostsOf(ItemID.WorkBench).ToList();
+			float planned = hosts.Count > 0 ? GuaranteedSources.For(hosts[0]).Where(d => d.Item == ItemID.WorkBench).Sum(d => d.Chance) : 0;
+			// The same hosts with fixed chances, to see how the time follows the chance (the planned one comes from the model)
+			string candidates = string.Join(", ", new[] { 20, 30, 40, 50, 60 }.Select(d => $"1/{d}: {PacingModel.MinutesToFirstWorkBench(400, 45, 1f / d):0}"));
+			Log($"First work bench: {minutes:0} minutes on average (chance {planned:P1} on {string.Join(", ", hosts.Select(Lang.GetNPCNameValue))}, "
+				+ $"{PacingModel.EarlyKillShare(hosts.Contains):P1} of the early kills; fixed chances {candidates})");
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			if (!IsDefault(progression, "GuaranteedDropMultiplier") || !IsDefault(progression, "PotGuaranteeChance")) Check.Skip("guarantee settings are not the default ones");
 			RequireDefaults();

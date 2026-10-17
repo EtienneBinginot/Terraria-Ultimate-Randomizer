@@ -24,14 +24,26 @@ namespace UltimateRandomizer.Common.Features
 	// so LootAbundance (extra slots, their chances, small frequent drops) is modelled as it is applied in game.
 	public static class PacingModel
 	{
-		// A typical early hour: the enemies killed, before the random enemy swap, and where they spawn
-		private static readonly (int npc, int count, SpawnBiome biome)[] EarlyKills =
+		// A typical early hour: the enemies killed, before the random enemy swap, and where they spawn. A zombie or a demon
+		// eye is one of their kinds at random, as vanilla spawns them (each kind has its own Forest slot)
+		private static readonly int[] Zombies = BiomeSlots.ForestNightFamily.Take(7).ToArray();
+		private static readonly int[] DemonEyes = BiomeSlots.ForestNightFamily.Skip(7).ToArray();
+
+		private static readonly (int[] npcs, int count, SpawnBiome biome)[] EarlyKills =
 		{
-			(NPCID.GreenSlime, 25, SpawnBiome.Forest), (NPCID.BlueSlime, 25, SpawnBiome.Forest), (NPCID.Zombie, 30, SpawnBiome.Forest),
-			(NPCID.DemonEye, 25, SpawnBiome.Forest), (NPCID.CaveBat, 15, SpawnBiome.Caverns), (NPCID.Skeleton, 10, SpawnBiome.Caverns),
-			(NPCID.RedSlime, 5, SpawnBiome.Underground), (NPCID.YellowSlime, 5, SpawnBiome.Underground), (NPCID.Vulture, 5, SpawnBiome.Desert),
-			(NPCID.Antlion, 5, SpawnBiome.Desert)
+			(new int[] { NPCID.GreenSlime }, 25, SpawnBiome.Forest), (new int[] { NPCID.BlueSlime }, 25, SpawnBiome.Forest), (Zombies, 30, SpawnBiome.Forest),
+			(DemonEyes, 25, SpawnBiome.Forest), (new int[] { NPCID.CaveBat }, 15, SpawnBiome.Caverns), (new int[] { NPCID.Skeleton }, 10, SpawnBiome.Caverns),
+			(new int[] { NPCID.RedSlime }, 5, SpawnBiome.Underground), (new int[] { NPCID.YellowSlime }, 5, SpawnBiome.Underground),
+			(new int[] { NPCID.Vulture }, 5, SpawnBiome.Desert), (new int[] { NPCID.Antlion }, 5, SpawnBiome.Desert)
 		};
+
+		// Kills per simulated minute in MinutesToFirstWorkBench: 3, then 2 more half of the time
+		public const double KillsPerMinute = 4;
+
+		private static int TotalKills => EarlyKills.Sum(k => k.count);
+
+		// The kind of an early kill (one of its family)
+		private static int Kind(int[] npcs, Random rng) => npcs.Length == 1 ? npcs[0] : npcs[rng.Next(npcs.Length)];
 
 		// The enemy really killed: by biome, the owner of the original's slot (pre-hardmode slots are always open);
 		// otherwise a random natural enemy of the first tier
@@ -46,6 +58,32 @@ namespace UltimateRandomizer.Common.Features
 			return pool.Count > 0 ? pool[rng.Next(pool.Count)] : npc;
 		}
 
+		// The share of the early kills (as Killed draws them, without randomness) that are of the types accepted (types: a
+		// Green Slime is a Blue Slime). Same on every machine: spawn map, synced settings. Hardmode slots count as open (the
+		// early slots always are), so planning before or after hardmode gives the same chances
+		public static double EarlyKillShare(Func<int, bool> isType)
+		{
+			float swapChance = SwapChance();
+			List<int> pool = BiomeSlots.Active ? null : EnemySwapPool.NaturalEnemies(0);
+			double poolShare = pool == null || pool.Count == 0 ? 0 : pool.Count(n => isType(BiomeSlots.TypeOf(n))) / (double)pool.Count;
+			double total = 0;
+			foreach ((int[] npcs, int count, SpawnBiome biome) in EarlyKills)
+			{
+				foreach (int npc in npcs)
+				{
+					double kept = isType(BiomeSlots.TypeOf(npc)) ? 1 : 0;
+					double swapped;
+					if (BiomeSlots.Active)
+					{
+						BiomeSlot slot = BiomeSlots.SlotIn(BiomeSlots.Current, (int)biome, npc);
+						swapped = slot == null ? kept : BiomeSlots.SpawnParts(slot).Where(p => isType(BiomeSlots.TypeOf(p.id))).Sum(p => p.part);
+					}
+					else swapped = pool.Count > 0 ? poolShare : kept;
+					total += count / (double)npcs.Length * ((1 - swapChance) * kept + swapChance * swapped);
+				}
+			}
+			return total / TotalKills;
+		}
 		private static float SwapChance()
 		{
 			EnemiesConfig enemies = EnemiesConfig.Instance;
@@ -61,22 +99,24 @@ namespace UltimateRandomizer.Common.Features
 		public const float ItemsPerTree = 0.35f;
 		public const int Herbs = 15;
 
-		// Minutes until the first work bench, averaged over many simulated starts: kills (2.5 per minute), pots
-		// (1 per minute) and a wooden chest every 12 minutes, which holds a work bench with the world's real odds
-		public static double MinutesToFirstWorkBench(int runs, int seed)
+		// Minutes until the first work bench, averaged over many simulated starts: kills (KillsPerMinute), pots
+		// (1 per minute) and a wooden chest every 12 minutes, which holds a work bench with the world's real odds.
+		// chanceOverride: the work bench's chance on each of its hosts instead of the planned one (the test logs a few)
+		public static double MinutesToFirstWorkBench(int runs, int seed, float? chanceOverride = null)
 		{
 			Random rng = new(seed);
 			float swapChance = SwapChance();
 			List<int> pool = EnemySwapPool.NaturalEnemies(0);
-			List<(int npc, int count, SpawnBiome biome)> kills = new(EarlyKills);
-			int totalKills = kills.Sum(k => k.count);
+			List<(int[] npcs, int count, SpawnBiome biome)> kills = new(EarlyKills);
+			int totalKills = TotalKills;
 			Dictionary<int, float> benchChance = new();
 			float ChanceOn(int npc)
 			{
 				if (benchChance.TryGetValue(npc, out float chance)) return chance;
 				// Guaranteed drops are per type: a Green Slime (net ID) is a Blue Slime
-				int type = ContentSamples.NpcsByNetId.TryGetValue(npc, out NPC sample) ? sample.type : npc;
-				chance = GuaranteedSources.For(type).Where(d => d.Item == ItemID.WorkBench).Sum(d => d.Chance);
+				int type = BiomeSlots.TypeOf(npc);
+				List<PlannedDrop> drops = GuaranteedSources.For(type).Where(d => d.Item == ItemID.WorkBench).ToList();
+				chance = chanceOverride.HasValue ? (drops.Count > 0 ? chanceOverride.Value : 0) : drops.Sum(d => d.Chance);
 				benchChance[npc] = chance;
 				return chance;
 			}
@@ -94,18 +134,19 @@ namespace UltimateRandomizer.Common.Features
 					{
 						if (k >= 3 && rng.NextDouble() < 0.5) continue;
 						int roll = rng.Next(totalKills);
-						int npc = kills[0].npc;
+						int[] npcs = kills[0].npcs;
 						SpawnBiome biome = kills[0].biome;
-						foreach ((int type, int count, SpawnBiome where) in kills)
+						foreach ((int[] types, int count, SpawnBiome where) in kills)
 						{
 							if (roll < count)
 							{
-								npc = type;
+								npcs = types;
 								biome = where;
 								break;
 							}
 							roll -= count;
 						}
+						int npc = Kind(npcs, rng);
 						npc = Killed(npc, biome, rng, swapChance, pool);
 						found = rng.NextDouble() < ChanceOn(npc);
 					}
@@ -127,14 +168,14 @@ namespace UltimateRandomizer.Common.Features
 			Random rng = new(seed);
 			float swapChance = SwapChance();
 			List<int> pool = EnemySwapPool.NaturalEnemies(0);
-			int totalKills = EarlyKills.Sum(k => k.count);
+			int totalKills = TotalKills;
 			float luckyChance = ProgressionConfig.Instance.RuntimeJackpotChance / 100f;
 			double jackpots = 0;
 			for (int k = 0; k < kills; k++)
 			{
 				int roll = rng.Next(totalKills);
-				(int npc, int count, SpawnBiome biome) picked = EarlyKills[0];
-				foreach ((int npc, int count, SpawnBiome biome) entry in EarlyKills)
+				(int[] npcs, int count, SpawnBiome biome) picked = EarlyKills[0];
+				foreach ((int[] npcs, int count, SpawnBiome biome) entry in EarlyKills)
 				{
 					if (roll < entry.count)
 					{
@@ -143,7 +184,7 @@ namespace UltimateRandomizer.Common.Features
 					}
 					roll -= entry.count;
 				}
-				int killed = Killed(picked.npc, picked.biome, rng, swapChance, pool);
+				int killed = Killed(Kind(picked.npcs, rng), picked.biome, rng, swapChance, pool);
 				int owner = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(killed, out NPC sample) ? sample.type : killed);
 				foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(killed, owner, Main.expertMode, rng.NextDouble() < luckyChance, wildRng: new Random(rng.Next())))
 				{
@@ -204,11 +245,11 @@ namespace UltimateRandomizer.Common.Features
 				});
 
 				// Kills
-				foreach ((int npc, int count, SpawnBiome biome) in EarlyKills)
+				foreach ((int[] npcs, int count, SpawnBiome biome) in EarlyKills)
 				{
 					for (int k = 0; k < count; k++)
 					{
-						int killed = Killed(npc, biome, rng, swapChance, pool);
+						int killed = Killed(Kind(npcs, rng), biome, rng, swapChance, pool);
 						if (!plans.TryGetValue(killed, out List<PlannedDrop> plan))
 						{
 							plan = loot.RandomizeMobDrops ? RandomNpcDropRule.Plan(killed, Main.expertMode) : new List<PlannedDrop>();

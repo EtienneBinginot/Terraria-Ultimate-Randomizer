@@ -29,15 +29,29 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		public const int HostsPerItem = 2;
-		// The bigger biome classes (1.1.1) put the critical hosts in more Forest slots: 1/28 gave a first work bench after 12
-		// minutes, 1/45 after 15 to 18 (1.2.0); the time is nearly proportional to 1 / chance, so 1/55 gives about 20
-		// (PacingTests: 15 to 30)
-		public const float CriticalStationChance = 1 / 55f;
-		public const float StationChance = 1 / 40f;
+		// The critical stations' chance follows from the pacing model (CriticalChance): the kills of a simulated early hour
+		// that land on the item's hosts give the first one after this many minutes on average, before pots and chests
+		// shorten it a little (PacingTests: 15 to 30). Fixed chances (1/28, 1/45, 1/55) went from 12 to 55 minutes as the
+		// hosts changed
+		public const double CriticalTargetMinutes = 22;
+		// The chance of a station, summon or tool follows from how often its host is met: about this many kills in the host's
+		// best biome before it drops (1 / (share x chance)), within StationChance and MaxStationChance. A host of a crowded
+		// biome (the Forest: 2 to 4 % of its spawns each) hits the cap and takes longer, one of a small biome less
+		public const double StationTargetKills = 50;
+		public const float StationChance = 1 / 50f;
+		public const float MaxStationChance = 0.3f;
+		// Materials: a few biome kills per drop, from MaterialChance to MaxMaterialChance
+		public const double MaterialTargetKills = 8;
 		public const float MaterialChance = 1 / 6f;
-		public const int MaxPerHost = 6;
+		public const float MaxMaterialChance = 0.5f;
+		// Without a known spawn share (modded enemies without a biome, enemies swapped another way)
+		public const float UnknownShareStationChance = 1 / 25f;
+		// Few items per host: the guarantees are spread over most common enemies (beyond, the least loaded takes one more)
+		public const int MaxPerHost = 3;
 		// Stations, summons and tools are never rarer than this, whatever GuaranteedDropMultiplier says
 		public const float MinStationChance = 0.01f;
+		// GuaranteedFindTime: the easiest host of a station, summon or tool gives it within this many kills of its best biome
+		public const double MaxFindKills = 300;
 		// A frequent host makes at least this share of the spawns of its best biome (BiomeSlots.PlannedShare), or half the
 		// average share of that biome's enemies when it holds many (MinShare)
 		public const double MinHostShare = 0.05;
@@ -53,6 +67,8 @@ namespace UltimateRandomizer.Common.Features
 		private static Dictionary<int, List<PlannedDrop>> byNpc;
 		private static List<Requirement> requirements;
 		private static readonly Dictionary<(int npc, int tier), bool> frequent = new();
+		private static readonly Dictionary<(int npc, int tier), double> shares = new();
+		private static Dictionary<int, int> hostTiers;
 		// The spawn map the frequent cache was computed with (rebuilt when the world evil arrives, or the settings change)
 		private static BiomeSlotMap frequentMap;
 
@@ -68,6 +84,8 @@ namespace UltimateRandomizer.Common.Features
 			Overflows = 0;
 			Missing = 0;
 			frequent.Clear();
+			shares.Clear();
+			hostTiers = null;
 			frequentMap = null;
 		}
 
@@ -192,7 +210,9 @@ namespace UltimateRandomizer.Common.Features
 
 		// The hosts of each requirement with a world seed and the current spawn map (the tests plan other seeds with
 		// BiomeSlots.WithMap). A host carries at most MaxPerHost items while some other host of the tier has room; when every
-		// one is full, the least loaded takes one more (counted in overflows): a requirement never loses a host silently
+		// one is full, the least loaded takes one more (counted in overflows): a requirement never loses a host silently.
+		// Among the least loaded candidates, the enemies met most (steady share of their best biome) are picked more often;
+		// the chances follow from the hosts (Chance, CriticalChance)
 		public static Dictionary<int, List<PlannedDrop>> Assign(List<Requirement> all, int seed, out int overflows, out int missing)
 		{
 			overflows = 0;
@@ -210,7 +230,8 @@ namespace UltimateRandomizer.Common.Features
 			foreach (Requirement requirement in all.OrderBy(Priority).ThenBy(r => r.Tier).ThenBy(r => DetRandom.ItemKey(r.Item)))
 			{
 				Random rng = new(DetRandom.Hash(seed, RollKey.Guaranteed, DetRandom.ItemKey(requirement.Item)));
-				HashSet<int> chosen = new();
+				List<int> chosen = new();
+				bool single = requirement.Station || requirement.Tool;
 				bool Free(int n) => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost;
 				bool Other(int n) => !chosen.Contains(n);
 				bool Frequent(int n) => IsFrequentHost(n, requirement.Tier);
@@ -228,15 +249,27 @@ namespace UltimateRandomizer.Common.Features
 				for (int h = 0; h < HostsPerItem; h++)
 				{
 					int host;
-					List<int> common = requirement.Critical && h < CriticalHostSets
+					List<int> forest = requirement.Critical && h < CriticalHostSets
 						? CriticalHosts(h).Where(n => Free(n) && IsNaturalHost(n, requirement.Tier)).ToList()
 						: null;
-					if (common != null && common.Count > 0) host = common[rng.Next(common.Count)];
+					if (forest != null && forest.Count > 0)
+					{
+						// The Forest enemies the early kills meet most, a little less once loaded (the owner of the Purple
+						// Slime slot is seldom met by day, those of the Blue and Green Slimes are)
+						host = PickWeighted(forest, n => (PacingModel.EarlyKillShare(k => k == n) + 0.002) / (1 + load.GetValueOrDefault(n)), rng);
+					}
 					else
 					{
-						// Frequent hosts first at any lower tier (a station or a summon must not hide on a rare enemy), then any
-						// common one; when all are full, the least loaded of them takes one more
-						List<int> candidates = Search(natural, n => Free(n) && Frequent(n)) ?? Search(hosts, Free);
+						// Frequent hosts first at any lower tier (a station or a summon must not hide on a rare enemy: when they
+						// are all full, the least loaded takes one more), then any common one; when all are full, the least
+						// loaded of them takes one more
+						List<int> candidates = Search(natural, n => Free(n) && Frequent(n));
+						if (candidates == null && single)
+						{
+							candidates = Search(natural, n => Other(n) && Frequent(n));
+							if (candidates != null) overflows++;
+						}
+						candidates ??= Search(hosts, Free);
 						if (candidates == null)
 						{
 							candidates = Search(natural, n => Other(n) && Frequent(n)) ?? Search(hosts, Other);
@@ -247,15 +280,21 @@ namespace UltimateRandomizer.Common.Features
 							missing += HostsPerItem - h;
 							break;
 						}
-						// Spread the load: among the least used hosts
-						List<int> best = candidates.OrderBy(n => load.GetValueOrDefault(n)).ThenBy(DetRandom.NpcKey).Take(3).ToList();
-						host = best[rng.Next(best.Count)];
+						// Spread the load: the least used hosts, the most met of them more often (never a fixed order, or the
+						// same enemies would take the guarantees in every world)
+						int least = candidates.Min(n => load.GetValueOrDefault(n));
+						List<int> best = candidates.Where(n => load.GetValueOrDefault(n) == least).ToList();
+						host = PickWeighted(best, n => Math.Max(0.005, HostShare(n, requirement.Tier)), rng);
 					}
 					chosen.Add(host);
 					load[host] = load.GetValueOrDefault(host) + 1;
-					// Rare enough to be a small quest (first work bench in 15 to 30 minutes, see PacingTests)
-					bool single = requirement.Station || requirement.Tool;
-					float chance = requirement.Station ? (requirement.Critical ? CriticalStationChance : StationChance) : requirement.Tool ? StationChance : MaterialChance;
+				}
+				if (chosen.Count == 0) continue;
+				// Critical stations: one chance for all their hosts, from the early kills that meet them
+				float critical = requirement.Critical ? CriticalChance(chosen) : 0f;
+				foreach (int host in chosen)
+				{
+					float chance = requirement.Critical ? critical : Chance(requirement, host);
 					chance = Math.Min(1f, chance * multiplier);
 					if (single) chance = Math.Max(MinStationChance, chance);
 					(int min, int max) = single ? (1, 1) : StackRules.Range(requirement.Item);
@@ -264,6 +303,73 @@ namespace UltimateRandomizer.Common.Features
 				}
 			}
 			return result;
+		}
+
+		// A random candidate with these weights (the list is in a fixed order)
+		private static int PickWeighted(List<int> candidates, Func<int, double> weight, Random rng)
+		{
+			double[] weights = candidates.Select(n => Math.Max(0, weight(n))).ToArray();
+			double total = weights.Sum();
+			if (total <= 0) return candidates[rng.Next(candidates.Count)];
+			double roll = rng.NextDouble() * total;
+			for (int i = 0; i < candidates.Count; i++)
+			{
+				roll -= weights[i];
+				if (roll < 0) return candidates[i];
+			}
+			return candidates[^1];
+		}
+
+		// Steady share of the spawns of a host's best biome at a tier (BiomeSlots.SteadyShare), -1 when unknown (no slot, or
+		// spawns swapped another way)
+		public static double HostShare(int npc, int tier)
+		{
+			FollowMap();
+			if (shares.TryGetValue((npc, tier), out double cached)) return cached;
+			double share = -1;
+			if (BiomeSlots.SpawnsPlanned && BiomeSlots.HasAnySlot(npc))
+			{
+				(int biome, _, _) = BiomeSlots.BestBiome(npc, tier);
+				if (biome >= 0) share = BiomeSlots.SteadyShare(biome, npc, tier);
+			}
+			shares[(npc, tier)] = share;
+			return share;
+		}
+
+		// The chance of a guaranteed item on a host (before GuaranteedDropMultiplier): about StationTargetKills (stations,
+		// summons, tools) or MaterialTargetKills kills of the host's best biome per drop, within the bounds
+		public static float Chance(Requirement requirement, int host)
+		{
+			bool single = requirement.Station || requirement.Tool;
+			double share = HostShare(host, requirement.Tier);
+			if (share <= 0) return single ? UnknownShareStationChance : MaterialChance;
+			return single
+				? (float)Math.Clamp(1 / (StationTargetKills * share), StationChance, MaxStationChance)
+				: (float)Math.Clamp(1 / (MaterialTargetKills * share), MaterialChance, MaxMaterialChance);
+		}
+
+		// The chance of a critical station on its hosts (before GuaranteedDropMultiplier): the early kills of the pacing
+		// model that land on them give it after CriticalTargetMinutes on average (PacingModel.KillsPerMinute). Read from the
+		// spawn map and the synced settings only
+		public static float CriticalChance(IEnumerable<int> hosts)
+		{
+			HashSet<int> set = hosts.ToHashSet();
+			double share = PacingModel.EarlyKillShare(set.Contains);
+			if (share <= 0) return MaxStationChance;
+			return (float)Math.Clamp(1 / (CriticalTargetMinutes * PacingModel.KillsPerMinute * share), MinStationChance, MaxStationChance);
+		}
+
+		// Expected kills in the best biome of the easiest host before the item drops (infinity: no host with a known share)
+		public static double FindKills(int item, int tier)
+		{
+			double best = double.PositiveInfinity;
+			foreach (int host in HostsOf(item))
+			{
+				double share = HostShare(host, tier);
+				float chance = For(host).Where(d => d.Item == item).Sum(d => d.Chance);
+				if (share > 0 && chance > 0) best = Math.Min(best, 1 / (share * chance));
+			}
+			return best;
 		}
 
 		// Plans the hosts again with another seed and its spawn map, without touching this world's (tests)
@@ -275,16 +381,12 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Critical stations (work bench, furnace, anvil, table, chair) are carried by the enemies met most in the first hour:
-		// slimes by day (every colour shares the Blue Slime's type), then zombies or demon eyes by night. Other hosts are
-		// common by bestiary rarity only, and may be enemies seldom met at first (first work bench after 15 to 30 minutes,
-		// see PacingTests)
-		private static readonly int[][] VanillaCriticalHosts = { new int[] { NPCID.BlueSlime }, new int[] { NPCID.Zombie, NPCID.DemonEye } };
-
+		// slimes by day (every colour shares the Blue Slime's type), zombies and demon eyes of every kind by night (each kind
+		// has its own Forest slot: vanilla picks one at random). Other hosts are judged by their spawn share
 		private const int CriticalHostSets = 2;
 
-		// Enemies redistributed by biome: the enemies that now spawn in the Forest slots of the slimes (day) and of the
-		// zombies and demon eyes (night)
-		public static int[] CriticalHosts(int set) => BiomeSlots.Active ? BiomeSlots.CriticalHosts(set == 0).ToArray() : VanillaCriticalHosts[set];
+		// The enemies that spawn in those Forest slots (redistributed by biome, else the vanilla ones)
+		public static int[] CriticalHosts(int set) => BiomeSlots.ForestFamilyHosts(BiomeSlots.SpawnMap, set == 0).ToArray();
 
 		// The hosts that pass the filter, or null
 		private static List<int> Matching(List<int> hosts, Func<int, bool> filter)
@@ -298,14 +400,21 @@ namespace UltimateRandomizer.Common.Features
 		// An enemy without any slot (modded, without a bestiary biome) only needs bestiary rarity 0.
 		public static bool IsFrequentHost(int npc, int tier)
 		{
-			BiomeSlotMap map = BiomeSlots.SpawnMap;
-			if (frequentMap != map)
-			{
-				frequent.Clear();
-				frequentMap = map;
-			}
+			FollowMap();
 			if (!frequent.TryGetValue((npc, tier), out bool result)) frequent[(npc, tier)] = result = ComputeFrequent(npc, tier);
 			return result;
+		}
+
+		// The caches below follow the spawn map (rebuilt when the world evil arrives, the settings change, or a test plans
+		// another map)
+		private static void FollowMap()
+		{
+			BiomeSlotMap map = BiomeSlots.SpawnMap;
+			if (frequentMap == map) return;
+			frequent.Clear();
+			shares.Clear();
+			hostTiers = null;
+			frequentMap = map;
 		}
 
 		private static bool ComputeFrequent(int npc, int tier)
@@ -326,19 +435,45 @@ namespace UltimateRandomizer.Common.Features
 		private static bool IsNaturalHost(int npc, int tier)
 		{
 			if (NPCID.Sets.CountsAsCritter[npc] || IsEventEnemy(npc) || NeverMet(npc)) return false;
-			for (int t = 0; t <= Tiers.Clamp(tier); t++)
+			return HostTiers().TryGetValue(npc, out int from) && from <= Tiers.Clamp(tier);
+		}
+
+		// The tier from which a natural enemy can carry guaranteed items: the tier it spawns at (EnemySwapPool.NaturalEnemies),
+		// or the earlier one at which it is met in its slots (BiomeSlots.MeetTier: the starting Forest's enemies, Demon Eyes
+		// included, are all met from the first night). Its own tier for an enemy that never spawns naturally
+		public static int HostTier(int npc) => HostTiers().TryGetValue(npc, out int tier) ? tier : NpcTiers.BaseTier(npc);
+
+		private static Dictionary<int, int> HostTiers()
+		{
+			FollowMap();
+			if (hostTiers != null) return hostTiers;
+			Dictionary<int, int> result = new();
+			for (int t = 0; t < Tiers.Count; t++)
 			{
-				if (EnemySwapPool.NaturalEnemies(t).Contains(npc)) return true;
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t)) result.TryAdd(npc, t);
 			}
-			return false;
+			if (BiomeSlots.SpawnsPlanned)
+			{
+				foreach (int npc in result.Keys.ToList())
+				{
+					int met = BiomeSlots.MeetTier(npc);
+					if (met >= 0 && met < result[npc]) result[npc] = met;
+				}
+			}
+			hostTiers = result;
+			return result;
 		}
 
 		// Without the redistribution by biome, the swap pool also holds enemies of the evil this world lacks (Crimson ones in
 		// a Corruption world): they never spawn (by biome, the pool only holds enemies that really spawn somewhere)
 		private static bool NeverMet(int npc) => !BiomeSlots.Active && BiomeSlots.NeverSpawns(npc);
 
-		// Natural enemies of a tier that may carry a guaranteed drop (no critter, no event enemy, met in this world)
-		private static List<int> NaturalHosts(int tier) => EnemySwapPool.NaturalEnemies(tier).Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n) && !NeverMet(n)).ToList();
+		// Frequent natural enemies that may carry guaranteed items from a tier on (tests)
+		public static List<int> FrequentHosts(int tier) => NaturalHosts(tier).Where(n => IsFrequentHost(n, tier)).ToList();
+
+		// Natural enemies that may carry a guaranteed drop from a tier on (no critter, no event enemy, met in this world)
+		private static List<int> NaturalHosts(int tier) => HostTiers().Where(pair => pair.Value == Tiers.Clamp(tier)).Select(pair => pair.Key)
+			.Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n) && !NeverMet(n)).OrderBy(n => n).ToList();
 
 		// Common natural enemies of a tier (bestiary rarity 1, else 2, else any)
 		private static List<int> Hosts(int tier)
@@ -435,7 +570,7 @@ namespace UltimateRandomizer.Common.Features
 				{
 					foreach (int host in GuaranteedSources.HostsOf(requirement.Item))
 					{
-						result[requirement.Item] = Math.Min(result[requirement.Item], NpcTiers.BaseTier(host));
+						result[requirement.Item] = Math.Min(result[requirement.Item], GuaranteedSources.HostTier(host));
 					}
 				}
 				tiers = result;

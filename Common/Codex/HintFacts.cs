@@ -456,7 +456,8 @@ namespace UltimateRandomizer.Common.Codex
 			bool required = requirement.Item == item;
 			foreach (int host in GuaranteedSources.HostsOf(item))
 			{
-				int tier = NaturalTier(host);
+				// Met from that tier on (a Demon Eye in the starting Forest carries tier 0 items)
+				int tier = Math.Min(NaturalTier(host), GuaranteedSources.HostTier(host));
 				AddCreature(CreatureFact(item, host, tier, Math.Max(tier, required ? requirement.Tier : tier), CodexStats.LuckyChance(host, item)));
 			}
 			foreach (int recipe in RecipesMaking(item))

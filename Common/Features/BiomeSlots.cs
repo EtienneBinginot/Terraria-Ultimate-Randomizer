@@ -112,6 +112,7 @@ namespace UltimateRandomizer.Common.Features
 		// Planned spawn shares by band (BiomeSlots.PlannedShare), and the types with any slot at all
 		internal readonly Dictionary<int, ShareTable> Shares = new();
 		internal HashSet<int> SlotTypes;
+		internal Dictionary<int, int> MeetTiers;
 		// For each type (slime colours are Blue Slimes): the tier from which it spawns somewhere, as an owner or an extra
 		public readonly Dictionary<int, int> SpawnTier = new();
 
@@ -178,6 +179,16 @@ namespace UltimateRandomizer.Common.Features
 		// The Forest slots of the vanilla hosts of the critical stations (GuaranteedSources): day slimes, night zombies and eyes
 		public static readonly int[] CriticalDayOriginals = { NPCID.BlueSlime, NPCID.GreenSlime, NPCID.PurpleSlime };
 		public static readonly int[] CriticalNightOriginals = { NPCID.Zombie, NPCID.DemonEye };
+
+		// Every kind of zombie and demon eye of the Forest night: vanilla picks one kind at random for each spawn, so each kind
+		// has its own Forest slot and the plain Zombie's and Demon Eye's are only a few of them (the armed zombies of expert
+		// mode and the torch zombies of the very first nights left aside). The critical stations' night hosts are the enemies
+		// of all these slots (GuaranteedSources.CriticalHosts, PacingModel)
+		public static readonly int[] ForestNightFamily =
+		{
+			NPCID.Zombie, NPCID.BaldZombie, NPCID.PincushionZombie, NPCID.SlimedZombie, NPCID.SwampZombie, NPCID.TwiggyZombie, NPCID.FemaleZombie,
+			NPCID.DemonEye, NPCID.CataractEye, NPCID.SleepyEye, NPCID.DialatedEye, NPCID.GreenEye, NPCID.PurpleEye
+		};
 
 		private class Natural
 		{
@@ -907,11 +918,48 @@ namespace UltimateRandomizer.Common.Features
 		// The identity used by the map for a live NPC: its slime colour when that colour has slots, else its type
 		public static int OriginalOf(BiomeSlotMap map, NPC npc) => map.ByOriginal.ContainsKey(npc.netID) ? npc.netID : npc.type;
 
-		// Owners spawning in the Forest slots of the vanilla critical hosts, as types (guaranteed drops are per type)
-		public static List<int> CriticalHosts(bool day)
+		// Enemies spawning in the Forest slots of the day slimes or of the night zombies and demon eyes (ForestNightFamily) in a
+		// map, as types (guaranteed drops are per type): owners and extras (event enemies, never hosts, are filtered by the
+		// caller)
+		public static List<int> ForestFamilyHosts(BiomeSlotMap map, bool day)
 		{
-			int[] originals = day ? CriticalDayOriginals : CriticalNightOriginals;
-			return Current.Slots.Where(s => s.Critical && originals.Contains(s.Original)).Select(s => TypeOf(s.Owner)).Distinct().OrderBy(t => t).ToList();
+			int[] originals = day ? CriticalDayOriginals : ForestNightFamily;
+			return map.Slots.Where(s => s.Biome == (int)SpawnBiome.Forest && originals.Contains(s.Original) && !s.AbsentEvil).SelectMany(Spawners)
+				.Select(TypeOf).Distinct().OrderBy(t => t).ToList();
+		}
+
+		// The tier from which a type is met in a map's slots (-1: in none). Like SpawnTier (its own tier, never below the
+		// slot's), except in the starting Forest, where every enemy of the first band is met from the first day or night: one
+		// tier below its own there (a Demon Eye, tier 1 for its 18 damage, is a first-night enemy)
+		public static int MeetTier(int type)
+		{
+			int tier = MeetTiers(SpawnMap).GetValueOrDefault(type, -1);
+			if (Active && VanillaKeep > 0)
+			{
+				int vanillaTier = MeetTiers(Vanilla).GetValueOrDefault(type, -1);
+				if (vanillaTier >= 0 && (tier < 0 || vanillaTier < tier)) tier = vanillaTier;
+			}
+			return tier;
+		}
+
+		private static Dictionary<int, int> MeetTiers(BiomeSlotMap map)
+		{
+			if (map.MeetTiers != null) return map.MeetTiers;
+			Dictionary<int, int> result = new();
+			foreach (BiomeSlot slot in map.Slots)
+			{
+				if (slot.Critter || slot.AbsentEvil) continue;
+				bool forest = slot.Biome == (int)SpawnBiome.Forest && slot.Band == 0;
+				foreach (int id in Spawners(slot))
+				{
+					int type = TypeOf(id);
+					int own = Math.Max(NpcTiers.BaseTier(type), TierOf(id));
+					int tier = forest ? Math.Max(0, own - 1) : Math.Max(own, slot.Tier);
+					if (!result.TryGetValue(type, out int old) || tier < old) result[type] = tier;
+				}
+			}
+			map.MeetTiers = result;
+			return result;
 		}
 
 		// Modded biome keys that have slots (for the tests)
