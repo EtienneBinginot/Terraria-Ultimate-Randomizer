@@ -65,15 +65,13 @@ namespace UltimateRandomizer.Common.Core
 			}
 			if (cfg.ProtectProgressionMaterials) set.UnionWith(ProgressionMaterials);
 			int count = ItemLoader.ItemCount;
-			// Off: crafted and dropped summons are randomized, with guaranteed drops (GuaranteedSources.SummonRequirements)
+			// Off: crafted and dropped vanilla summons are randomized, with guaranteed drops (GuaranteedSources.SummonRequirements);
+			// modded ones keep their own sources (their recipes and drops may hold rules the planners don't know)
 			set.UnionWith(WorldSummons);
 			set.UnionWith(SortedAsSummons);
-			if (cfg.AutoProtectBossSummons)
+			for (int type = 1; type < count; type++)
 			{
-				for (int type = 1; type < count; type++)
-				{
-					if (IsBossSummon(type)) set.Add(type);
-				}
+				if (IsBossSummon(type) && (cfg.AutoProtectBossSummons || type >= ItemID.Count)) set.Add(type);
 			}
 			{
 				// Any item placing a tile that some recipe requires (work bench, anvils, furnaces...). Unprotected stations,

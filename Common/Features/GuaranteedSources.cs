@@ -45,6 +45,8 @@ namespace UltimateRandomizer.Common.Features
 		private static Dictionary<int, List<PlannedDrop>> byNpc;
 		private static List<Requirement> requirements;
 		private static readonly Dictionary<(int npc, int tier), bool> frequent = new();
+		// The spawn map the frequent cache was computed with (rebuilt when the world evil arrives, or the settings change)
+		private static BiomeSlotMap frequentMap;
 
 		static GuaranteedSources()
 		{
@@ -56,6 +58,7 @@ namespace UltimateRandomizer.Common.Features
 			byNpc = null;
 			requirements = null;
 			frequent.Clear();
+			frequentMap = null;
 		}
 
 		public static List<Requirement> Requirements
@@ -118,19 +121,27 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// Crafted and dropped boss summons (Guide Voodoo Doll included) when unprotected, at the tier before their boss's;
-		// dropped one at a time, as rarely as a station
+		// Crafted and dropped vanilla boss summons (Guide Voodoo Doll included) when unprotected, at the tier before their
+		// boss's; dropped one at a time, as rarely as a station. Only the summon of the world's evil (both in drunk and zenith
+		// worlds: BiomeSlots.CurrentEvil, from the synced world data). Modded summons stay protected (Protection)
 		public static IEnumerable<Requirement> SummonRequirements()
 		{
-			for (int type = 1; type < ItemPool.Info.Length; type++)
+			WorldEvil evil = BiomeSlots.CurrentEvil;
+			for (int type = 1; type < ItemPool.Info.Length && type < ItemID.Count; type++)
 			{
-				if (Protection.IsBossSummon(type) && ItemPool.IsRandomizable(type)) yield return new Requirement { Item = type, Tier = Protection.SummonTier(type), Station = true };
+				if (!Protection.IsBossSummon(type) || !ItemPool.IsRandomizable(type)) continue;
+				if (type == ItemID.WormFood && evil == WorldEvil.Crimson || type == ItemID.BloodySpine && evil == WorldEvil.Corruption) continue;
+				yield return new Requirement { Item = type, Tier = Protection.SummonTier(type), Station = true };
 			}
 		}
 
-		// Items a pot may also give, among those already unlocked
-		public static List<int> PotItems(int unlockedTier) =>
-			Requirements.Where(r => r.Tier <= unlockedTier && (r.Station || r.Tool || r.Tier == 0)).Select(r => r.Item).ToList();
+		// Items a pot may also give, among those already unlocked: basic stations, tools and early materials (not the
+		// progression stations nor the summons: they would dilute the work bench, see PacingModel)
+		public static List<int> PotItems(int unlockedTier)
+		{
+			HashSet<int> basic = Stations.Basic().Select(s => s.info.Item).ToHashSet();
+			return Requirements.Where(r => r.Tier <= unlockedTier && (r.Tool || basic.Contains(r.Item) || r.Tier == 0 && !r.Station)).Select(r => r.Item).ToList();
+		}
 
 		private static void Build()
 		{
@@ -166,9 +177,15 @@ namespace UltimateRandomizer.Common.Features
 					if (common != null && common.Count > 0) host = common[rng.Next(common.Count)];
 					else
 					{
-						// Frequent hosts first (a station or a summon must not hide on a rare enemy), then any common one
+						// Frequent hosts first (a station or a summon must not hide on a rare enemy), then any common one, at the
+						// highest tier that has some. Nothing spawns from tier 8 (post-Cultist) on: such items go to tier 7 or
+						// lower hosts, a little earlier than their tier
 						bool Free(int n) => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost;
-						List<int> candidates = Candidates(natural, requirement.Tier, n => Free(n) && IsFrequentHost(n, requirement.Tier)) ?? Candidates(hosts, requirement.Tier, Free);
+						List<int> candidates = null;
+						for (int t = Tiers.Clamp(requirement.Tier); t >= 0 && candidates == null; t--)
+						{
+							candidates = Matching(natural[t], n => Free(n) && IsFrequentHost(n, requirement.Tier)) ?? Matching(hosts[t], Free);
+						}
 						if (candidates == null) break;
 						// Spread the load: among the least used hosts
 						List<int> best = candidates.OrderBy(n => load.GetValueOrDefault(n)).ThenBy(DetRandom.NpcKey).Take(3).ToList();
@@ -202,15 +219,11 @@ namespace UltimateRandomizer.Common.Features
 		// zombies and demon eyes (night)
 		public static int[] CriticalHosts(int set) => BiomeSlots.Active ? BiomeSlots.CriticalHosts(set == 0).ToArray() : VanillaCriticalHosts[set];
 
-		// The hosts of the highest tier at or below the requirement's that pass the filter, or null
-		private static List<int> Candidates(List<int>[] hosts, int tier, Func<int, bool> filter)
+		// The hosts that pass the filter, or null
+		private static List<int> Matching(List<int> hosts, Func<int, bool> filter)
 		{
-			for (int t = Tiers.Clamp(tier); t >= 0; t--)
-			{
-				List<int> candidates = hosts[t].Where(filter).ToList();
-				if (candidates.Count > 0) return candidates;
-			}
-			return null;
+			List<int> candidates = hosts.Where(filter).ToList();
+			return candidates.Count > 0 ? candidates : null;
 		}
 
 		// A natural host met often at a tier: not rare, no event enemy, and at least MinHostShare of the spawns of its best
@@ -218,6 +231,12 @@ namespace UltimateRandomizer.Common.Features
 		// An enemy without any slot (modded, without a bestiary biome) only needs bestiary rarity 0.
 		public static bool IsFrequentHost(int npc, int tier)
 		{
+			BiomeSlotMap map = BiomeSlots.SpawnMap;
+			if (frequentMap != map)
+			{
+				frequent.Clear();
+				frequentMap = map;
+			}
 			if (!frequent.TryGetValue((npc, tier), out bool result)) frequent[(npc, tier)] = result = ComputeFrequent(npc, tier);
 			return result;
 		}
@@ -226,14 +245,15 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (!IsNaturalHost(npc, tier)) return false;
 			if (ContentSamples.NpcsByNetId.TryGetValue(npc, out NPC sample) && sample.rarity > 0) return false;
-			if (BiomeSlots.PlannedBiomes(npc).Count == 0) return true;
-			(_, double share, _) = BiomeSlots.BestBiome(npc, tier);
-			return share >= MinHostShare && BiomeSlots.SpawnsInCommonSlot(npc, tier);
+			// Only an enemy without any slot is judged by its rarity; one whose slots never open in this world is never met
+			if (!BiomeSlots.HasAnySlot(npc)) return true;
+			(int biome, double share, _) = BiomeSlots.BestBiome(npc, tier);
+			return biome >= 0 && share >= MinHostShare && BiomeSlots.SpawnsInCommonSlot(npc, tier);
 		}
 
 		private static bool IsNaturalHost(int npc, int tier)
 		{
-			if (NPCID.Sets.CountsAsCritter[npc] || IsEventEnemy(npc)) return false;
+			if (NPCID.Sets.CountsAsCritter[npc] || IsEventEnemy(npc) || NeverMet(npc)) return false;
 			for (int t = 0; t <= Tiers.Clamp(tier); t++)
 			{
 				if (EnemySwapPool.NaturalEnemies(t).Contains(npc)) return true;
@@ -241,8 +261,12 @@ namespace UltimateRandomizer.Common.Features
 			return false;
 		}
 
-		// Natural enemies of a tier that may carry a guaranteed drop (no critter, no event enemy)
-		private static List<int> NaturalHosts(int tier) => EnemySwapPool.NaturalEnemies(tier).Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n)).ToList();
+		// Without the redistribution by biome, the swap pool also holds enemies of the evil this world lacks (Crimson ones in
+		// a Corruption world): they never spawn (by biome, the pool only holds enemies that really spawn somewhere)
+		private static bool NeverMet(int npc) => !BiomeSlots.Active && BiomeSlots.NeverSpawns(npc);
+
+		// Natural enemies of a tier that may carry a guaranteed drop (no critter, no event enemy, met in this world)
+		private static List<int> NaturalHosts(int tier) => EnemySwapPool.NaturalEnemies(tier).Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n) && !NeverMet(n)).ToList();
 
 		// Common natural enemies of a tier (bestiary rarity 1, else 2, else any)
 		private static List<int> Hosts(int tier)

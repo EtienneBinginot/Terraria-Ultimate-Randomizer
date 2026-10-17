@@ -446,6 +446,18 @@ namespace UltimateRandomizer.Common.Features
 
 		// ---------------------------------------------------------------- Vanilla ingredients
 
+		// The tier of each guaranteed station and summon, for the providers that can't read Findability.Tier (it depends on them)
+		private static Dictionary<int, int> GuaranteedStationTiers()
+		{
+			Dictionary<int, int> tiers = new();
+			foreach (GuaranteedSources.Requirement station in GuaranteedSources.StationRequirements().Concat(GuaranteedSources.OtherStationRequirements())
+				.Concat(GuaranteedSources.SummonRequirements()))
+			{
+				tiers[station.Item] = Math.Min(tiers.GetValueOrDefault(station.Item, station.Tier), station.Tier);
+			}
+			return tiers;
+		}
+
 		// Vanilla mode: ingredients that can't be obtained at their recipe's tier, to be placed on enemies
 		public static IEnumerable<GuaranteedSources.Requirement> VanillaRequirements()
 		{
@@ -453,7 +465,10 @@ namespace UltimateRandomizer.Common.Features
 			if (!cfg.RandomizeRecipes || cfg.IngredientMode != IngredientMode.Vanilla || RecipeSystem.RecipeCount == 0) yield break;
 			(int, int)[][] ingredients = OriginalIngredients();
 			int[] results = Types(UnlockedResults());
-			int[] avail = Availability(Findability.BaseTier, results, ResultTiers(results), ingredients, OriginalTiles(), out _);
+			// Guaranteed stations count from their tier: an unprotected Hellforge or Crystal Ball has no vanilla source left
+			Dictionary<int, int> stations = GuaranteedStationTiers();
+			int Found(int item) => stations.TryGetValue(item, out int s) ? Math.Min(s, Findability.BaseTier(item)) : Findability.BaseTier(item);
+			int[] avail = Availability(Found, results, ResultTiers(results), ingredients, OriginalTiles(), out _);
 			Dictionary<int, int> needed = new();
 			for (int i = 0; i < Count; i++)
 			{
@@ -532,11 +547,7 @@ namespace UltimateRandomizer.Common.Features
 			int[][] tiles = OriginalTiles();
 			int[] results = Types(UnlockedResults());
 			int[] resultTiers = ResultTiers(results);
-			Dictionary<int, int> stations = new();
-			foreach (GuaranteedSources.Requirement station in GuaranteedSources.StationRequirements().Concat(GuaranteedSources.OtherStationRequirements()))
-			{
-				stations[station.Item] = Math.Min(stations.GetValueOrDefault(station.Item, station.Tier), station.Tier);
-			}
+			Dictionary<int, int> stations = GuaranteedStationTiers();
 			List<int> pickaxes = ContentSamples.ItemsByType.Where(pair => pair.Value.pick > 0 && ItemPool.IsValid(pair.Key) && !ItemPool.Info[pair.Key].Excluded).Select(pair => pair.Key).OrderBy(t => t).ToList();
 			Dictionary<int, int> guaranteed = new();
 			foreach ((int pick, int[] ores) level in MiningLevels)

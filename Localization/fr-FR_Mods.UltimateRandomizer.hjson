@@ -886,7 +886,7 @@ Configs: {
 
 		AutoProtectBossSummons: {
 			Label: Protéger toutes les invocations de boss
-			Tooltip: Désactivé : les invocations de boss fabriquées ou lâchées (Œil à l'air suspect, Poupée vaudou du guide, invocations mécaniques...) sont randomisées, et des ennemis courants de leur palier les lâchent à la place. Les invocations trouvées dans le monde (Ver truffe, Capsule de pouvoir Lihzahrd, Cristal de gélatine, Chrysope prismatique) restent protégées. Activé : toutes les invocations de boss sont protégées, y compris celles des autres mods.
+			Tooltip: Désactivé : les invocations de boss fabriquées ou lâchées (Œil à l'air suspect, Poupée vaudou du guide, invocations mécaniques...) sont randomisées, et des ennemis courants de leur palier les lâchent à la place. Les invocations trouvées dans le monde (Ver truffe, Capsule de pouvoir Lihzahrd, Cristal de gélatine, Chrysope prismatique) restent protégées, tout comme les invocations des autres mods. Activé : toutes les invocations de boss sont protégées.
 		}
 
 		StationProtection: {

@@ -365,9 +365,13 @@ namespace UltimateRandomizer.Common.Tests
 				if (!recipesOf.TryGetValue(made, out List<int[]> list)) recipesOf[made] = list = new List<int[]>();
 				list.Add(recipe.requiredTile.ToArray());
 			}
-			// Reachable: stations no recipe makes (world, shops) and basic ones (found in the world), then any station one
-			// of whose recipes only needs reachable stations. Whatever is left needs itself, directly or through others
+			// Reachable: stations no recipe makes (world, shops), basic ones and the guaranteed ones (found in the world), then
+			// any station one of whose recipes only needs reachable stations. Whatever is left needs itself, directly or not
 			HashSet<int> reachable = Stations.Basic().Select(s => s.tile).ToHashSet();
+			foreach (GuaranteedSources.Requirement r in GuaranteedSources.Requirements.Where(r => r.Station))
+			{
+				if (Stations.PlacedTile(r.Item, out int placed)) reachable.Add(placed);
+			}
 			bool Reachable(int tile) => reachable.Contains(tile) || !recipesOf.ContainsKey(tile);
 			bool changed = true;
 			while (changed)

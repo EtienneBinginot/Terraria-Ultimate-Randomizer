@@ -104,6 +104,7 @@ namespace UltimateRandomizer.Common.Tests
 			RecipePlan plan = RecipePlanner.Get();
 			List<string> failures = new();
 			int summons = 0, stations = 0;
+			slotShares.Clear();
 			foreach (GuaranteedSources.Requirement want in wanted)
 			{
 				int item = want.Item;
@@ -117,12 +118,19 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				int tier = merged.Tier;
 				List<int> hosts = GuaranteedSources.HostsOf(item).ToList();
-				bool Good(int host) => NpcTiers.BaseTier(host) <= tier && GuaranteedSources.IsFrequentHost(host, tier)
-					&& GuaranteedSources.For(host).Any(d => d.Item == item && d.Chance >= GuaranteedSources.MinStationChance - 1e-6f);
+				if (hosts.Count < GuaranteedSources.HostsPerItem) failures.Add($"{Name(item)}: {hosts.Count} host(s), expected {GuaranteedSources.HostsPerItem}");
+				// Recomputed here: the share from the slots through Pick, the chance from the enemy's real drop plan
+				bool Good(int host)
+				{
+					if (NpcTiers.BaseTier(host) > tier || GuaranteedSources.IsEventEnemy(host) || ContentSamples.NpcsByNetId[host].rarity > 0) return false;
+					(double share, bool common, bool anySlot) = SlotShare(host, tier);
+					if (anySlot && (share < GuaranteedSources.MinHostShare - 0.005 || !common)) return false;
+					return RandomNpcDropRule.Plan(host, Main.expertMode).Any(d => d.Guaranteed && d.Item == item && d.Chance >= 0.01f - 1e-6f);
+				}
 				if (!hosts.Any(Good))
 				{
 					string list = hosts.Count == 0 ? "none" : string.Join(", ", hosts.Select(h => $"{Lang.GetNPCNameValue(h)} (tier {NpcTiers.BaseTier(h)}, best biome "
-						+ $"{BiomeSlots.BestBiome(h, tier).share:P1})"));
+						+ $"{SlotShare(h, tier).share:P1})"));
 					failures.Add($"{Name(item)} (tier {tier}): no frequent host, hosts: {list}");
 				}
 				if (Findability.Tier(item) > tier) failures.Add($"{Name(item)} found at tier {Findability.Tier(item)} > {tier}");
@@ -141,6 +149,59 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed: {stations} progression or themed stations, {summons} boss summons");
 			Check.All(failures, "Stations and summons without a frequent source");
+		}
+
+		private const int ShareRolls = 200;
+		private static readonly Dictionary<(BiomeSlotMap map, int band), Dictionary<int, Dictionary<int, double>>> slotShares = new();
+
+		// Biome, then type, then share of the biome's enemy spawns, from the slots open in a band: each slot weighs 1 (rare 0.1,
+		// conditional 0.5) and is split by sampling Pick
+		private static Dictionary<int, Dictionary<int, double>> SlotShares(BiomeSlotMap map, int band)
+		{
+			if (slotShares.TryGetValue((map, band), out Dictionary<int, Dictionary<int, double>> cached)) return cached;
+			Dictionary<int, Dictionary<int, double>> result = new();
+			Dictionary<int, double> totals = new();
+			foreach (BiomeSlot slot in map.Slots)
+			{
+				if (slot.Critter || slot.AbsentEvil || slot.Band > band) continue;
+				double weight = (slot.Rare ? 0.1 : 1) * (slot.Conditional ? 0.5 : 1);
+				totals[slot.Biome] = totals.GetValueOrDefault(slot.Biome) + weight;
+				if (!result.TryGetValue(slot.Biome, out Dictionary<int, double> byType)) result[slot.Biome] = byType = new Dictionary<int, double>();
+				for (int k = 0; k < ShareRolls; k++)
+				{
+					int type = BiomeSlots.TypeOf(BiomeSlots.Pick(slot, (k + 0.5) / ShareRolls));
+					byType[type] = byType.GetValueOrDefault(type) + weight / ShareRolls;
+				}
+			}
+			foreach ((int biome, Dictionary<int, double> byType) in result)
+			{
+				foreach (int type in byType.Keys.ToList()) byType[type] /= totals[biome];
+			}
+			slotShares[(map, band)] = result;
+			return result;
+		}
+
+		// A type's best share among the biomes at a tier (BiomeVanillaChance mixed in by biome), whether a slot that is not
+		// rare holds it, and whether any slot mentions it at all
+		private static (double share, bool common, bool anySlot) SlotShare(int type, int tier)
+		{
+			int band = BiomeSlots.BandOf(tier);
+			BiomeSlotMap map = BiomeSlots.Active ? BiomeSlots.Current : BiomeSlots.Vanilla;
+			double keep = BiomeSlots.Active ? EnemiesConfig.Instance.BiomeVanillaChance / 100.0 : 0;
+			Dictionary<int, Dictionary<int, double>> planned = SlotShares(map, band);
+			Dictionary<int, Dictionary<int, double>> vanilla = keep > 0 ? SlotShares(BiomeSlots.Vanilla, band) : null;
+			double best = 0;
+			foreach ((int biome, Dictionary<int, double> byType) in planned)
+			{
+				double share = (1 - keep) * byType.GetValueOrDefault(type);
+				if (vanilla != null && vanilla.TryGetValue(biome, out Dictionary<int, double> v)) share += keep * v.GetValueOrDefault(type);
+				best = System.Math.Max(best, share);
+			}
+			bool Holds(BiomeSlot s) => BiomeSlots.TypeOf(s.Owner) == type || s.Extra != 0 && BiomeSlots.TypeOf(s.Extra) == type
+				|| s.EvilShared != null && s.EvilShared.Any(id => BiomeSlots.TypeOf(id) == type);
+			bool common = map.Slots.Any(s => !s.Critter && !s.AbsentEvil && s.Band <= band && !s.Rare && Holds(s));
+			bool anySlot = map.Slots.Any(s => Holds(s) || BiomeSlots.TypeOf(s.Original) == type);
+			return (best, common, anySlot);
 		}
 
 		// The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) and the

@@ -886,7 +886,7 @@ Configs: {
 
 		AutoProtectBossSummons: {
 			Label: Protect all boss summons
-			Tooltip: Off: crafted and dropped boss summons (Suspicious Looking Eye, Guide Voodoo Doll, mechanical summons...) are randomized and dropped by common enemies of their tier instead. The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) stay protected. On: every boss summon is protected, those of other mods too.
+			Tooltip: Off: crafted and dropped boss summons (Suspicious Looking Eye, Guide Voodoo Doll, mechanical summons...) are randomized and dropped by common enemies of their tier instead. The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) stay protected, and so do the summons of other mods. On: every boss summon is protected.
 		}
 
 		StationProtection: {
