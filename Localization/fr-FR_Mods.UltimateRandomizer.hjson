@@ -138,7 +138,9 @@ Tests: {
 	DropFrequency: La plupart des kills donnent quelque chose (au moins 0,6 objet par kill ; valeur écrite dans client.log)
 	WorkBenchPacing: Le premier établi arrive après 15 à 30 minutes en moyenne (valeur écrite dans client.log)
 	BasicStationsUnprotected: Les stations de base (établi, fourneau, enclume...) sont confiées au randomizer
-	ProgressionStationsProtected: Les stations de progression (Hellforge, enclumes et forges hardmode...) restent protégées
+	ProgressionStationsProtected: Les stations de progression et thématiques sont protégées, sauf si la protection des stations vaut Aucune
+	ProgressionStationsGuaranteed: Les stations de progression et les invocations de boss non protégées tombent d'ennemis fréquents de leur palier (1 % ou plus)
+	WorldSummonsProtected: Les invocations trouvées dans le monde restent protégées, celles qu'on fabrique sont randomisées
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
 	GuaranteedLoadBalanced: Aucun ennemi ne porte trop d'objets garantis
@@ -874,7 +876,7 @@ Configs: {
 
 		ProtectedItems: {
 			Label: Objets protégés
-			Tooltip: Jamais remplacés (drops, recettes...) et jamais donnés comme objet aléatoire. Garantit que la progression reste possible.
+			Tooltip: Jamais remplacés (drops, recettes...) et jamais donnés comme objet aléatoire. Garantit que la progression reste possible. Les invocations de boss fabriquées ne sont plus dans la liste par défaut : des ennemis courants les lâchent à coup sûr (réinitialisez la liste pour avoir la nouvelle valeur par défaut).
 		}
 
 		ProtectProgressionMaterials: {
@@ -884,12 +886,12 @@ Configs: {
 
 		AutoProtectBossSummons: {
 			Label: Protéger toutes les invocations de boss
-			Tooltip: Protège aussi les invocations de boss des autres mods.
+			Tooltip: Désactivé : les invocations de boss fabriquées ou lâchées (Œil à l'air suspect, Poupée vaudou du guide, invocations mécaniques...) sont randomisées, et des ennemis courants de leur palier les lâchent à la place. Les invocations trouvées dans le monde (Ver truffe, Capsule de pouvoir Lihzahrd, Cristal de gélatine, Chrysope prismatique) restent protégées. Activé : toutes les invocations de boss sont protégées, y compris celles des autres mods.
 		}
 
 		StationProtection: {
 			Label: Protection des stations de craft
-			Tooltip: Progression seulement : les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) ne sont plus protégées ; on les trouve dans le monde (ennemis courants, pots, coffres en bois). Les stations de progression (Hellforge, enclumes et forges hardmode...) gardent leur recette, même avec Aucune.
+			Tooltip: Aucune : toutes les stations sont randomisées, y compris celles de progression (Forge d'enfer, enclumes et forges hardmode, Atelier de bricolage, Manipulateur antique...) ; des ennemis courants de leur palier lâchent chacune d'elles. Progression seulement : seules les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) sont randomisées ; on les trouve aussi dans les pots et les coffres en bois. Les stations des autres mods restent protégées.
 		}
 
 		ProtectPickaxeProgression: {

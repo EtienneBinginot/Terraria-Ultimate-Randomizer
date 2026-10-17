@@ -3,6 +3,7 @@ using System.Linq;
 using Terraria;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
+using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
@@ -16,6 +17,8 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			TestRunner.Register("BasicStationsUnprotected", BasicStationsUnprotected);
 			TestRunner.Register("ProgressionStationsProtected", ProgressionStationsProtected);
+			TestRunner.Register("ProgressionStationsGuaranteed", ProgressionStationsGuaranteed);
+			TestRunner.Register("WorldSummonsProtected", WorldSummonsProtected);
 			TestRunner.Register("BasicStationsFindable", BasicStationsFindable);
 			TestRunner.Register("GuaranteedReachability", GuaranteedReachability);
 			TestRunner.Register("GuaranteedLoadBalanced", GuaranteedLoadBalanced);
@@ -73,18 +76,93 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Basic stations still protected");
 		}
 
+		// Progression and themed stations are protected unless StationProtection is None; then they are randomized (and
+		// guaranteed: ProgressionStationsGuaranteed)
 		private static void ProgressionStationsProtected()
 		{
-			// Progression stations stay protected even with StationProtection.None (nothing else guarantees them);
-			// themed ones only when stations are protected
-			List<int> items = new()
+			int[] items =
 			{
 				ItemID.Hellforge, ItemID.MythrilAnvil, ItemID.OrichalcumAnvil, ItemID.AdamantiteForge, ItemID.TitaniumForge, ItemID.TinkerersWorkshop,
-				ItemID.ImbuingStation, ItemID.CrystalBall, ItemID.Autohammer, ItemID.LihzahrdFurnace, ItemID.LunarCraftingStation
+				ItemID.ImbuingStation, ItemID.CrystalBall, ItemID.Autohammer, ItemID.LihzahrdFurnace, ItemID.LunarCraftingStation, ItemID.GlassKiln
 			};
-			if (ProgressionConfig.Instance.StationProtection != StationProtection.None) items.Add(ItemID.GlassKiln);
-			List<string> failures = items.Where(ItemPool.IsRandomizable).Select(Name).ToList();
-			Check.All(failures, "Progression stations not protected");
+			bool protect = ProgressionConfig.Instance.StationProtection != StationProtection.None;
+			HashSet<int> listed = ProgressionConfig.Instance.ProtectedItems.Where(d => d != null && !d.IsUnloaded).Select(d => d.Type).ToHashSet();
+			List<string> failures = items.Where(i => !listed.Contains(i) && ItemPool.IsRandomizable(i) == protect)
+				.Select(i => $"{Name(i)} {(protect ? "not protected" : "protected")}").ToList();
+			Check.All(failures, "Stations against StationProtection");
+		}
+
+		// Every unprotected progression or themed station and every crafted or dropped boss summon is dropped by a frequent
+		// enemy (not rare, no event, at least 5 % of its best biome) at or below its tier, with a chance of at least 1 %, and is
+		// available by then in the recipe plan; every station a recipe needs can be placed
+		private static void ProgressionStationsGuaranteed()
+		{
+			Check.Equal(0, Protection.SummonTier(ItemID.SuspiciousLookingEye), "tier of the Suspicious Looking Eye");
+			Check.That(Protection.SummonTier(ItemID.GuideVoodooDoll) <= (int)Core.Tier.PostSkeletron, $"Guide Voodoo Doll at tier {Protection.SummonTier(ItemID.GuideVoodooDoll)}, after the Wall of Flesh");
+			List<GuaranteedSources.Requirement> wanted = GuaranteedSources.OtherStationRequirements().Concat(GuaranteedSources.SummonRequirements()).ToList();
+			if (wanted.Count == 0) Check.Skip("progression stations and boss summons are protected");
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			int summons = 0, stations = 0;
+			foreach (GuaranteedSources.Requirement want in wanted)
+			{
+				int item = want.Item;
+				if (Protection.IsBossSummon(item)) summons++;
+				else stations++;
+				GuaranteedSources.Requirement merged = GuaranteedSources.Requirements.FirstOrDefault(r => r.Item == item);
+				if (merged.Item != item)
+				{
+					failures.Add($"{Name(item)}: not among the requirements");
+					continue;
+				}
+				int tier = merged.Tier;
+				List<int> hosts = GuaranteedSources.HostsOf(item).ToList();
+				bool Good(int host) => NpcTiers.BaseTier(host) <= tier && GuaranteedSources.IsFrequentHost(host, tier)
+					&& GuaranteedSources.For(host).Any(d => d.Item == item && d.Chance >= GuaranteedSources.MinStationChance - 1e-6f);
+				if (!hosts.Any(Good))
+				{
+					string list = hosts.Count == 0 ? "none" : string.Join(", ", hosts.Select(h => $"{Lang.GetNPCNameValue(h)} (tier {NpcTiers.BaseTier(h)}, best biome "
+						+ $"{BiomeSlots.BestBiome(h, tier).share:P1})"));
+					failures.Add($"{Name(item)} (tier {tier}): no frequent host, hosts: {list}");
+				}
+				if (Findability.Tier(item) > tier) failures.Add($"{Name(item)} found at tier {Findability.Tier(item)} > {tier}");
+				if (item < plan.Availability.Length && plan.Availability[item] > tier) failures.Add($"{Name(item)} available at tier {plan.Availability[item]} > {tier}");
+			}
+			// Every station a live recipe needs can be placed (modded stations keep their own sources)
+			HashSet<int> tiles = new();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				if (!Main.recipe[i].Disabled) tiles.UnionWith(Main.recipe[i].requiredTile.Where(t => t >= 0));
+			}
+			foreach (int tile in tiles.OrderBy(t => t))
+			{
+				if (Stations.Info(tile).Kind == StationKind.Unknown) continue;
+				if (RecipePlanner.StationTier(tile, plan.Availability) >= Findability.Never) failures.Add($"{TileID.Search.GetName(tile)} can never be placed");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed: {stations} progression or themed stations, {summons} boss summons");
+			Check.All(failures, "Stations and summons without a frequent source");
+		}
+
+		// The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) and the
+		// items sorted with the summons (life and mana crystals, mirrors) stay protected; with the default settings the crafted
+		// and dropped ones (Guide Voodoo Doll, Suspicious Looking Eye) are randomized
+		private static void WorldSummonsProtected()
+		{
+			List<string> failures = new();
+			foreach (int item in Protection.WorldSummons.Concat(new int[] { ItemID.LifeCrystal, ItemID.ManaCrystal, ItemID.LifeFruit, ItemID.MagicMirror }))
+			{
+				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Protected) failures.Add($"{Name(item)} is not protected");
+			}
+			if (!Protection.IsBossSummon(ItemID.GuideVoodooDoll) || Protection.IsBossSummon(ItemID.LifeCrystal)) failures.Add("wrong boss summon set");
+			Check.All(failures, "World summons");
+			if (ProgressionConfig.Instance.AutoProtectBossSummons) Check.Skip("every boss summon is protected");
+			HashSet<int> listed = ProgressionConfig.Instance.ProtectedItems.Where(d => d != null && !d.IsUnloaded).Select(d => d.Type).ToHashSet();
+			foreach (int item in new[] { ItemID.GuideVoodooDoll, ItemID.SuspiciousLookingEye })
+			{
+				if (listed.Contains(item)) Check.Skip($"{Name(item)} is in the protected items (an old list: reset it)");
+				if (!ItemPool.IsRandomizable(item)) failures.Add($"{Name(item)} is protected");
+			}
+			Check.All(failures, "Crafted summons");
 		}
 
 		private static void BasicStationsFindable()

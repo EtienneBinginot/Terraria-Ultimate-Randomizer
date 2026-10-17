@@ -221,12 +221,16 @@ namespace UltimateRandomizer.Common.Features
 
 		// ---------------------------------------------------------------- Stations
 
-		// Earliest tier a station can be placed: its cheapest placing item, or its protected tier
+		// Tier from which a station can be placed with an availability (RecipePlan.Availability), for the tests
+		public static int StationTier(int tile, int[] avail) => TileAvailability(tile, ItemsByTile(), avail);
+
+		// Earliest tier a station can be placed: its cheapest placing item (crafted, found or guaranteed: avail), or its
+		// protected tier
 		private static int TileAvailability(int tile, Dictionary<int, List<int>> itemsByTile, int[] avail)
 		{
 			// Tiles without an item (Demon Altar...) are part of the world
 			if (!itemsByTile.TryGetValue(tile, out List<int> placers)) return 0;
-			int best = placers.Any(Obtainability.RecipeResults.Contains) ? Never : ProtectedStationTier(tile);
+			int best = KeepsVanillaSource(placers) ? ProtectedStationTier(tile) : Never;
 			foreach (int placer in placers)
 			{
 				if (placer < avail.Length) best = Math.Min(best, avail[placer]);
@@ -234,9 +238,14 @@ namespace UltimateRandomizer.Common.Features
 			return best;
 		}
 
-		// Progression stations no recipe makes (bought from a town NPC, found in the world) keep their vanilla way to be
-		// obtained: usable from their tier. A crafted one (Mythril Anvil, Adamantite Forge...) is available once its recipe
-		// is doable, like any item: its protected recipe keeps its result, but its ingredients are planned
+		// A protected placer that no recipe makes (bought from a town NPC, found in the world) keeps its vanilla way to be
+		// obtained. An unprotected one may lose its shop, drop or chest: it only counts through avail (its guaranteed drops)
+		public static bool KeepsVanillaSource(IEnumerable<int> placers) =>
+			placers.Any(p => ItemPool.IsValid(p) && ItemPool.Info[p].Protected && !Obtainability.RecipeResults.Contains(p));
+
+		// Progression stations kept with their vanilla source are usable from their tier. A crafted one (Mythril Anvil,
+		// Adamantite Forge...) is available once its recipe is doable, like any item: a protected recipe keeps its result;
+		// an unprotected station also counts from its guaranteed drops (Findability.Tier)
 		public static int ProtectedStationTier(int tile)
 		{
 			Stations.StationInfo info = Stations.Info(tile);
@@ -315,7 +324,9 @@ namespace UltimateRandomizer.Common.Features
 			{
 				for (int t = 0; t < Tiers.Count; t++) buckets[c, t] = new List<int>();
 			}
+			// Guaranteed stations (basic ones, and progression or themed ones when unprotected) are never new ingredients
 			HashSet<int> stationItems = Stations.Basic().Select(s => s.info.Item).ToHashSet();
+			stationItems.UnionWith(GuaranteedSources.Requirements.Where(r => r.Station).Select(r => r.Item));
 			for (int item = 1; item < ItemPool.Info.Length; item++)
 			{
 				// Hardmode pair ores: present or not depending on the altars, the ingredient plan must not depend on them. Ores
@@ -511,7 +522,7 @@ namespace UltimateRandomizer.Common.Features
 
 		// A pickaxe (or drill) strong enough for each mining level, by the tier of its ores: when the recipes (results rolled
 		// from the original recipes) and the raw sources don't give one in time, the cheapest vanilla one of that level is
-		// placed on common enemies. Computed from Findability.BaseTier and the basic stations' requirements, never from
+		// placed on common enemies. Computed from Findability.BaseTier and the stations' requirements, never from
 		// RecipePlanner.Get() (the plan depends on the guaranteed sources). The ores of the level and above count as not
 		// found at all (not even dropped): conservative, a spare pickaxe is harmless.
 		public static IEnumerable<GuaranteedSources.Requirement> MiningRequirements()
@@ -522,7 +533,10 @@ namespace UltimateRandomizer.Common.Features
 			int[] results = Types(UnlockedResults());
 			int[] resultTiers = ResultTiers(results);
 			Dictionary<int, int> stations = new();
-			foreach (GuaranteedSources.Requirement station in GuaranteedSources.StationRequirements()) stations[station.Item] = Math.Min(stations.GetValueOrDefault(station.Item, station.Tier), station.Tier);
+			foreach (GuaranteedSources.Requirement station in GuaranteedSources.StationRequirements().Concat(GuaranteedSources.OtherStationRequirements()))
+			{
+				stations[station.Item] = Math.Min(stations.GetValueOrDefault(station.Item, station.Tier), station.Tier);
+			}
 			List<int> pickaxes = ContentSamples.ItemsByType.Where(pair => pair.Value.pick > 0 && ItemPool.IsValid(pair.Key) && !ItemPool.Info[pair.Key].Excluded).Select(pair => pair.Key).OrderBy(t => t).ToList();
 			Dictionary<int, int> guaranteed = new();
 			foreach ((int pick, int[] ores) level in MiningLevels)

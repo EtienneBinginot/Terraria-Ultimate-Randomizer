@@ -205,13 +205,15 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Slots never reached");
 		}
 
-		// Without both evils, the slots of the missing one never open: each of their owners spawns through a present-evil slot
-		// (its owner, or shared with it), within the tier rule, and Pick returns the shared owners half of the time. Drunk
-		// worlds share nothing. The sharing never changes the owners.
+		// Without both evils, the slots of the missing one never open: each of their owners still spawns somewhere. Through a
+		// present-evil slot (its owner, or shared with it, within the tier rule) whenever the present evil has a slot of its
+		// kind that takes it; otherwise through its other slots, or a slot of its movement shared in another biome (never
+		// across the hardmode or Plantera line). Pick returns the shared owners half of the time. Drunk worlds share nothing,
+		// and the sharing never changes the owners.
 		private static void EvilSlotsShared()
 		{
 			List<string> failures = new();
-			int absentSlots = 0, unshared = 0;
+			int absentSlots = 0, unshared = 0, elsewhere = 0;
 			for (int i = 0; i < Seeds; i++)
 			{
 				int seed = Seed(i);
@@ -224,37 +226,49 @@ namespace UltimateRandomizer.Common.Tests
 					SpawnBiome surface = evil == WorldEvil.Crimson ? SpawnBiome.Crimson : SpawnBiome.Corruption;
 					SpawnBiome underground = evil == WorldEvil.Crimson ? SpawnBiome.UndergroundCrimson : SpawnBiome.UndergroundCorruption;
 					List<BiomeSlot> hosts = map.Slots.Where(s => s.Biome == (int)surface || s.Biome == (int)underground).ToList();
+					List<BiomeSlot> open = map.Slots.Where(s => !s.AbsentEvil).ToList();
 					if (hosts.Any(s => s.AbsentEvil)) failures.Add($"seed {seed} ({evil}): a present-evil slot is marked absent");
 					foreach (BiomeSlot slot in map.Slots.Where(s => s.AbsentEvil))
 					{
 						absentSlots++;
-						if (!hosts.Any(h => BiomeSlots.Spawners(h).Contains(slot.Owner)))
+						int owner = slot.Owner;
+						string where = $"seed {seed} ({evil}): {Name(owner)} ({BiomeSlots.BiomeName(slot.Biome)} slot of {Name(slot.Original)})";
+						if (hosts.Any(h => BiomeSlots.Spawners(h).Contains(owner))) continue;
+						if (!open.Any(h => BiomeSlots.Spawners(h).Contains(owner)))
 						{
 							unshared++;
-							failures.Add($"seed {seed} ({evil}): {Name(slot.Owner)} ({BiomeSlots.BiomeName(slot.Biome)} slot of {Name(slot.Original)}) never spawns");
+							failures.Add($"{where} never spawns");
+							continue;
 						}
+						elsewhere++;
+						// Outside the present evil only when no slot of its kind there could take it
+						int tier = BiomeSlots.TierOf(owner);
+						bool fits = hosts.Any(h => !h.Critical && h.Critter == slot.Critter && h.Movement == slot.Movement && tier <= h.Tier + 1 && BiomeSlots.BandOf(tier) <= h.Band
+							&& (!h.DaySurface || !EnemySwapPool.DaylightIntolerant(owner)));
+						if (fits) failures.Add($"{where} spawns outside the present evil, which has a slot for it");
 					}
-					foreach (BiomeSlot host in hosts.Where(h => h.EvilShared != null))
+					foreach (BiomeSlot host in open.Where(h => h.EvilShared != null))
 					{
+						bool present = hosts.Contains(host);
 						if (host.Critical || host.Extra != 0) failures.Add($"seed {seed} ({evil}): the {BiomeSlots.BiomeName(host.Biome)} slot of {Name(host.Original)} is also critical or shared with an extra");
-						foreach (int owner in host.EvilShared)
+						foreach (int shared in host.EvilShared)
 						{
-							int tier = BiomeSlots.TierOf(owner);
-							if (tier > host.Tier + 1 || BiomeSlots.BandOf(tier) > host.Band)
+							int tier = BiomeSlots.TierOf(shared);
+							if ((present && tier > host.Tier + 1) || BiomeSlots.BandOf(tier) > host.Band)
 							{
-								failures.Add($"seed {seed} ({evil}): {Name(owner)} (tier {tier}) shares the tier {host.Tier} slot of {Name(host.Original)}");
+								failures.Add($"seed {seed} ({evil}): {Name(shared)} (tier {tier}) shares the tier {host.Tier} slot of {Name(host.Original)} in {BiomeSlots.BiomeName(host.Biome)}");
 							}
 						}
 						Check.Equal(host.EvilShared[0], BiomeSlots.Pick(host, 0.0), "Pick at 0");
 						Check.Equal(host.Owner, BiomeSlots.Pick(host, BiomeSlots.EvilShare), "Pick at the evil share");
 						Check.Equal(host.Owner, BiomeSlots.Pick(host, 0.999), "Pick near 1");
 					}
-					if (i == 0) Log($"Biome evil ({evil}): {map.EvilSharedSlots} absent-evil slots shared, {map.EvilUnshared} without a partner, "
+					if (i == 0) Log($"Biome evil ({evil}): {map.EvilSharedSlots} absent-evil slots shared, {map.EvilElsewhere} elsewhere, {map.EvilUnshared} without a partner, "
 						+ $"{hosts.Count(h => h.EvilShared != null)}/{hosts.Count} present-evil slots shared");
 				}
 			}
 			if (absentSlots == 0) Check.Skip("no natural enemy lives in an evil biome");
-			Log($"Biome evil: {unshared}/{absentSlots} absent-evil slots unreachable over {Seeds} seeds");
+			Log($"Biome evil: {unshared}/{absentSlots} absent-evil slots unreachable, {elsewhere} reached outside the present evil over {Seeds} seeds");
 			Check.All(failures, "Absent-evil owners");
 		}
 

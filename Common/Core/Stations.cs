@@ -8,9 +8,9 @@ namespace UltimateRandomizer.Common.Core
 	{
 		// Everyday stations: found in the world (guaranteed sources), may be required by any recipe
 		Basic,
-		// Needed to progress (Hellforge, hardmode anvils and forges...): always protected
+		// Needed to progress (Hellforge, hardmode anvils and forges...): guaranteed on enemies of their tier unless protected
 		Progression,
-		// Themed furniture stations (Glass Kiln, Bone Welder...): protected, never given to other recipes
+		// Themed furniture stations (Glass Kiln, Bone Welder...): never given to other recipes; guaranteed unless protected
 		Thematic,
 		// Modded or unknown stations: protected
 		Unknown

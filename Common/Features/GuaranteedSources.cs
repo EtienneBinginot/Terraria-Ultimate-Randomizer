@@ -11,8 +11,9 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// Items that must be findable in the world (basic crafting stations; vanilla recipe ingredients when chosen):
-	// each one is placed as an extra drop of two common enemies of its tier, in the pot pool and, for stations, in wooden chests.
+	// Items that must be findable in the world (crafting stations, crafted and dropped boss summons; vanilla recipe
+	// ingredients when chosen): each one is placed as an extra drop of two common enemies of its tier and in the pot pool;
+	// basic stations also in wooden chests.
 	// Computed from the seed and the settings only, so every machine gets the same result.
 	public static class GuaranteedSources
 	{
@@ -27,16 +28,23 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		public const int HostsPerItem = 2;
-		public const float CriticalStationChance = 1 / 28f;
+		// The bigger biome classes (1.1.1) put the critical hosts in more Forest slots: 1/28 gave a first work bench after 12
+		// minutes; the model is nearly linear in this chance, so 1/45 gives about 19 (PacingTests: 15 to 30)
+		public const float CriticalStationChance = 1 / 45f;
 		public const float StationChance = 1 / 40f;
 		public const float MaterialChance = 1 / 6f;
 		public const int MaxPerHost = 6;
+		// Stations, summons and tools are never rarer than this, whatever GuaranteedDropMultiplier says
+		public const float MinStationChance = 0.01f;
+		// A frequent host makes at least this share of the spawns of its best biome (BiomeSlots.PlannedShare)
+		public const double MinHostShare = 0.05;
 
 		// Extra requirement providers (vanilla recipe ingredients, a pickaxe per mining level), added by the recipe system
 		public static readonly List<Func<IEnumerable<Requirement>>> ExtraRequirements = new();
 
 		private static Dictionary<int, List<PlannedDrop>> byNpc;
 		private static List<Requirement> requirements;
+		private static readonly Dictionary<(int npc, int tier), bool> frequent = new();
 
 		static GuaranteedSources()
 		{
@@ -47,6 +55,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			byNpc = null;
 			requirements = null;
+			frequent.Clear();
 		}
 
 		public static List<Requirement> Requirements
@@ -83,6 +92,42 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
+		// The vanilla item guaranteed for a progression or themed station tile (one per tile: the Mythril Anvil stands for the
+		// Orichalcum Anvil), 0 when none is needed: a protected placer keeps its vanilla sources (recipe, shop, drop). Chosen
+		// by a fixed rule (lowest tier, then lowest ID): the recipe plan can't be read here, it depends on these guarantees
+		public static int StationItem(int tile)
+		{
+			Stations.StationInfo info = Stations.Info(tile);
+			if (tile == TileID.DemonAltar || info.Kind is not (StationKind.Progression or StationKind.Thematic)) return 0;
+			List<int> placers = ContentSamples.ItemsByType.Where(pair => pair.Value.createTile == tile).Select(pair => pair.Key).ToList();
+			if (placers.Any(p => ItemPool.IsValid(p) && ItemPool.Info[p].Protected)) return 0;
+			return placers.Where(p => p < ItemID.Count && ItemPool.IsRandomizable(p)).OrderBy(ItemPool.TierOf).ThenBy(p => p).FirstOrDefault();
+		}
+
+		// Progression stations (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...) at their
+		// tier, and themed ones at their item's tier, when unprotected: their recipe, shop or drop may be randomized away
+		public static IEnumerable<Requirement> OtherStationRequirements()
+		{
+			foreach (int tile in Stations.RequiredTiles().OrderBy(t => t))
+			{
+				int item = StationItem(tile);
+				if (item <= 0) continue;
+				Stations.StationInfo info = Stations.Info(tile);
+				int tier = info.Kind == StationKind.Progression ? info.Tier : ItemPool.TierOf(item);
+				yield return new Requirement { Item = item, Tier = Tiers.Clamp(tier), Station = true };
+			}
+		}
+
+		// Crafted and dropped boss summons (Guide Voodoo Doll included) when unprotected, at the tier before their boss's;
+		// dropped one at a time, as rarely as a station
+		public static IEnumerable<Requirement> SummonRequirements()
+		{
+			for (int type = 1; type < ItemPool.Info.Length; type++)
+			{
+				if (Protection.IsBossSummon(type) && ItemPool.IsRandomizable(type)) yield return new Requirement { Item = type, Tier = Protection.SummonTier(type), Station = true };
+			}
+		}
+
 		// Items a pot may also give, among those already unlocked
 		public static List<int> PotItems(int unlockedTier) =>
 			Requirements.Where(r => r.Tier <= unlockedTier && (r.Station || r.Tool || r.Tier == 0)).Select(r => r.Item).ToList();
@@ -91,7 +136,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (byNpc != null) return;
 			Dictionary<int, List<PlannedDrop>> result = new();
-			List<Requirement> all = StationRequirements().ToList();
+			List<Requirement> all = StationRequirements().Concat(OtherStationRequirements()).Concat(SummonRequirements()).ToList();
 			foreach (Func<IEnumerable<Requirement>> provider in ExtraRequirements) all.AddRange(provider());
 			// One requirement per item: the earliest tier, keeping every flag (a pickaxe also needed as an ingredient stays a tool)
 			all = all.GroupBy(r => r.Item).Select(g => new Requirement
@@ -100,7 +145,12 @@ namespace UltimateRandomizer.Common.Features
 			}).OrderBy(r => r.Tier).ThenBy(r => DetRandom.ItemKey(r.Item)).ToList();
 
 			List<int>[] hosts = new List<int>[Tiers.Count];
-			for (int t = 0; t < Tiers.Count; t++) hosts[t] = Hosts(t);
+			List<int>[] natural = new List<int>[Tiers.Count];
+			for (int t = 0; t < Tiers.Count; t++)
+			{
+				hosts[t] = Hosts(t);
+				natural[t] = NaturalHosts(t).OrderBy(DetRandom.NpcKey).ToList();
+			}
 			Dictionary<int, int> load = new();
 			float multiplier = ProgressionConfig.Instance.GuaranteedDropMultiplier;
 			foreach (Requirement requirement in all)
@@ -116,13 +166,10 @@ namespace UltimateRandomizer.Common.Features
 					if (common != null && common.Count > 0) host = common[rng.Next(common.Count)];
 					else
 					{
-						List<int> candidates = null;
-						for (int t = Tiers.Clamp(requirement.Tier); t >= 0; t--)
-						{
-							candidates = hosts[t].Where(n => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost).ToList();
-							if (candidates.Count > 0) break;
-						}
-						if (candidates == null || candidates.Count == 0) break;
+						// Frequent hosts first (a station or a summon must not hide on a rare enemy), then any common one
+						bool Free(int n) => !chosen.Contains(n) && load.GetValueOrDefault(n) < MaxPerHost;
+						List<int> candidates = Candidates(natural, requirement.Tier, n => Free(n) && IsFrequentHost(n, requirement.Tier)) ?? Candidates(hosts, requirement.Tier, Free);
+						if (candidates == null) break;
 						// Spread the load: among the least used hosts
 						List<int> best = candidates.OrderBy(n => load.GetValueOrDefault(n)).ThenBy(DetRandom.NpcKey).Take(3).ToList();
 						host = best[rng.Next(best.Count)];
@@ -130,10 +177,13 @@ namespace UltimateRandomizer.Common.Features
 					chosen.Add(host);
 					load[host] = load.GetValueOrDefault(host) + 1;
 					// Rare enough to be a small quest (first work bench in 15 to 30 minutes, see PacingTests)
+					bool single = requirement.Station || requirement.Tool;
 					float chance = requirement.Station ? (requirement.Critical ? CriticalStationChance : StationChance) : requirement.Tool ? StationChance : MaterialChance;
-					(int min, int max) = requirement.Station || requirement.Tool ? (1, 1) : StackRules.Range(requirement.Item);
+					chance = Math.Min(1f, chance * multiplier);
+					if (single) chance = Math.Max(MinStationChance, chance);
+					(int min, int max) = single ? (1, 1) : StackRules.Range(requirement.Item);
 					if (!result.TryGetValue(host, out List<PlannedDrop> drops)) result[host] = drops = new List<PlannedDrop>();
-					drops.Add(new PlannedDrop { Item = requirement.Item, StackMin = min, StackMax = Math.Max(min, max), Chance = Math.Min(1f, chance * multiplier), Extra = true, Guaranteed = true });
+					drops.Add(new PlannedDrop { Item = requirement.Item, StackMin = min, StackMax = Math.Max(min, max), Chance = chance, Extra = true, Guaranteed = true });
 				}
 			}
 			requirements = all;
@@ -152,6 +202,35 @@ namespace UltimateRandomizer.Common.Features
 		// zombies and demon eyes (night)
 		public static int[] CriticalHosts(int set) => BiomeSlots.Active ? BiomeSlots.CriticalHosts(set == 0).ToArray() : VanillaCriticalHosts[set];
 
+		// The hosts of the highest tier at or below the requirement's that pass the filter, or null
+		private static List<int> Candidates(List<int>[] hosts, int tier, Func<int, bool> filter)
+		{
+			for (int t = Tiers.Clamp(tier); t >= 0; t--)
+			{
+				List<int> candidates = hosts[t].Where(filter).ToList();
+				if (candidates.Count > 0) return candidates;
+			}
+			return null;
+		}
+
+		// A natural host met often at a tier: not rare, no event enemy, and at least MinHostShare of the spawns of its best
+		// biome, with a slot that is not rare (BiomeSlots.PlannedShare: the redistributed slots, else the vanilla ones).
+		// An enemy without any slot (modded, without a bestiary biome) only needs bestiary rarity 0.
+		public static bool IsFrequentHost(int npc, int tier)
+		{
+			if (!frequent.TryGetValue((npc, tier), out bool result)) frequent[(npc, tier)] = result = ComputeFrequent(npc, tier);
+			return result;
+		}
+
+		private static bool ComputeFrequent(int npc, int tier)
+		{
+			if (!IsNaturalHost(npc, tier)) return false;
+			if (ContentSamples.NpcsByNetId.TryGetValue(npc, out NPC sample) && sample.rarity > 0) return false;
+			if (BiomeSlots.PlannedBiomes(npc).Count == 0) return true;
+			(_, double share, _) = BiomeSlots.BestBiome(npc, tier);
+			return share >= MinHostShare && BiomeSlots.SpawnsInCommonSlot(npc, tier);
+		}
+
 		private static bool IsNaturalHost(int npc, int tier)
 		{
 			if (NPCID.Sets.CountsAsCritter[npc] || IsEventEnemy(npc)) return false;
@@ -162,10 +241,13 @@ namespace UltimateRandomizer.Common.Features
 			return false;
 		}
 
+		// Natural enemies of a tier that may carry a guaranteed drop (no critter, no event enemy)
+		private static List<int> NaturalHosts(int tier) => EnemySwapPool.NaturalEnemies(tier).Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n)).ToList();
+
 		// Common natural enemies of a tier (bestiary rarity 1, else 2, else any)
 		private static List<int> Hosts(int tier)
 		{
-			List<int> natural = EnemySwapPool.NaturalEnemies(tier).Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n)).ToList();
+			List<int> natural = NaturalHosts(tier);
 			for (int stars = 1; stars <= 5; stars++)
 			{
 				List<int> common = natural.Where(n => Stars(n) <= stars).OrderBy(DetRandom.NpcKey).ToList();

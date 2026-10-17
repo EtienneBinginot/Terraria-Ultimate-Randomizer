@@ -65,7 +65,7 @@ namespace UltimateRandomizer.Common.Codex
 			"Name.Creature/2", "Name.Recipe/2", "Name.Boss/2", "Name.Bag/2", "Name.Chest/2", "Name.Pot/2", "Name.Shop/2"
 		};
 
-		// Vanilla summons found in the world rather than dropped or crafted: (item, text key, critter to show)
+		// Vanilla summons found in the world rather than dropped or crafted (Protection.WorldSummons): (item, text key, critter to show)
 		private static readonly (int item, string key, int npc)[] WorldSources =
 		{
 			(ItemID.TruffleWorm, "TruffleWorm", NPCID.TruffleWorm),
@@ -139,9 +139,10 @@ namespace UltimateRandomizer.Common.Codex
 				int best = Placers(tile).Where(p => p < ItemID.Count).OrderBy(p => Availability(plan, p)).ThenBy(p => p).FirstOrDefault();
 				if (best > 0) Add(best, info.Tier, HintTargetKind.Station);
 			}
-			for (int type = 1; type < ItemPool.Info.Length && type < ItemID.Sets.SortingPriorityBossSpawns.Length; type++)
+			// Boss and event summons (not the life crystals and mirrors sorted with them), needed before their boss
+			for (int type = 1; type < ItemPool.Info.Length; type++)
 			{
-				if (ItemID.Sets.SortingPriorityBossSpawns[type] >= 0) Add(type, ItemPool.TierOf(type), HintTargetKind.Summon);
+				if (Protection.IsBossSummon(type)) Add(type, Protection.SummonTier(type), HintTargetKind.Summon);
 			}
 			// The pickaxes placed on enemies for a mining level: cheap ones only
 			foreach (GuaranteedSources.Requirement r in GuaranteedSources.Requirements.Where(r => r.Tool)) Add(r.Item, r.Tier, HintTargetKind.Pickaxe);
@@ -328,9 +329,9 @@ namespace UltimateRandomizer.Common.Codex
 			{
 				if (Stations.Info(tile).Kind == StationKind.Progression) set.UnionWith(Placers(tile));
 			}
-			for (int type = 1; type < ItemPool.Info.Length && type < ItemID.Sets.SortingPriorityBossSpawns.Length; type++)
+			for (int type = 1; type < ItemPool.Info.Length; type++)
 			{
-				if (ItemID.Sets.SortingPriorityBossSpawns[type] >= 0) set.Add(type);
+				if (Protection.IsBossSummon(type)) set.Add(type);
 			}
 			foreach (GuaranteedSources.Requirement r in GuaranteedSources.Requirements.Where(r => r.Tool)) set.Add(r.Item);
 			return set;

@@ -138,7 +138,9 @@ Tests: {
 	DropFrequency: Most kills give something (at least 0.6 items per kill; the value is written to client.log)
 	WorkBenchPacing: The first work bench comes after 15 to 30 minutes on average (written to client.log)
 	BasicStationsUnprotected: Basic stations (work bench, furnace, anvil...) are left to the randomizer
-	ProgressionStationsProtected: Progression stations (Hellforge, hardmode anvils and forges...) stay protected
+	ProgressionStationsProtected: Progression and themed stations are protected unless station protection is None
+	ProgressionStationsGuaranteed: Unprotected progression stations and boss summons drop from frequent enemies of their tier (1 % or more)
+	WorldSummonsProtected: The summons found in the world stay protected, crafted ones are randomized
 	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier
 	GuaranteedLoadBalanced: No enemy carries too many guaranteed items
@@ -874,7 +876,7 @@ Configs: {
 
 		ProtectedItems: {
 			Label: Protected items
-			Tooltip: Never replaced (drops, recipes...) and never given as a random item. Keeps progression possible.
+			Tooltip: Never replaced (drops, recipes...) and never given as a random item. Keeps progression possible. Crafted boss summons are no longer in the default list: they are guaranteed on common enemies (reset the list to get the new default).
 		}
 
 		ProtectProgressionMaterials: {
@@ -884,12 +886,12 @@ Configs: {
 
 		AutoProtectBossSummons: {
 			Label: Protect all boss summons
-			Tooltip: Also protects boss summoning items from other mods.
+			Tooltip: Off: crafted and dropped boss summons (Suspicious Looking Eye, Guide Voodoo Doll, mechanical summons...) are randomized and dropped by common enemies of their tier instead. The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) stay protected. On: every boss summon is protected, those of other mods too.
 		}
 
 		StationProtection: {
 			Label: Crafting station protection
-			Tooltip: Progression only: basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are no longer protected; they are found in the world (common enemies, pots, wooden chests). Progression stations (Hellforge, hardmode anvils and forges...) keep their recipe, even with None.
+			Tooltip: None: every station is randomized, progression ones too (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...); each one is dropped by common enemies of its tier. Progression only: only basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are randomized; they are also found in pots and wooden chests. Stations from other mods stay protected.
 		}
 
 		ProtectPickaxeProgression: {

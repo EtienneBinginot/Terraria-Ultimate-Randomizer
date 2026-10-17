@@ -120,14 +120,16 @@ namespace UltimateRandomizer.Common.Tests
 			return placers;
 		}
 
-		// A station is usable from its cheapest placing item; progression stations no recipe makes from their tier (bought...);
-		// tiles no item places (Demon Altar) are part of the world
+		// A station is usable from its cheapest placing item; progression stations whose protected placer no recipe makes from
+		// their tier (bought...); tiles no item places (Demon Altar) are part of the world
 		private static int StationTier(int tile, Dictionary<int, List<int>> placers, int[] avail)
 		{
 			if (!placers.TryGetValue(tile, out List<int> items)) return 0;
 			Stations.StationInfo info = Stations.Info(tile);
-			// A progression station no recipe makes (bought, found) is usable from its tier; a crafted one through its recipe
-			int best = info.Kind == StationKind.Progression && !items.Any(Obtainability.RecipeResults.Contains) ? info.Tier : Findability.Never;
+			// A protected progression station no recipe makes (bought, found) is usable from its tier; a crafted or
+			// unprotected one through its recipe or its guaranteed drops (avail)
+			bool vanillaSource = items.Any(i => ItemPool.IsValid(i) && ItemPool.Info[i].Protected && !Obtainability.RecipeResults.Contains(i));
+			int best = info.Kind == StationKind.Progression && vanillaSource ? info.Tier : Findability.Never;
 			foreach (int item in items)
 			{
 				if (item < avail.Length) best = Math.Min(best, avail[item]);

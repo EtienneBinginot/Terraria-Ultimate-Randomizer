@@ -23,9 +23,9 @@ namespace UltimateRandomizer.Common.Configs
 	{
 		// Every crafting station keeps its vanilla recipe and is never given at random
 		AllStations,
-		// Only progression stations are protected; basic ones (work bench, furnace, anvil...) are found in the world
+		// Progression and themed stations are protected; basic ones (work bench, furnace, anvil...) are found in the world
 		ProgressionOnly,
-		// No station is protected
+		// No station is protected (except modded ones): each one is guaranteed on common enemies of its tier
 		None
 	}
 
@@ -116,25 +116,23 @@ namespace UltimateRandomizer.Common.Configs
 		[ReloadRequired]
 		public List<ItemDefinition> ProtectedItems = new()
 		{
-			// Boss summons, the hardmode ore chain (Pwnhammer) and keys. The ingredients of protected results that can't be
-			// found in time are replaced by findable ones (or guaranteed in Vanilla mode), so their materials (souls of light and
-			// night...) need no protection; event summons are optional (the Goblin army and eclipses also come by themselves)
-			new(ItemID.GuideVoodooDoll), new(ItemID.Pwnhammer), new(ItemID.TempleKey), new(ItemID.LihzahrdPowerCell),
-			new(ItemID.GoldenKey), new(ItemID.ShadowKey), new(ItemID.MechanicalEye), new(ItemID.MechanicalWorm),
-			new(ItemID.MechanicalSkull), new(ItemID.SuspiciousLookingEye), new(ItemID.WormFood), new(ItemID.BloodySpine),
-			new(ItemID.SlimeCrown), new(ItemID.Abeemination), new(ItemID.DeerThing), new(ItemID.QueenSlimeCrystal),
-			new(ItemID.TruffleWorm), new(ItemID.CelestialSigil), new(ItemID.LihzahrdAltar)
+			// The hardmode ore chain (Pwnhammer), keys and the summons found in the world. Crafted and dropped boss summons are
+			// randomized and guaranteed on common enemies (GuaranteedSources.SummonRequirements). The ingredients of protected
+			// results that can't be found in time are replaced by findable ones (or guaranteed in Vanilla mode), so their
+			// materials (souls of light and night...) need no protection
+			new(ItemID.Pwnhammer), new(ItemID.TempleKey), new(ItemID.LihzahrdPowerCell), new(ItemID.GoldenKey), new(ItemID.ShadowKey),
+			new(ItemID.QueenSlimeCrystal), new(ItemID.TruffleWorm), new(ItemID.LihzahrdAltar)
 		};
 
 		[DefaultValue(true)]
 		[ReloadRequired]
 		public bool ProtectProgressionMaterials;
 
-		[DefaultValue(true)]
+		[DefaultValue(false)]
 		[ReloadRequired]
 		public bool AutoProtectBossSummons;
 
-		[DefaultValue(StationProtection.ProgressionOnly)]
+		[DefaultValue(StationProtection.None)]
 		[DrawTicks]
 		[ReloadRequired]
 		public StationProtection StationProtection;
