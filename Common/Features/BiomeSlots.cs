@@ -808,21 +808,30 @@ namespace UltimateRandomizer.Common.Features
 		// often there with half the average share of the biome's enemy types, or the cap when that is lower
 		public const double RelativeFrequentShare = 0.5;
 
+		// Enemy types by (map, vanilla mixed in, band, biome): the maps are rebuilt when the seed or settings change
+		private static readonly Dictionary<(BiomeSlotMap map, bool mixed, int band, int biome), int> typeCounts = new();
+
 		public static double FrequentShare(int biome, int tier, double cap)
 		{
-			int band = BandOf(Tiers.Clamp(tier));
+			int count = TypeCount(biome, BandOf(Tiers.Clamp(tier)));
+			return count == 0 ? cap : Math.Min(cap, RelativeFrequentShare / count);
+		}
+
+		private static int TypeCount(int biome, int band)
+		{
+			BiomeSlotMap map = Active ? Current : Vanilla;
+			bool mixed = Active && VanillaKeep > 0;
+			if (typeCounts.TryGetValue((map, mixed, band, biome), out int cached)) return cached;
+			if (typeCounts.Count > 4000) typeCounts.Clear();
 			HashSet<int> types = new();
 			void From(BiomeSlotMap map)
 			{
 				if (Table(map, band).ByBiome.TryGetValue(biome, out Dictionary<int, double> byType)) types.UnionWith(byType.Keys);
 			}
-			if (!Active) From(Vanilla);
-			else
-			{
-				From(Current);
-				if (VanillaKeep > 0) From(Vanilla);
-			}
-			return types.Count == 0 ? cap : Math.Min(cap, RelativeFrequentShare / types.Count);
+			From(map);
+			if (mixed) From(Vanilla);
+			typeCounts[(map, mixed, band, biome)] = types.Count;
+			return types.Count;
 		}
 
 		// The biome where a type is met the most at a tier, steadily first (biome -1: it spawns nowhere)

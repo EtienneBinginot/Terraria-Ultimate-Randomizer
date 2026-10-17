@@ -84,6 +84,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			PacingResult result = PacingModel.Simulate(5, 44);
 			Log($"Drops: {result.ItemsPerKill:0.00} items per kill");
+			Log($"Jackpots: {PacingModel.JackpotsPer100Kills(2000, 46):0.00} per 100 kills");
 			RequireDefaults();
 			if (!IsDefault(LootConfig.Instance, "CommonDropChance")) Check.Skip("CommonDropChance is not at its default value");
 			Check.That(result.ItemsPerKill >= MinItemsPerKill, $"only {result.ItemsPerKill:0.00} items per kill, expected at least {MinItemsPerKill} (about 3.2 with LootAbundance 3)");

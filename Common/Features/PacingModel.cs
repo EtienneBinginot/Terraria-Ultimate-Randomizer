@@ -118,6 +118,48 @@ namespace UltimateRandomizer.Common.Features
 			return total / runs;
 		}
 
+		// Jackpots (ItemPool.LastJackpotGap) per 100 early kills, expected from the runtime rolls of the kills: the extra drops
+		// (one lucky roll per kill, as RandomNpcDropRule does) and the replaced original drops (one lucky roll each), weighted
+		// by their chances. Loot bonuses and giants are left out
+		public static double JackpotsPer100Kills(int kills, int seed)
+		{
+			if (!LootConfig.Instance.RandomizeMobDrops || kills <= 0) return 0;
+			Random rng = new(seed);
+			float swapChance = SwapChance();
+			List<int> pool = EnemySwapPool.NaturalEnemies(0);
+			int totalKills = EarlyKills.Sum(k => k.count);
+			float luckyChance = ProgressionConfig.Instance.RuntimeJackpotChance / 100f;
+			double jackpots = 0;
+			for (int k = 0; k < kills; k++)
+			{
+				int roll = rng.Next(totalKills);
+				(int npc, int count, SpawnBiome biome) picked = EarlyKills[0];
+				foreach ((int npc, int count, SpawnBiome biome) entry in EarlyKills)
+				{
+					if (roll < entry.count)
+					{
+						picked = entry;
+						break;
+					}
+					roll -= entry.count;
+				}
+				int killed = Killed(picked.npc, picked.biome, rng, swapChance, pool);
+				int owner = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(killed, out NPC sample) ? sample.type : killed);
+				foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(killed, owner, Main.expertMode, rng.NextDouble() < luckyChance, wildRng: new Random(rng.Next())))
+				{
+					if (drop.JackpotGap > 0) jackpots += Math.Clamp(drop.Chance, 0f, 1f);
+				}
+				foreach (Terraria.GameContent.ItemDropRules.DropRateInfo entry in LootSnapshot.ForNpc(killed))
+				{
+					Random wild = new(rng.Next());
+					DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(owner), entry.itemId, NpcTiers.EffectiveTier(owner), 0, rng.NextDouble() < luckyChance, wild, wild);
+					if (ItemPool.LastJackpotGap > 0) jackpots += Math.Clamp(entry.dropRate, 0f, 1f);
+				}
+			}
+			ItemPool.ClearJackpot();
+			return jackpots * 100 / kills;
+		}
+
 		// In this world (single player: chests are only known there)
 		private static (int benches, int wooden) WoodenChestsWithWorkBench()
 		{

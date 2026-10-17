@@ -100,6 +100,7 @@ Tests: {
 	JackpotUseful: Jackpots are always useful items
 	JackpotNotInEnemyDrops: Jackpots are not listed among the enemy's drops
 	JackpotRatesLower: Jackpots are a little rarer by default
+	JackpotDropsMarked: Drops above the limit are marked as jackpots
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled

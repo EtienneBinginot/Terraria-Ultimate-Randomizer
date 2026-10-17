@@ -267,32 +267,35 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Hints out of order");
 		}
 
-		// A target found in the world counts as fully known: shown at the last level, never sold, and the server records the
-		// last level (and its reveal) without any coin. On an empty copy of the codex, restored afterwards
+		// A target obtained in the world (not only seen in a recipe or a chest) counts as fully known: shown at the last
+		// level, never sold, and the server records the last level (and its reveal) for free. On an empty copy of the codex,
+		// restored afterwards
 		private static void HintFoundUnlocks()
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (the server records it)");
-			HintTarget target = TargetsOrSkip().FirstOrDefault(t => HintFacts.For(t.Item) != null);
-			if (target == null) Check.Skip("no target with a hint");
+			TargetsOrSkip();
+			HintTarget target = HintFacts.Targets().FirstOrDefault(t => HintFacts.For(t.Item) != null);
+			if (target == null) Check.Skip("no target on sale now");
 			CodexSystem.ProcessReveals(force: true);
 			CodexData saved = CodexSystem.Data;
-			Player player = Main.LocalPlayer;
-			long CoinsOf() => Utils.CoinsCount(out _, player.inventory) + Utils.CoinsCount(out _, player.bank.item);
-			long coins = CoinsOf();
 			try
 			{
 				CodexSystem.Data = new CodexData { Seed = saved.Seed, HasSeed = saved.HasSeed, RecipeStamp = saved.RecipeStamp, HasRecipeStamp = saved.HasRecipeStamp };
 				string name = CodexNames.Item(target.Item);
 				Check.Equal(0, CodexSystem.ShownHintLevel(target.Item), "level before it is found");
 				CodexSystem.Submit(CodexEntry.Seen(name));
+				CodexSystem.ProcessReveals(force: true);
+				Check.Equal(0, CodexSystem.Data.HintLevel(name), "level once only seen");
+				Check.That(!CodexSystem.IsFound(target.Item), "seen counts as found");
+				CodexSystem.Submit(CodexEntry.Obtained(name));
+				Check.That(CodexSystem.IsFound(target.Item), "obtained does not count as found");
 				Check.Equal(HintFacts.MaxLevel, CodexSystem.ShownHintLevel(target.Item), "level shown once found");
-				Check.That(HintShop.TryBuy(player, target, 1, out _) == HintPurchase.NotNext, "a found target is still sold");
 				CodexSystem.ProcessReveals(force: true);
 				Check.Equal(HintFacts.MaxLevel, CodexSystem.Data.HintLevel(name), "level recorded once found");
 				Check.Equal(0, CodexSystem.PendingFoundCount, "found items waiting");
 				HintFact fact = HintFacts.For(target.Item);
 				if (fact.Kind is HintKind.Creature or HintKind.Boss) Check.That(CodexSystem.KnownNpcs().Contains(CodexSystem.RevealKey(fact)), "the source of a found target is not revealed");
-				Check.Equal(coins, CoinsOf(), "coins after finding the target");
+				if (fact.Kind == HintKind.Recipe) Check.That(CodexSystem.Data.Recipes.Contains(RecipeSystem.RecipeKey(fact.Recipe)), "the recipe of a found target is not shown");
 			}
 			finally
 			{

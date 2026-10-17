@@ -65,7 +65,7 @@ namespace UltimateRandomizer.Common.Codex
 		// Entries a client may send: what happens only on its machine (the rest is recorded by the server)
 		public static bool ClientMayRecord(CodexEntry e) => e.Op switch
 		{
-			CodexOp.Recipe or CodexOp.Seen or CodexOp.Chest or CodexOp.Hint => true,
+			CodexOp.Recipe or CodexOp.Seen or CodexOp.Obtained or CodexOp.Chest or CodexOp.Hint => true,
 			CodexOp.Source or CodexOp.SourceKey => e.Kind is CodexSource.Bag or CodexSource.Fishing or CodexSource.Extractinator,
 			_ => false
 		};
@@ -178,7 +178,7 @@ namespace UltimateRandomizer.Common.Codex
 			if (!Data.Apply(e)) return;
 			if (Main.netMode == NetmodeID.Server) outbox.Add(e);
 			if (e.Op == CodexOp.Hint) QueueReveal(e);
-			if (e.Op == CodexOp.Seen) QueueFound(e);
+			if (e.Op == CodexOp.Obtained) QueueFound(e);
 		}
 
 		// ---- Reveals: the last level of a hint counts as discovering the enemy it names ----
@@ -196,20 +196,28 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static int PendingRevealCount => pendingReveals.Count;
 
-		// Server (or single player): items seen in this world whose hint may not be fully known yet. A hint target found
-		// anyway needs no hint: its last level is recorded for free (saved, synced, and its source revealed like a bought
-		// one). The server only trusts its own codex: what it saw, or what a client reported seeing like any discovery
+		// Server (or single player): items obtained in this world (picked up, crafted, taken from a chest: ItemsObtained,
+		// not merely shown in a recipe or a chest) whose hint may not be fully known yet. A target found anyway needs no hint:
+		// its last level is recorded for free (saved, synced, and its source revealed like a bought one), within the tier
+		// window of the hints on sale. The server trusts what a client reports holding like any of its discoveries
 		private static readonly HashSet<string> pendingFound = new();
 
-		public static void QueueFound(CodexEntry seen)
+		public static void QueueFound(CodexEntry obtained)
 		{
-			if (seen.Op == CodexOp.Seen && Main.netMode != NetmodeID.MultiplayerClient && !string.IsNullOrEmpty(seen.Item)) pendingFound.Add(seen.Item);
+			if (obtained.Op == CodexOp.Obtained && Main.netMode != NetmodeID.MultiplayerClient && !string.IsNullOrEmpty(obtained.Item)) pendingFound.Add(obtained.Item);
 		}
 
 		public static int PendingFoundCount => pendingFound.Count;
 
-		// A hint target already seen: shown as fully known, never sold
-		public static bool IsFound(int item) => HasSeen(item) && HintFacts.Ready && HintFacts.RawTarget(item) != null;
+		public static bool HasObtained(int item) => Data.ItemsObtained.Contains(CodexNames.Item(item));
+
+		// A hint target already obtained, among those on sale now: shown as fully known, never sold
+		public static bool IsFound(int item)
+		{
+			if (!HasObtained(item) || !HintFacts.Ready) return false;
+			HintTarget target = HintFacts.RawTarget(item);
+			return target != null && target.Tier <= ProgressionSystem.UnlockedTier + 1;
+		}
 
 		// The level the interface shows: the last one for a found target
 		public static int ShownHintLevel(int item) => IsFound(item) ? HintFacts.MaxLevel : HintLevel(item);
@@ -222,8 +230,11 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (string name in items)
 			{
 				int item = CodexNames.ItemType(name);
-				if (item <= 0 || !Data.ItemsSeen.Contains(name) || HintFacts.RawTarget(item) == null || Data.HintLevel(name) >= HintFacts.MaxLevel) continue;
+				if (item <= 0 || !IsFound(item) || Data.HintLevel(name) >= HintFacts.MaxLevel) continue;
 				Submit(CodexEntry.Hint(name, HintFacts.MaxLevel));
+				// The last level of a recipe hint shows the recipe, as when it is bought
+				HintFact fact = HintFacts.For(item);
+				if (fact != null && fact.Kind == HintKind.Recipe) RecordRecipeOnly(fact.Recipe);
 			}
 		}
 
@@ -249,7 +260,7 @@ namespace UltimateRandomizer.Common.Codex
 					if (level >= HintFacts.MaxLevel) pendingReveals.Add(item);
 				}
 				// Old saves, and targets that changed with the tier or the settings
-				pendingFound.UnionWith(Data.ItemsSeen);
+				pendingFound.UnionWith(Data.ItemsObtained);
 			}
 			UnlockFound();
 			if (pendingReveals.Count == 0) return;
@@ -382,9 +393,16 @@ namespace UltimateRandomizer.Common.Codex
 		private static void ConfirmHints(string name, int serverLevel, bool refundOthers)
 		{
 			if (!pendingHints.TryGetValue(name, out List<PendingHint> list)) return;
+			// Found meanwhile: the server gave the last level for free, the levels being bought are paid back
+			bool found = serverLevel >= HintFacts.MaxLevel && IsFound(CodexNames.ItemType(name));
 			foreach (PendingHint pending in list.ToList())
 			{
-				if (pending.Level <= serverLevel)
+				if (found)
+				{
+					list.Remove(pending);
+					DropPending(name, pending);
+				}
+				else if (pending.Level <= serverLevel)
 				{
 					list.Remove(pending);
 					pending.Accepted?.Invoke();
@@ -462,6 +480,15 @@ namespace UltimateRandomizer.Common.Codex
 		public static void RecordSeen(int item)
 		{
 			if (item > ItemID.None) Submit(CodexEntry.Seen(CodexNames.Item(item)));
+		}
+
+		// Held by the local player: seen too
+		public static void RecordObtained(int item)
+		{
+			if (item <= ItemID.None) return;
+			string name = CodexNames.Item(item);
+			if (!Data.ItemsSeen.Contains(name)) Submit(CodexEntry.Seen(name));
+			if (!Data.ItemsObtained.Contains(name)) Submit(CodexEntry.Obtained(name));
 		}
 
 		public static void RecordChest(Chest chest)
@@ -910,7 +937,7 @@ namespace UltimateRandomizer.Common.Codex
 					}
 					outbox.Add(e);
 					if (e.Op == CodexOp.Hint) QueueReveal(e);
-					if (e.Op == CodexOp.Seen) QueueFound(e);
+					if (e.Op == CodexOp.Obtained) QueueFound(e);
 				}
 				else
 				{

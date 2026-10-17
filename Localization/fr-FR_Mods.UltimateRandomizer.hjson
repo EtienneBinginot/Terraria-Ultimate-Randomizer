@@ -100,6 +100,7 @@ Tests: {
 	JackpotUseful: Les jackpots sont toujours des objets utiles
 	JackpotNotInEnemyDrops: Les jackpots ne comptent pas parmi les drops de l'ennemi
 	JackpotRatesLower: Les jackpots sont un peu plus rares par défaut
+	JackpotDropsMarked: Les drops au-delà de la limite sont marqués comme jackpots
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés

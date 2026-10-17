@@ -173,9 +173,11 @@ namespace UltimateRandomizer.Common.Codex
 		public static List<HintTarget> ByProgress(IEnumerable<HintTarget> targets)
 		{
 			RecipePlan plan = RecipePlanner.Get();
+			Dictionary<HintTarget, int> order = new();
 			List<HintTarget> all = AllTargets();
+			for (int i = 0; i < all.Count; i++) order[all[i]] = i;
 			return targets.OrderBy(t => t.Tier).ThenBy(t => For(t.Item)?.Tier ?? Findability.Never).ThenBy(t => Availability(plan, t.Item))
-				.ThenBy(t => all.IndexOf(t)).ToList();
+				.ThenBy(t => order.TryGetValue(t, out int i) ? i : int.MaxValue).ToList();
 		}
 
 		// Targets offered now: up to one tier above the unlocked one

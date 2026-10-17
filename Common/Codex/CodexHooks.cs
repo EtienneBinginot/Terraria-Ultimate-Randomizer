@@ -15,7 +15,7 @@ namespace UltimateRandomizer.Common.Codex
 		// Runs on the client picking the item up
 		public override bool OnPickup(Item item, Player player)
 		{
-			if (player.whoAmI == Main.myPlayer && !Main.dedServ) CodexSystem.RecordSeen(item.type);
+			if (player.whoAmI == Main.myPlayer && !Main.dedServ) CodexSystem.RecordObtained(item.type);
 			return true;
 		}
 
@@ -53,7 +53,7 @@ namespace UltimateRandomizer.Common.Codex
 			CodexSystem.RequestFull();
 			foreach (Item item in Player.inventory)
 			{
-				if (item != null && !item.IsAir) CodexSystem.RecordSeen(item.type);
+				if (item != null && !item.IsAir) CodexSystem.RecordObtained(item.type);
 			}
 		}
 
@@ -67,7 +67,19 @@ namespace UltimateRandomizer.Common.Codex
 				if (Player.chest >= 0 && Player.chest < Main.maxChests) CodexSystem.RecordChest(Main.chest[Player.chest]);
 			}
 			if (Main.GameUpdateCount % 15 == 0) CodexSystem.ScanGuide();
+			// Crafted, taken from a chest, caught: whatever reaches the inventory without a pickup
+			if (Main.GameUpdateCount % 60 == 30) ScanInventory();
 			if (Main.playerInventory && Main.GameUpdateCount % 30 == 0 && RecipeSystem.RecipeCount > 0) CodexSystem.ScanAvailableRecipes();
+		}
+
+		private void ScanInventory()
+		{
+			for (int i = 0; i < Main.InventorySlotsTotal && i < Player.inventory.Length; i++)
+			{
+				Item item = Player.inventory[i];
+				if (item != null && !item.IsAir && !CodexSystem.HasObtained(item.type)) CodexSystem.RecordObtained(item.type);
+			}
+			if (!Main.mouseItem.IsAir && !CodexSystem.HasObtained(Main.mouseItem.type)) CodexSystem.RecordObtained(Main.mouseItem.type);
 		}
 
 		// Server: the next player in this slot gets the full codex again

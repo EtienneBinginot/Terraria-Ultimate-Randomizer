@@ -149,15 +149,12 @@ namespace UltimateRandomizer.Common.Core
 		public static float? WildChanceOverride;
 
 		// Jackpots: a runtime roll (WildRng set: at kill or bag opening, never in plans) whose item is above the progression
-		// limit, by madness (WildDropChance) or luck (RuntimeJackpotChance, IgnoreGating). It is always something useful
-		// (equipment or a progression station, never an ore or a block), and the last Roll says by how many tiers it is
+		// limit, by madness (WildDropChance) or luck (RuntimeJackpotChance, IgnoreGating), and useful (equipment or a
+		// progression station): a roll above the limit on an ore or a block is no jackpot, the normal roll stands. The last Roll says by how many tiers it is
 		// above the limit (0: no jackpot). Rolls run on the game thread only
 		public static int LastJackpotGap { get; private set; }
 
 		public static void ClearJackpot() => LastJackpotGap = 0;
-
-		// Share of the jackpots that are a progression station of their tier, when there is one
-		public const double StationJackpotShare = 0.1;
 
 		private static int[] progressionStations;
 
@@ -177,60 +174,11 @@ namespace UltimateRandomizer.Common.Core
 		public static bool IsJackpotWorthy(int type) =>
 			IsValid(type) && (ItemCategories.IsGear(Info[type].Category) || Array.IndexOf(ProgressionStations(), type) >= 0);
 
-		// A useful item of a tier for a jackpot: sometimes a progression station of that tier, else equipment of a category
-		// drawn with the loot weights (gear categories only). The runtime rng only
-		public static int JackpotItem(int tier, Random rng)
-		{
-			if (rng.NextDouble() < StationJackpotShare)
-			{
-				int[] stations = ProgressionStations().Where(s => TierOf(s) == tier).ToArray();
-				if (stations.Length > 0) return stations[rng.Next(stations.Length)];
-			}
-			WeightTable weights = LootConfig.Instance.DropCategoryWeights;
-			List<ItemCategory> gear = new();
-			int total = 0;
-			for (int c = 0; c < ItemCategories.Count; c++)
-			{
-				if (!categoryHasItems[c] || !ItemCategories.IsGear((ItemCategory)c)) continue;
-				gear.Add((ItemCategory)c);
-				total += Math.Max(0, weights.Get((ItemCategory)c));
-			}
-			if (gear.Count == 0) return PickFromBucket(ItemCategory.Misc, tier, rng, tier);
-			ItemCategory category = gear[rng.Next(gear.Count)];
-			if (total > 0)
-			{
-				int roll = rng.Next(total);
-				foreach (ItemCategory c in gear)
-				{
-					roll -= Math.Max(0, weights.Get(c));
-					if (roll < 0)
-					{
-						category = c;
-						break;
-					}
-				}
-			}
-			return PickFromBucket(category, tier, rng, tier);
-		}
-
 		// The limit progression sets for a roll, whether or not this one ignores it
 		public static int GatingLimit(int minLimit)
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			return progression.TierGating ? Tiers.Clamp(Math.Max(ProgressionSystem.UnlockedTier + progression.TierAllowance, minLimit)) : Tiers.Max;
-		}
-
-		// A runtime result above the limit becomes useful, and is counted as a jackpot
-		private static int Jackpot(in RollRequest request, int item, int gatingLimit)
-		{
-			if (request.WildRng == null || TierOf(item) <= gatingLimit) return item;
-			if (!IsJackpotWorthy(item))
-			{
-				int useful = JackpotItem(TierOf(item), request.WildRng);
-				if (IsJackpotWorthy(useful)) item = useful;
-			}
-			LastJackpotGap = Math.Max(0, TierOf(item) - gatingLimit);
-			return item;
 		}
 
 		public static int Roll(in RollRequest request) => Roll(request, out _);
@@ -281,16 +229,36 @@ namespace UltimateRandomizer.Common.Core
 				int wildTier = WildTier(limit, WildChanceOverride ?? progression.WildDropChance, progression.WildTierDecay, request.WildRng);
 				if (wildTier > limit)
 				{
-					int wild = Jackpot(request, PickFromBucket(category, wildTier, request.WildRng, wildTier), limit);
-					rolledTier = TierOf(wild);
-					return wild;
+					// Only something useful is a jackpot: a wild ore or block is no jackpot, the normal roll stands
+					int wild = PickFromBucket(category, wildTier, request.WildRng, wildTier);
+					if (TierOf(wild) > limit && IsJackpotWorthy(wild))
+					{
+						LastJackpotGap = TierOf(wild) - limit;
+						rolledTier = TierOf(wild);
+						return wild;
+					}
 				}
 			}
 			if (target <= limit)
 			{
 				int intended = PickFromBucket(category, target, rng, categoryLimit, window);
-				// A lucky runtime roll above the limit it ignores is a jackpot
-				if (request.IgnoreGating) intended = Jackpot(request, intended, GatingLimit(request.MinLimit));
+				// A lucky runtime roll above the limit it ignores is a jackpot when useful; otherwise it is no jackpot, and the
+				// item is the one the limit allows
+				if (request.IgnoreGating && request.WildRng != null)
+				{
+					int gatingLimit = GatingLimit(request.MinLimit);
+					if (TierOf(intended) > gatingLimit)
+					{
+						if (IsJackpotWorthy(intended)) LastJackpotGap = TierOf(intended) - gatingLimit;
+						else
+						{
+							RollRequest normal = request;
+							normal.IgnoreGating = false;
+							normal.Wild = false;
+							return Roll(normal, out rolledTier);
+						}
+					}
+				}
 				rolledTier = TierOf(intended);
 				return intended;
 			}

@@ -31,6 +31,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("JackpotUseful", JackpotUseful);
 			TestRunner.Register("JackpotNotInEnemyDrops", JackpotNotInEnemyDrops);
 			TestRunner.Register("JackpotRatesLower", JackpotRatesLower);
+			TestRunner.Register("JackpotDropsMarked", JackpotDropsMarked);
 		}
 
 		// Critters get a share (CritterDropFactor) of the small frequent drop, here at abundance 3
@@ -156,6 +157,61 @@ namespace UltimateRandomizer.Common.Tests
 				if (RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true).Any(d => d.JackpotGap > 0)) failures.Add(Lang.GetNPCNameValue(npc));
 			}
 			Check.All(failures, "Planned drops marked as jackpots");
+		}
+
+		// Kills through the real extra-drop rule with madness at 100 %: the drops above the limit are marked with their gap,
+		// useful, and the others are not marked. The spawned items are removed
+		private static void JackpotDropsMarked()
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (drops spawn on the server)");
+			LootConfig cfg = LootConfig.Instance;
+			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("no random extra drops");
+			if (!ProgressionConfig.Instance.TierGating) Check.Skip("no progression limit");
+			int limit = ItemPool.GatingLimit(0);
+			if (limit >= Tiers.Max) Check.Skip("the limit is already the last tier");
+			NPC npc = new();
+			npc.SetDefaults(NPCID.Zombie);
+			npc.Center = Main.LocalPlayer.Center;
+			npc.life = 0;
+			List<int> slots = new();
+			List<string> failures = new();
+			int marked = 0;
+			try
+			{
+				ItemPool.WildChanceOverride = 100f;
+				CodexSystem.SpawnLog = slots;
+				RandomNpcDropRule rule = new(NPCID.Zombie);
+				for (int i = 0; i < 40; i++)
+				{
+					rule.TryDroppingItem(new DropAttemptInfo { npc = npc, player = Main.LocalPlayer, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode });
+				}
+				CodexSystem.SpawnLog = null;
+				foreach (int slot in slots.Distinct())
+				{
+					if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active) continue;
+					Item item = Main.item[slot];
+					int gap = JackpotItem.GapOf(item);
+					if (gap == 0) continue;
+					marked++;
+					if (!ItemPool.IsJackpotWorthy(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} marked but not useful");
+					if (gap != ItemPool.TierOf(item.type) - limit) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, tier {ItemPool.TierOf(item.type)}, limit {limit}");
+					if (CodexSystem.CountsAsDrop(item)) failures.Add($"{Lang.GetItemNameValue(item.type)} would be recorded as the zombie's drop");
+				}
+			}
+			finally
+			{
+				CodexSystem.SpawnLog = null;
+				ItemPool.WildChanceOverride = null;
+				ItemPool.ClearJackpot();
+				foreach (int slot in slots.Distinct())
+				{
+					if (slot < 0 || slot >= Main.maxItems) continue;
+					Main.item[slot].TurnToAir();
+					Main.item[slot].active = false;
+				}
+			}
+			Check.That(marked > 0, $"no marked jackpot in {slots.Count} drops of 40 kills");
+			Check.All(failures, "Jackpot drops");
 		}
 
 		// Jackpots a little rarer than in 1.2.0 (madness 12 %, luck 4 %)
