@@ -26,18 +26,48 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				chancesExpert = Main.expertMode;
 			}
 			if (chances.TryGetValue(netId, out Dictionary<int, float> cached)) return cached;
-			Dictionary<int, float> miss = new();
-			foreach (PlannedDrop drop in RandomNpcDropRule.Plan(netId, Main.expertMode))
+			List<PlannedDrop> plan = RandomNpcDropRule.Plan(netId, Main.expertMode);
+			Dictionary<int, float> result = new();
+			foreach (PlannedDrop drop in plan)
 			{
-				if (drop.Item <= ItemID.None) continue;
-				float chance = Math.Clamp(drop.Chance, 0f, 1f);
-				miss[drop.Item] = miss.GetValueOrDefault(drop.Item, 1f) * (1f - chance);
+				if (drop.Item > ItemID.None && !result.ContainsKey(drop.Item)) result[drop.Item] = CombinedChance(plan, drop.Item);
 			}
-			Dictionary<int, float> result = new(miss.Count);
-			foreach ((int item, float missing) in miss) result[item] = 1f - missing;
 			if (chances.Count > 500) chances.Clear();
 			chances[netId] = result;
 			return result;
+		}
+
+		// The chance of dropping at least once, from every planned entry of the item
+		public static float CombinedChance(IEnumerable<PlannedDrop> plan, int item)
+		{
+			float missing = 1f;
+			foreach (PlannedDrop drop in plan)
+			{
+				if (drop.Item == item) missing *= 1f - Math.Clamp(drop.Chance, 0f, 1f);
+			}
+			return 1f - missing;
+		}
+
+		private static readonly Dictionary<int, List<PlannedDrop>> luckyPlans = new();
+		private static long luckyVersion = -1;
+		private static bool luckyExpert;
+
+		// The same chance once the enemy's drops are all unlocked (lucky plan): what the hints state, on every machine.
+		// It equals what the codex shows once the progression reaches it
+		public static float LuckyChance(int netId, int item)
+		{
+			if (luckyVersion != Codex.HintFacts.CacheVersion || luckyExpert != Main.expertMode)
+			{
+				luckyPlans.Clear();
+				luckyVersion = Codex.HintFacts.CacheVersion;
+				luckyExpert = Main.expertMode;
+			}
+			if (!luckyPlans.TryGetValue(netId, out List<PlannedDrop> plan))
+			{
+				if (luckyPlans.Count > 500) luckyPlans.Clear();
+				luckyPlans[netId] = plan = RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true);
+			}
+			return CombinedChance(plan, item);
 		}
 
 		// null: not in the plan (a madness drop, a drop of other settings, an event...)

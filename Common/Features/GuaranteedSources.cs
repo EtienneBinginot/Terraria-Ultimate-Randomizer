@@ -245,10 +245,12 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (!IsNaturalHost(npc, tier)) return false;
 			if (ContentSamples.NpcsByNetId.TryGetValue(npc, out NPC sample) && sample.rarity > 0) return false;
-			// Only an enemy without any slot is judged by its rarity; one whose slots never open in this world is never met
-			if (!BiomeSlots.HasAnySlot(npc)) return true;
-			(int biome, double share, _) = BiomeSlots.BestBiome(npc, tier);
-			return biome >= 0 && share >= MinHostShare && BiomeSlots.SpawnsInCommonSlot(npc, tier);
+			// Only an enemy without any slot is judged by its rarity (or any enemy when spawns are swapped another way); one
+			// whose slots never open in this world is never met
+			if (!BiomeSlots.SpawnsPlanned || !BiomeSlots.HasAnySlot(npc)) return true;
+			// Met on an ordinary day: the share of its best biome from slots neither rare nor conditional
+			(int biome, _, _) = BiomeSlots.BestBiome(npc, tier);
+			return biome >= 0 && BiomeSlots.SteadyShare(biome, npc, tier) >= MinHostShare;
 		}
 
 		private static bool IsNaturalHost(int npc, int tier)

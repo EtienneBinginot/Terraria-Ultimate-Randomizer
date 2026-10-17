@@ -70,12 +70,9 @@ namespace UltimateRandomizer.Common.Features
 		public int ClassKey => Movement * 100 + (Rare ? 50 : 0) + (Conditional ? 20 : 0) + TierGroup;
 	}
 
-	// Where a type is met the most in one band of a map
+	// What the planned shares say about a type in one band of a map, beyond its share of each biome
 	public struct SpawnInfo
 	{
-		public int Biome;
-		public double Share;
-		public SlotTime Time;
 		// Spawns in at least one slot that is not rare (any biome)
 		public bool CommonSlot;
 	}
@@ -85,6 +82,8 @@ namespace UltimateRandomizer.Common.Features
 	{
 		// Biome, then type, then share of the biome's enemy spawns
 		public readonly Dictionary<int, Dictionary<int, double>> ByBiome = new();
+		// The same, from the slots that are neither rare nor conditional only: what is met there on an ordinary day
+		public readonly Dictionary<int, Dictionary<int, double>> Steady = new();
 		// Times of the slots of a type in a biome: 1 by day, 2 by night (3: both)
 		public readonly Dictionary<(int biome, int type), int> Times = new();
 		public readonly Dictionary<int, SpawnInfo> ByType = new();
@@ -703,13 +702,16 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (!Counted(slot, band)) continue;
 				double weight = SlotWeight(slot);
+				bool steady = !slot.Rare && !slot.Conditional;
 				totals[slot.Biome] = totals.GetValueOrDefault(slot.Biome) + weight;
 				if (!table.ByBiome.TryGetValue(slot.Biome, out Dictionary<int, double> byType)) table.ByBiome[slot.Biome] = byType = new Dictionary<int, double>();
+				if (!table.Steady.TryGetValue(slot.Biome, out Dictionary<int, double> steadyByType)) table.Steady[slot.Biome] = steadyByType = new Dictionary<int, double>();
 				int flags = slot.Time == SlotTime.Day ? 1 : slot.Time == SlotTime.Night ? 2 : 3;
 				void Add(int id, double part)
 				{
 					int type = TypeOf(id);
 					byType[type] = byType.GetValueOrDefault(type) + weight * part;
+					if (steady) steadyByType[type] = steadyByType.GetValueOrDefault(type) + weight * part;
 					table.Times[(slot.Biome, type)] = table.Times.GetValueOrDefault((slot.Biome, type)) | flags;
 					if (!slot.Rare) common.Add(type);
 				}
@@ -730,59 +732,62 @@ namespace UltimateRandomizer.Common.Features
 			foreach ((int biome, Dictionary<int, double> byType) in table.ByBiome)
 			{
 				double total = totals[biome];
-				foreach (int type in byType.Keys.ToList())
-				{
-					double share = byType[type] / total;
-					byType[type] = share;
-					if (!table.ByType.TryGetValue(type, out SpawnInfo best) || share > best.Share || share == best.Share && biome < best.Biome)
-					{
-						table.ByType[type] = new SpawnInfo { Biome = biome, Share = share, Time = TimeOf(table.Times[(biome, type)]), CommonSlot = common.Contains(type) };
-					}
-				}
+				Dictionary<int, double> steadyByType = table.Steady[biome];
+				foreach (int type in byType.Keys.ToList()) byType[type] /= total;
+				foreach (int type in steadyByType.Keys.ToList()) steadyByType[type] /= total;
+				foreach (int type in byType.Keys) table.ByType[type] = new SpawnInfo { CommonSlot = common.Contains(type) };
 			}
 			map.Shares[band] = table;
 			return table;
 		}
 
-		private static double ShareIn(BiomeSlotMap map, int band, int biome, int type) =>
-			Table(map, band).ByBiome.TryGetValue(biome, out Dictionary<int, double> byType) && byType.TryGetValue(type, out double share) ? share : 0;
+		private static double ShareIn(BiomeSlotMap map, int band, int biome, int type, bool steady = false) =>
+			(steady ? Table(map, band).Steady : Table(map, band).ByBiome).TryGetValue(biome, out Dictionary<int, double> byType) && byType.TryGetValue(type, out double share) ? share : 0;
 
 		private static double VanillaKeep => Active ? Math.Clamp(EnemiesConfig.Instance.BiomeVanillaChance / 100.0, 0, 1) : 0;
+
+		// Are the planned shares where enemies really spawn? Yes when spawns are redistributed by biome or not randomized;
+		// other swap modes put any enemy anywhere: hints and guarantees then judge enemies by their rarity only
+		public static bool SpawnsPlanned => Active || !EnemiesConfig.Instance.RandomizeEnemySpawns;
+
+		private static double Mixed(int biome, int type, int tier, bool steady)
+		{
+			int band = BandOf(Tiers.Clamp(tier));
+			if (!Active) return ShareIn(Vanilla, band, biome, type, steady);
+			double keep = VanillaKeep;
+			double share = (1 - keep) * ShareIn(Current, band, biome, type, steady);
+			return keep > 0 ? share + keep * ShareIn(Vanilla, band, biome, type, steady) : share;
+		}
 
 		// Expected share of the enemy spawns of a biome that are this type (slime colours are Blue Slimes), with the slots open
 		// at a tier: each slot weighs 1 (rare 0.1, conditional 0.5), split as Pick splits it. With the spawns redistributed by
 		// biome, the vanilla share of BiomeVanillaChance is mixed in; otherwise the vanilla slots are used. Same on every
 		// machine (seed, synced settings and world evil).
-		public static double PlannedShare(int biome, int type, int tier = Tiers.Max)
-		{
-			int band = BandOf(Tiers.Clamp(tier));
-			if (!Active) return ShareIn(Vanilla, band, biome, type);
-			double keep = VanillaKeep;
-			double share = (1 - keep) * ShareIn(Current, band, biome, type);
-			return keep > 0 ? share + keep * ShareIn(Vanilla, band, biome, type) : share;
-		}
+		public static double PlannedShare(int biome, int type, int tier = Tiers.Max) => Mixed(biome, type, tier, false);
 
-		// Every biome where a type spawns at a tier, the highest share first, with the time of its slots there
+		// The part of that share that comes from slots neither rare nor conditional (no weather, season or event needed)
+		public static double SteadyShare(int biome, int type, int tier = Tiers.Max) => Mixed(biome, type, tier, true);
+
+		// Every biome where a type spawns at a tier, the highest steady share first (then the whole share), with the time of
+		// its slots there. The share given is the whole one
 		public static List<(int biome, double share, SlotTime time)> PlannedBiomes(int type, int tier = Tiers.Max)
 		{
 			ShareTable table = Table(SpawnMap, BandOf(Tiers.Clamp(tier)));
-			List<(int biome, double share, SlotTime time)> result = new();
+			List<(int biome, double share, double steady, SlotTime time)> result = new();
 			foreach ((int biome, Dictionary<int, double> byType) in table.ByBiome)
 			{
 				if (!byType.ContainsKey(type)) continue;
 				double share = PlannedShare(biome, type, tier);
-				if (share > 0) result.Add((biome, share, TimeOf(table.Times[(biome, type)])));
+				if (share > 0) result.Add((biome, share, SteadyShare(biome, type, tier), TimeOf(table.Times[(biome, type)])));
 			}
-			return result.OrderByDescending(b => b.share).ThenBy(b => b.biome).ToList();
+			return result.OrderByDescending(b => b.steady).ThenByDescending(b => b.share).ThenBy(b => b.biome).Select(b => (b.biome, b.share, b.time)).ToList();
 		}
 
-		// The biome where a type is met the most at a tier (biome -1: it spawns nowhere)
+		// The biome where a type is met the most at a tier, steadily first (biome -1: it spawns nowhere)
 		public static (int biome, double share, SlotTime time) BestBiome(int type, int tier = Tiers.Max)
 		{
-			if (!Table(SpawnMap, BandOf(Tiers.Clamp(tier))).ByType.TryGetValue(type, out SpawnInfo info)) return (-1, 0, SlotTime.Any);
-			// The vanilla part of BiomeVanillaChance only changes the share, rarely the best biome
-			double share = VanillaKeep > 0 ? PlannedShare(info.Biome, type, tier) : info.Share;
-			return (info.Biome, share, info.Time);
+			List<(int biome, double share, SlotTime time)> biomes = PlannedBiomes(type, tier);
+			return biomes.Count > 0 ? biomes[0] : (-1, 0, SlotTime.Any);
 		}
 
 		// Every type's share of the enemy spawns of a biome in a map (no vanilla mix), for the tests

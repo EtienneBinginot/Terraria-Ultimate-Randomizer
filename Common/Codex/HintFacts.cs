@@ -50,8 +50,10 @@ namespace UltimateRandomizer.Common.Codex
 		public int Movement = -1;
 		// Planned chance that the creature, boss or bag gives the item (1 for recipes and shops)
 		public float Chance = 1f;
-		// Creature: share of the spawns of its best biome that are this enemy (BiomeSlots.PlannedShare); 0: unknown
+		// Creature: steady share of the spawns of its best biome that are this enemy (BiomeSlots.SteadyShare); 0: unknown
 		public double Share;
+		// A creature that fails the frequency rules, kept because nothing better than a chest or a pot gives the item
+		public bool Fallback;
 	}
 
 	// Hint targets, facts, prices and sentences. Pure data from the planners (RecipePlanner, GuaranteedSources,
@@ -65,8 +67,8 @@ namespace UltimateRandomizer.Common.Codex
 		{
 			"Kind.Creature/3", "Kind.Recipe/3", "Kind.Boss/3", "Kind.Bag/3", "Kind.Chest/3", "Kind.Pot/3", "Kind.Shop/3",
 			"Where.Creature/3", "Where.Roaming/3", "Where.Recipe/3", "Where.Boss/3", "Where.Bag/3", "Where.Chest/3", "Where.Pot/3", "Where.Shop/3",
-			"Shape.Creature/2", "Shape.Recipe/2", "Shape.Boss/2", "Shape.Bag/2", "Shape.Chest/2", "Shape.Pot/2", "Shape.Shop/2",
-			"Name.Creature/2", "Name.Recipe/2", "Name.Boss/2", "Name.Bag/2", "Name.Chest/2", "Name.Pot/2", "Name.Shop/2"
+			"Shape.Creature/2", "Shape.Roaming/2", "Shape.Recipe/2", "Shape.Boss/2", "Shape.Bag/2", "Shape.Chest/2", "Shape.Pot/2", "Shape.Shop/2",
+			"Name.Creature/2", "Name.Roaming/2", "Name.Recipe/2", "Name.Boss/2", "Name.Bag/2", "Name.Chest/2", "Name.Pot/2", "Name.Shop/2"
 		};
 
 		// Vanilla summons found in the world rather than dropped or crafted (Protection.WorldSummons): (item, text key, critter to show)
@@ -88,6 +90,8 @@ namespace UltimateRandomizer.Common.Codex
 		private static readonly Dictionary<int, HintFact> facts = new();
 		private static Dictionary<int, List<(int npc, int tier, float chance)>> planDrops;
 		private static Dictionary<int, List<(int bag, int tier, float chance)>> bagContents;
+		// The first tier at which each natural enemy spawns (EnemySwapPool.NaturalEnemies), bosses at their own
+		private static Dictionary<int, int> naturalTiers;
 		private static Dictionary<int, List<int>> placers;
 		private static Dictionary<int, int> shopKeepers;
 		// The indexes above, built a few enemies at a time (Warm) or all at once when needed first
@@ -111,6 +115,7 @@ namespace UltimateRandomizer.Common.Codex
 			facts.Clear();
 			planDrops = null;
 			bagContents = null;
+			naturalTiers = null;
 			shopKeepers = null;
 			indexer = null;
 			CacheVersion++;
@@ -322,6 +327,7 @@ namespace UltimateRandomizer.Common.Codex
 				yield return true;
 			}
 			bagContents = bags;
+			naturalTiers = enemies.ToDictionary(e => e.npc, e => e.tier);
 			planDrops = drops;
 		}
 
@@ -394,36 +400,48 @@ namespace UltimateRandomizer.Common.Codex
 			_ => fact.World ?? ""
 		};
 
-		// A creature source the hint may lead to: met often at that tier (best-biome share, a slot that is not rare) with a
-		// planned chance of 1 % or more. Enemies without any slot (modded) only need their rarity 0
-		private static HintFact CreatureFact(int item, int npc, int tier, float chance)
+		// A creature source the hint may lead to, judged at a tier: no rare enemy, a planned chance of 1 % or more, and at
+		// least MinHostShare of the steady spawns (slots neither rare nor conditional) of its best biome. Enemies without
+		// any slot (modded), and every enemy when spawns are swapped another way, are judged by their rarity only.
+		// A source failing these is returned as a fallback (null: no chance at all)
+		private static HintFact CreatureFact(int item, int npc, int tier, int judgeTier, float chance)
 		{
-			if (chance < MinCreatureChance - 1e-6f) return null;
+			if (chance <= 0) return null;
 			int type = BiomeSlots.TypeOf(npc);
-			if (ContentSamples.NpcsByNetId.TryGetValue(npc, out NPC sample) && sample.rarity > 0) return null;
+			bool ok = chance >= MinCreatureChance - 1e-6f && !(ContentSamples.NpcsByNetId.TryGetValue(npc, out NPC sample) && sample.rarity > 0);
 			double share = 0;
-			if (BiomeSlots.HasAnySlot(type))
+			if (BiomeSlots.SpawnsPlanned && BiomeSlots.HasAnySlot(type))
 			{
-				(int biome, double best, _) = BiomeSlots.BestBiome(type, tier);
-				if (biome < 0 || best < MinHostShare || !BiomeSlots.SpawnsInCommonSlot(type, tier)) return null;
-				share = best;
+				(int biome, _, _) = BiomeSlots.BestBiome(type, judgeTier);
+				share = biome >= 0 ? BiomeSlots.SteadyShare(biome, type, judgeTier) : 0;
+				ok &= share >= MinHostShare;
 			}
-			return new HintFact { Item = item, Kind = HintKind.Creature, Npc = npc, Tier = tier, Band = Band(tier), Chance = chance, Share = share };
+			return new HintFact { Item = item, Kind = HintKind.Creature, Npc = npc, Tier = tier, Band = Band(tier), Chance = chance, Share = share, Fallback = !ok };
 		}
+
+		// The tier from which an enemy spawns naturally (its own tier if it never does)
+		private static int NaturalTier(int npc) => naturalTiers.TryGetValue(npc, out int tier) ? tier : NpcTiers.BaseTier(npc);
 
 		private static HintFact Build(int item)
 		{
 			if (!Ready || !ItemPool.IsValid(item)) return null;
 			RecipePlan plan = RecipePlanner.Get();
+			EnsureIndexes();
 			List<HintFact> options = new();
+			List<HintFact> rejected = new();
+			void AddCreature(HintFact fact)
+			{
+				if (fact != null) (fact.Fallback ? rejected : options).Add(fact);
+			}
 
-			// Guaranteed drop of a common enemy (stations, summons, pickaxes)
+			// Guaranteed drop of a common enemy (stations, summons, pickaxes): from the tier it spawns at, judged like the
+			// guarantees were (at the requirement's tier at least)
+			GuaranteedSources.Requirement requirement = GuaranteedSources.Requirements.FirstOrDefault(r => r.Item == item);
+			bool required = requirement.Item == item;
 			foreach (int host in GuaranteedSources.HostsOf(item))
 			{
-				// The chance of the enemy's real plan (its guaranteed drop, or better)
-				float chance = RandomNpcDropRule.Plan(host, Main.expertMode, lucky: true).Where(d => d.Item == item).Select(d => d.Chance).DefaultIfEmpty(0).Max();
-				HintFact fact = CreatureFact(item, host, NpcTiers.BaseTier(host), chance);
-				if (fact != null) options.Add(fact);
+				int tier = NaturalTier(host);
+				AddCreature(CreatureFact(item, host, tier, Math.Max(tier, required ? requirement.Tier : tier), CodexStats.LuckyChance(host, item)));
 			}
 			foreach (int recipe in RecipesMaking(item))
 			{
@@ -435,22 +453,20 @@ namespace UltimateRandomizer.Common.Codex
 				if (tier >= Findability.Never) continue;
 				options.Add(new HintFact { Item = item, Kind = HintKind.Recipe, Recipe = recipe, Ingredients = ingredients, Tiles = tiles.Where(t => t >= 0).ToArray(), Tier = tier, Band = Band(ingredientTier) });
 			}
-			EnsureIndexes();
 			if (planDrops.TryGetValue(item, out List<(int npc, int tier, float chance)> droppers))
 			{
-				foreach ((int npc, int tier, float chance) in droppers)
+				foreach ((int npc, int tier, _) in droppers.DistinctBy(d => d.npc))
 				{
-					bool boss = RandomNpcDropRule.IsBossType(BossParts.Owner(npc));
-					HintFact fact = boss ? new HintFact { Item = item, Kind = HintKind.Boss, Npc = npc, Tier = tier, Band = Band(tier), Chance = chance } : CreatureFact(item, npc, tier, chance);
-					if (fact != null) options.Add(fact);
+					// The chance the codex shows too: every planned entry of the item together
+					float chance = CodexStats.LuckyChance(npc, item);
+					if (RandomNpcDropRule.IsBossType(BossParts.Owner(npc))) options.Add(new HintFact { Item = item, Kind = HintKind.Boss, Npc = npc, Tier = tier, Band = Band(tier), Chance = chance });
+					else AddCreature(CreatureFact(item, npc, tier, tier, chance));
 				}
 			}
 			if (bagContents.TryGetValue(item, out List<(int bag, int tier, float chance)> holders))
 			{
 				foreach ((int bag, int tier, float chance) in holders) options.Add(new HintFact { Item = item, Kind = HintKind.Bag, Bag = bag, Tier = tier, Band = Band(tier), Chance = chance });
 			}
-			GuaranteedSources.Requirement requirement = GuaranteedSources.Requirements.FirstOrDefault(r => r.Item == item);
-			bool required = requirement.Item == item;
 			// Only the stations really hidden in chests of this world (saved, and sent with the world data)
 			if (ChestSystem.StationInChests(item))
 			{
@@ -472,14 +488,18 @@ namespace UltimateRandomizer.Common.Codex
 			{
 				if (worldItem == item) options.Add(new HintFact { Item = item, Kind = HintKind.World, World = key, Npc = npc, Tier = ItemPool.TierOf(item) });
 			}
-			if (options.Count == 0) return null;
 			// The source reached first; between equal tiers, the preferred kind (chests and pots only when nothing else gives
 			// it at that tier), then the easiest, then a fixed key
-			HintFact best = options.OrderBy(o => o.Tier).ThenBy(o => KindClass(o.Kind)).ThenByDescending(Ease)
-				.ThenBy(StableKey, StringComparer.Ordinal).ThenBy(o => (int)o.Kind).First();
+			HintFact best = Best(options);
+			// Nothing but a chest or a pot: the best creature that failed the frequency rules says more
+			if ((best == null || best.Kind is HintKind.Chest or HintKind.Pot) && rejected.Count > 0) best = Best(rejected);
+			if (best == null) return null;
 			if (best.Kind is HintKind.Creature or HintKind.Boss or HintKind.Shop) FillPlaces(best);
 			return best;
 		}
+
+		private static HintFact Best(List<HintFact> options) => options.OrderBy(o => o.Tier).ThenBy(o => KindClass(o.Kind)).ThenByDescending(Ease)
+			.ThenBy(StableKey, StringComparer.Ordinal).ThenBy(o => (int)o.Kind).FirstOrDefault();
 
 		// Where the host spawns, from the planned shares at the fact's tier (the redistributed slots, else the vanilla ones):
 		// its best biome first, then up to two more where it makes at least MinHostShare of the spawns; the time of the best
@@ -487,12 +507,12 @@ namespace UltimateRandomizer.Common.Codex
 		private static void FillPlaces(HintFact fact)
 		{
 			int type = BiomeSlots.TypeOf(fact.Npc);
-			List<(int biome, double share, SlotTime time)> biomes = BiomeSlots.PlannedBiomes(type, fact.Tier);
+			// Swapped another way, an enemy spawns anywhere: no biome is named
+			List<(int biome, double share, SlotTime time)> biomes = BiomeSlots.SpawnsPlanned ? BiomeSlots.PlannedBiomes(type, fact.Tier) : new();
 			if (biomes.Count > 0)
 			{
-				fact.Biomes = biomes.Where((b, i) => i == 0 || b.share >= MinHostShare).Take(3).Select(b => BiomeSlots.BiomeName(b.biome)).ToList();
+				fact.Biomes = biomes.Where((b, i) => i == 0 || BiomeSlots.SteadyShare(b.biome, type, fact.Tier) >= MinHostShare).Take(3).Select(b => BiomeSlots.BiomeName(b.biome)).ToList();
 				fact.Time = biomes[0].time;
-				if (fact.Kind == HintKind.Creature && fact.Share <= 0) fact.Share = biomes[0].share;
 				List<BiomeSlot> slots = BiomeSlots.SpawnMap.Slots.Where(s => s.Biome == biomes[0].biome && SpawnsIn(s, type)).ToList();
 				if (slots.Count > 0) fact.Movement = Math.Min(3, slots.GroupBy(s => s.Movement).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key);
 			}
@@ -512,10 +532,13 @@ namespace UltimateRandomizer.Common.Codex
 		public static string LevelFamily(HintFact fact, int level) => level switch
 		{
 			1 => "Kind." + fact.Kind,
-			2 => fact.Kind == HintKind.Creature && fact.Biomes.Count == 0 ? "Where.Roaming" : "Where." + fact.Kind,
-			3 => "Shape." + fact.Kind,
-			_ => "Name." + fact.Kind
+			2 => Roaming(fact) ? "Where.Roaming" : "Where." + fact.Kind,
+			3 => Roaming(fact) ? "Shape.Roaming" : "Shape." + fact.Kind,
+			_ => Roaming(fact) ? "Name.Roaming" : "Name." + fact.Kind
 		};
+
+		// A creature without a known biome: its own sentences, never "here: anywhere"
+		private static bool Roaming(HintFact fact) => fact.Kind == HintKind.Creature && fact.Biomes.Count == 0;
 
 		private static int Variants(string family)
 		{
@@ -592,11 +615,10 @@ namespace UltimateRandomizer.Common.Codex
 
 		private static string BiomeList(HintFact fact) => string.Join(", ", fact.Biomes.Select(BiomeSlots.BiomeDisplayName));
 
-		private static string BestBiomeName(HintFact fact) => fact.Biomes.Count > 0 ? BiomeSlots.BiomeDisplayName(fact.Biomes[0]) : CodexText.Get("Hint.Place.Anywhere");
+		private static string BestBiomeName(HintFact fact) => fact.Biomes.Count > 0 ? BiomeSlots.BiomeDisplayName(fact.Biomes[0]) : "";
 
-		// The biomes and the time, or "all over the world"
-		public static string PlacePhrase(HintFact fact) =>
-			fact.Biomes.Count > 0 ? CodexText.Get("Hint.Place.Known", BiomeList(fact), TimePhrase(fact)) : CodexText.Get("Hint.Place.Anywhere");
+		// The biomes and the time (only used when they are known)
+		public static string PlacePhrase(HintFact fact) => fact.Biomes.Count > 0 ? CodexText.Get("Hint.Place.Known", BiomeList(fact), TimePhrase(fact)) : "";
 
 		private static string TimePhrase(HintFact fact) => CodexText.Get("Hint.Time." + fact.Time);
 
@@ -632,7 +654,6 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (string group in StationGroups) yield return "Hint.Station." + group;
 			yield return "Hint.Around";
 			yield return "Hint.Place.Known";
-			yield return "Hint.Place.Anywhere";
 			foreach (string move in Movements) yield return "Hint.Move." + move;
 			for (int b = 0; b < 4; b++) yield return "Hint.Band." + b;
 			foreach (SlotTime time in Enum.GetValues<SlotTime>()) yield return "Hint.Time." + time;

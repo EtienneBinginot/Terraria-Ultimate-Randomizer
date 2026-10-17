@@ -124,7 +124,7 @@ namespace UltimateRandomizer.Common.Tests
 				{
 					if (NpcTiers.BaseTier(host) > tier || GuaranteedSources.IsEventEnemy(host) || ContentSamples.NpcsByNetId[host].rarity > 0) return false;
 					(double share, bool common, bool anySlot) = SlotShare(host, tier);
-					if (anySlot && (share < GuaranteedSources.MinHostShare - 0.005 || !common)) return false;
+					if (anySlot && BiomeSlots.SpawnsPlanned && (share < GuaranteedSources.MinHostShare - 0.005 || !common)) return false;
 					return RandomNpcDropRule.Plan(host, Main.expertMode).Any(d => d.Guaranteed && d.Item == item && d.Chance >= 0.01f - 1e-6f);
 				}
 				if (!hosts.Any(Good))

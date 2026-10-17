@@ -222,6 +222,7 @@ Tests: {
 	HintSyncRoundTrip: Les niveaux d'indice survivent au format réseau du codex, à la sauvegarde et aux vérifications du serveur
 	HintTextsResolved: Chaque phrase d'indice est une vraie phrase dans cette langue
 	HintSourceFrequent: Les indices de créature mènent à un ennemi fréquent (5 % d'un biome ou plus) avec 1 % de chances ou plus
+	HintTargetsHaveSource: Chaque station et invocation garantie a un indice de créature ou de recette, jamais une source rare de secours
 	HintBiomeEveryLevel: Les niveaux 2 à 4 d'un indice de créature nomment son meilleur biome
 	HintRevealDiscovers: Le dernier niveau d'un indice révèle l'ennemi dans le codex (page, butin, biome), sauvegardé et synchronisé
 	PlannedShareSums: Les parts d'apparition prévues de chaque biome font 100 %, les ennemis rares en ont moins
@@ -302,7 +303,6 @@ Codex: {
 
 		Place: {
 			Known: "{0}, {1}"
-			Anywhere: un peu partout dans le monde
 		}
 
 		Coin: {
@@ -444,6 +444,11 @@ Codex: {
 				1: Je te l'ai dessinée du mieux que j'ai pu ({0}) :
 			}
 
+			Roaming: {
+				0: Voici sa silhouette. Elle va où bon lui semble, alors garde l'œil ouvert.
+				1: Je te l'ai dessinée du mieux que j'ai pu. Elle peut surgir n'importe où :
+			}
+
 			Recipe: {
 				0: Voici les silhouettes de ce qu'il te faut :
 				1: Voici la recette, en ombres chinoises :
@@ -479,6 +484,11 @@ Codex: {
 			Creature: {
 				0: Cette créature le transporte : {0}. Va la chercher ici : {1}. Elle le lâche dans {2} des cas.
 				1: Ta cible : {0}, à cet endroit : {1} ({2} de chances par créature tuée).
+			}
+
+			Roaming: {
+				0: Cette créature le transporte, où qu'elle aille : {0}. Elle le lâche dans {2} des cas.
+				1: Chasse-la partout où tu la croises : {0} ({2} de chances par créature tuée).
 			}
 
 			Recipe: {

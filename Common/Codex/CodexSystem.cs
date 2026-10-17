@@ -92,6 +92,8 @@ namespace UltimateRandomizer.Common.Codex
 
 		public override void ClearWorld()
 		{
+			pendingReveals.Clear();
+			revealedVersion = -1;
 			Data = new CodexData();
 			outbox.Clear();
 			sent.Clear();
@@ -174,23 +176,72 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			if (!Data.Apply(e)) return;
 			if (Main.netMode == NetmodeID.Server) outbox.Add(e);
-			if (e.Op == CodexOp.Hint) RevealHinted(e);
+			if (e.Op == CodexOp.Hint) QueueReveal(e);
 		}
 
-		// Server (or single player), once the last level of a hint is accepted: the enemy or boss it names counts as
-		// discovered, through the usual entries (saved, and sent to everyone): its page and portrait open (no kill is
-		// counted), the item shows among its drops, and it is seen in its best biome (once, if it never was there)
-		public static void RevealHinted(CodexEntry hint)
+		// ---- Reveals: the last level of a hint counts as discovering the enemy it names ----
+
+		// Server (or single player): items whose last hint level was accepted, revealed once the hint facts are built. They
+		// are built a little each tick (Warm), never while a packet is handled: a client must not wait for them
+		private static readonly HashSet<string> pendingReveals = new();
+		// HintFacts.CacheVersion of the last pass over every bought hint (old saves, facts rebuilt after a tier change)
+		private static int revealedVersion = -1;
+
+		public static void QueueReveal(CodexEntry hint)
 		{
-			if (hint.Count < HintFacts.MaxLevel || Main.netMode == NetmodeID.MultiplayerClient) return;
-			int item = CodexNames.ItemType(hint.Item);
-			HintFact fact = item > 0 ? HintFacts.For(item) : null;
-			if (fact == null || fact.Kind is not (HintKind.Creature or HintKind.Boss) || fact.Npc == 0) return;
-			int key = fact.Kind == HintKind.Boss ? (BossParts.IsPart(fact.Npc) ? BossParts.Owner(fact.Npc) : IsTwin(fact.Npc) ? NPCID.Retinazer : fact.Npc) : fact.Npc;
-			string npc = CodexNames.Npc(key);
-			Submit(CodexEntry.Reveal(npc, hint.Item));
-			string biome = fact.Biomes.FirstOrDefault();
-			if (!string.IsNullOrEmpty(biome) && !(Data.Sightings.TryGetValue(biome, out Dictionary<string, int> seen) && seen.ContainsKey(npc))) Submit(CodexEntry.Sighting(biome, npc, 1));
+			if (hint.Count >= HintFacts.MaxLevel && Main.netMode != NetmodeID.MultiplayerClient && !string.IsNullOrEmpty(hint.Item)) pendingReveals.Add(hint.Item);
+		}
+
+		public static int PendingRevealCount => pendingReveals.Count;
+
+		// Each tick on the server or in single player: warms the hint facts, then reveals what is waiting. force: build the
+		// facts at once (tests)
+		public static void ProcessReveals(bool force = false)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || !SeedSystem.WorldReady || !HintFacts.Ready) return;
+			if (!HintFacts.Warmed)
+			{
+				if (!force)
+				{
+					HintFacts.Warm(2.0);
+					return;
+				}
+				HintFacts.AllTargets();
+			}
+			if (revealedVersion != HintFacts.CacheVersion)
+			{
+				revealedVersion = HintFacts.CacheVersion;
+				foreach ((string item, int level) in Data.Hints)
+				{
+					if (level >= HintFacts.MaxLevel) pendingReveals.Add(item);
+				}
+			}
+			if (pendingReveals.Count == 0) return;
+			List<string> items = pendingReveals.OrderBy(i => i, StringComparer.Ordinal).ToList();
+			pendingReveals.Clear();
+			foreach (string item in items) Reveal(item);
+		}
+
+		// The enemy or boss of the item's hint counts as discovered, through the usual entries (saved, and sent to
+		// everyone): its page and portrait open (no kill is counted), the item shows among its drops, and it is seen in its
+		// best biome (once, if it never was there). Running it again changes nothing
+		private static void Reveal(string itemName)
+		{
+			try
+			{
+				int item = CodexNames.ItemType(itemName);
+				HintFact fact = item > 0 ? HintFacts.For(item) : null;
+				if (fact == null || fact.Kind is not (HintKind.Creature or HintKind.Boss) || fact.Npc == 0) return;
+				int key = fact.Kind == HintKind.Boss ? (BossParts.IsPart(fact.Npc) ? BossParts.Owner(fact.Npc) : IsTwin(fact.Npc) ? NPCID.Retinazer : fact.Npc) : fact.Npc;
+				string npc = CodexNames.Npc(key);
+				Submit(CodexEntry.Reveal(npc, itemName));
+				string biome = fact.Biomes.FirstOrDefault();
+				if (!string.IsNullOrEmpty(biome) && !(Data.Sightings.TryGetValue(biome, out Dictionary<string, int> seen) && seen.ContainsKey(npc))) Submit(CodexEntry.Sighting(biome, npc, 1));
+			}
+			catch (Exception e)
+			{
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Could not reveal the source of {itemName}: {e}");
+			}
 		}
 
 		private static bool IsEaterSegment(int type) => type is NPCID.EaterofWorldsHead or NPCID.EaterofWorldsBody or NPCID.EaterofWorldsTail;
@@ -641,7 +692,11 @@ namespace UltimateRandomizer.Common.Codex
 				}
 			}
 			if (!SeedSystem.WorldReady) return;
-			if (Main.netMode != NetmodeID.MultiplayerClient) UpdateSightings();
+			if (Main.netMode != NetmodeID.MultiplayerClient)
+			{
+				UpdateSightings();
+				ProcessReveals();
+			}
 			if (Main.netMode == NetmodeID.SinglePlayer) return;
 			if (Main.netMode == NetmodeID.MultiplayerClient && pendingHints.Count > 0) ExpireHints();
 			if (++flushTimer < (Main.netMode == NetmodeID.Server ? ServerFlushTicks : ClientFlushTicks)) return;
@@ -809,7 +864,7 @@ namespace UltimateRandomizer.Common.Codex
 						continue;
 					}
 					outbox.Add(e);
-					if (e.Op == CodexOp.Hint) RevealHinted(e);
+					if (e.Op == CodexOp.Hint) QueueReveal(e);
 				}
 				else
 				{
@@ -836,7 +891,7 @@ namespace UltimateRandomizer.Common.Codex
 		{
 			int item = CodexNames.ItemType(e.Item);
 			if (item <= 0 || e.Count != data.HintLevel(e.Item) + 1 || e.Count > HintFacts.MaxLevel) return false;
-			// Only the tier: no fact is built on the server for a purchase
+			// Only the tier: the facts are not needed to accept a purchase (the reveal of the last level waits for them)
 			HintTarget target = HintFacts.RawTarget(item);
 			return target != null && target.Tier <= unlockedTier + 1;
 		}

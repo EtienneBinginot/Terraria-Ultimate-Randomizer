@@ -222,6 +222,7 @@ Tests: {
 	HintSyncRoundTrip: Hint levels survive the codex wire format, the save and the server checks
 	HintTextsResolved: Every hint sentence is a full sentence in this language
 	HintSourceFrequent: Creature hints lead to an enemy met often (5 % of a biome or more) with a 1 % chance or more
+	HintTargetsHaveSource: Every guaranteed station and summon has a creature or recipe hint, never a rare fallback
 	HintBiomeEveryLevel: Levels 2 to 4 of a creature hint name its best biome
 	HintRevealDiscovers: The last level of a hint reveals the enemy in the codex (page, drop, biome), saved and synced
 	PlannedShareSums: The planned spawn shares of each biome sum to 100 %, rare enemies get less
@@ -302,7 +303,6 @@ Codex: {
 
 		Place: {
 			Known: "{0}, {1}"
-			Anywhere: all over the world
 		}
 
 		Coin: {
@@ -444,6 +444,11 @@ Codex: {
 				1: I sketched it for you, as best I could ({0}):
 			}
 
+			Roaming: {
+				0: Here is its shape. It goes where it likes, so keep your eyes open.
+				1: I sketched it for you, as best I could. It could turn up anywhere:
+			}
+
 			Recipe: {
 				0: These are the shapes of what you need:
 				1: Here is the recipe, in shadows:
@@ -479,6 +484,11 @@ Codex: {
 			Creature: {
 				0: "{0} carries it: look here, {1}. About {2} of them drop it."
 				1: Hunt this one: {0}, in this place: {1} ({2} chance per kill).
+			}
+
+			Roaming: {
+				0: "{0} carries it, wherever it wanders. About {2} of them drop it."
+				1: Hunt this one wherever you meet it: {0} ({2} chance per kill).
 			}
 
 			Recipe: {

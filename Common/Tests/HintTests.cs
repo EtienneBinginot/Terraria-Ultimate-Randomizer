@@ -26,6 +26,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintSyncRoundTrip", HintSyncRoundTrip);
 			TestRunner.Register("HintTextsResolved", HintTextsResolved);
 			TestRunner.Register("HintSourceFrequent", HintSourceFrequent);
+			TestRunner.Register("HintTargetsHaveSource", HintTargetsHaveSource);
 			TestRunner.Register("HintBiomeEveryLevel", HintBiomeEveryLevel);
 			TestRunner.Register("HintRevealDiscovers", HintRevealDiscovers);
 			TestRunner.Register("PlannedShareSums", PlannedShareSums);
@@ -33,12 +34,37 @@ namespace UltimateRandomizer.Common.Tests
 
 		private static List<HintFact> CreatureFacts() => TargetsOrSkip().Select(t => HintFacts.For(t.Item)).Where(f => f != null && f.Kind == HintKind.Creature).ToList();
 
-		// A creature hint leads to an enemy met often (at least 5 % of the spawns of its best biome, in a slot that is not
-		// rare, no rare enemy) that really drops the item with a planned chance of 1 % or more
+		// Steady share of a type in each biome, recomputed from the slots (not from the planner's table): slots open in the
+		// band, weight 1 (rare 0.1, conditional 0.5), only the slots neither rare nor conditional count for the type, split by
+		// sampling Pick
+		private static Dictionary<int, double> SteadyFromSlots(int type, int tier)
+		{
+			int band = BiomeSlots.BandOf(Tiers.Clamp(tier));
+			Dictionary<int, double> totals = new(), mine = new();
+			const int Rolls = 200;
+			foreach (BiomeSlot slot in BiomeSlots.SpawnMap.Slots)
+			{
+				if (slot.Critter || slot.AbsentEvil || slot.Band > band) continue;
+				double weight = (slot.Rare ? 0.1 : 1) * (slot.Conditional ? 0.5 : 1);
+				totals[slot.Biome] = totals.GetValueOrDefault(slot.Biome) + weight;
+				if (slot.Rare || slot.Conditional) continue;
+				int hits = 0;
+				for (int k = 0; k < Rolls; k++)
+				{
+					if (BiomeSlots.TypeOf(BiomeSlots.Pick(slot, (k + 0.5) / Rolls)) == type) hits++;
+				}
+				if (hits > 0) mine[slot.Biome] = mine.GetValueOrDefault(slot.Biome) + weight * hits / Rolls;
+			}
+			return mine.ToDictionary(p => p.Key, p => p.Value / totals[p.Key]);
+		}
+
+		// A creature hint leads to an enemy met often (at least 5 % of the steady spawns of its best biome, no rare enemy)
+		// that drops the item with the chance the codex shows (1 % or more). Fallbacks are counted by HintTargetsHaveSource
 		private static void HintSourceFrequent()
 		{
-			List<HintFact> facts = CreatureFacts();
+			List<HintFact> facts = CreatureFacts().Where(f => !f.Fallback).ToList();
 			if (facts.Count == 0) Check.Skip("no creature hint in this world");
+			bool shares = BiomeSlots.SpawnsPlanned && !(BiomeSlots.Active && EnemiesConfig.Instance.BiomeVanillaChance > 0);
 			List<string> failures = new();
 			foreach (HintFact fact in facts)
 			{
@@ -46,22 +72,61 @@ namespace UltimateRandomizer.Common.Tests
 				int type = BiomeSlots.TypeOf(fact.Npc);
 				if (ContentSamples.NpcsByNetId[fact.Npc].rarity > 0) failures.Add($"{name}: a rare enemy");
 				if (fact.Chance < 0.01f - 1e-6f) failures.Add($"{name}: {fact.Chance:P2} chance");
-				// The chance the fact states is a real planned drop of that enemy (its guaranteed drop, or its lucky plan)
-				float planned = RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true).Where(d => d.Item == fact.Item).Select(d => d.Chance).DefaultIfEmpty(0).Max();
-				if (planned < fact.Chance - 1e-4f) failures.Add($"{name}: states {fact.Chance:P2}, planned {planned:P2}");
-				if (!BiomeSlots.HasAnySlot(type)) continue;
-				(int biome, double share, _) = BiomeSlots.BestBiome(type, fact.Tier);
-				if (biome < 0 || share < GuaranteedSources.MinHostShare - 1e-9) failures.Add($"{name}: {share:P1} of its best biome");
-				if (!BiomeSlots.SpawnsInCommonSlot(type, fact.Tier)) failures.Add($"{name}: only in rare slots");
-				if (fact.Biomes.Count == 0 || fact.Biomes[0] != BiomeSlots.BiomeName(biome)) failures.Add($"{name}: the first biome named is not its best one");
-				foreach (string named in fact.Biomes.Skip(1))
+				// Recomputed from the enemy's lucky plan: every planned entry of the item together
+				float missing = 1f;
+				foreach (PlannedDrop drop in RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true))
 				{
-					int key = BiomeSlots.SpawnMap.Slots.Where(s => BiomeSlots.BiomeName(s.Biome) == named).Select(s => s.Biome).DefaultIfEmpty(-1).First();
-					if (BiomeSlots.PlannedShare(key, type, fact.Tier) < GuaranteedSources.MinHostShare - 1e-9) failures.Add($"{name}: {named} named with a small share");
+					if (drop.Item == fact.Item) missing *= 1f - Math.Clamp(drop.Chance, 0f, 1f);
+				}
+				if (Math.Abs((1f - missing) - fact.Chance) > 1e-4f) failures.Add($"{name}: states {fact.Chance:P2}, planned {1f - missing:P2}");
+				if (!shares || !BiomeSlots.HasAnySlot(type)) continue;
+				// Judged at the requirement's tier for a guaranteed host, like the guarantees
+				GuaranteedSources.Requirement requirement = GuaranteedSources.Requirements.FirstOrDefault(r => r.Item == fact.Item);
+				int tier = requirement.Item == fact.Item && GuaranteedSources.HostsOf(fact.Item).Contains(fact.Npc) ? Math.Max(fact.Tier, requirement.Tier) : fact.Tier;
+				Dictionary<int, double> steady = SteadyFromSlots(type, tier);
+				double best = steady.Values.DefaultIfEmpty(0).Max();
+				if (best < GuaranteedSources.MinHostShare - 0.005) failures.Add($"{name}: {best:P1} of the steady spawns of its best biome");
+				if (fact.Biomes.Count == 0) failures.Add($"{name}: no biome named");
+				else if (steady.Where(p => BiomeSlots.BiomeName(p.Key) == fact.Biomes[0]).Select(p => p.Value).DefaultIfEmpty(0).First() < best - 0.005)
+				{
+					failures.Add($"{name}: {fact.Biomes[0]} is not its best biome");
 				}
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Hint sources: {facts.Count} creature hints, lowest chance {facts.Min(f => f.Chance):P1}, lowest share {facts.Min(f => f.Share):P1}");
 			Check.All(failures, "Creature hints on rare sources");
+		}
+
+		private static bool AtDefault(object config, string field)
+		{
+			System.Reflection.FieldInfo info = config.GetType().GetField(field);
+			object value = info?.GetCustomAttributes(typeof(System.ComponentModel.DefaultValueAttribute), false).OfType<System.ComponentModel.DefaultValueAttribute>().FirstOrDefault()?.Value;
+			return info != null && Equals(Convert.ChangeType(value, info.FieldType.IsEnum ? Enum.GetUnderlyingType(info.FieldType) : info.FieldType), Convert.ChangeType(info.GetValue(config), info.FieldType.IsEnum ? Enum.GetUnderlyingType(info.FieldType) : info.FieldType));
+		}
+
+		// Every station or summon target with guaranteed hosts has a creature or recipe hint; with the default settings,
+		// never a creature kept only because nothing else than a chest or a pot gives it
+		private static void HintTargetsHaveSource()
+		{
+			List<HintTarget> targets = TargetsOrSkip().Where(t => t.Kind is HintTargetKind.Station or HintTargetKind.Summon && GuaranteedSources.HostsOf(t.Item).Any()).ToList();
+			if (targets.Count == 0) Check.Skip("no guaranteed station or summon");
+			EnemiesConfig enemies = EnemiesConfig.Instance;
+			bool defaults = AtDefault(enemies, "RandomizeEnemySpawns") && AtDefault(enemies, "EnemySwapMode") && AtDefault(enemies, "BiomeVanillaChance")
+				&& AtDefault(ProgressionConfig.Instance, "GuaranteedDropMultiplier");
+			List<string> failures = new();
+			int fallbacks = 0;
+			foreach (HintTarget target in targets)
+			{
+				HintFact fact = HintFacts.For(target.Item);
+				string name = HintFacts.ItemName(target.Item);
+				if (fact == null || fact.Kind is not (HintKind.Creature or HintKind.Recipe)) failures.Add($"{name}: {(fact == null ? "no hint" : fact.Kind.ToString())}");
+				else if (fact.Fallback)
+				{
+					fallbacks++;
+					if (defaults) failures.Add($"{name}: only a rare source ({HintFacts.NpcName(fact.Npc)}, {fact.Chance:P1}, {fact.Share:P1} of its biome)");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Hint targets: {targets.Count} guaranteed stations and summons, {fallbacks} on a fallback creature");
+			Check.All(failures, "Targets without a frequent hint");
 		}
 
 		// Levels 2 to 4 of a creature hint name its best biome
@@ -89,14 +154,20 @@ namespace UltimateRandomizer.Common.Tests
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (the server records the reveal)");
 			HintFact fact = TargetsOrSkip().Select(t => HintFacts.For(t.Item)).FirstOrDefault(f => f != null && f.Kind is HintKind.Creature or HintKind.Boss);
 			if (fact == null) Check.Skip("no creature or boss hint in this world");
+			// Reveals of the real codex first: they must not land in the copy
+			CodexSystem.ProcessReveals(force: true);
 			CodexData saved = CodexSystem.Data;
 			try
 			{
 				CodexSystem.Data = new CodexData { Seed = saved.Seed, HasSeed = saved.HasSeed, RecipeStamp = saved.RecipeStamp, HasRecipeStamp = saved.HasRecipeStamp };
 				string item = CodexNames.Item(fact.Item);
-				CodexSystem.RevealHinted(CodexEntry.Hint(item, HintFacts.MaxLevel - 1));
+				// The purchase path: the hint entry, then the reveal once the facts are ready (forced here)
+				CodexSystem.Submit(CodexEntry.Hint(item, HintFacts.MaxLevel - 1));
+				CodexSystem.ProcessReveals(force: true);
 				Check.Equal(0, CodexSystem.KnownNpcs().Count, "enemies known after level 3");
-				CodexSystem.RevealHinted(CodexEntry.Hint(item, HintFacts.MaxLevel));
+				CodexSystem.Submit(CodexEntry.Hint(item, HintFacts.MaxLevel));
+				Check.Equal(1, CodexSystem.PendingRevealCount, "reveals waiting after level 4");
+				CodexSystem.ProcessReveals(force: true);
 				CodexSystem.RefreshIndex();
 				List<int> known = CodexSystem.KnownNpcs();
 				Check.That(known.Count == 1, $"{known.Count} enemies known after the reveal");
