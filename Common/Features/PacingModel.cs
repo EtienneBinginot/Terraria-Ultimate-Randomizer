@@ -45,6 +45,9 @@ namespace UltimateRandomizer.Common.Features
 		// The biomes of the early kills, in a fixed order (the critical stations go to one of them: GuaranteedSources)
 		public static IEnumerable<SpawnBiome> EarlyBiomes => EarlyKills.Select(k => k.biome).Distinct();
 
+		// The share of the early kills made in a biome (Forest about three quarters)
+		public static double EarlyBiomeShare(SpawnBiome biome) => EarlyKills.Where(k => k.biome == biome).Sum(k => k.count) / (double)EarlyKills.Sum(k => k.count);
+
 		// The vanilla enemies of the early kills in a biome (tests)
 		public static IEnumerable<int> EarlyOriginals(SpawnBiome biome) => EarlyKills.Where(k => k.biome == biome).SelectMany(k => k.npcs);
 

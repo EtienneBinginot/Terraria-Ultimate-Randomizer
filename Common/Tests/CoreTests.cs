@@ -47,6 +47,13 @@ namespace UltimateRandomizer.Common.Tests
 				if (overridden.Contains(item) || !ItemPool.IsValid(item)) continue;
 				if (ItemPool.TierOf(item) >= (int)Tier.Hardmode) failures.Add($"{Lang.GetItemNameValue(item)} at tier {ItemPool.TierOf(item)} (rarity {ItemPool.Info[item].RarityTier}), crafted before hardmode");
 			}
+			// Gear made from late materials stays late (a wrong ingredient tier would pull it to the start)
+			foreach ((int item, Tier floor) in new[] { (ItemID.NecroHelmet, Tier.PostSkeletron), (ItemID.SpookyHelmet, Tier.PostPlantera), (ItemID.SpiderMask, Tier.Hardmode),
+				(ItemID.MartianConduitWall, Tier.PostGolem), (ItemID.AncientBattleArmorHat, Tier.Hardmode) })
+			{
+				if (overridden.Contains(item) || !ItemPool.IsValid(item)) continue;
+				if (ItemPool.TierOf(item) < (int)floor) failures.Add($"{Lang.GetItemNameValue(item)} at tier {ItemPool.TierOf(item)}, at least {(int)floor} expected");
+			}
 			// The original recipes (the live ones are randomized), placers of each tile for the stations
 			Dictionary<int, List<int>> placers = new();
 			foreach ((int type, Item sample) in ContentSamples.ItemsByType)
@@ -62,6 +69,8 @@ namespace UltimateRandomizer.Common.Tests
 				Recipe recipe = Main.recipe[i];
 				if (recipe == null || recipe.Disabled || recipe.Mod != null && recipe.Mod.Name != "ModLoader") continue;
 				int result = Features.RecipeSystem.OriginalResult(i);
+				// The same recipes as the lowering (SetsTier reads the live recipe: its conditions and ingredient count stay)
+				if (!ItemClassifier.SetsTier(recipe)) continue;
 				if (result <= 0 || result >= tiers.Length) continue;
 				int tier = 0;
 				foreach ((int type, _) in Features.RecipeSystem.OriginalIngredients(i))

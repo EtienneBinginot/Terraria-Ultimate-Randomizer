@@ -67,6 +67,11 @@ namespace UltimateRandomizer.Common.Core
 			[ItemID.PearlstoneBlock] = Tier.Hardmode,
 			[ItemID.PearlsandBlock] = Tier.Hardmode,
 			[ItemID.SpookyWood] = Tier.PostPlantera,
+			// Only from the Dungeon after Skeletron, and the Steampunker in hardmode (Necro armor, cog machines)
+			[ItemID.Bone] = Tier.PostSkeletron,
+			[ItemID.Cog] = Tier.Hardmode,
+			[ItemID.AncientBattleArmorMaterial] = Tier.Hardmode,
+			[ItemID.FrostCore] = Tier.Hardmode,
 			[ItemID.MartianConduitPlating] = Tier.PostGolem
 		};
 
@@ -137,7 +142,7 @@ namespace UltimateRandomizer.Common.Core
 			for (int i = 0; i < Recipe.numRecipes; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (!IsVanillaRecipe(recipe)) continue;
+				if (!SetsTier(recipe)) continue;
 				int result = recipe.createItem.type;
 				if (result >= tiers.Length || overrides.ContainsKey(result) || KnownTiers.ContainsKey(result)) continue;
 				List<int[]> parts = new();
@@ -174,6 +179,25 @@ namespace UltimateRandomizer.Common.Core
 			examples = string.Join(", ", new[] { ItemID.YellowHorseshoeBalloon, ItemID.BundleofBalloons, ItemID.FrostsparkBoots }.Where(t => t < tiers.Length)
 				.Select(t => $"{Lang.GetItemNameValue(t)} {before[t]} > {tiers[t]}"));
 			return count;
+		}
+
+		// World kinds a recipe may need: such a recipe is no way to make the item in every world
+		private static readonly Condition[] WorldConditions =
+		{
+			Condition.CrimsonWorld, Condition.CorruptWorld, Condition.DrunkWorld, Condition.RemixWorld, Condition.ZenithWorld, Condition.NotDrunkWorld,
+			Condition.NotRemixWorld, Condition.NotZenithWorld
+		};
+
+		// A vanilla recipe that can lower its result's tier: none tied to a kind of world, and not tModLoader's reverse recipes
+		// (wall or platform back to its block: the block would take the wall's rarity)
+		public static bool SetsTier(Recipe recipe)
+		{
+			if (!IsVanillaRecipe(recipe) || recipe.Conditions.Any(c => WorldConditions.Contains(c))) return false;
+			if (recipe.requiredItem.Count == 1 && ContentSamples.ItemsByType.TryGetValue(recipe.requiredItem[0].type, out Item part))
+			{
+				if (part.createWall > 0 || part.createTile >= TileID.Dirt && TileID.Sets.Platforms[part.createTile]) return false;
+			}
+			return true;
 		}
 
 		// A recipe of vanilla Terraria (tModLoader's own count as vanilla, as in RecipeSystem), enabled, with a result

@@ -385,7 +385,7 @@ namespace UltimateRandomizer.Common.Features
 				BiomeHosts? picked = null;
 				if (requirement.Critical)
 				{
-					picked = PickCritical(Eligible(0), load, biomeItems, rng);
+					picked = PickCritical(requirement.Item, Eligible(0), load, biomeItems, rng);
 					if (picked != null)
 					{
 						place.Tier = 0;
@@ -660,11 +660,14 @@ namespace UltimateRandomizer.Common.Features
 
 		// The critical stations go to one of the pacing model's early biomes (PacingModel.EarlyBiomes: Forest, Underground,
 		// Caverns, Desert) whose hosts the early kills meet often enough for CriticalChance to stay below MaxHostSingleChance
-		// (with what they already carry), picked like other items. Null when none qualifies (the Forest's critical hosts then)
-		private static BiomeHosts? PickCritical(List<BiomeEligible> eligible, HostLoads load, Dictionary<int, int> biomeItems, Random rng)
+		// (with what they already carry). The work bench stays in the Forest: a new player builds a house near the spawn
+		// before the first night, and the pacing model has no order in its kills to see a work bench in a far desert. The
+		// others are picked by how much of the early kills their biome makes, less once it holds items. Null when none
+		// qualifies (the Forest's critical hosts then)
+		private static BiomeHosts? PickCritical(int item, List<BiomeEligible> eligible, HostLoads load, Dictionary<int, int> biomeItems, Random rng)
 		{
 			if (!BiomeSlots.SpawnsPlanned) return null;
-			HashSet<int> early = PacingModel.EarlyBiomes.Select(b => (int)b).ToHashSet();
+			HashSet<int> early = item == ItemID.WorkBench ? new HashSet<int> { (int)SpawnBiome.Forest } : PacingModel.EarlyBiomes.Select(b => (int)b).ToHashSet();
 			List<BiomeHosts> candidates = new();
 			foreach (BiomeEligible biome in eligible.Where(b => early.Contains(b.Biome)))
 			{
@@ -684,7 +687,8 @@ namespace UltimateRandomizer.Common.Features
 				candidates.Add(hosts.Value);
 			}
 			if (candidates.Count == 0) return null;
-			return candidates[PickWeighted(Enumerable.Range(0, candidates.Count).ToList(), i => BiomeWeight(biomeItems.GetValueOrDefault(candidates[i].Biome)), rng)];
+			return candidates[PickWeighted(Enumerable.Range(0, candidates.Count).ToList(),
+				i => PacingModel.EarlyBiomeShare((SpawnBiome)candidates[i].Biome) * BiomeWeight(biomeItems.GetValueOrDefault(candidates[i].Biome)), rng)];
 		}
 
 		// The share of the early kills a critical station's hosts must make: below, CriticalChance would pass
@@ -1026,7 +1030,10 @@ namespace UltimateRandomizer.Common.Features
 			{
 				foreach (PlannedDrop drop in plan)
 				{
-					if (drop.Chance >= minChance && WorldAllows(drop.Conditions)) Add(drop.Item, Math.Max(sourceTier, Gated(drop.Item)));
+					if (drop.Chance < minChance || !WorldAllows(drop.Conditions)) continue;
+					// Remix worlds: the pre-hardmode Mimic gives these only in hardmode
+					int from = drop.Conditions != null && drop.Conditions.Any(c => c is Conditions.RemixSeedHardmode) ? Math.Max(sourceTier, (int)Core.Tier.Hardmode) : sourceTier;
+					Add(drop.Item, Math.Max(from, Gated(drop.Item)));
 				}
 			}
 			for (int t = 0; t < Tiers.Count; t++)

@@ -22,7 +22,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			Full = full ?? "";
 		}
 
-		public bool IsEmpty => Short.Length == 0;
+		public bool IsEmpty => string.IsNullOrEmpty(Short);
 
 		public static readonly CodexNote None = new("", "");
 
