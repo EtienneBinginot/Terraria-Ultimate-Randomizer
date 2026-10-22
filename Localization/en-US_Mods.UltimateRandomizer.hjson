@@ -93,6 +93,7 @@ Tests: {
 	StackRules: Stack sizes are valid
 	PriceFloor: Shop prices are never below the item value
 	DropRates: Drop rates are valid
+	TierFromRecipes: Crafted items take the tier of their vanilla recipe when it is earlier than their rarity (Tinkerer combinations)
 	SnapshotsCaptured: Original drop tables were read
 	MobPlansValid: Every enemy drop table is valid
 	LootAbundanceScales: Loot abundance scales enemy drops, not guaranteed ones

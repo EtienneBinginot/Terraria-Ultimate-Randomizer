@@ -13,6 +13,8 @@ namespace UltimateRandomizer.Common.Core
 	{
 		public ItemCategory Category;
 		public int Tier;
+		// The tier its rarity (or KnownTiers, an override) gives, before vanilla recipes lower it (ItemClassifier.LowerByRecipes)
+		public int RarityTier;
 		public bool Excluded;
 		public bool Protected;
 	}
@@ -57,6 +59,9 @@ namespace UltimateRandomizer.Common.Core
 
 		public static int ContentHash { get; private set; }
 
+		// The tier of every item, excluded ones too (they may be recipe ingredients), after the tiers from recipes (tests)
+		public static int[] AllTiers { get; private set; } = Array.Empty<int>();
+
 		public static bool Ready => Info.Length > 0;
 
 		// Buckets[category][tier] = item types, sorted so the order is the same on every machine
@@ -87,6 +92,14 @@ namespace UltimateRandomizer.Common.Core
 				for (int t = 0; t < Tiers.Count; t++) lists[c, t] = new List<int>();
 			}
 			int hash = count;
+			// Tiers of every item first (excluded ones too: they may be ingredients), then lowered by the vanilla recipes
+			int[] rarityTiers = new int[count];
+			for (int type = 1; type < count; type++)
+			{
+				rarityTiers[type] = ContentSamples.ItemsByType.TryGetValue(type, out Item sample) && sample != null ? ItemClassifier.ComputeTier(type, sample, overrides) : Tiers.Max;
+			}
+			int[] tiers = (int[])rarityTiers.Clone();
+			int lowered = ItemClassifier.LowerByRecipes(tiers, overrides, out string loweredExamples);
 			for (int type = 1; type < count; type++)
 			{
 				hash = DetRandom.Hash(hash, DetRandom.ItemKey(type));
@@ -96,9 +109,9 @@ namespace UltimateRandomizer.Common.Core
 					continue;
 				}
 				ItemCategory category = ItemClassifier.Classify(type, item);
-				int tier = ItemClassifier.ComputeTier(type, item, overrides);
+				int tier = tiers[type];
 				bool isProtected = protectedItems.Contains(type);
-				info[type] = new ItemInfo { Category = category, Tier = tier, Protected = isProtected };
+				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], Protected = isProtected };
 				if (!isProtected) lists[(int)category, tier].Add(type);
 			}
 
@@ -114,16 +127,19 @@ namespace UltimateRandomizer.Common.Core
 				}
 			}
 			Info = info;
+			AllTiers = tiers;
 			ContentHash = hash;
 			shuffleMap = null;
 			progressionStations = null;
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Classified {count} items in {watch.ElapsedMilliseconds} ms ({protectedItems.Count} protected).");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Classified {count} items in {watch.ElapsedMilliseconds} ms ({protectedItems.Count} protected), "
+				+ $"tiers from recipes: {lowered} lowered ({loweredExamples}).");
 		}
 
 		public static void Unload()
 		{
 			WildChanceOverride = null;
 			Info = Array.Empty<ItemInfo>();
+			AllTiers = Array.Empty<int>();
 			buckets = null;
 			categoryHasItems = null;
 			shuffleMap = null;

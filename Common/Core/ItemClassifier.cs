@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -55,8 +56,21 @@ namespace UltimateRandomizer.Common.Core
 			[ItemID.FragmentNebula] = Tier.PostCultist,
 			[ItemID.FragmentStardust] = Tier.PostCultist,
 			[ItemID.LunarOre] = Tier.PostMoonLord,
-			[ItemID.LunarBar] = Tier.PostMoonLord
+			[ItemID.LunarBar] = Tier.PostMoonLord,
+			// Late drops and blocks with a low rarity: without them, what is crafted from them would take their early tier
+			// (LowerByRecipes: Spooky armor from Spooky Wood at a work bench)
+			[ItemID.SpiderFang] = Tier.Hardmode,
+			[ItemID.DarkShard] = Tier.Hardmode,
+			[ItemID.LightShard] = Tier.Hardmode,
+			[ItemID.AncientCloth] = Tier.Hardmode,
+			[ItemID.Pearlwood] = Tier.Hardmode,
+			[ItemID.PearlstoneBlock] = Tier.Hardmode,
+			[ItemID.PearlsandBlock] = Tier.Hardmode,
+			[ItemID.SpookyWood] = Tier.PostPlantera,
+			[ItemID.MartianConduitPlating] = Tier.PostGolem
 		};
+
+		public static bool HasKnownTier(int type) => KnownTiers.ContainsKey(type);
 
 		public static bool IsExcluded(int type, Item item, HashSet<int> excludedItems, HashSet<string> excludedMods)
 		{
@@ -107,6 +121,81 @@ namespace UltimateRandomizer.Common.Core
 			if (item.createWall > WallID.None) return ItemCategory.Block;
 			if (item.material) return ItemCategory.Material;
 			return ItemCategory.Misc;
+		}
+
+		// Items made by vanilla recipes are found no later than their best recipe allows: the highest tier among its
+		// ingredients (a recipe group: its earliest item) and stations (a progression station at its tier, a basic one at 0,
+		// any other at the earliest item placing it), repeated until nothing changes (ingredients may be crafted). Rarity
+		// misleads for crafted items: a Yellow Horseshoe Balloon (rarity 4, hardmode) is made from pre-hardmode parts at the
+		// Tinkerer's Workshop. Only lowers; KnownTiers and the config overrides keep theirs; modded recipes are left out (their
+		// mod chose the rarities). Run when recipes are set up (ItemPool.Build in PostSetupRecipes), before RecipeSystem
+		// randomizes them on world load: the live recipes are the vanilla ones then, the same on every machine. Returns how
+		// many items it lowered, and a few of them for the log
+		public static int LowerByRecipes(int[] tiers, Dictionary<int, Tier> overrides, out string examples)
+		{
+			List<(int result, List<int[]> parts, List<int> tiles)> recipes = new();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (!IsVanillaRecipe(recipe)) continue;
+				int result = recipe.createItem.type;
+				if (result >= tiers.Length || overrides.ContainsKey(result) || KnownTiers.ContainsKey(result)) continue;
+				List<int[]> parts = new();
+				foreach (Item ingredient in recipe.requiredItem)
+				{
+					if (ingredient == null || ingredient.type <= 0 || ingredient.type >= tiers.Length) continue;
+					parts.Add(IngredientChoices(recipe, ingredient.type).Where(t => t > 0 && t < tiers.Length).ToArray());
+				}
+				recipes.Add((result, parts, recipe.requiredTile.Where(t => t >= 0).Distinct().ToList()));
+			}
+			Dictionary<int, List<int>> placers = new();
+			foreach ((int type, Item sample) in ContentSamples.ItemsByType)
+			{
+				if (sample == null || sample.createTile < TileID.Dirt || type <= 0 || type >= tiers.Length) continue;
+				if (!placers.TryGetValue(sample.createTile, out List<int> list)) placers[sample.createTile] = list = new List<int>();
+				list.Add(type);
+			}
+			int[] before = (int[])tiers.Clone();
+			bool changed = true;
+			for (int pass = 0; pass < 32 && changed; pass++)
+			{
+				changed = false;
+				foreach ((int result, List<int[]> parts, List<int> tiles) in recipes)
+				{
+					int tier = 0;
+					foreach (int[] part in parts) tier = System.Math.Max(tier, part.Length == 0 ? Tiers.Max : part.Min(t => tiers[t]));
+					foreach (int tile in tiles) tier = System.Math.Max(tier, StationTier(tile, placers, t => tiers[t]));
+					if (tier >= tiers[result]) continue;
+					tiers[result] = tier;
+					changed = true;
+				}
+			}
+			int count = Enumerable.Range(1, tiers.Length - 1).Count(t => tiers[t] < before[t]);
+			examples = string.Join(", ", new[] { ItemID.YellowHorseshoeBalloon, ItemID.BundleofBalloons, ItemID.FrostsparkBoots }.Where(t => t < tiers.Length)
+				.Select(t => $"{Lang.GetItemNameValue(t)} {before[t]} > {tiers[t]}"));
+			return count;
+		}
+
+		// A recipe of vanilla Terraria (tModLoader's own count as vanilla, as in RecipeSystem), enabled, with a result
+		public static bool IsVanillaRecipe(Recipe recipe) => recipe != null && !recipe.Disabled && (recipe.Mod == null || recipe.Mod.Name == "ModLoader")
+			&& recipe.createItem != null && recipe.createItem.type > 0;
+
+		// The items an ingredient of a recipe accepts: every item of its recipe group, else itself
+		public static IEnumerable<int> IngredientChoices(Recipe recipe, int ingredient)
+		{
+			RecipeGroup group = recipe.acceptedGroups.Select(g => RecipeGroup.recipeGroups.TryGetValue(g, out RecipeGroup found) ? found : null)
+				.FirstOrDefault(g => g != null && g.ContainsItem(ingredient));
+			return group != null ? group.ValidItems.Append(ingredient).Distinct() : new[] { ingredient };
+		}
+
+		// The tier from which a station is had, for the tiers from recipes: a progression station at its tier, a basic one at
+		// 0, any other at the earliest item placing it (never, without one)
+		public static int StationTier(int tile, Dictionary<int, List<int>> placers, System.Func<int, int> tierOf)
+		{
+			Stations.StationInfo info = Stations.Info(tile);
+			if (info.Kind == StationKind.Progression) return info.Tier;
+			if (info.Kind == StationKind.Basic) return 0;
+			return placers.TryGetValue(tile, out List<int> list) && list.Count > 0 ? list.Min(tierOf) : Tiers.Max;
 		}
 
 		public static int ComputeTier(int type, Item item, Dictionary<int, Tier> overrides)

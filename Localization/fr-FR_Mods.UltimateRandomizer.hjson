@@ -93,6 +93,7 @@ Tests: {
 	StackRules: Les tailles de stack sont valides
 	PriceFloor: Les prix des boutiques ne sont jamais sous la valeur de l'objet
 	DropRates: Les taux de drop sont valides
+	TierFromRecipes: Les objets fabriqués prennent le tier de leur recette vanilla quand il est plus précoce que leur rareté (combinaisons du Tinkerer)
 	SnapshotsCaptured: Les tables de loot d'origine ont été lues
 	MobPlansValid: Toutes les tables de loot des ennemis sont valides
 	LootAbundanceScales: L'abondance du butin multiplie les drops des ennemis, pas les drops garantis

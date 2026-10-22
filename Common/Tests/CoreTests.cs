@@ -22,6 +22,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("StackRules", StackRulesValid);
 			TestRunner.Register("PriceFloor", PriceFloor);
 			TestRunner.Register("DropRates", DropRatesValid);
+			TestRunner.Register("TierFromRecipes", TierFromRecipes);
 		}
 
 		private static IEnumerable<int> Randomizable() => Enumerable.Range(1, ItemPool.Info.Length - 1).Where(ItemPool.IsRandomizable);
@@ -31,6 +32,63 @@ namespace UltimateRandomizer.Common.Tests
 			int[] all = Randomizable().ToArray();
 			Random rng = new(salt);
 			return Enumerable.Range(0, count).Select(_ => all[rng.Next(all.Length)]).ToArray();
+		}
+
+		// Crafted items are found no later than their vanilla recipe allows: the Tinkerer's combinations made of pre-hardmode
+		// parts are below hardmode; an item is never lowered below its best original vanilla recipe (the highest tier of its
+		// ingredients and stations), and only lowered when such a recipe allows it; KnownTiers and overrides keep theirs
+		private static void TierFromRecipes()
+		{
+			HashSet<int> overridden = ProgressionConfig.Instance.TierOverrides.Where(o => o?.Item != null && !o.Item.IsUnloaded).Select(o => o.Item.Type).ToHashSet();
+			int[] tiers = ItemPool.AllTiers;
+			List<string> failures = new();
+			foreach (int item in new[] { ItemID.YellowHorseshoeBalloon, ItemID.BundleofBalloons, ItemID.FrostsparkBoots, ItemID.LightningBoots })
+			{
+				if (overridden.Contains(item) || !ItemPool.IsValid(item)) continue;
+				if (ItemPool.TierOf(item) >= (int)Tier.Hardmode) failures.Add($"{Lang.GetItemNameValue(item)} at tier {ItemPool.TierOf(item)} (rarity {ItemPool.Info[item].RarityTier}), crafted before hardmode");
+			}
+			// The original recipes (the live ones are randomized), placers of each tile for the stations
+			Dictionary<int, List<int>> placers = new();
+			foreach ((int type, Item sample) in ContentSamples.ItemsByType)
+			{
+				if (sample == null || sample.createTile < TileID.Dirt || type <= 0 || type >= tiers.Length) continue;
+				if (!placers.TryGetValue(sample.createTile, out List<int> list)) placers[sample.createTile] = list = new List<int>();
+				list.Add(type);
+			}
+			Dictionary<int, int> best = new();
+			int count = Math.Min(Recipe.numRecipes, Features.RecipeSystem.RecipeCount);
+			for (int i = 0; i < count; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe == null || recipe.Disabled || recipe.Mod != null && recipe.Mod.Name != "ModLoader") continue;
+				int result = Features.RecipeSystem.OriginalResult(i);
+				if (result <= 0 || result >= tiers.Length) continue;
+				int tier = 0;
+				foreach ((int type, _) in Features.RecipeSystem.OriginalIngredients(i))
+				{
+					if (type <= 0 || type >= tiers.Length) continue;
+					tier = Math.Max(tier, ItemClassifier.IngredientChoices(recipe, type).Where(t => t > 0 && t < tiers.Length).Select(t => tiers[t]).DefaultIfEmpty(Tiers.Max).Min());
+				}
+				foreach (int tile in Features.RecipeSystem.OriginalTiles(i).Where(t => t >= 0)) tier = Math.Max(tier, ItemClassifier.StationTier(tile, placers, t => tiers[t]));
+				best[result] = Math.Min(best.GetValueOrDefault(result, int.MaxValue), tier);
+			}
+			int lowered = 0;
+			for (int item = 1; item < ItemPool.Info.Length && item < tiers.Length; item++)
+			{
+				if (!ItemPool.IsValid(item)) continue;
+				ItemInfo info = ItemPool.Info[item];
+				if (info.Tier > info.RarityTier) failures.Add($"{Lang.GetItemNameValue(item)} raised from {info.RarityTier} to {info.Tier}");
+				if (info.Tier == info.RarityTier || failures.Count > 20) continue;
+				lowered++;
+				string name = Lang.GetItemNameValue(item);
+				if (overridden.Contains(item) || ItemClassifier.HasKnownTier(item)) failures.Add($"{name}: a fixed tier lowered to {info.Tier}");
+				else if (!best.TryGetValue(item, out int recipeTier)) failures.Add($"{name}: lowered to {info.Tier} without a vanilla recipe");
+				else if (info.Tier < recipeTier) failures.Add($"{name}: tier {info.Tier} below its best recipe's {recipeTier}");
+				else if (info.Tier > recipeTier) failures.Add($"{name}: tier {info.Tier}, its best recipe allows {recipeTier}");
+			}
+			Terraria.ModLoader.ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Tiers from recipes: {lowered} items lowered");
+			if (count == 0) Check.Skip("no recipe stored");
+			Check.All(failures, "Tiers from recipes");
 		}
 
 		private static void PoolBuilt()
