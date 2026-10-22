@@ -69,7 +69,7 @@ namespace UltimateRandomizer.Common.Tests
 				(float life, float damage) previous = (1, 1);
 				for (float gap = -2; gap <= 12; gap += 0.25f)
 				{
-					(float l, float d) = AdaptivePower.Multipliers(gap, life, damage, cap);
+					(float l, float d) = AdaptivePower.Multipliers(gap, life, damage, cap, cap);
 					if (l < 1 || d < 1) failures.Add($"x{l:0.00}/x{d:0.00} below 1 at gap {gap} (growth {life}/{damage})");
 					if (l > Math.Max(1, cap) + 0.0001f || d > Math.Max(1, cap) + 0.0001f) failures.Add($"x{l:0.00}/x{d:0.00} above the cap {cap} at gap {gap}");
 					if (l < previous.life - 0.0001f || d < previous.damage - 0.0001f) failures.Add($"decreasing at gap {gap} (growth {life}/{damage})");
@@ -77,7 +77,7 @@ namespace UltimateRandomizer.Common.Tests
 					previous = (l, d);
 				}
 			}
-			(float oneLife, float oneDamage) = AdaptivePower.Multipliers(1, 1.8f, 1.5f, 10);
+			(float oneLife, float oneDamage) = AdaptivePower.Multipliers(1, 1.8f, 1.5f, 10, 10);
 			if (Math.Abs(oneLife - 1.8f) > 0.001f || Math.Abs(oneDamage - 1.5f) > 0.001f) failures.Add($"one tier: x{oneLife:0.00}/x{oneDamage:0.00}, expected x1.80/x1.50");
 			float previousGap = 0;
 			for (float power = 0; power <= 10; power += 0.5f)
@@ -129,7 +129,7 @@ namespace UltimateRandomizer.Common.Tests
 			// The forced gap gives exactly growth^gap (capped), computed here without the formula under test
 			ProgressionConfig cfg = ProgressionConfig.Instance;
 			float exactLife = (float)Math.Max(1, Math.Min(Math.Max(1, cfg.AdaptiveCap), Math.Pow(Math.Max(1, cfg.LifeGrowthPerTier), 2)));
-			float exactDamage = (float)Math.Max(1, Math.Min(Math.Max(1, cfg.AdaptiveCap), Math.Pow(Math.Max(1, cfg.DamageGrowthPerTier), 2)));
+			float exactDamage = (float)Math.Max(1, Math.Min(Math.Max(1, cfg.AdaptiveDamageCap), Math.Pow(Math.Max(1, cfg.DamageGrowthPerTier), 2)));
 			(float formulaLife, float formulaDamage) = AdaptivePower.Multipliers(2, false);
 			if (Math.Abs(formulaLife - exactLife) > 0.001f || Math.Abs(formulaDamage - exactDamage) > 0.001f)
 				failures.Add($"gap 2: x{formulaLife:0.000}/x{formulaDamage:0.000}, expected x{exactLife:0.000}/x{exactDamage:0.000}");
@@ -141,8 +141,10 @@ namespace UltimateRandomizer.Common.Tests
 			(float plainLife, float plainDamage, EnemyKind plainKind) = (probeStats.Life, probeStats.Damage, probeStats.Kind);
 			AdaptivePower.PowerOverride = PowerWithGap(2);
 			probeStats.Roll(probe, new Random(21));
-			if (probeStats.Kind != plainKind || Math.Abs(probeStats.Life - plainLife * exactLife) > 0.001f * probeStats.Life || Math.Abs(probeStats.Damage - plainDamage * exactDamage) > 0.001f * probeStats.Damage)
-				failures.Add($"same seed: x{probeStats.Life:0.000}/x{probeStats.Damage:0.000}, expected x{plainLife * exactLife:0.000}/x{plainDamage * exactDamage:0.000}");
+			// The total damage cap (MaxDamageMultiplier) may stop the damage below that
+			float probeDamage = Math.Min(plainDamage * exactDamage, EnemyIndividualNPC.DamageCap(probe));
+			if (probeStats.Kind != plainKind || Math.Abs(probeStats.Life - plainLife * exactLife) > 0.001f * probeStats.Life || Math.Abs(probeStats.Damage - probeDamage) > 0.001f * probeStats.Damage)
+				failures.Add($"same seed: x{probeStats.Life:0.000}/x{probeStats.Damage:0.000}, expected x{plainLife * exactLife:0.000}/x{probeDamage:0.000}");
 			foreach (float gap in new[] { 0f, 2f })
 			{
 				AdaptivePower.PowerOverride = PowerWithGap(gap);

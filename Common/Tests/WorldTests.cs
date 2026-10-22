@@ -208,6 +208,13 @@ namespace UltimateRandomizer.Common.Tests
 				if (cfg.RandomizeBossHealth && (m.Life < Math.Min(cfg.BossHealthMin, cfg.BossHealthMax) - 0.001f || m.Life > Math.Max(cfg.BossHealthMin, cfg.BossHealthMax) + 0.001f)) failures.Add($"boss {type} life x{m.Life}");
 				if (cfg.RandomizeBossDamage && (m.Damage < Math.Min(cfg.BossDamageMin, cfg.BossDamageMax) - 0.001f || m.Damage > Math.Max(cfg.BossDamageMin, cfg.BossDamageMax) + 0.001f)) failures.Add($"boss {type} damage x{m.Damage}");
 			}
+			// Every enemy type stays under the total damage cap
+			float cap = Math.Max(1, cfg.MaxDamageMultiplier);
+			for (int type = 1; type < NPCLoader.NPCCount; type++)
+			{
+				float damage = EnemyStatCache.Get(type, false).Damage;
+				if (damage > cap + 0.001f) failures.Add($"{type} damage x{damage} above the cap x{cap}");
+			}
 			Check.All(failures, "Multipliers outside the configured range");
 		}
 	}

@@ -84,16 +84,17 @@ namespace UltimateRandomizer.Common.Features
 		{
 			ProgressionConfig cfg = ProgressionConfig.Instance;
 			return boss
-				? Multipliers(gap, cfg.BossLifeGrowthPerTier, cfg.BossDamageGrowthPerTier, cfg.AdaptiveCap)
-				: Multipliers(gap, cfg.LifeGrowthPerTier, cfg.DamageGrowthPerTier, cfg.AdaptiveCap);
+				? Multipliers(gap, cfg.BossLifeGrowthPerTier, cfg.BossDamageGrowthPerTier, cfg.AdaptiveCap, cfg.AdaptiveDamageCap)
+				: Multipliers(gap, cfg.LifeGrowthPerTier, cfg.DamageGrowthPerTier, cfg.AdaptiveCap, cfg.AdaptiveDamageCap);
 		}
 
-		public static (float life, float damage) Multipliers(float gap, float lifeGrowth, float damageGrowth, float cap)
+		public static (float life, float damage) Multipliers(float gap, float lifeGrowth, float damageGrowth, float lifeCap, float damageCap)
 		{
-			cap = Math.Max(1, cap);
+			lifeCap = Math.Max(1, lifeCap);
+			damageCap = Math.Max(1, damageCap);
 			gap = Math.Max(0, gap);
-			float life = (float)Math.Min(cap, Math.Pow(Math.Max(1, lifeGrowth), gap));
-			float damage = (float)Math.Min(cap, Math.Pow(Math.Max(1, damageGrowth), gap));
+			float life = (float)Math.Min(lifeCap, Math.Pow(Math.Max(1, lifeGrowth), gap));
+			float damage = (float)Math.Min(damageCap, Math.Pow(Math.Max(1, damageGrowth), gap));
 			return (Math.Max(1, life), Math.Max(1, damage));
 		}
 

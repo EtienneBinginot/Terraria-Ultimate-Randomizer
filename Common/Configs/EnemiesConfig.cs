@@ -18,6 +18,14 @@ namespace UltimateRandomizer.Common.Configs
 	{
 		public static EnemiesConfig Instance => ModContent.GetInstance<EnemiesConfig>();
 
+		// Most the mod multiplies the damage of an enemy, boss or boss part by (type x variation x giant x adaptive power).
+		// Defense is subtracted from damage: x10 damage turns a 1 damage hit into a one-shot, unlike x10 health
+		[Header("DamageLimit")]
+		[Range(1f, 20f)]
+		[Increment(0.1f)]
+		[DefaultValue(3f)]
+		public float MaxDamageMultiplier;
+
 		[Header("Bosses")]
 		[DefaultValue(true)]
 		public bool RandomizeBossHealth;
@@ -42,7 +50,7 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(1.6f)]
+		[DefaultValue(1.35f)]
 		public float BossDamageMax;
 
 		// How rare values far from normal are for bosses (1 = as likely as normal ones)
@@ -84,7 +92,7 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0.05f, 20f)]
 		[Increment(0.05f)]
-		[DefaultValue(2.5f)]
+		[DefaultValue(1.6f)]
 		public float EnemyDamageMax;
 
 		[Range(0.05f, 20f)]

@@ -33,6 +33,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("StatCacheBossFlag", StatCacheBossFlag);
 			TestRunner.Register("LootBonusCap", LootBonusCap);
 			TestRunner.Register("LootBonusApplied", LootBonusApplied);
+			TestRunner.Register("DamageCapRespected", DamageCapRespected);
 		}
 
 		private static double Share(float[] samples, Func<float, bool> predicate) => samples.Count(predicate) / (double)samples.Length;
@@ -382,6 +383,60 @@ namespace UltimateRandomizer.Common.Tests
 			individual.Life = 4;
 			individual.Damage = 2;
 			Check.That(EnemyIndividualNPC.LootBonus(npc) > normal, "a strong enemy gets no loot bonus");
+		}
+
+		// Defense is subtracted from damage, so the mod's damage multipliers together (type x variation x giant x adaptive)
+		// must stay under MaxDamageMultiplier even with a huge power gap, for enemies, bosses and boss parts
+		private static void DamageCapRespected()
+		{
+			float cap = Math.Max(1, EnemiesConfig.Instance.MaxDamageMultiplier);
+			List<string> failures = new();
+			float? previousOverride = AdaptivePower.PowerOverride;
+			try
+			{
+				// Far above any world: adaptive damage reaches its own cap
+				AdaptivePower.PowerOverride = 50;
+				foreach (int type in new[] { NPCID.Zombie, NPCID.BlueSlime, NPCID.Werewolf, NPCID.EyeofCthulhu, NPCID.SkeletronHand, NPCID.Plantera })
+				{
+					NPC npc = Sample(type);
+					if (!npc.TryGetGlobalNPC(out EnemyIndividualNPC individual)) continue;
+					float typeDamage = EnemyStatCache.Get(BossParts.Owner(type), EnemyStatsNPC.IsBossLike(npc)).Damage;
+					if (typeDamage > cap + 0.001f) failures.Add($"{npc.TypeName}: type x{typeDamage:0.00}");
+					Random rng = new(type);
+					for (int i = 0; i < 3000; i++)
+					{
+						individual.Roll(npc, rng);
+						float total = typeDamage * individual.Damage;
+						if (total > cap + 0.001f)
+						{
+							failures.Add($"{npc.TypeName} ({individual.Kind}): x{total:0.00}");
+							break;
+						}
+					}
+				}
+				// A living boss measured again with even more power: the rise stops at the cap
+				NPC boss = Sample(NPCID.EyeofCthulhu);
+				// Outside the slots: RaiseAdaptive stores the roll of its slot, which a real NPC could get back
+				boss.whoAmI = -1;
+				if (boss.TryGetGlobalNPC(out EnemyIndividualNPC bossStats))
+				{
+					int baseDamage = boss.damage;
+					bossStats.Roll(boss, new Random(3));
+					bossStats.Damage = EnemyIndividualNPC.DamageCap(boss) / 2;
+					bossStats.AdaptiveDamage = 1;
+					bossStats.Apply(boss);
+					bossStats.RaiseAdaptive(boss, bossStats.AdaptiveLife * 2, 100);
+					float bossType = EnemyStatCache.Get(NPCID.EyeofCthulhu, true).Damage;
+					if (bossType * bossStats.Damage > cap + 0.001f) failures.Add($"raised boss: x{bossType * bossStats.Damage:0.00}");
+					// baseDamage already has the type multiplier
+					if (boss.damage > baseDamage * EnemyIndividualNPC.DamageCap(boss) + 1) failures.Add($"raised boss: {boss.damage} damage from {baseDamage}");
+				}
+			}
+			finally
+			{
+				AdaptivePower.PowerOverride = previousOverride;
+			}
+			Check.All(failures, "Damage multiplied beyond the cap");
 		}
 	}
 }

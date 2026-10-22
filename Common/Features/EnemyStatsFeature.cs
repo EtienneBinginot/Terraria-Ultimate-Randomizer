@@ -141,7 +141,10 @@ namespace UltimateRandomizer.Common.Features
 			AdaptiveLife *= lifeFactor;
 			AdaptiveDamage *= damageFactor;
 			Life *= lifeFactor;
-			Damage *= damageFactor;
+			// The damage cap may leave less room than the measured rise (never lowers the current damage)
+			float oldDamage = Damage;
+			Damage = Math.Min(Damage * damageFactor, Math.Max(Damage, DamageCap(npc)));
+			damageFactor = Damage / Math.Max(0.0001f, oldDamage);
 			float ratio = npc.lifeMax > 0 ? Math.Clamp(npc.life / (float)npc.lifeMax, 0, 1) : 1;
 			npc.lifeMax = Math.Max(1, (int)(baseLifeMax * Life));
 			npc.life = Math.Clamp((int)Math.Ceiling(npc.lifeMax * ratio), 1, npc.lifeMax);
@@ -214,6 +217,13 @@ namespace UltimateRandomizer.Common.Features
 		// (swarms of giant creepers or bees, and no giant loot from them)
 		public static bool Scalable(NPC npc) => Eligible(npc) && npc.aiStyle != NPCAIStyleID.Worm && !BossParts.IsMinion(npc.type);
 
+		// Most the individual damage factor may be on top of the type's: together they never exceed MaxDamageMultiplier
+		public static float DamageCap(NPC npc)
+		{
+			float type = EnemyStatCache.Get(BossParts.Owner(npc.type), EnemyStatsNPC.IsBossLike(npc)).Damage;
+			return Math.Max(1, EnemiesConfig.Instance.MaxDamageMultiplier) / Math.Max(0.0001f, type);
+		}
+
 		public void Roll(NPC npc, Random rng)
 		{
 			Life = Damage = Defense = Size = 1;
@@ -225,7 +235,8 @@ namespace UltimateRandomizer.Common.Features
 			(AdaptiveLife, AdaptiveDamage) = AdaptivePower.ForNpc(npc);
 			RollVariation(npc, rng);
 			Life *= AdaptiveLife;
-			Damage *= AdaptiveDamage;
+			// AdaptiveDamage keeps the measured value: boss re-measures and other projectiles compare to it
+			Damage = Math.Min(Damage * AdaptiveDamage, DamageCap(npc));
 		}
 
 		private void RollVariation(NPC npc, Random rng)
@@ -256,7 +267,8 @@ namespace UltimateRandomizer.Common.Features
 				Kind = EnemyKind.Giant;
 				Size *= size;
 				Life *= size * size;
-				Damage *= (float)Math.Sqrt(size);
+				// Damage grows much slower than health: a size 4 giant hits x1.4, not x2
+				Damage *= (float)Math.Pow(size, 0.25);
 				Defense *= (float)Math.Sqrt(size);
 			}
 			else if (roll < giantChance + miniChance)
@@ -405,7 +417,7 @@ namespace UltimateRandomizer.Common.Features
 				multiplier = EnemyStatCache.Get(BossParts.Owner(npc.type), true).Damage;
 				if (hasIndividual) multiplier *= individual.Damage;
 			}
-			else multiplier = hasIndividual ? individual.AdaptiveDamage : 1;
+			else multiplier = hasIndividual ? Math.Min(individual.AdaptiveDamage, Math.Max(1, EnemiesConfig.Instance.MaxDamageMultiplier)) : 1;
 			if (Math.Abs(multiplier - 1) > 0.001f) projectile.damage = Math.Max(1, (int)(projectile.damage * multiplier));
 		}
 	}
@@ -446,6 +458,7 @@ namespace UltimateRandomizer.Common.Features
 				double follow = Math.Clamp(cfg.ScaleFollowsLife, 0, 1);
 				m.Scale = StatCurve.FromPosition(follow * lifePosition + (1 - follow) * ownPosition, cfg.EnemyScaleMin, cfg.EnemyScaleMax);
 			}
+			m.Damage = Math.Min(m.Damage, Math.Max(1, cfg.MaxDamageMultiplier));
 			cache[(npcType, boss)] = m;
 			return m;
 		}

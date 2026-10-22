@@ -37,7 +37,7 @@ namespace UltimateRandomizer.Common.Configs
 		public static readonly string[] AdaptiveFields =
 		{
 			nameof(AdaptivePower), nameof(AdaptiveGrace), nameof(LifeGrowthPerTier), nameof(DamageGrowthPerTier), nameof(BossLifeGrowthPerTier),
-			nameof(BossDamageGrowthPerTier), nameof(AdaptiveCap)
+			nameof(BossDamageGrowthPerTier), nameof(AdaptiveCap), nameof(AdaptiveDamageCap)
 		};
 
 		[Header("TierGating")]
@@ -93,8 +93,8 @@ namespace UltimateRandomizer.Common.Configs
 		public float LifeGrowthPerTier;
 
 		[Range(1f, 4f)]
-		[Increment(0.1f)]
-		[DefaultValue(1.5f)]
+		[Increment(0.01f)]
+		[DefaultValue(1.12f)]
 		public float DamageGrowthPerTier;
 
 		[Range(1f, 4f)]
@@ -103,14 +103,20 @@ namespace UltimateRandomizer.Common.Configs
 		public float BossLifeGrowthPerTier;
 
 		[Range(1f, 4f)]
-		[Increment(0.1f)]
-		[DefaultValue(1.6f)]
+		[Increment(0.01f)]
+		[DefaultValue(1.15f)]
 		public float BossDamageGrowthPerTier;
 
 		[Range(1f, 50f)]
 		[Increment(0.5f)]
 		[DefaultValue(10f)]
 		public float AdaptiveCap;
+
+		// Damage has its own, much lower cap: health makes fights longer, damage makes defense useless
+		[Range(1f, 10f)]
+		[Increment(0.1f)]
+		[DefaultValue(1.5f)]
+		public float AdaptiveDamageCap;
 
 		[Header("Protection")]
 		[ReloadRequired]

@@ -205,6 +205,7 @@ Tests: {
 	StatCacheBossFlag: Boss multipliers do not depend on an earlier lookup of the same type as a non-boss
 	LootBonusCap: The loot bonus grows with strength and stays under its cap
 	LootBonusApplied: Stronger enemies get a loot bonus
+	DamageCapRespected: Enemy damage multipliers stay under the total damage cap
 	AdaptivePowerMeasured: Player power comes from the best weapon, the worn armor and the 3 best accessories
 	AdaptiveFormula: Adaptive multipliers grow with the gap, are capped and never below x1
 	AdaptiveAppliedAtSpawn: Enemies get the adaptive multipliers when they spawn
@@ -302,106 +303,132 @@ Codex: {
 			Name: Forest
 			Description: The starting surface area, around your spawn point, outside every other biome
 		}
+
 		Snow: {
 			Name: Snow
 			Description: The frozen lands of the surface
 		}
+
 		Desert: {
 			Name: Desert
 			Description: The sands of the surface, oases included
 		}
+
 		Jungle: {
 			Name: Jungle
 			Description: The surface of the jungle, all mud and mahogany
 		}
+
 		Ocean: {
 			Name: Ocean
 			Description: The beaches and the sea, at both edges of the world
 		}
+
 		Corruption: {
 			Name: Corruption
 			Description: The surface of the Corruption, with its chasms
 		}
+
 		Crimson: {
 			Name: Crimson
 			Description: The surface of the Crimson, red and fleshy
 		}
+
 		Hallow: {
 			Name: Hallow
 			Description: The surface of the Hallow, which appears in hardmode
 		}
+
 		Mushroom: {
 			Name: Glowing Mushroom
 			Description: A field of glowing mushrooms on the surface
 		}
+
 		Graveyard: {
 			Name: Graveyard
 			Description: Around a cluster of tombstones, under a misty sky
 		}
+
 		Meteor: {
 			Name: Meteorite
 			Description: Around a fallen meteorite
 		}
+
 		Sky: {
 			Name: Sky
 			Description: High above the surface, among the floating islands
 		}
+
 		Underground: {
 			Name: Underground
 			Description: The dirt layer, just below the surface
 		}
+
 		Caverns: {
 			Name: Caverns
 			Description: The deep stone caves, between the dirt layer and the Underworld
 		}
+
 		UndergroundSnow: {
 			Name: Ice Caves
 			Description: Below the snow: the ice caves
 		}
+
 		UndergroundDesert: {
 			Name: Underground Desert
 			Description: Below the desert: the sandstone caves
 		}
+
 		UndergroundJungle: {
 			Name: Underground Jungle
 			Description: Below the jungle: the mud caves
 		}
+
 		UndergroundCorruption: {
 			Name: Underground Corruption
 			Description: The Corruption below the surface
 		}
+
 		UndergroundCrimson: {
 			Name: Underground Crimson
 			Description: The Crimson below the surface
 		}
+
 		UndergroundHallow: {
 			Name: Underground Hallow
 			Description: The Hallow below the surface (hardmode)
 		}
+
 		UndergroundMushroom: {
 			Name: Underground Mushroom
 			Description: Glowing mushroom caves, below the surface
 		}
+
 		Underworld: {
 			Name: Underworld
 			Description: The burning bottom of the world
 		}
+
 		Dungeon: {
 			Name: Dungeon
 			Description: Inside the dungeon, past its guardian
 		}
+
 		Temple: {
 			Name: Jungle Temple
 			Description: Inside the Lihzahrd temple, deep in the jungle
 		}
+
 		Granite: {
 			Name: Granite Cave
 			Description: A cave of dark blue granite, underground
 		}
+
 		Marble: {
 			Name: Marble Cave
 			Description: A cave of white marble, underground
 		}
+
 		SpiderNest: {
 			Name: Spider Nest
 			Description: A cave covered in cobwebs, underground
@@ -1015,8 +1042,8 @@ Configs: {
 		}
 
 		DamageGrowthPerTier: {
-			Label: Enemy damage per tier of power
-			Tooltip: Enemy damage multiplier for each tier of power too many (multiplied again for each tier).
+			Label: "Enemy damage per tier of power"
+			Tooltip: "Enemy damage multiplier for each tier of power too many (multiplied again for each tier). Kept low on purpose: defense is subtracted from damage, so health does most of the scaling."
 		}
 
 		BossLifeGrowthPerTier: {
@@ -1025,13 +1052,18 @@ Configs: {
 		}
 
 		BossDamageGrowthPerTier: {
-			Label: Boss damage per tier of power
-			Tooltip: Same for the damage of bosses, their parts and their projectiles.
+			Label: "Boss damage per tier of power"
+			Tooltip: "Same for the damage of bosses, their parts and their projectiles."
 		}
 
 		AdaptiveCap: {
-			Label: Maximum multiplier
-			Tooltip: Enemy health and damage are never multiplied by more than this by adaptive power.
+			Label: "Maximum health multiplier"
+			Tooltip: "Enemy health is never multiplied by more than this by adaptive power."
+		}
+
+		AdaptiveDamageCap: {
+			Label: "Maximum damage multiplier"
+			Tooltip: "Enemy damage is never multiplied by more than this by adaptive power (the total damage cap of the enemy settings applies too)."
 		}
 
 		ProtectedItems: {
@@ -1660,6 +1692,7 @@ Configs: {
 			EnemySwap: Random enemies
 			GiantsAndMinis: Giants and minis
 			LootBonus: Loot of strong enemies
+			DamageLimit: "Damage limit"
 		}
 
 		RandomizeBossHealth: {
@@ -1688,8 +1721,8 @@ Configs: {
 		}
 
 		BossDamageMax: {
-			Label: Boss damage: maximum multiplier
-			Tooltip: ""
+			Label: "Boss damage: maximum multiplier"
+			Tooltip: "Keep it low: defense is subtracted from damage, so a small multiplier already hurts a lot more."
 		}
 
 		BossStatExtremeness: {
@@ -1728,8 +1761,8 @@ Configs: {
 		}
 
 		EnemyDamageMax: {
-			Label: Damage: maximum multiplier
-			Tooltip: ""
+			Label: "Damage: maximum multiplier"
+			Tooltip: "Keep it low: defense is subtracted from damage, so a small multiplier already hurts a lot more. Health is the place for big multipliers."
 		}
 
 		EnemyDefenseMin: {
@@ -1860,6 +1893,11 @@ Configs: {
 		SwapModdedEnemies: {
 			Label: Include enemies from other mods
 			Tooltip: Their enemies are redistributed too, including in their own biomes.
+		}
+
+		MaxDamageMultiplier: {
+			Label: "Total damage: maximum multiplier"
+			Tooltip: "The randomizer never multiplies the damage of an enemy, boss or boss part by more than this in total (type, variation, giant and adaptive power together; expert and master scaling still apply on top). Damage is far stronger than health in Terraria: defense is subtracted from it, so x10 damage turns a 1 damage hit into a one-shot."
 		}
 	}
 
