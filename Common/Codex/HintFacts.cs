@@ -243,7 +243,11 @@ namespace UltimateRandomizer.Common.Codex
 		public static List<HintTarget> LockedTargets() => AllTargets().Where(t => IsLocked(t)).ToList();
 
 		// "after Plantera": when a locked target will be offered (the boss of the tier before its own)
+		// When the Guide starts to talk about a target: one tier before the target itself
 		public static string UnlockText(HintTarget target) => CodexText.Of("Hint.Unlock", (Tier)Tiers.Clamp(target.Tier - 1));
+
+		// When the target itself comes in the game (an Orichalcum Anvil: after the Wall of Flesh)
+		public static string ComesText(HintTarget target) => CodexText.Of("Hint.Unlock", (Tier)Tiers.Clamp(target.Tier));
 
 		public static HintTarget Target(int item) => AllTargets().FirstOrDefault(t => t.Item == item);
 
@@ -1197,6 +1201,7 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (Tier tier in Enum.GetValues<Tier>()) yield return "Hint.Unlock." + tier;
 			yield return "Hint.LockedTitle";
 			yield return "Hint.LockedSay";
+			yield return "Hint.LockedWhen";
 			foreach (string move in Movements) yield return "Hint.Move." + move;
 			for (int b = 0; b < 4; b++) yield return "Hint.Band." + b;
 			foreach (SlotTime time in Enum.GetValues<SlotTime>())

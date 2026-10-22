@@ -507,6 +507,7 @@ Codex: {
 		NothingHere: Rien dans cet onglet pour l'instant : regarde dans l'autre.
 		LockedTitle: Plus tard
 		LockedSay: "{0} ? Pas encore : redemande-moi {1}."
+				LockedWhen: "Arrive {0} ; le Guide en parle {1}."
 		
 		Unlock: {
 			PreBoss: dès le début

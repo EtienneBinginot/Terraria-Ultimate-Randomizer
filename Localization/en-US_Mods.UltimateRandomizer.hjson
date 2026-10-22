@@ -507,6 +507,7 @@ Codex: {
 		NothingHere: Nothing in this tab for now: look in the other one.
 		LockedTitle: Later on
 		LockedSay: "{0}? Not yet: ask me again {1}."
+				LockedWhen: "Comes {0}; the Guide talks about it {1}."
 		
 		Unlock: {
 			PreBoss: from the start

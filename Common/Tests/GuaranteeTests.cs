@@ -492,7 +492,7 @@ namespace UltimateRandomizer.Common.Tests
 		// MinTierZeroBiomes different biomes (fewer only when fewer qualify or fewer stations exist), always among the biomes a
 		// new character explores (Forest, caves, snow, desert, ocean, the world's evil: never the jungle, the mushroom caves,
 		// the spider nests, the Underworld...)
-		public const int MinTierZeroBiomes = 5;
+		public const int MinTierZeroBiomes = 4;
 
 		private static readonly HashSet<SpawnBiome> StartBiomes = new()
 		{

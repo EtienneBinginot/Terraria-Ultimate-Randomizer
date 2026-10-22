@@ -505,10 +505,13 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		// A target that comes later: its icon and name greyed, when it will be offered, nothing to buy nor to read
 		private UIElement LockedRow(HintTarget target)
 		{
+			// The row says when the item comes; the Guide, when he will talk about it (a tier earlier)
 			string when = HintFacts.UnlockText(target);
+			string comes = HintFacts.ComesText(target);
+			string hover = CodexText.Get("Hint.LockedWhen", comes, when);
 			CodexRow row = new(44, 2) { Highlight = true };
 			row.OnLeftClick += (_, _) => HintShop.Say(CodexText.Get("Hint.LockedSay", HintFacts.ItemName(target.Item), when));
-			row.Add(new CodexItemIcon(target.Item, 0, 40) { Silhouette = !CodexSystem.HasSeen(target.Item), HoverText = when }, 6);
+			row.Add(new CodexItemIcon(target.Item, 0, 40) { Silhouette = !CodexSystem.HasSeen(target.Item), HoverText = hover }, 6);
 			float nameWidth = panelWidth - 330;
 			string name = HintFacts.ItemName(target.Item);
 			if (CodexDraw.TextWidth(name, 0.8f) > nameWidth)
@@ -517,7 +520,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				name += "...";
 			}
 			row.Add(new CodexLabel(name, 0.8f, CodexDraw.Muted));
-			CodexLabel unlock = new(when, 0.72f, CodexDraw.Muted);
+			CodexLabel unlock = new(comes, 0.72f, CodexDraw.Muted) { HoverText = hover };
 			unlock.Left.Set(-232, 1f);
 			unlock.VAlign = 0.5f;
 			row.Append(unlock);
