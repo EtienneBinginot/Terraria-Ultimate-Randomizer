@@ -101,7 +101,9 @@ namespace UltimateRandomizer.Common.Tests
 			float planned = hosts.Count > 0 ? GuaranteedSources.For(hosts[0]).Where(d => d.Item == ItemID.WorkBench).Sum(d => d.Chance) : 0;
 			// The same hosts with fixed chances, to see how the time follows the chance (the planned one comes from the model)
 			string candidates = string.Join(", ", new[] { 20, 30, 40, 50, 60 }.Select(d => $"1/{d}: {PacingModel.MinutesToFirstWorkBench(400, 45, 1f / d):0}"));
-			Log($"First work bench: {minutes:0} minutes on average (chance {planned:P1} on {string.Join(", ", hosts.Select(Lang.GetNPCNameValue))}, "
+			int biome = GuaranteedSources.BiomeOf(ItemID.WorkBench);
+			Log($"First work bench: {minutes:0} minutes on average (chance {planned:P1} on {string.Join(", ", hosts.Select(Lang.GetNPCNameValue))}"
+				+ $"{(biome >= 0 ? " in " + BiomeSlots.BiomeName(biome) : "")}, "
 				+ $"{PacingModel.EarlyKillShare(hosts.Contains):P1} of the early kills; fixed chances {candidates})");
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			if (!IsDefault(progression, "GuaranteedDropMultiplier") || !IsDefault(progression, "PotGuaranteeChance")) Check.Skip("guarantee settings are not the default ones");

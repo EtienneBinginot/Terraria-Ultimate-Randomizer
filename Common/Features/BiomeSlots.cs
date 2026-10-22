@@ -193,6 +193,25 @@ namespace UltimateRandomizer.Common.Features
 		public static readonly int[] ForestEyeKinds = { NPCID.DemonEye, NPCID.CataractEye, NPCID.SleepyEye, NPCID.DialatedEye, NPCID.GreenEye, NPCID.PurpleEye };
 		public static readonly int[] ForestNightFamily = ForestZombieKinds.Concat(ForestEyeKinds).ToArray();
 
+		// The biomes a new character explores before any boss: around the spawn, its caves, the snow, the desert, the ocean and
+		// the world's evil. The enemies of their steady pre-hardmode slots are met from the first days, one tier below their
+		// own (a Skeleton in the caverns is a first-day enemy as a Demon Eye in the Forest is): MeetTier, EffectiveTier
+		public static readonly SpawnBiome[] StartBiomes =
+		{
+			SpawnBiome.Forest, SpawnBiome.Underground, SpawnBiome.Caverns, SpawnBiome.Snow, SpawnBiome.UndergroundSnow, SpawnBiome.Desert,
+			SpawnBiome.UndergroundDesert, SpawnBiome.Ocean, SpawnBiome.Corruption, SpawnBiome.Crimson, SpawnBiome.UndergroundCorruption,
+			SpawnBiome.UndergroundCrimson
+		};
+
+		public static bool IsStartBiome(int biome) => biome >= 0 && biome < ModdedBiomeStart && StartBiomes.Contains((SpawnBiome)biome);
+
+		// A steady pre-hardmode slot of a start biome
+		private static bool StartSlot(BiomeSlot slot) => slot.Band == 0 && !slot.Rare && !slot.Conditional && IsStartBiome(slot.Biome);
+
+		// The tier from which the enemies of a slot are met through it (SteadyShareAt, guaranteed hosts): one below its
+		// original's in a start biome's steady pre-hardmode slots, its original's elsewhere
+		public static int EffectiveTier(BiomeSlot slot) => StartSlot(slot) ? Math.Max(0, slot.Tier - 1) : slot.Tier;
+
 		private class Natural
 		{
 			public int Id;
@@ -817,7 +836,7 @@ namespace UltimateRandomizer.Common.Features
 		public static bool OpenIn(SlotTime slot, SlotTime period) => period == SlotTime.Any || slot == SlotTime.Any || slot == period;
 
 		// Steady share of a type among the spawns of a biome in one period (Day: the day and any-hour slots; Night: the night
-		// and any-hour ones; Any: all), counting for the type only the slots whose original is of that tier or below: an
+		// and any-hour ones; Any: all), counting for the type only the slots met from that tier or below (EffectiveTier): an
 		// enemy met there only through the slots of stronger originals doesn't make the biome reachable at that tier. Every
 		// slot open in the tier's band (rare and conditional ones with their weights) counts in the total, as in SteadyShare;
 		// the vanilla share of BiomeVanillaChance is mixed in by biome
@@ -844,7 +863,7 @@ namespace UltimateRandomizer.Common.Features
 				if (!Counted(slot, band) || !OpenIn(slot.Time, period)) continue;
 				double weight = SlotWeight(slot);
 				totals[slot.Biome] = totals.GetValueOrDefault(slot.Biome) + weight;
-				if (slot.Rare || slot.Conditional || slot.Tier > tier) continue;
+				if (slot.Rare || slot.Conditional || EffectiveTier(slot) > tier) continue;
 				if (!result.TryGetValue(slot.Biome, out Dictionary<int, double> byType)) result[slot.Biome] = byType = new Dictionary<int, double>();
 				// Split as Pick splits it
 				foreach ((int id, double part) in SpawnParts(slot))
@@ -867,7 +886,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			tier = Tiers.Clamp(tier);
 			int band = BandOf(tier);
-			return SpawnMap.Slots.Count(s => s.Biome == biome && Counted(s, band) && s.Tier <= tier);
+			return SpawnMap.Slots.Count(s => s.Biome == biome && Counted(s, band) && EffectiveTier(s) <= tier);
 		}
 
 		// Every biome where a type spawns at a tier, the highest steady share first (then the whole share), with the time of
@@ -1008,8 +1027,9 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// The tier from which a type is met in the spawn map's slots (-1: in none). Like SpawnTier (its own tier, never below
-		// the slot's), except in the steady slots of the starting Forest, where the enemies of the first band are met from the
-		// first day or night: one tier below their own there (a Demon Eye, tier 1 for its 18 damage, is a first-night enemy)
+		// the slot's), except in the steady pre-hardmode slots of the start biomes, where enemies are met from the first days:
+		// one tier below their own in the Forest (a Demon Eye, tier 1 for its 18 damage, is a first-night enemy), one below
+		// their own or the slot's elsewhere (StartBiomes)
 		public static int MeetTier(int type) => MeetTiers(SpawnMap).GetValueOrDefault(type, -1);
 
 		// The same in the vanilla slots mixed in by biome (BiomeVanillaChance), -1 when there are none
@@ -1022,12 +1042,13 @@ namespace UltimateRandomizer.Common.Features
 			foreach (BiomeSlot slot in map.Slots)
 			{
 				if (slot.Critter || slot.AbsentEvil) continue;
-				bool forest = slot.Biome == (int)SpawnBiome.Forest && slot.Band == 0 && !slot.Rare && !slot.Conditional;
+				bool start = StartSlot(slot);
+				bool forest = start && slot.Biome == (int)SpawnBiome.Forest;
 				foreach (int id in Spawners(slot))
 				{
 					int type = TypeOf(id);
 					int own = Math.Max(NpcTiers.BaseTier(type), TierOf(id));
-					int tier = forest ? Math.Max(0, own - 1) : Math.Max(own, slot.Tier);
+					int tier = forest ? Math.Max(0, own - 1) : start ? Math.Max(0, Math.Max(own, slot.Tier) - 1) : Math.Max(own, slot.Tier);
 					if (!result.TryGetValue(type, out int old) || tier < old) result[type] = tier;
 				}
 			}

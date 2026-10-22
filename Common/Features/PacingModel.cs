@@ -42,6 +42,12 @@ namespace UltimateRandomizer.Common.Features
 
 		private static int TotalKills => EarlyKills.Sum(k => k.count);
 
+		// The biomes of the early kills, in a fixed order (the critical stations go to one of them: GuaranteedSources)
+		public static IEnumerable<SpawnBiome> EarlyBiomes => EarlyKills.Select(k => k.biome).Distinct();
+
+		// The vanilla enemies of the early kills in a biome (tests)
+		public static IEnumerable<int> EarlyOriginals(SpawnBiome biome) => EarlyKills.Where(k => k.biome == biome).SelectMany(k => k.npcs);
+
 		// The kind of an early kill (one of its family)
 		private static int Kind(int[] npcs, Random rng) => npcs.Length == 1 ? npcs[0] : npcs[rng.Next(npcs.Length)];
 

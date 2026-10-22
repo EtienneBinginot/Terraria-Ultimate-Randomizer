@@ -129,7 +129,7 @@ Tests: {
 	BiomeRedistributionComplete: By biome: every natural enemy keeps its number of spawn places, inside its class and its tier pair, never more than one tier above the place (20 seeds)
 	BiomeSlotsRespectDaylight: By biome: no enemy that flees or dies in daylight (Gnome) in a day surface place
 	BiomeExtrasShare: By biome: 8% of the spawn places are shared with event enemies
-	CriticalHostsInForest: By biome: the basic stations drop from enemies of the early Forest
+	CriticalHostsInForest: By biome: the basic stations drop from enemies met in the first hour (Forest, caves or desert)
 	SurpriseZero: With 0% surprise, replaced items keep their category
 	SurpriseHundred: With 100% surprise, categories follow the loot weights
 	SurpriseGatedAndProtected: Surprises respect progression and protected items
@@ -156,6 +156,7 @@ Tests: {
 	GuaranteedBiomeHosts: Each guaranteed item is carried by 3 or more enemies of one biome, with the same chance on each
 	GuaranteedSeveralSeeds: Every guaranteed item gets the enemies of a biome with other seeds
 	GuaranteedBiomesSpread: The guaranteed items of a tier are spread over several biomes
+	GuaranteedBiomesVaried: The first stations land in at least three different nearby biomes, never in a far one
 	GuaranteedFindTime: Every guaranteed station, summon and tool drops within about 90 kills of its biome
 	GuaranteedDayAndNight: A guaranteed item whose biome is met by day and by night has at least two enemies at each time
 	GuaranteedHostLoad: No enemy carries more than four guaranteed items, and none gives too many guaranteed drops per kill
@@ -537,7 +538,7 @@ Codex: {
 
 		When: {
 			Time: "Only {0}."
-			Conditional: It only comes with an event or a weather (rain, sandstorm...).
+			Conditional: It only comes with an event or certain weather (rain, sandstorm...).
 			Drop: "Mind the condition: {0}."
 
 			Short: {

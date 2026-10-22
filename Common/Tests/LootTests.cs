@@ -142,6 +142,8 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Critters never give a jackpot: not lucky, no madness, even with both chances at 100 %, through the real drop rule on
 		// detached critters (the items it spawns are removed, the chances restored)
+		private const int KillsPerCritter = 20;
+
 		private static void CrittersNoJackpot()
 		{
 			LootConfig cfg = LootConfig.Instance;
@@ -181,19 +183,23 @@ namespace UltimateRandomizer.Common.Tests
 					npc.Center = Main.LocalPlayer.Center;
 					npc.life = 0;
 					RandomNpcDropRule rule = new(critter);
-					for (int i = 0; i < 150; i++)
+					for (int i = 0; i < KillsPerCritter; i++)
 					{
 						rule.TryDroppingItem(new DropAttemptInfo { npc = npc, player = Main.LocalPlayer, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode });
+						// Read, then removed right away: a later kill must not reuse a slot before it is read
+						foreach (int slot in slots.Distinct())
+						{
+							if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active) continue;
+							drops++;
+							Item item = Main.item[slot];
+							if (JackpotItem.GapOf(item) > 0 && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(item.type)} dropped by a critter is a jackpot");
+							item.TurnToAir();
+							item.active = false;
+						}
+						slots.Clear();
 					}
 				}
 				CodexSystem.SpawnLog = null;
-				foreach (int slot in slots.Distinct())
-				{
-					if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active) continue;
-					drops++;
-					Item item = Main.item[slot];
-					if (JackpotItem.GapOf(item) > 0 && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(item.type)} dropped by a critter is a jackpot");
-				}
 			}
 			finally
 			{
@@ -208,7 +214,7 @@ namespace UltimateRandomizer.Common.Tests
 					Main.item[slot].active = false;
 				}
 			}
-			if (drops == 0) Check.Skip("critters dropped nothing in 300 kills");
+			if (drops == 0) Check.Skip($"critters dropped nothing in {2 * KillsPerCritter} kills");
 			Check.All(failures, "Critter jackpots");
 		}
 
@@ -489,14 +495,14 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Jackpots rarer than in 1.2.0 (madness 12 %, luck 4 %) and 1.2.1 (9 %, 3 %, decay 3, allowance 3): items up to two
-		// tiers ahead already come normally. 1.3.0 raised 5 % / 2 % to 7 % / 3 %: weak enemies only get a share of them
-		// (JackpotWorth), ordinary kills keep about the same rate
+		// tiers ahead already come normally. 1.3.0 raised 5 % / 2 % to 7 % / 3 % (weak enemies only get a share of them:
+		// JackpotWorth); 1.3.2 went back to 5 % / 2 %, the far jackpots were too many
 		private static void JackpotRatesLower()
 		{
 			float Default(string field) => Convert.ToSingle(typeof(ProgressionConfig).GetField(field).GetCustomAttributes(typeof(System.ComponentModel.DefaultValueAttribute), false)
 				.OfType<System.ComponentModel.DefaultValueAttribute>().First().Value);
-			Check.Equal(7f, Default("WildDropChance"), "default WildDropChance");
-			Check.Equal(3f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
+			Check.Equal(5f, Default("WildDropChance"), "default WildDropChance");
+			Check.Equal(2f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
 			Check.Equal(4f, Default("WildTierDecay"), "default WildTierDecay");
 			Check.Equal(2f, Default("TierAllowance"), "default TierAllowance");
 		}

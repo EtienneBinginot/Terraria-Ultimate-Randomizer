@@ -580,7 +580,10 @@ namespace UltimateRandomizer.Common.Codex
 				HintKind.Bag => BagPlan.Plan(fact.Bag, lucky: true),
 				_ => null
 			};
-			List<PlannedDrop> entries = plan?.Where(d => d.Item == fact.Item && Findability.WorldAllows(d.Conditions)).ToList();
+			// Only the entries that count as a source (MinFindableChance, as the indexes): a 0.01 % entry without a condition
+			// must not hide the condition of the real one
+			float minChance = ProgressionConfig.Instance.MinFindableChance / 100f;
+			List<PlannedDrop> entries = plan?.Where(d => d.Item == fact.Item && d.Chance >= minChance && Findability.WorldAllows(d.Conditions)).ToList();
 			if (entries == null || entries.Count == 0 || entries.Any(d => ConditionTexts(d.Conditions).Count == 0)) return new List<string>();
 			return ConditionTexts(entries.OrderByDescending(d => d.Chance).First().Conditions);
 		}
@@ -610,10 +613,13 @@ namespace UltimateRandomizer.Common.Codex
 			return texts;
 		}
 
-		// Conditions Findability.WorldAllows decides from the world alone (difficulty, world evil)
+		// Conditions Findability.WorldAllows decides from the world alone (difficulty, world evil, special seeds; the remix
+		// seed's easy and hard mode ones keep their text: they also depend on hardmode)
 		private static bool WorldFixed(IItemDropRuleCondition condition) => condition is DropRuleConditions.IsExpert or DropRuleConditions.NotExpert
 			or DropRuleConditions.IsMasterMode or DropRuleConditions.NotMasterMode or DropRuleConditions.IsCrimson or DropRuleConditions.IsCorruption
-			or DropRuleConditions.IsCrimsonAndNotExpert or DropRuleConditions.IsCorruptionAndNotExpert;
+			or DropRuleConditions.IsCrimsonAndNotExpert or DropRuleConditions.IsCorruptionAndNotExpert or DropRuleConditions.LegacyHack_IsBossAndExpert
+			or DropRuleConditions.LegacyHack_IsBossAndNotExpert or DropRuleConditions.TenthAnniversaryIsUp or DropRuleConditions.TenthAnniversaryIsNotUp
+			or DropRuleConditions.DontStarveIsUp or DropRuleConditions.DontStarveIsNotUp or DropRuleConditions.RemixSeed or DropRuleConditions.NotRemixSeed;
 
 		private static HintFact Best(List<HintFact> options) => options.OrderBy(o => o.Tier).ThenBy(o => KindClass(o.Kind)).ThenByDescending(Ease)
 			.ThenBy(StableKey, StringComparer.Ordinal).ThenBy(o => (int)o.Kind).FirstOrDefault();

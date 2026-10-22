@@ -387,11 +387,15 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			if (fact.Kind is not (HintKind.Creature or HintKind.Boss or HintKind.Bag) || fact.Kind == HintKind.Creature && fact.Hosts.Count > 0) return new List<string>();
 			List<PlannedDrop> plan = fact.Kind == HintKind.Bag ? BagPlan.Plan(fact.Bag, lucky: true) : RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true);
-			List<PlannedDrop> entries = plan.Where(d => d.Item == fact.Item && Findability.WorldAllows(d.Conditions)).ToList();
-			// Allowed in this world, a difficulty or evil condition is always met
+			float minChance = ProgressionConfig.Instance.MinFindableChance / 100f;
+			List<PlannedDrop> entries = plan.Where(d => d.Item == fact.Item && d.Chance >= minChance && Findability.WorldAllows(d.Conditions)).ToList();
+			// Allowed in this world, a difficulty, evil or legacy boss condition is always met
 			List<string> Described(PlannedDrop drop) => (drop.Conditions ?? new List<Terraria.GameContent.ItemDropRules.IItemDropRuleCondition>())
 				.Where(c => c is not (Terraria.GameContent.ItemDropRules.Conditions.IsExpert or Terraria.GameContent.ItemDropRules.Conditions.IsMasterMode
-					or Terraria.GameContent.ItemDropRules.Conditions.IsCrimson or Terraria.GameContent.ItemDropRules.Conditions.IsCorruption))
+					or Terraria.GameContent.ItemDropRules.Conditions.IsCrimson or Terraria.GameContent.ItemDropRules.Conditions.IsCorruption
+					or Terraria.GameContent.ItemDropRules.Conditions.NotExpert or Terraria.GameContent.ItemDropRules.Conditions.NotMasterMode
+					or Terraria.GameContent.ItemDropRules.Conditions.IsCrimsonAndNotExpert or Terraria.GameContent.ItemDropRules.Conditions.IsCorruptionAndNotExpert
+					or Terraria.GameContent.ItemDropRules.Conditions.LegacyHack_IsBossAndExpert or Terraria.GameContent.ItemDropRules.Conditions.LegacyHack_IsBossAndNotExpert))
 				.Select(c => c.GetConditionDescription()).Where(d => !string.IsNullOrWhiteSpace(d)).Select(d => d.Trim()).Distinct().ToList();
 			if (entries.Count == 0 || entries.Any(d => Described(d).Count == 0)) return new List<string>();
 			return Described(entries.OrderByDescending(d => d.Chance).First());
@@ -459,7 +463,28 @@ namespace UltimateRandomizer.Common.Tests
 					}
 				}
 			}
-			if (conditions + times + treeLines == 0) Check.Skip("no source with a time or a condition in this world");
+			// A made-up creature source dropping only on windy days (and the legacy boss check this world meets, which says
+			// nothing): the drop-condition path is tested even when no target of this world needs one
+			List<string> windy = HintFacts.ConditionTexts(new List<Terraria.GameContent.ItemDropRules.IItemDropRuleCondition>
+			{
+				new Terraria.GameContent.ItemDropRules.Conditions.WindyEnoughForKiteDrops(),
+				Main.expertMode ? new Terraria.GameContent.ItemDropRules.Conditions.LegacyHack_IsBossAndExpert() : new Terraria.GameContent.ItemDropRules.Conditions.LegacyHack_IsBossAndNotExpert()
+			});
+			if (windy.Count != 1) failures.Add($"windy day and legacy boss conditions: {windy.Count} texts ({string.Join("; ", windy)}), expected the windy day only");
+			else
+			{
+				HintFact synthetic = new()
+				{
+					Item = ItemID.WorkBench, Kind = HintKind.Creature, Npc = NPCID.BlueSlime, Tier = 0, Chance = 0.05f, Movement = 0, Conditions = windy,
+					Biomes = new List<string> { BiomeSlots.BiomeName((int)SpawnBiome.Forest) }
+				};
+				conditions++;
+				if (!HintFacts.Text(synthetic, 2).Contains(windy[0])) failures.Add($"synthetic windy source: level 2 without \"{windy[0]}\"");
+				if (!HintFacts.Text(synthetic, 4).Contains(windy[0])) failures.Add($"synthetic windy source: level 4 without \"{windy[0]}\"");
+				if (!HintFacts.FactWhen(synthetic).Contains(windy[0])) failures.Add("synthetic windy source: no short condition");
+				string tree = HintFacts.TreeSource(new HintTreeNode { Item = ItemID.WorkBench, Stack = 1, Depth = 1, Leaf = HintTreeLeaf.Fact, Fact = synthetic });
+				if (!tree.Contains(windy[0])) failures.Add($"synthetic windy source: \"{tree}\" without \"{windy[0]}\"");
+			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Hint conditions: {conditions} conditions, {times} times in sentences, {treeLines} on tree lines");
 			Check.All(failures, "Hints hiding when their source works");
 		}

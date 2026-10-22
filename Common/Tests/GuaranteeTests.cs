@@ -24,6 +24,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("GuaranteedBiomeHosts", GuaranteedBiomeHosts);
 			TestRunner.Register("GuaranteedSeveralSeeds", GuaranteedSeveralSeeds);
 			TestRunner.Register("GuaranteedBiomesSpread", GuaranteedBiomesSpread);
+			TestRunner.Register("GuaranteedBiomesVaried", GuaranteedBiomesVaried);
 			TestRunner.Register("GuaranteedFindTime", GuaranteedFindTime);
 			TestRunner.Register("GuaranteedDayAndNight", GuaranteedDayAndNight);
 			TestRunner.Register("GuaranteedHostLoad", GuaranteedHostLoad);
@@ -249,34 +250,44 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Guaranteed items missing a period");
 		}
 
-		// No host carries more than MaxItemsPerHost guaranteed items (or its critical stations), except those kept because its
-		// biome had too few others (counted); the busiest host gives less than MaxDropsPerKill guaranteed stations, summons
-		// and tools per kill (materials, guaranteed only with vanilla ingredients, come in stacks and much more often: logged)
+		// No host carries more than MaxItemsPerHost guaranteed items, plus one for a host kept once although full (each host
+		// at most once, MaxForcedHosts over the world) and the items placed without the biome rules (critical stations of the
+		// Forest fallback, common hosts without a biome); the busiest host gives
+		// less than MaxDropsPerKill guaranteed stations, summons and tools per kill (materials, guaranteed only with vanilla
+		// ingredients, come in stacks and much more often: logged)
 		public const double MaxDropsPerKill = 0.6;
+		public const int MaxForcedHosts = 10;
 
 		private static void GuaranteedHostLoad()
 		{
 			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
 			if (requirements.Count == 0) Check.Skip("nothing is guaranteed");
-			HashSet<int> critical = requirements.Where(r => r.Critical).Select(r => r.Item).ToHashSet();
 			HashSet<int> single = requirements.Where(r => r.Station || r.Tool).Select(r => r.Item).ToHashSet();
 			Dictionary<int, int> forced = new();
+			// Items placed without the biome rules: critical stations on the Forest fallback, common hosts without a biome
+			Dictionary<int, int> fallback = new();
 			HashSet<int> hosts = new();
 			foreach (GuaranteedSources.Requirement requirement in requirements)
 			{
 				hosts.UnionWith(GuaranteedSources.HostsOf(requirement.Item));
-				if (!GuaranteedSources.TryPlacement(requirement.Item, out GuaranteedSources.Placement place) || place.Forced == null) continue;
-				foreach (int host in place.Forced) forced[host] = forced.GetValueOrDefault(host) + 1;
+				if (!GuaranteedSources.TryPlacement(requirement.Item, out GuaranteedSources.Placement place)) continue;
+				if (place.Fallback || place.Biome < 0)
+				{
+					foreach (int host in place.Hosts) fallback[host] = fallback.GetValueOrDefault(host) + 1;
+					continue;
+				}
+				foreach (int host in place.Forced ?? new List<int>()) forced[host] = forced.GetValueOrDefault(host) + 1;
 			}
 			List<string> failures = new();
+			foreach ((int host, int times) in forced.Where(pair => pair.Value > 1).OrderBy(pair => pair.Key)) failures.Add($"{Lang.GetNPCNameValue(host)} kept {times} times although full");
+			if (forced.Count > MaxForcedHosts) failures.Add($"{forced.Count} hosts kept although full, at most {MaxForcedHosts}");
 			int maxItems = 0, busiest = 0;
 			double maxDrops = 0, maxAll = 0;
 			foreach (int host in hosts.OrderBy(h => h))
 			{
 				List<PlannedDrop> drops = GuaranteedSources.For(host);
 				int items = drops.Select(d => d.Item).Distinct().Count();
-				int criticalItems = drops.Select(d => d.Item).Distinct().Count(critical.Contains);
-				int allowed = System.Math.Max(GuaranteedSources.MaxItemsPerHost, criticalItems) + forced.GetValueOrDefault(host);
+				int allowed = GuaranteedSources.MaxItemsPerHost + (forced.ContainsKey(host) ? 1 : 0) + fallback.GetValueOrDefault(host);
 				if (items > allowed) failures.Add($"{Lang.GetNPCNameValue(host)}: {items} items, at most {allowed}");
 				maxItems = System.Math.Max(maxItems, items);
 				maxAll = System.Math.Max(maxAll, drops.Sum(d => (double)d.Chance));
@@ -289,20 +300,30 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			double bound = MaxDropsPerKill * System.Math.Max(1f, ProgressionConfig.Instance.GuaranteedDropMultiplier);
 			if (maxDrops > bound) failures.Add($"{Lang.GetNPCNameValue(busiest)}: {maxDrops:0.00} guaranteed stations, summons or tools per kill, at most {bound:0.00}");
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed load: {hosts.Count} hosts, at most {maxItems} items on one, {forced.Values.Sum()} kept over "
-				+ $"{GuaranteedSources.MaxItemsPerHost}, busiest {(busiest != 0 ? Lang.GetNPCNameValue(busiest) : "none")} {maxDrops:0.000} stations, summons or tools per kill ({maxAll:0.000} with materials)");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed load: {hosts.Count} hosts, at most {maxItems} items on one, {forced.Count} kept although full, "
+				+ $"{fallback.Count} host(s) of items without the biome rules, busiest {(busiest != 0 ? Lang.GetNPCNameValue(busiest) : "none")} {maxDrops:0.000} stations, summons or tools per kill ({maxAll:0.000} with materials)");
 			Check.All(failures, "Guaranteed hosts overloaded");
 		}
 
-		// Planned with other seeds (and this world): no item lands in a biome before it can be farmed (Dungeon after
-		// Skeletron, Underworld after the evil boss, Temple after Plantera, sky islands after the Eye), never in the Graveyard
-		// or the Meteor, and each host is met in its biome through a steady slot of the placement's tier or below
+		// Planned with other seeds (and this world): no item lands in a biome before it should (jungle and sky islands after
+		// the Eye; mushroom, granite and marble caves, spider nests and the Underworld after the evil boss; the Dungeon after
+		// Skeletron; the Hallow in hardmode; the Temple after Plantera), never in the Graveyard or the Meteor, and each host is
+		// met in its biome through a steady slot of the placement's tier or below
 		private static readonly Dictionary<SpawnBiome, int> Access = new()
 		{
-			[SpawnBiome.Dungeon] = (int)Core.Tier.PostSkeletron,
-			[SpawnBiome.Underworld] = (int)Core.Tier.PostEvilBoss,
-			[SpawnBiome.Temple] = (int)Core.Tier.PostPlantera,
+			[SpawnBiome.Jungle] = (int)Core.Tier.PostEyeOfCthulhu,
+			[SpawnBiome.UndergroundJungle] = (int)Core.Tier.PostEyeOfCthulhu,
 			[SpawnBiome.Sky] = (int)Core.Tier.PostEyeOfCthulhu,
+			[SpawnBiome.Mushroom] = (int)Core.Tier.PostEvilBoss,
+			[SpawnBiome.UndergroundMushroom] = (int)Core.Tier.PostEvilBoss,
+			[SpawnBiome.Granite] = (int)Core.Tier.PostEvilBoss,
+			[SpawnBiome.Marble] = (int)Core.Tier.PostEvilBoss,
+			[SpawnBiome.SpiderNest] = (int)Core.Tier.PostEvilBoss,
+			[SpawnBiome.Underworld] = (int)Core.Tier.PostEvilBoss,
+			[SpawnBiome.Dungeon] = (int)Core.Tier.PostSkeletron,
+			[SpawnBiome.Hallow] = (int)Core.Tier.Hardmode,
+			[SpawnBiome.UndergroundHallow] = (int)Core.Tier.Hardmode,
+			[SpawnBiome.Temple] = (int)Core.Tier.PostPlantera,
 			[SpawnBiome.Graveyard] = int.MaxValue,
 			[SpawnBiome.Meteor] = int.MaxValue
 		};
@@ -312,7 +333,6 @@ namespace UltimateRandomizer.Common.Tests
 			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
 			if (requirements.Count == 0) Check.Skip("nothing is guaranteed");
 			if (!BiomeSlots.SpawnsPlanned) Check.Skip("enemies are swapped without biomes");
-			HashSet<int> critical = requirements.Where(r => r.Critical).Select(r => r.Item).ToHashSet();
 			const int Seeds = 4;
 			List<string> failures = new();
 			int placed = 0;
@@ -325,7 +345,7 @@ namespace UltimateRandomizer.Common.Tests
 				GuaranteedSources.PlanWith(seed, map, out _, out Dictionary<int, GuaranteedSources.Placement> places);
 				foreach ((int item, GuaranteedSources.Placement place) in places.OrderBy(p => p.Key))
 				{
-					if (critical.Contains(item) || place.Biome < 0) continue;
+					if (place.Fallback || place.Biome < 0) continue;
 					placed++;
 					string where = $"seed {seed}: {Name(item)} in {BiomeSlots.BiomeName(place.Biome)} at tier {place.Tier}";
 					if (place.Biome < BiomeSlots.ModdedBiomeStart && Access.TryGetValue((SpawnBiome)place.Biome, out int access) && place.Tier < access)
@@ -334,7 +354,7 @@ namespace UltimateRandomizer.Common.Tests
 					}
 					foreach (int host in place.Hosts)
 					{
-						bool Met(BiomeSlotMap m) => m.Slots.Any(s => s.Biome == place.Biome && !s.Critter && !s.AbsentEvil && !s.Rare && !s.Conditional && s.Tier <= place.Tier
+						bool Met(BiomeSlotMap m) => m.Slots.Any(s => s.Biome == place.Biome && !s.Critter && !s.AbsentEvil && !s.Rare && !s.Conditional && BiomeSlots.EffectiveTier(s) <= place.Tier
 							&& BiomeSlots.Spawners(s).Any(id => BiomeSlots.TypeOf(id) == host));
 						if (!Met(map) && !(mixed && Met(BiomeSlots.Vanilla))) failures.Add($"{where}: {Lang.GetNPCNameValue(host)} only met through stronger slots");
 					}
@@ -400,15 +420,16 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Every requirement is carried by the enemies of one biome: at least MinHostsInBiome of them (any count for the critical
-		// Forest hosts), at most GuaranteedHostsPerItem, all spawning in that biome, with the same chance on each. Without a
-		// biome, common hosts of the tier, no more than GuaranteedHostsPerItem
+		// Forest fallback), at most GuaranteedHostsPerItem, all spawning in that biome, with the same chance on the hosts met at
+		// the same times. Without a biome, common hosts of the tier, no more than GuaranteedHostsPerItem. An item is placed below
+		// its tier only when no biome of its tier qualifies
 		private static void GuaranteedBiomeHosts()
 		{
 			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
 			if (requirements.Count == 0) Check.Skip("nothing is guaranteed");
 			int perItem = GuaranteedSources.HostLimit;
 			List<string> failures = new();
-			int withBiome = 0;
+			int withBiome = 0, below = 0;
 			foreach (GuaranteedSources.Requirement requirement in requirements)
 			{
 				string name = Name(requirement.Item);
@@ -420,20 +441,31 @@ namespace UltimateRandomizer.Common.Tests
 					failures.Add($"{name}: no host");
 					continue;
 				}
-				if (!requirement.Critical && hosts.Count > perItem) failures.Add($"{name}: {hosts.Count} hosts, at most {perItem}");
+				GuaranteedSources.TryPlacement(requirement.Item, out GuaranteedSources.Placement place);
+				if (!place.Fallback && hosts.Count > perItem) failures.Add($"{name}: {hosts.Count} hosts, at most {perItem}");
 				if (biome >= 0)
 				{
 					withBiome++;
-					if (!requirement.Critical && hosts.Count < GuaranteedSources.MinHostsInBiome) failures.Add($"{name}: {hosts.Count} host(s) in {BiomeSlots.BiomeName(biome)}");
+					if (!place.Fallback && hosts.Count < GuaranteedSources.MinHostsInBiome) failures.Add($"{name}: {hosts.Count} host(s) in {BiomeSlots.BiomeName(biome)}");
 					foreach (int host in hosts.Where(h => BiomeSlots.PlannedShare(biome, h, tier) <= 0)) failures.Add($"{name}: {Lang.GetNPCNameValue(host)} is not met in {BiomeSlots.BiomeName(biome)}");
 				}
-				else if (BiomeSlots.SpawnsPlanned && requirement.Critical) failures.Add($"{name}: a critical station without the Forest");
-				List<float> chances = hosts.Select(h => GuaranteedSources.For(h).Where(d => d.Item == requirement.Item).Sum(d => d.Chance)).ToList();
-				if (chances.Max() - chances.Min() > 1e-5f) failures.Add($"{name}: chances from {chances.Min():P2} to {chances.Max():P2}");
+				else if (BiomeSlots.SpawnsPlanned && requirement.Critical) failures.Add($"{name}: a critical station without a biome");
+				// Hosts met at the same times share one chance
+				foreach (IGrouping<SlotTime, int> group in hosts.GroupBy(h => GuaranteedSources.HostTime(requirement.Item, h)))
+				{
+					List<float> chances = group.Select(h => GuaranteedSources.For(h).Where(d => d.Item == requirement.Item).Sum(d => d.Chance)).ToList();
+					if (chances.Max() - chances.Min() > 1e-5f) failures.Add($"{name}: chances from {chances.Min():P2} to {chances.Max():P2} ({group.Key})");
+				}
+				if (tier >= 0 && tier < Tiers.Clamp(requirement.Tier))
+				{
+					below++;
+					int candidates = GuaranteedSources.CandidateBiomes(Tiers.Clamp(requirement.Tier));
+					if (candidates > 0) failures.Add($"{name}: placed at tier {tier} below its tier {requirement.Tier}, where {candidates} biome(s) qualify");
+				}
 			}
 			if (GuaranteedSources.Missing > 0) failures.Add($"{GuaranteedSources.Missing} item(s) without a host");
 			if (BiomeSlots.SpawnsPlanned && withBiome == 0) failures.Add("no item placed in a biome");
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed: {withBiome} of {requirements.Count} items placed in a biome");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed: {withBiome} of {requirements.Count} items placed in a biome, {below} below their tier");
 			Check.All(failures, "Guaranteed items on their biome's enemies");
 		}
 
@@ -458,6 +490,51 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info("Guaranteed biomes: " + string.Join("; ", summary));
 			Check.All(failures, "Guaranteed items gathered in one biome");
+		}
+
+		// The tier 0 stations (the critical ones included) of this world and of four other seeds land in at least
+		// MinTierZeroBiomes different biomes (fewer only when fewer qualify or fewer stations exist), always among the biomes a
+		// new character explores (Forest, caves, snow, desert, ocean, the world's evil: never the jungle, the mushroom caves,
+		// the spider nests, the Underworld...)
+		public const int MinTierZeroBiomes = 3;
+
+		private static readonly HashSet<SpawnBiome> StartBiomes = new()
+		{
+			SpawnBiome.Forest, SpawnBiome.Underground, SpawnBiome.Caverns, SpawnBiome.Snow, SpawnBiome.UndergroundSnow, SpawnBiome.Desert,
+			SpawnBiome.UndergroundDesert, SpawnBiome.Ocean, SpawnBiome.Corruption, SpawnBiome.Crimson, SpawnBiome.UndergroundCorruption,
+			SpawnBiome.UndergroundCrimson
+		};
+
+		private static void GuaranteedBiomesVaried()
+		{
+			List<GuaranteedSources.Requirement> stations = GuaranteedSources.Requirements.Where(r => r.Station && r.Tier == 0).ToList();
+			if (stations.Count == 0) Check.Skip("no tier 0 station is guaranteed");
+			if (!BiomeSlots.SpawnsPlanned) Check.Skip("enemies are swapped without biomes");
+			const int Seeds = 4;
+			List<string> failures = new();
+			List<string> summary = new();
+			for (int i = -1; i < Seeds; i++)
+			{
+				int seed = i < 0 ? SeedSystem.WorldSeed : Seed(i);
+				BiomeSlotMap map = i >= 0 && BiomeSlots.Active ? BiomeSlots.Build(seed, EnemiesConfig.Instance.BiomeExtraEnemies) : BiomeSlots.SpawnMap;
+				GuaranteedSources.PlanWith(seed, map, out _, out Dictionary<int, GuaranteedSources.Placement> places);
+				List<int> biomes = new();
+				foreach (GuaranteedSources.Requirement station in stations)
+				{
+					if (!places.TryGetValue(station.Item, out GuaranteedSources.Placement place) || place.Biome < 0) continue;
+					biomes.Add(place.Biome);
+					if (place.Biome >= BiomeSlots.ModdedBiomeStart) continue;
+					if (!StartBiomes.Contains((SpawnBiome)place.Biome)) failures.Add($"seed {seed}: {Name(station.Item)} in {BiomeSlots.BiomeName(place.Biome)}");
+				}
+				int qualify;
+				using (BiomeSlots.WithMap(map)) qualify = GuaranteedSources.CandidateBiomes(0);
+				int wanted = System.Math.Min(MinTierZeroBiomes, System.Math.Min(qualify, biomes.Count));
+				int distinct = biomes.Distinct().Count();
+				summary.Add($"seed {seed}: {distinct} biomes for {biomes.Count} stations ({qualify} qualify)");
+				if (distinct < wanted) failures.Add($"seed {seed}: {biomes.Count} tier 0 stations in {distinct} biome(s) ({string.Join(", ", biomes.Distinct().Select(BiomeSlots.BiomeName))}), {qualify} qualify");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info("Guaranteed tier 0 biomes: " + string.Join("; ", summary));
+			Check.All(failures, "Tier 0 stations in too few or far biomes");
 		}
 
 		// Every station, summon and tool drops within MaxFindKills kills of its biome (1 / sum of share x chance over its
@@ -511,8 +588,9 @@ namespace UltimateRandomizer.Common.Tests
 		private static int Seed(int i) => 2000 + i * 7919;
 
 		// Planned with other seeds (and their spawn maps) without touching this world: every requirement gets its hosts (at
-		// least MinHostsInBiome in a biome, all met there), none later than its tier, and the critical stations a host in the
-		// Forest's critical slots by day and by night
+		// least MinHostsInBiome in a biome, all met there), none later than its tier, and the critical stations hosts in one of
+		// the pacing model's early biomes that its early kills meet (the Forest fallback: a host in the Forest's critical
+		// slots by day and by night)
 		private static void GuaranteedSeveralSeeds()
 		{
 			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
@@ -540,15 +618,20 @@ namespace UltimateRandomizer.Common.Tests
 					else if (place.Biome >= 0)
 					{
 						placedInBiome++;
-						if (!requirement.Critical && hosts.Count < GuaranteedSources.MinHostsInBiome) failures.Add($"seed {seed}: {Name(requirement.Item)} has {hosts.Count} host(s)");
+						if (!place.Fallback && hosts.Count < GuaranteedSources.MinHostsInBiome) failures.Add($"seed {seed}: {Name(requirement.Item)} has {hosts.Count} host(s)");
 					}
 					// Host tiers and shares follow the spawn map: read with this seed's
 					using (BiomeSlots.WithMap(map))
 					{
 						if (hosts.Any(h => GuaranteedSources.HostTier(h) > requirement.Tier)) failures.Add($"seed {seed}: {Name(requirement.Item)} on a later enemy");
 						if (place.Biome >= 0 && hosts.Any(h => BiomeSlots.PlannedShare(place.Biome, h, place.Tier) <= 0)) failures.Add($"seed {seed}: {Name(requirement.Item)} on an enemy outside {BiomeSlots.BiomeName(place.Biome)}");
+						if (requirement.Critical && !place.Fallback)
+						{
+							if (place.Biome < 0 || !PacingModel.EarlyBiomes.Contains((SpawnBiome)place.Biome)) failures.Add($"seed {seed}: {Name(requirement.Item)} outside the early biomes");
+							if (PacingModel.EarlyKillShare(hosts.Contains) <= 0) failures.Add($"seed {seed}: {Name(requirement.Item)} on enemies the early kills never meet");
+						}
 					}
-					if (!requirement.Critical || !BiomeSlots.Active) continue;
+					if (!requirement.Critical || !place.Fallback || !BiomeSlots.Active) continue;
 					if (day.Count > 0 && !hosts.Any(day.Contains)) failures.Add($"seed {seed}: {Name(requirement.Item)} without a Forest host by day");
 					if (night.Count > 0 && !hosts.Any(night.Contains)) failures.Add($"seed {seed}: {Name(requirement.Item)} without a Forest host by night");
 				}

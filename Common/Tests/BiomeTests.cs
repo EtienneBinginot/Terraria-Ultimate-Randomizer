@@ -142,7 +142,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Extra share");
 		}
 
-		// The critical stations (work bench...) drop from enemies that really spawn in the early Forest slots
+		// The critical stations (work bench...) drop from enemies that really spawn in the early slots of their biome: the
+		// slots of the pacing model's early kills there (the Forest's day slimes and night zombies and eyes for the fallback)
 		private static void CriticalHostsInForest()
 		{
 			if (!BiomeSlots.Active) Check.Skip("enemies are not redistributed by biome");
@@ -158,10 +159,23 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (GuaranteedSources.Requirement requirement in critical)
 			{
 				List<int> hosts = GuaranteedSources.HostsOf(requirement.Item).ToList();
+				GuaranteedSources.TryPlacement(requirement.Item, out GuaranteedSources.Placement place);
+				if (!place.Fallback)
+				{
+					if (place.Biome < 0 || place.Biome >= BiomeSlots.ModdedBiomeStart || !PacingModel.EarlyBiomes.Contains((SpawnBiome)place.Biome))
+					{
+						failures.Add($"{Lang.GetItemNameValue(requirement.Item)}: in {(place.Biome >= 0 ? BiomeSlots.BiomeName(place.Biome) : "no biome")}, not an early biome");
+						continue;
+					}
+					HashSet<int> early = PacingModel.EarlyOriginals((SpawnBiome)place.Biome).ToHashSet();
+					HashSet<int> met = map.Slots.Where(s => s.Biome == place.Biome && early.Contains(s.Original) && !s.AbsentEvil).SelectMany(BiomeSlots.Spawners).Select(BiomeSlots.TypeOf).ToHashSet();
+					if (!hosts.Any(met.Contains)) failures.Add($"{Lang.GetItemNameValue(requirement.Item)}: no host spawns in the early slots of {BiomeSlots.BiomeName(place.Biome)} ({string.Join(", ", hosts.Select(Name))})");
+					continue;
+				}
 				if (!hosts.Any(day.Contains)) failures.Add($"{Lang.GetItemNameValue(requirement.Item)}: no host spawns in the Forest by day ({string.Join(", ", hosts.Select(Name))})");
 				if (!hosts.Any(night.Contains)) failures.Add($"{Lang.GetItemNameValue(requirement.Item)}: no host spawns in the Forest by night ({string.Join(", ", hosts.Select(Name))})");
 			}
-			Check.All(failures, "Critical stations on enemies outside the Forest");
+			Check.All(failures, "Critical stations on enemies outside the early slots");
 		}
 
 		// Every slot of an enemy with several slots is reached by some zone combination (simulated zones, not a player):

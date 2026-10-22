@@ -129,7 +129,7 @@ Tests: {
 	BiomeRedistributionComplete: Par biome : chaque ennemi naturel garde son nombre de lieux d'apparition, dans sa classe et sa paire de tiers, jamais plus d'un tier au-dessus du lieu (20 graines)
 	BiomeSlotsRespectDaylight: Par biome : aucun ennemi qui fuit ou meurt au soleil (Gnome) dans un lieu de surface de jour
 	BiomeExtrasShare: Par biome : 8 % des lieux d'apparition sont partagés avec des ennemis d'événement
-	CriticalHostsInForest: Par biome : les stations de base tombent d'ennemis de la Forêt du début
+	CriticalHostsInForest: Par biome : les stations de base tombent d'ennemis croisés dès la première heure (Forêt, grottes ou désert)
 	SurpriseZero: Avec 0 % de surprise, les objets remplacés gardent leur catégorie
 	SurpriseHundred: Avec 100 % de surprise, les catégories suivent les poids du loot
 	SurpriseGatedAndProtected: Les surprises respectent la progression et les objets protégés
@@ -156,6 +156,7 @@ Tests: {
 	GuaranteedBiomeHosts: Chaque objet garanti est porté par au moins 3 ennemis d'un même biome, avec la même chance sur chacun
 	GuaranteedSeveralSeeds: Chaque objet garanti obtient les ennemis d'un biome avec d'autres graines
 	GuaranteedBiomesSpread: Les objets garantis d'un tier sont répartis sur plusieurs biomes
+	GuaranteedBiomesVaried: Les premières stations tombent dans au moins trois biomes proches différents, jamais dans un biome lointain
 	GuaranteedFindTime: Chaque station, invocation et outil garanti tombe en environ 90 ennemis tués dans son biome
 	GuaranteedDayAndNight: Un objet garanti dont le biome se visite de jour et de nuit a au moins deux ennemis à chaque moment
 	GuaranteedHostLoad: Aucun ennemi ne porte plus de quatre objets garantis, ni ne donne trop d'objets garantis par victime
