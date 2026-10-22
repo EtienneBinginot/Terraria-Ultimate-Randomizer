@@ -103,6 +103,22 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (SeedSystem.WorldReady && CraftingConfig.Instance.RandomizeRecipes && ItemPool.Ready) Apply();
 			else Restore();
+			RefreshOtherMods();
+		}
+
+		// Magic Storage indexes the recipes by result, ingredient and station once, when the game loads: without a rebuild its
+		// crafting interface would keep the vanilla recipes. Recipe Browser reads Main.recipe live and needs nothing
+		private static void RefreshOtherMods()
+		{
+			if (!ModLoader.TryGetMod("MagicStorage", out Mod magicStorage)) return;
+			try
+			{
+				magicStorage.Code?.GetType("MagicStorage.Common.Systems.MagicCache")?.GetMethod("RecalculateRecipeCaches", BindingFlags.Public | BindingFlags.Static, Type.EmptyTypes)?.Invoke(null, null);
+			}
+			catch (Exception e)
+			{
+				ModContent.GetInstance<RecipeSystem>().Mod.Logger.Warn("Could not refresh Magic Storage's recipe caches", e);
+			}
 		}
 
 		// Recipes whose result, ingredients and station may change: vanilla recipes of randomizable items, except the mining chain
