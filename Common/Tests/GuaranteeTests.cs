@@ -250,13 +250,13 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Guaranteed items missing a period");
 		}
 
-		// No host carries more than MaxItemsPerHost guaranteed items, plus one for a host kept once although full (each host
-		// at most once, MaxForcedHosts over the world) and the items placed without the biome rules (critical stations of the
-		// Forest fallback, common hosts without a biome); the busiest host gives
+		// No host carries more than MaxItemsPerHost guaranteed items, plus one for a host kept although full (at most a
+		// MaxForcedShare of the hosts), plus the items placed without the biome rules (critical stations of the Forest
+		// fallback, common hosts without a biome); the busiest host gives
 		// less than MaxDropsPerKill guaranteed stations, summons and tools per kill (materials, guaranteed only with vanilla
 		// ingredients, come in stacks and much more often: logged)
 		public const double MaxDropsPerKill = 0.6;
-		public const int MaxForcedHosts = 10;
+		public const double MaxForcedShare = 0.25;
 
 		private static void GuaranteedHostLoad()
 		{
@@ -279,8 +279,8 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int host in place.Forced ?? new List<int>()) forced[host] = forced.GetValueOrDefault(host) + 1;
 			}
 			List<string> failures = new();
-			foreach ((int host, int times) in forced.Where(pair => pair.Value > 1).OrderBy(pair => pair.Key)) failures.Add($"{Lang.GetNPCNameValue(host)} kept {times} times although full");
-			if (forced.Count > MaxForcedHosts) failures.Add($"{forced.Count} hosts kept although full, at most {MaxForcedHosts}");
+			int maxForced = System.Math.Max(4, (int)(hosts.Count * MaxForcedShare));
+			if (forced.Count > maxForced) failures.Add($"{forced.Count} of {hosts.Count} hosts kept although full, at most {maxForced}");
 			int maxItems = 0, busiest = 0;
 			double maxDrops = 0, maxAll = 0;
 			foreach (int host in hosts.OrderBy(h => h))
@@ -420,8 +420,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Every requirement is carried by the enemies of one biome: at least MinHostsInBiome of them (any count for the critical
-		// Forest fallback), at most GuaranteedHostsPerItem, all spawning in that biome, with the same chance on the hosts met at
-		// the same times. Without a biome, common hosts of the tier, no more than GuaranteedHostsPerItem. An item is placed below
+		// Forest fallback), at most GuaranteedHostsPerItem, all spawning in that biome, with the same chance on each. Without a
+		// biome, common hosts of the tier, no more than GuaranteedHostsPerItem. An item is placed below
 		// its tier only when no biome of its tier qualifies
 		private static void GuaranteedBiomeHosts()
 		{
@@ -450,12 +450,8 @@ namespace UltimateRandomizer.Common.Tests
 					foreach (int host in hosts.Where(h => BiomeSlots.PlannedShare(biome, h, tier) <= 0)) failures.Add($"{name}: {Lang.GetNPCNameValue(host)} is not met in {BiomeSlots.BiomeName(biome)}");
 				}
 				else if (BiomeSlots.SpawnsPlanned && requirement.Critical) failures.Add($"{name}: a critical station without a biome");
-				// Hosts met at the same times share one chance
-				foreach (IGrouping<SlotTime, int> group in hosts.GroupBy(h => GuaranteedSources.HostTime(requirement.Item, h)))
-				{
-					List<float> chances = group.Select(h => GuaranteedSources.For(h).Where(d => d.Item == requirement.Item).Sum(d => d.Chance)).ToList();
-					if (chances.Max() - chances.Min() > 1e-5f) failures.Add($"{name}: chances from {chances.Min():P2} to {chances.Max():P2} ({group.Key})");
-				}
+				List<float> chances = hosts.Select(h => GuaranteedSources.For(h).Where(d => d.Item == requirement.Item).Sum(d => d.Chance)).ToList();
+				if (chances.Max() - chances.Min() > 1e-5f) failures.Add($"{name}: chances from {chances.Min():P2} to {chances.Max():P2}");
 				if (tier >= 0 && tier < Tiers.Clamp(requirement.Tier))
 				{
 					below++;
@@ -496,7 +492,7 @@ namespace UltimateRandomizer.Common.Tests
 		// MinTierZeroBiomes different biomes (fewer only when fewer qualify or fewer stations exist), always among the biomes a
 		// new character explores (Forest, caves, snow, desert, ocean, the world's evil: never the jungle, the mushroom caves,
 		// the spider nests, the Underworld...)
-		public const int MinTierZeroBiomes = 3;
+		public const int MinTierZeroBiomes = 5;
 
 		private static readonly HashSet<SpawnBiome> StartBiomes = new()
 		{

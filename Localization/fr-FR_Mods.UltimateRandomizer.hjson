@@ -158,10 +158,10 @@ Tests: {
 	GuaranteedBiomeHosts: Chaque objet garanti est porté par au moins 3 ennemis d'un même biome, avec la même chance sur chacun
 	GuaranteedSeveralSeeds: Chaque objet garanti obtient les ennemis d'un biome avec d'autres graines
 	GuaranteedBiomesSpread: Les objets garantis d'un tier sont répartis sur plusieurs biomes
-	GuaranteedBiomesVaried: Les premières stations tombent dans au moins trois biomes proches différents, jamais dans un biome lointain
+	GuaranteedBiomesVaried: Les premières stations tombent dans au moins cinq biomes proches différents, jamais dans un biome lointain
 	GuaranteedFindTime: Chaque station, invocation et outil garanti tombe en environ 90 ennemis tués dans son biome
 	GuaranteedDayAndNight: Un objet garanti dont le biome se visite de jour et de nuit a au moins deux ennemis à chaque moment
-	GuaranteedHostLoad: Aucun ennemi ne porte plus de quatre objets garantis, ni ne donne trop d'objets garantis par victime
+	GuaranteedHostLoad: Aucun ennemi ne porte plus de quatre objets garantis (cinq quand son biome n'a pas d'autre choix), ni ne donne trop d'objets garantis par victime
 	GuaranteedReachable: Les objets garantis ne sont jamais dans un biome avant qu'on puisse y chasser (donjon, Enfer, temple, ciel), ni dans un cimetière ou une météorite
 	HintSortedByProgress: Les indices sont triés par avancement, en deux onglets
 	HintFoundUnlocks: L'indice d'un objet trouvé est entièrement connu, gratuitement

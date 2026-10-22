@@ -180,6 +180,29 @@ namespace UltimateRandomizer.Common.Tests
 			return mine.ToDictionary(p => p.Key, p => p.Value / totals[p.Key]);
 		}
 
+		// The same in one period (Day: day and any-hour slots...), counting for the type only the slots met from the tier on
+		// (BiomeSlots.EffectiveTier), as the guaranteed items' share is stated (GuaranteedSources.BiomeShare)
+		private static Dictionary<int, double> SteadyFromSlotsAt(int type, int tier, SlotTime period)
+		{
+			int band = BiomeSlots.BandOf(Tiers.Clamp(tier));
+			Dictionary<int, double> totals = new(), mine = new();
+			const int Rolls = 200;
+			foreach (BiomeSlot slot in BiomeSlots.SpawnMap.Slots)
+			{
+				if (slot.Critter || slot.AbsentEvil || slot.Band > band || !BiomeSlots.OpenIn(slot.Time, period)) continue;
+				double weight = (slot.Rare ? 0.1 : 1) * (slot.Conditional ? 0.5 : 1);
+				totals[slot.Biome] = totals.GetValueOrDefault(slot.Biome) + weight;
+				if (slot.Rare || slot.Conditional || BiomeSlots.EffectiveTier(slot) > tier) continue;
+				int hits = 0;
+				for (int k = 0; k < Rolls; k++)
+				{
+					if (BiomeSlots.TypeOf(BiomeSlots.Pick(slot, (k + 0.5) / Rolls)) == type) hits++;
+				}
+				if (hits > 0) mine[slot.Biome] = mine.GetValueOrDefault(slot.Biome) + weight * hits / Rolls;
+			}
+			return mine.ToDictionary(p => p.Key, p => p.Value / totals[p.Key]);
+		}
+
 		// A creature hint leads to an enemy met often (at least 5 % of the steady spawns of its best biome, no rare enemy)
 		// that drops the item with the chance the codex shows (1 % or more); a guaranteed item's enemies are judged together,
 		// on the share they make of its biome. Fallbacks are counted by HintTargetsHaveSource
@@ -203,15 +226,24 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				if (Math.Abs((1f - missing) - fact.Chance) > 1e-4f) failures.Add($"{name}: states {fact.Chance:P2}, planned {1f - missing:P2}");
 				if (!shares || !BiomeSlots.HasAnySlot(type)) continue;
-				// Several enemies: the share they make together of the biome named first
+				// Several enemies: the share they make together of the biome named first, at the tier and in the period(s) they
+				// were placed for
 				int biome = GuaranteedSources.BiomeOf(fact.Item);
 				if (fact.Hosts.Count > 1 && biome >= 0)
 				{
 					int placed = GuaranteedSources.PlacedTier(fact.Item);
-					double together = fact.Hosts.Sum(h => SteadyFromSlots(BiomeSlots.TypeOf(h), placed).GetValueOrDefault(biome));
+					SlotTime period = GuaranteedSources.PlacedTime(fact.Item);
+					double together = fact.Hosts.Sum(h => SteadyFromSlotsAt(BiomeSlots.TypeOf(h), placed, period).GetValueOrDefault(biome));
 					if (fact.Biomes.Count == 0 || fact.Biomes[0] != BiomeSlots.BiomeName(biome)) failures.Add($"{name}: does not name {BiomeSlots.BiomeName(biome)} first");
 					if (together < GuaranteedSources.MinShare(biome, placed) - 0.005) failures.Add($"{name}: its enemies make {together:P1} of {BiomeSlots.BiomeName(biome)}");
 					if (Math.Abs(together - fact.Share) > 0.02) failures.Add($"{name}: states {fact.Share:P1} of {BiomeSlots.BiomeName(biome)}, slots give {together:P1}");
+					continue;
+				}
+				// Several enemies without a biome (common hosts of the tier): each lives elsewhere, the hint names no place (the
+				// roaming sentences)
+				if (fact.Hosts.Count > 1)
+				{
+					if (fact.Biomes.Count > 0) failures.Add($"{name}: names {fact.Biomes[0]} for enemies placed without a biome");
 					continue;
 				}
 				// Judged at the requirement's tier for a guaranteed host, like the guarantees

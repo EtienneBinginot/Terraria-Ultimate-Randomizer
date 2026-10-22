@@ -52,7 +52,9 @@ namespace UltimateRandomizer.Common.Tests
 				(ItemID.MartianConduitWall, Tier.PostGolem), (ItemID.AncientBattleArmorHat, Tier.Hardmode) })
 			{
 				if (overridden.Contains(item) || !ItemPool.IsValid(item)) continue;
-				if (ItemPool.TierOf(item) < (int)floor) failures.Add($"{Lang.GetItemNameValue(item)} at tier {ItemPool.TierOf(item)}, at least {(int)floor} expected");
+				// Only a lowering counts: an item whose rarity already gives a lower tier keeps it
+				int expected = System.Math.Min((int)floor, ItemPool.Info[item].RarityTier);
+				if (ItemPool.TierOf(item) < expected) failures.Add($"{Lang.GetItemNameValue(item)} at tier {ItemPool.TierOf(item)}, at least {expected} expected");
 			}
 			// The original recipes (the live ones are randomized), placers of each tile for the stations
 			Dictionary<int, List<int>> placers = new();
@@ -69,8 +71,8 @@ namespace UltimateRandomizer.Common.Tests
 				Recipe recipe = Main.recipe[i];
 				if (recipe == null || recipe.Disabled || recipe.Mod != null && recipe.Mod.Name != "ModLoader") continue;
 				int result = Features.RecipeSystem.OriginalResult(i);
-				// The same recipes as the lowering (SetsTier reads the live recipe: its conditions and ingredient count stay)
-				if (!ItemClassifier.SetsTier(recipe)) continue;
+				// The same recipes as the lowering: the live recipe's conditions stay, its ingredients are randomized (the originals)
+				if (!ItemClassifier.SetsTier(recipe, Features.RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToList())) continue;
 				if (result <= 0 || result >= tiers.Length) continue;
 				int tier = 0;
 				foreach ((int type, _) in Features.RecipeSystem.OriginalIngredients(i))

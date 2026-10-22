@@ -158,10 +158,10 @@ Tests: {
 	GuaranteedBiomeHosts: Each guaranteed item is carried by 3 or more enemies of one biome, with the same chance on each
 	GuaranteedSeveralSeeds: Every guaranteed item gets the enemies of a biome with other seeds
 	GuaranteedBiomesSpread: The guaranteed items of a tier are spread over several biomes
-	GuaranteedBiomesVaried: The first stations land in at least three different nearby biomes, never in a far one
+	GuaranteedBiomesVaried: The first stations land in at least five different nearby biomes, never in a far one
 	GuaranteedFindTime: Every guaranteed station, summon and tool drops within about 90 kills of its biome
 	GuaranteedDayAndNight: A guaranteed item whose biome is met by day and by night has at least two enemies at each time
-	GuaranteedHostLoad: No enemy carries more than four guaranteed items, and none gives too many guaranteed drops per kill
+	GuaranteedHostLoad: No enemy carries more than four guaranteed items (five when its biome has no other choice), and none gives too many guaranteed drops per kill
 	GuaranteedReachable: Guaranteed items never sit in a biome before it can be farmed (Dungeon, Underworld, Temple, sky), nor in the Graveyard or the Meteor
 	HintSortedByProgress: Hints are sorted by progression, in two tabs
 	HintFoundUnlocks: A found item's hint is fully known for free

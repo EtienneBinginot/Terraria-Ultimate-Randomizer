@@ -17,6 +17,15 @@ namespace UltimateRandomizer.Common.Features
 		public double DistinctPerHour;
 		// Items of any kind per kill, on average
 		public double ItemsPerKill;
+		// Where the equipment of an hour comes from (PacingExpected logs it): replaced original drops, random extra drops,
+		// guaranteed drops (pickaxes), surprises (any source) and the main item of chests
+		public double FromOriginal;
+		public double FromExtra;
+		public double FromGuaranteed;
+		public double FromSurprise;
+		public double FromChests;
+		// Equipment of the hour by its tier (lowered tiers from recipes show here)
+		public double[] ByTier;
 	}
 
 	// Simulates an hour of early game with the current world and settings, to check that random equipment comes
@@ -238,17 +247,21 @@ namespace UltimateRandomizer.Common.Features
 			Dictionary<int, List<PlannedDrop>> plans = new();
 			List<double> perHour = new();
 			double distinctTotal = 0;
+			double fromOriginal = 0, fromExtra = 0, fromGuaranteed = 0, fromSurprise = 0, fromChests = 0;
+			double[] byTier = new double[Tiers.Count];
 			long kills = 0;
 			long items = 0;
 			for (int hour = 0; hour < hours; hour++)
 			{
 				int found = 0;
 				HashSet<int> distinct = new();
-				void Found(int item)
+				bool Found(int item)
 				{
-					if (!ItemPool.IsValid(item) || !ItemCategories.IsGear(ItemPool.Info[item].Category)) return;
+					if (!ItemPool.IsValid(item) || !ItemCategories.IsGear(ItemPool.Info[item].Category)) return false;
 					found++;
 					distinct.Add(item);
+					byTier[ItemPool.Info[item].Tier]++;
+					return true;
 				}
 				int SurpriseItem(int tier) => ItemPool.Roll(new RollRequest
 				{
@@ -271,8 +284,16 @@ namespace UltimateRandomizer.Common.Features
 						{
 							if (rng.NextDouble() >= drop.Chance) continue;
 							items++;
-							if (!drop.Extra && rng.NextDouble() < surprise) Found(SurpriseItem(NpcTiers.EffectiveTier(killed)));
-							else Found(drop.Item);
+							if (!drop.Extra && rng.NextDouble() < surprise)
+							{
+								if (Found(SurpriseItem(NpcTiers.EffectiveTier(killed)))) fromSurprise++;
+							}
+							else if (Found(drop.Item))
+							{
+								if (drop.Guaranteed) fromGuaranteed++;
+								else if (drop.Extra) fromExtra++;
+								else fromOriginal++;
+							}
 						}
 					}
 				}
@@ -282,15 +303,16 @@ namespace UltimateRandomizer.Common.Features
 				if (!loot.RandomizePotDrops) surpriseRolls -= Pots * ItemsPerPot;
 				for (int i = 0; i < (int)Math.Round(surpriseRolls); i++)
 				{
-					if (rng.NextDouble() < surprise) Found(SurpriseItem(0));
+					if (rng.NextDouble() < surprise && Found(SurpriseItem(0))) fromSurprise++;
 				}
 				// Chests: one main item (usually equipment, replaced by the same kind) and a few others
 				for (int c = 0; c < Chests; c++)
 				{
 					found++;
+					fromChests++;
 					for (int i = 0; i < OtherItemsPerChest; i++)
 					{
-						if (loot.RandomizeChests && rng.NextDouble() < surprise) Found(SurpriseItem(0));
+						if (loot.RandomizeChests && rng.NextDouble() < surprise && Found(SurpriseItem(0))) fromSurprise++;
 					}
 				}
 				perHour.Add(found);
@@ -298,7 +320,12 @@ namespace UltimateRandomizer.Common.Features
 			}
 			double mean = perHour.Average();
 			double deviation = Math.Sqrt(perHour.Sum(x => (x - mean) * (x - mean)) / Math.Max(1, perHour.Count - 1));
-			return new PacingResult { GearPerHour = mean, StandardDeviation = deviation, DistinctPerHour = distinctTotal / hours, ItemsPerKill = kills == 0 ? 0 : items / (double)kills };
+			return new PacingResult
+			{
+				GearPerHour = mean, StandardDeviation = deviation, DistinctPerHour = distinctTotal / hours, ItemsPerKill = kills == 0 ? 0 : items / (double)kills,
+				FromOriginal = fromOriginal / hours, FromExtra = fromExtra / hours, FromGuaranteed = fromGuaranteed / hours, FromSurprise = fromSurprise / hours,
+				FromChests = fromChests / hours, ByTier = byTier.Select(t => t / hours).ToArray()
+			};
 		}
 	}
 }

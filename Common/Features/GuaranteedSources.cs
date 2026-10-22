@@ -36,9 +36,10 @@ namespace UltimateRandomizer.Common.Features
 		public const double CriticalTargetMinutes = 22;
 		// Each item goes to one biome of its tier: the enemies met there steadily (at least MinBiomeHostShare each, no rare
 		// enemy, no event enemy), most met first, up to GuaranteedHostsPerItem. A biome qualifies with at least MinBiomeHosts
-		// of them making MinBiomeShare of its spawns together
-		public const int MinBiomeHosts = 3;
-		public const double MinBiomeShare = 0.2;
+		// of them making MinBiomeShare of its spawns together, in each period it is kept for. 1.3.2 asked for 3 hosts and 20 %:
+		// only 3 biomes qualified at tier 0 and 1 at tier 1, so items piled up on the same enemies or fell a tier
+		public const int MinBiomeHosts = 2;
+		public const double MinBiomeShare = 0.1;
 		public const double MinBiomeHostShare = 0.01;
 		// The hosts met in a period share its target: the biome gives a station, summon or tool in about StationFindKills kills
 		// of that period (1 / (sum of shares x chance)), a material in MaterialTargetKills, within these bounds
@@ -343,6 +344,9 @@ namespace UltimateRandomizer.Common.Features
 
 			public bool Full(int npc) => Items.GetValueOrDefault(npc) >= MaxItemsPerHost || Single.GetValueOrDefault(npc) >= MaxHostSingleChance - 1e-9;
 
+			// Beyond even what a full host may take when its tier has no other way (ChooseHosts with force)
+			public bool Overloaded(int npc) => Items.GetValueOrDefault(npc) >= MaxItemsPerHost + 1 || Single.GetValueOrDefault(npc) >= MaxForcedSingleChance - 1e-9;
+
 			public void Add(int npc, bool single, double chance)
 			{
 				Items[npc] = Items.GetValueOrDefault(npc) + 1;
@@ -354,9 +358,10 @@ namespace UltimateRandomizer.Common.Features
 		// BiomeSlots.WithMap): one biome per item at the highest tier at or below its own that has a qualifying biome
 		// (BiomeCandidates, ChooseHosts), picked at random among them, less likely the more items it already holds
 		// (BiomeWeight), so that the items of a tier spread over its biomes. Full hosts (HostLoads) are left aside: they are
-		// kept (once each) only when no biome of the tier works without them. The hosts met in a period share its target
-		// (PeriodChances). Critical stations go to an early biome of the pacing model with its chance (PlaceCritical), else
-		// to the Forest's critical hosts. Without any biome, common hosts of the tier
+		// kept (never Overloaded) only when no biome of the tier works without them; the item goes a tier lower only when its
+		// tier has no biome at all. One chance on every host (PeriodChances). Critical stations go to an early biome of the
+		// pacing model with its chance (PickCritical), else to the Forest's critical hosts. Without any biome, common hosts of
+		// the tier
 		public static Dictionary<int, List<PlannedDrop>> Assign(List<Requirement> all, int seed, out int missing, out Dictionary<int, Placement> places)
 		{
 			missing = 0;
@@ -479,6 +484,9 @@ namespace UltimateRandomizer.Common.Features
 		// on average (before GuaranteedDropMultiplier): it takes no more while another host or biome of the tier works
 		public const int MaxItemsPerHost = 4;
 		public const double MaxHostSingleChance = 0.25;
+		// A full host is still taken when no biome of the item's tier works without it (rather than placing the item a tier
+		// early), up to one more item and this many single drops per kill
+		public const double MaxForcedSingleChance = 0.4;
 		// A biome met by day and by night gives each period at least this many hosts (when it has them)
 		public const int MinPeriodHosts = 2;
 
@@ -514,8 +522,6 @@ namespace UltimateRandomizer.Common.Features
 			public int Biome;
 			public List<int> Hosts;
 			public List<SlotTime> HostTimes;
-			// Is each host met in the periods the item is met in (parallel to Hosts)?
-			public List<(bool day, bool night)> Periods;
 			public List<int> Forced;
 			public SlotTime Time;
 			// Steady share of the biome's spawns the hosts make together in each period (0: the item is not met then)
@@ -534,13 +540,17 @@ namespace UltimateRandomizer.Common.Features
 			TimeOf(BiomeSlots.SteadyShareAt(biome, type, tier, SlotTime.Day), BiomeSlots.SteadyShareAt(biome, type, tier, SlotTime.Night));
 
 		// The biomes that may carry the items of a tier: open at that tier (AllowedTier), with at least MinBiomeHosts natural
-		// hosts of exactly that tier (a tier 3 station never comes from tier 0 enemies) met steadily there through slots of
-		// that tier or below (BiomeSlots.SteadyShareAt), the most met first
+		// hosts of that tier or the one before (a tier 3 station never comes from tier 0 enemies) met steadily there through
+		// slots of that tier or below (BiomeSlots.SteadyShareAt), the most met first
 		private static List<BiomeEligible> BiomeCandidates(int tier)
 		{
 			List<BiomeEligible> result = new();
 			if (!BiomeSlots.SpawnsPlanned) return result;
-			List<int> natural = NaturalHosts(tier).Where(n => !(ContentSamples.NpcsByNetId.TryGetValue(n, out NPC sample) && sample.rarity > 0)).ToList();
+			// The enemies of the tier, and of the tier before in the same band (never pre-hardmode enemies for hardmode items,
+			// nor across Plantera): a biome rarely holds enough enemies of exactly one tier
+			List<int> natural = NaturalHosts(tier);
+			if (tier > 0 && BiomeSlots.BandOf(tier - 1) == BiomeSlots.BandOf(tier)) natural.AddRange(NaturalHosts(tier - 1));
+			natural = natural.Where(n => !(ContentSamples.NpcsByNetId.TryGetValue(n, out NPC sample) && sample.rarity > 0)).ToList();
 			if (natural.Count < MinBiomeHosts) return result;
 			foreach (int biome in BiomeSlots.BiomesAt(tier))
 			{
@@ -556,7 +566,7 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// The hosts of one item in a biome (null when the biome doesn't qualify). Full hosts are left aside, or with force kept
-		// (once each) while too few others remain (MinHostsInBiome, and MinPeriodHosts in each period); then each period gets
+		// (the least loaded first, never an Overloaded one) while too few others remain (MinHostsInBiome, and MinPeriodHosts in each period); then each period gets
 		// its MinPeriodHosts hosts first (a host met at any hour counts for both), the rest goes to the most met. A period
 		// without MinPeriodHosts hosts, or whose hosts make less than MinBiomeShare of its spawns, is given up (the item is
 		// only met in the other one)
@@ -568,7 +578,7 @@ namespace UltimateRandomizer.Common.Features
 			List<int> forced = new();
 			if (force)
 			{
-				foreach ((int npc, double day, double night) h in all.Where(h => load.Full(h.npc) && !load.Forced.Contains(h.npc))
+				foreach ((int npc, double day, double night) h in all.Where(h => load.Full(h.npc) && !load.Overloaded(h.npc))
 					.OrderBy(h => load.Items.GetValueOrDefault(h.npc)).ThenBy(h => load.Single.GetValueOrDefault(h.npc)).ThenBy(h => all.IndexOf(h)).ToList())
 				{
 					bool needed = free.Count < MinHostsInBiome || InDay(h) && free.Count(InDay) < Math.Min(MinPeriodHosts, dayAll)
@@ -600,8 +610,6 @@ namespace UltimateRandomizer.Common.Features
 						Biome = biome.Biome,
 						Hosts = chosen.Select(h => h.npc).ToList(),
 						HostTimes = chosen.Select(h => TimeOf(h.day, h.night)).ToList(),
-						// As HostTimes says (a host met at both times counts for both), within the periods kept
-						Periods = chosen.Select(h => (dayOk && h.day > 0, nightOk && h.night > 0)).ToList(),
 						Forced = forced.Where(f => chosen.Any(h => h.npc == f)).ToList(),
 						Time = dayOk && nightOk ? SlotTime.Any : dayOk ? SlotTime.Day : SlotTime.Night,
 						DayShare = dayOk ? day : 0,
@@ -640,18 +648,14 @@ namespace UltimateRandomizer.Common.Features
 			return free.Where(chosen.Contains).ToList();
 		}
 
-		// The chance on each host (before GuaranteedDropMultiplier): the hosts met in a period share its target (BiomeChance of
-		// the share they make then); a host met in both periods takes the larger of the two, so that neither period is slower
-		// than its target
+		// The chance on each host (before GuaranteedDropMultiplier): the same on all, so that the hints name one chance, from
+		// the period where the hosts make the smallest share (each period kept gives the item within its target; the richer
+		// one a little sooner). HostLoads keeps the hosts from piling such chances up
 		private static List<float> PeriodChances(BiomeHosts hosts, bool single)
 		{
-			float day = hosts.DayShare > 0 ? BiomeChance(single, hosts.DayShare) : 0f;
-			float night = hosts.NightShare > 0 ? BiomeChance(single, hosts.NightShare) : 0f;
-			return hosts.Periods.Select(p =>
-			{
-				float chance = Math.Max(p.day ? day : 0f, p.night ? night : 0f);
-				return chance > 0 ? chance : Math.Max(day, night);
-			}).ToList();
+			double share = hosts.DayShare > 0 && hosts.NightShare > 0 ? Math.Min(hosts.DayShare, hosts.NightShare) : Math.Max(hosts.DayShare, hosts.NightShare);
+			float chance = BiomeChance(single, share);
+			return hosts.Hosts.Select(_ => chance).ToList();
 		}
 
 		// How likely a biome is to be picked for an item among those that qualify: about the same for all, much less once it

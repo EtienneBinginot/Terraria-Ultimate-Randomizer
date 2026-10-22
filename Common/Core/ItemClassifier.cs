@@ -142,7 +142,7 @@ namespace UltimateRandomizer.Common.Core
 			for (int i = 0; i < Recipe.numRecipes; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (!SetsTier(recipe)) continue;
+				if (!SetsTier(recipe, recipe.requiredItem.Select(i => i.type).ToList())) continue;
 				int result = recipe.createItem.type;
 				if (result >= tiers.Length || overrides.ContainsKey(result) || KnownTiers.ContainsKey(result)) continue;
 				List<int[]> parts = new();
@@ -190,10 +190,12 @@ namespace UltimateRandomizer.Common.Core
 
 		// A vanilla recipe that can lower its result's tier: none tied to a kind of world, and not tModLoader's reverse recipes
 		// (wall or platform back to its block: the block would take the wall's rarity)
-		public static bool SetsTier(Recipe recipe)
+		// ingredients: the recipe's original ones (the live ones are randomized in a world: the tests pass
+		// RecipeSystem.OriginalIngredients)
+		public static bool SetsTier(Recipe recipe, IReadOnlyList<int> ingredients)
 		{
 			if (!IsVanillaRecipe(recipe) || recipe.Conditions.Any(c => WorldConditions.Contains(c))) return false;
-			if (recipe.requiredItem.Count == 1 && ContentSamples.ItemsByType.TryGetValue(recipe.requiredItem[0].type, out Item part))
+			if (ingredients.Count == 1 && ContentSamples.ItemsByType.TryGetValue(ingredients[0], out Item part))
 			{
 				if (part.createWall > 0 || part.createTile >= TileID.Dirt && TileID.Sets.Platforms[part.createTile]) return false;
 			}
