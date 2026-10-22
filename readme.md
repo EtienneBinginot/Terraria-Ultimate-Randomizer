@@ -23,4 +23,6 @@ A complete, configurable randomizer mod for Terraria (tModLoader 1.4.4), tied to
 
 ## Credits
 Based on [tRandomizer](https://github.com/ImplicitSaber/tRandomizer) by ImplicitSaber (MIT).
-Ultimate Randomizer by Etienne Binginot, MIT license.
+Ultimate Randomizer by Pootouf, MIT license.
+
+Originally made for the YouTube videos of the **Pootouf** and **Nouke** channels.

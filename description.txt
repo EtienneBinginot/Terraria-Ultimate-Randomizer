@@ -20,4 +20,5 @@ Do not enable it together with tRandomizer.
 
 ==[Credits]==
 Based on tRandomizer by ImplicitSaber (MIT license): https://github.com/ImplicitSaber/tRandomizer
-Ultimate Randomizer by Etienne Binginot, MIT license.
+Ultimate Randomizer by Pootouf, MIT license.
+Originally made for the YouTube videos of the Pootouf and Nouke channels.
