@@ -45,7 +45,8 @@ namespace UltimateRandomizer.Common.Core
 		// rng (WildRng, required): plans, findability and guarantees never set it, so they stay classic
 		public bool Wild;
 		public Random WildRng;
-		// Multiplies WildDropChance for this roll (0: 1), still with the runtime rng only (the giant and mini bonus drops)
+		// Multiplies WildDropChance for this roll (0: 1), still with the runtime rng only (giant and mini bonus drops, weak
+		// enemies: RandomNpcDropRule.JackpotWorth). To disable the madness of a roll, leave Wild false
 		public float WildChanceMultiplier;
 	}
 

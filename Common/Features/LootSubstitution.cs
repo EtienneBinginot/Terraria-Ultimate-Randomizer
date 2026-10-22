@@ -22,8 +22,11 @@ namespace UltimateRandomizer.Common.Features
 					int owner = BossParts.Owner(npc.type);
 					bool isBoss = RandomNpcDropRule.IsBossType(owner);
 					System.Random dropRng = new(Main.rand.Next());
+					// Same anti-farm rules as the extra drops: weak swarms get a share of the jackpot chances, critters and
+					// NPCs spawned by another NPC none (their replaced drop stays the planned one)
+					float worth = MobLootSystem.IsSpawnedByNpc(npc) ? 0f : RandomNpcDropRule.JackpotWorth(npc);
 					int replacement = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(owner), item.type,
-						NpcTiers.EffectiveTier(owner), isBoss ? NpcTiers.BaseTier(owner) : 0, DropHelper.RollLucky(), dropRng, dropRng);
+						NpcTiers.EffectiveTier(owner), isBoss ? NpcTiers.BaseTier(owner) : 0, DropHelper.RollLucky(worth), dropRng, worth > 0f ? dropRng : null, worth);
 					int gap = ItemPool.LastJackpotGap;
 					DropHelper.ChangeSpawnedItem(item, replacement, StackRules.Scaled(item.type, item.stack, replacement));
 					JackpotItem.Mark(item, gap);

@@ -17,7 +17,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// The item replacing an original drop of a source (enemy or bag): the same every time in a world, unless a
 		// surprise happens (surpriseRng null = never, for the journal and the tests). wildRng: runtime drops only (madness)
-		public static int Replacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky, Random surpriseRng = null, Random wildRng = null)
+		// wildMultiplier: scales the madness chance (RandomNpcDropRule.JackpotWorth)
+		public static int Replacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky, Random surpriseRng = null, Random wildRng = null, float wildMultiplier = 1f)
 		{
 			// ItemPool.LastJackpotGap then says whether this replacement is a jackpot
 			ItemPool.ClearJackpot();
@@ -33,13 +34,15 @@ namespace UltimateRandomizer.Common.Features
 				AllowJackpot = true,
 				IgnoreGating = lucky,
 				MinLimit = minLimit,
-				Wild = wildRng != null,
-				WildRng = wildRng
+				Wild = wildRng != null && wildMultiplier > 0f,
+				WildRng = wildRng,
+				WildChanceMultiplier = wildMultiplier
 			};
 			return ItemPool.RollReplacement(request, LootConfig.Instance.SurpriseChance, surpriseRng);
 		}
 
-		public static bool RollLucky() => Main.rand.NextFloat() * 100 < ProgressionConfig.Instance.RuntimeJackpotChance;
+		// worth: RandomNpcDropRule.JackpotWorth of the kill (0: never lucky)
+		public static bool RollLucky(float worth = 1f) => worth > 0f && Main.rand.NextFloat() * 100 < ProgressionConfig.Instance.RuntimeJackpotChance * worth;
 
 		// Stack range of a replacement item, from the original range (keeps roughly the same value)
 		public static (int min, int max) ScaledRange(int originalItem, int stackMin, int stackMax, int newType)

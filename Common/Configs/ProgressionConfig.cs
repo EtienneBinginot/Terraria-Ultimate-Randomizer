@@ -56,14 +56,15 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0f, 100f)]
 		[Increment(0.1f)]
-		[DefaultValue(2f)]
+		[DefaultValue(3f)]
 		public float RuntimeJackpotChance;
 
 		// Madness: share of the random drops (at kill or bag opening) that go above the progression limit, each extra
-		// tier WildTierDecay times rarer. Never used by plans, findability or guarantees.
+		// tier WildTierDecay times rarer. Never used by plans, findability or guarantees. Both jackpot chances are scaled by
+		// RandomNpcDropRule.JackpotWorth (weak swarms less): the defaults were raised to keep the same rate on ordinary kills
 		[Range(0f, 50f)]
 		[Increment(0.5f)]
-		[DefaultValue(5f)]
+		[DefaultValue(7f)]
 		public float WildDropChance;
 
 		[Range(1.5f, 10f)]

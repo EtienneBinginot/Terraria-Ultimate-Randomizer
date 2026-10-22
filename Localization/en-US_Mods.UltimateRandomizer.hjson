@@ -103,6 +103,9 @@ Tests: {
 	JackpotDropsMarked: Drops above the limit are marked as jackpots
 	GiantBonusUseful: A giant's bonus item is useful, and five times as likely to be a jackpot
 	MiniBonusDrop: Minis and giants give one bonus item, boss minions never
+	JackpotWorthScales: Weak enemies get a share of the jackpot chances that follows their health (0.1 to 1)
+	SpawnedEnemyNoExtraDrops: Enemies spawned by another enemy give no extra drop, guaranteed drop or jackpot
+	CrittersNoJackpot: Critters never give a jackpot
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled
@@ -1056,12 +1059,12 @@ Configs: {
 
 		RuntimeJackpotChance: {
 			Label: Lucky drop chance (%)
-			Tooltip: Chance, on each kill, to ignore the progression lock and get the real item right away. Above the limit, it is a jackpot: always useful equipment or a crafting station, shown with light and sound.
+			Tooltip: Chance, on each kill, to ignore the progression lock and get the real item right away. Above the limit, it is a jackpot: always useful equipment or a crafting station, shown with light and sound. Weak enemies (less health than usual at their level) get a smaller chance, critters and enemies spawned by another enemy none.
 		}
 
 		WildDropChance: {
 			Label: Madness: drops above the limit (%)
-			Tooltip: Share of the random drops of enemies and bags that go above the progression limit, at any time. Each tier further above is rarer (see the next setting): an early Zenith is possible, but extremely rare. These jackpots are always useful (equipment, progression stations), shown brighter the higher they are, and not listed among the enemy's drops. Enemies then adapt to your equipment (adaptive power). 0 = classic progression.
+			Tooltip: Share of the random drops of enemies and bags that go above the progression limit, at any time. Each tier further above is rarer (see the next setting): an early Zenith is possible, but extremely rare. These jackpots are always useful (equipment, progression stations), shown brighter the higher they are, and not listed among the enemy's drops. Enemies then adapt to your equipment (adaptive power). Weak enemies get a smaller share, critters and enemies spawned by another enemy none. 0 = classic progression.
 		}
 
 		WildTierDecay: {

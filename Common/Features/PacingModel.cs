@@ -186,14 +186,16 @@ namespace UltimateRandomizer.Common.Features
 				}
 				int killed = Killed(Kind(picked.npcs, rng), picked.biome, rng, swapChance, pool);
 				int owner = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(killed, out NPC sample) ? sample.type : killed);
-				foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(killed, owner, Main.expertMode, rng.NextDouble() < luckyChance, wildRng: new Random(rng.Next())))
+				// Weak enemies get a share of the jackpot chances, critters none (as at kill time)
+				float worth = RandomNpcDropRule.JackpotWorth(killed);
+				foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(killed, owner, Main.expertMode, rng.NextDouble() < luckyChance * worth, wildRng: new Random(rng.Next()), wildMultiplier: worth))
 				{
 					if (drop.JackpotGap > 0) jackpots += Math.Clamp(drop.Chance, 0f, 1f);
 				}
 				foreach (Terraria.GameContent.ItemDropRules.DropRateInfo entry in LootSnapshot.ForNpc(killed))
 				{
 					Random wild = new(rng.Next());
-					DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(owner), entry.itemId, NpcTiers.EffectiveTier(owner), 0, rng.NextDouble() < luckyChance, wild, wild);
+					DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(owner), entry.itemId, NpcTiers.EffectiveTier(owner), 0, rng.NextDouble() < luckyChance * worth, wild, worth > 0f ? wild : null, worth);
 					if (ItemPool.LastJackpotGap > 0) jackpots += Math.Clamp(entry.dropRate, 0f, 1f);
 				}
 			}

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.DataStructures;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -19,6 +20,65 @@ namespace UltimateRandomizer.Common.Features
 			List<IItemDropRule> rules = npcLoot.Get(false).Where(r => r != null).Distinct().ToList();
 			LootSnapshot.Npcs[npc.netID] = LootSnapshot.Capture(rules);
 			npcLoot.Add(new RandomNpcDropRule(npc.netID));
+		}
+	}
+
+	// NPCs spawned by another NPC (Mother Slime babies, slimes splitting on death...) must not become loot farms: their kills
+	// get no random extra drops, no guaranteed drops and no jackpot, like statue spawns. Decided where NPCs are created
+	// (server / single player, where the loot rolls too). Kept per slot: globals are recreated by SetDefaults/Transform
+	public class SpawnOriginNPC : GlobalNPC
+	{
+		public override void OnSpawn(NPC npc, IEntitySource source)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || npc.whoAmI < 0 || npc.whoAmI >= Main.maxNPCs) return;
+			// Every new NPC in a slot sets it again: the flag of a previous NPC never sticks
+			MobLootSystem.SpawnedByNpc[npc.whoAmI] = IsNpcChild(npc, source);
+		}
+
+		// Vanilla spawns children with EntitySource_Parent (GetSpawnSourceForNPCFromNPCAI, GetSpawnSource_NPCHurt). Not
+		// flagged: worm segments (the segment killed drops the worm's loot), bosses (the Lunatic Cultist comes from its
+		// devotees) and Dungeon Spirits (a rare reward of their own, not a swarm)
+		public static bool IsNpcChild(NPC npc, IEntitySource source) =>
+			source is EntitySource_Parent { Entity: NPC parent } && parent.whoAmI != npc.whoAmI && npc.aiStyle != NPCAIStyleID.Worm
+			&& npc.type != NPCID.DungeonSpirit && !RandomNpcDropRule.IsBossType(BossParts.Owner(npc.type));
+	}
+
+	public class MobLootSystem : ModSystem
+	{
+		public static readonly bool[] SpawnedByNpc = new bool[Main.maxNPCs + 1];
+
+		// Median base life of the natural enemies of each tier (JackpotWorth), rebuilt with the other world caches
+		private static readonly Dictionary<int, float> medianLife = new();
+
+		public override void Load() => WorldCaches.Reset += ResetWorth;
+
+		public override void OnWorldLoad()
+		{
+			Array.Clear(SpawnedByNpc);
+			ResetWorth();
+		}
+
+		public static void ResetWorth() => medianLife.Clear();
+
+		// Only for the NPC really in its slot (tests and tools also roll loot on detached NPCs)
+		public static bool IsSpawnedByNpc(NPC npc) =>
+			npc != null && npc.whoAmI >= 0 && npc.whoAmI < Main.maxNPCs && Main.npc[npc.whoAmI] == npc && SpawnedByNpc[npc.whoAmI];
+
+		public static float MedianLife(int tier)
+		{
+			tier = Tiers.Clamp(tier);
+			if (medianLife.TryGetValue(tier, out float cached)) return cached;
+			float median = 0f;
+			// A tier without natural enemies of its own takes the closest one below
+			for (int t = tier; t >= 0 && median <= 0f; t--)
+			{
+				List<int> lives = EnemySwapPool.NaturalEnemies(t).Where(ContentSamples.NpcsByNetId.ContainsKey)
+					.Select(n => ContentSamples.NpcsByNetId[n].lifeMax).Where(l => l > 0).OrderBy(l => l).ToList();
+				if (lives.Count == 0) continue;
+				median = lives.Count % 2 == 1 ? lives[lives.Count / 2] : (lives[lives.Count / 2 - 1] + lives[lives.Count / 2]) / 2f;
+			}
+			medianLife[tier] = median;
+			return median;
 		}
 	}
 
@@ -67,11 +127,13 @@ namespace UltimateRandomizer.Common.Features
 		public ItemDropAttemptResult TryDroppingItem(DropAttemptInfo info)
 		{
 			NPC npc = info.npc;
-			if (!SeedSystem.WorldReady || !ItemPool.Ready || npc == null || npc.SpawnedFromStatue || !ExtraDropsAllowedNow(info))
+			if (!SeedSystem.WorldReady || !ItemPool.Ready || npc == null || npc.SpawnedFromStatue || MobLootSystem.IsSpawnedByNpc(npc) || !ExtraDropsAllowedNow(info))
 			{
 				return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			}
-			IEnumerable<PlannedDrop> drops = ExtraDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky(), wildRng: new Random(info.rng.Next()))
+			// Weak swarm enemies (and critters: never) get a share of the jackpot chances (luck and madness)
+			float worth = JackpotWorth(npc);
+			IEnumerable<PlannedDrop> drops = ExtraDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky(worth), wildRng: new Random(info.rng.Next()), wildMultiplier: worth)
 				.Concat(GuaranteedSources.For(npc.type));
 			// Stronger enemies (type and individual) drop more often. Guaranteed drops (stations...) leave adaptive power
 			// out, so that how fast they are found does not depend on the player's equipment
@@ -83,12 +145,33 @@ namespace UltimateRandomizer.Common.Features
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
 				DropMarked(npc, drop.Item, stack, drop.JackpotGap);
 			}
-			foreach ((int item, int stack, int gap) in BonusDrops(npc, netId, info.rng.Next(), DropHelper.RollLucky()))
+			foreach ((int item, int stack, int gap) in BonusDrops(npc, netId, info.rng.Next(), DropHelper.RollLucky(worth), worth))
 			{
 				DropMarked(npc, item, stack, gap);
 			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
 		}
+
+		// Share of the jackpot chances (RuntimeJackpotChance, WildDropChance) a kill gets: its base life against the median of
+		// the natural enemies of its tier, in [0.1, 1], so that farming a swarm of weak enemies pays no more than ordinary
+		// fights. Critters: 0 (never a jackpot). Bosses and anything sturdier than the median: 1. Runtime rolls only
+		public const float MinJackpotWorth = 0.1f;
+
+		public static float JackpotWorth(NPC npc) => npc == null ? 1f : JackpotWorth(npc.netID);
+
+		public static float JackpotWorth(int netId)
+		{
+			if (!ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample)) return 1f;
+			if (NPCID.Sets.CountsAsCritter[sample.type]) return 0f;
+			int owner = BossParts.Owner(sample.type);
+			if (IsBossType(owner)) return 1f;
+			// Parts share their owner's life
+			if (owner != sample.type && ContentSamples.NpcsByNetId.TryGetValue(owner, out NPC ownerSample)) sample = ownerSample;
+			return WorthOf(sample.lifeMax, MobLootSystem.MedianLife(NpcTiers.EffectiveTier(owner)));
+		}
+
+		public static float WorthOf(float life, float medianLife) =>
+			medianLife <= 0f || life <= 0f ? 1f : Math.Clamp(life / medianLife, MinJackpotWorth, 1f);
 
 		// Giants: one more useful item a tier above their level, five times as likely to be a jackpot. Minis (small, agile and
 		// dangerous): one more item of their level, twice as likely. Never for boss minions and parts (GiantBonusAllowed).
@@ -96,15 +179,16 @@ namespace UltimateRandomizer.Common.Features
 		public const float GiantWildMultiplier = 5f;
 		public const float MiniWildMultiplier = 2f;
 
-		public static List<(int item, int stack, int gap)> BonusDrops(NPC npc, int netId, int key, bool lucky)
+		// worth: JackpotWorth, multiplies the madness chance on top of the giant or mini multiplier (0: no madness)
+		public static List<(int item, int stack, int gap)> BonusDrops(NPC npc, int netId, int key, bool lucky, float worth = 1f)
 		{
 			List<(int, int, int)> drops = new();
 			if (!LootConfig.Instance.RandomizeMobDrops || !npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) || !GiantBonusAllowed(netId, npc.type)) return drops;
 			EnemiesConfig cfg = EnemiesConfig.Instance;
 			int owner = BossParts.Owner(npc.type);
 			int item;
-			if (individual.Kind == EnemyKind.Giant && cfg.GiantBonusDrop) item = GiantDrop(owner, key, lucky);
-			else if (individual.Kind == EnemyKind.Mini && cfg.MiniBonusDrop) item = MiniDrop(owner, key, lucky);
+			if (individual.Kind == EnemyKind.Giant && cfg.GiantBonusDrop) item = GiantDrop(owner, key, lucky, GiantWildMultiplier * worth);
+			else if (individual.Kind == EnemyKind.Mini && cfg.MiniBonusDrop) item = MiniDrop(owner, key, lucky, MiniWildMultiplier * worth);
 			else return drops;
 			int gap = ItemPool.LastJackpotGap;
 			// Not the WildRng seed of the roll
@@ -152,7 +236,8 @@ namespace UltimateRandomizer.Common.Features
 					OriginalItem = -1,
 					Policy = CategoryPolicy.Weighted,
 					IgnoreGating = lucky,
-					Wild = attempt == 0,
+					// A multiplier of 0 means no madness (RollRequest reads 0 as 1)
+					Wild = attempt == 0 && wildMultiplier > 0,
 					// Also the rng that checks a lucky roll above the limit (a jackpot, or rolled again within it)
 					WildRng = new Random(unchecked(key + attempt * 7919)),
 					WildChanceMultiplier = wildMultiplier
@@ -173,7 +258,7 @@ namespace UltimateRandomizer.Common.Features
 				OriginalItem = -1,
 				Policy = CategoryPolicy.Weighted,
 				IgnoreGating = lucky,
-				Wild = true,
+				Wild = wildMultiplier > 0,
 				WildRng = new Random(key),
 				WildChanceMultiplier = wildMultiplier
 			};
@@ -220,9 +305,11 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// wildRng: at kill time only, the madness tail (WildDropChance) may replace an item by one above the limit; the
-		// chance stays the one of the planned item, so the setting really is a share of the drops
-		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, bool lucky, float? abundance = null, Random wildRng = null)
+		// chance stays the one of the planned item, so the setting really is a share of the drops. wildMultiplier: scales
+		// that chance (JackpotWorth), 0 = no madness
+		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, bool lucky, float? abundance = null, Random wildRng = null, float wildMultiplier = 1f)
 		{
+			if (wildMultiplier <= 0f) wildRng = null;
 			List<PlannedDrop> drops = new();
 			LootConfig cfg = LootConfig.Instance;
 			float abundanceFactor = Math.Max(0f, abundance ?? cfg.LootAbundance);
@@ -269,7 +356,7 @@ namespace UltimateRandomizer.Common.Features
 					int denominator = isBoss && slot == 0 ? 1 : DropRates.Denominator(item, tier, sourceTier, isBoss, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item, 7));
 					chance = Math.Min(1f, cfg.DropRateMultiplier * slotFactor / denominator);
 				}
-				item = Wild(request, item, wildRng);
+				item = Wild(request, item, wildRng, wildMultiplier);
 				int gap = wildRng != null ? ItemPool.LastJackpotGap : 0;
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
 				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap });
@@ -291,7 +378,7 @@ namespace UltimateRandomizer.Common.Features
 					TierJitterDown = 1,
 					IgnoreGating = lucky
 				};
-				int item = Wild(common, ItemPool.Roll(common), wildRng);
+				int item = Wild(common, ItemPool.Roll(common), wildRng, wildMultiplier);
 				int gap = wildRng != null ? ItemPool.LastJackpotGap : 0;
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000 + c, item));
 				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = Math.Min(1f, commonTotal), Extra = true, JackpotGap = gap });
@@ -325,11 +412,12 @@ namespace UltimateRandomizer.Common.Features
 			return expected;
 		}
 
-		private static int Wild(RollRequest request, int planned, Random wildRng)
+		private static int Wild(RollRequest request, int planned, Random wildRng, float multiplier)
 		{
-			if (wildRng == null) return planned;
+			if (wildRng == null || multiplier <= 0f) return planned;
 			request.Wild = true;
 			request.WildRng = wildRng;
+			request.WildChanceMultiplier = multiplier;
 			return ItemPool.Roll(request);
 		}
 

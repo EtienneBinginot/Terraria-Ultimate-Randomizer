@@ -34,6 +34,157 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("JackpotDropsMarked", JackpotDropsMarked);
 			TestRunner.Register("GiantBonusUseful", GiantBonusUseful);
 			TestRunner.Register("MiniBonusDrop", MiniBonusDrop);
+			TestRunner.Register("JackpotWorthScales", JackpotWorthScales);
+			TestRunner.Register("SpawnedEnemyNoExtraDrops", SpawnedEnemyNoExtraDrops);
+			TestRunner.Register("CrittersNoJackpot", CrittersNoJackpot);
+		}
+
+		// The share of the jackpot chances follows the base life against the median of the tier, in [0.1, 1]: 1 for a typical
+		// enemy, 0.1 for a 5-HP swarm enemy, never more for a weaker enemy of the same tier; bosses 1, critters 0
+		private static void JackpotWorthScales()
+		{
+			List<string> failures = new();
+			if (Math.Abs(RandomNpcDropRule.WorthOf(5, 50) - 0.1f) > 0.001f) failures.Add($"5 HP against 50: {RandomNpcDropRule.WorthOf(5, 50):0.00}, expected 0.1");
+			if (Math.Abs(RandomNpcDropRule.WorthOf(1, 50) - RandomNpcDropRule.MinJackpotWorth) > 0.001f) failures.Add("no floor at 0.1");
+			if (Math.Abs(RandomNpcDropRule.WorthOf(25, 50) - 0.5f) > 0.001f) failures.Add($"25 HP against 50: {RandomNpcDropRule.WorthOf(25, 50):0.00}, expected 0.5");
+			if (Math.Abs(RandomNpcDropRule.WorthOf(50, 50) - 1f) > 0.001f || Math.Abs(RandomNpcDropRule.WorthOf(400, 50) - 1f) > 0.001f) failures.Add("a typical or sturdy enemy is not worth 1");
+			if (RandomNpcDropRule.JackpotWorth(NPCID.Bunny) != 0f) failures.Add("a bunny may give a jackpot");
+			if (RandomNpcDropRule.JackpotWorth(NPCID.EyeofCthulhu) != 1f) failures.Add("the Eye of Cthulhu is not worth 1");
+			List<int> enemies = EnemySwapPool.NaturalEnemies(0).Where(ContentSamples.NpcsByNetId.ContainsKey).Where(n => NpcTiers.EffectiveTier(n) == 0).ToList();
+			if (enemies.Count < 3) Check.Skip("fewer than 3 natural enemies at tier 0");
+			float median = MobLootSystem.MedianLife(0);
+			if (median <= 0f) failures.Add("no median life at tier 0");
+			float previous = 0f;
+			int previousLife = 0;
+			int atOne = 0;
+			foreach (int npc in enemies.OrderBy(n => ContentSamples.NpcsByNetId[n].lifeMax))
+			{
+				int life = ContentSamples.NpcsByNetId[npc].lifeMax;
+				float worth = RandomNpcDropRule.JackpotWorth(npc);
+				if (worth < RandomNpcDropRule.MinJackpotWorth - 0.0001f || worth > 1.0001f) failures.Add($"{NpcName(npc)}: worth {worth:0.00}");
+				if (worth + 0.0001f < previous && life > previousLife) failures.Add($"{NpcName(npc)} ({life} HP) worth {worth:0.00}, less than a weaker enemy ({previous:0.00})");
+				if (worth > 0.999f) atOne++;
+				previous = worth;
+				previousLife = life;
+			}
+			// The median enemy and the sturdier half
+			if (atOne < enemies.Count / 2) failures.Add($"only {atOne} of {enemies.Count} tier 0 enemies are worth 1 (median {median:0} HP)");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"JackpotWorth: median life {median:0} at tier 0, {atOne} of {enemies.Count} enemies worth 1");
+			Check.All(failures, "Jackpot worth");
+		}
+
+		// An NPC spawned by another NPC (Mother Slime babies...) is flagged in its slot, even after SetDefaults, and its kill
+		// gets nothing from the extra-drop rule; the flag does not stick to the next NPC of the slot. Worm segments and bosses
+		// are never flagged. Spawned NPCs and items are removed
+		private static void SpawnedEnemyNoExtraDrops()
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (NPCs spawn on the server)");
+			Player player = Main.LocalPlayer;
+			NPC Spawn(Terraria.DataStructures.IEntitySource source, int type)
+			{
+				int index = NPC.NewNPC(source, (int)player.Center.X + 1200, (int)player.Center.Y - 200, type);
+				return index >= 0 && index < Main.maxNPCs ? Main.npc[index] : null;
+			}
+			NPC parent = null, child = null;
+			List<int> slots = new();
+			List<string> failures = new();
+			try
+			{
+				parent = Spawn(new Terraria.DataStructures.EntitySource_DebugCommand("UltimateRandomizer test"), NPCID.Zombie);
+				Check.That(parent != null, "could not spawn the parent");
+				child = Spawn(new Terraria.DataStructures.EntitySource_Parent(parent), NPCID.BlueSlime);
+				Check.That(child != null, "could not spawn the child");
+				if (MobLootSystem.IsSpawnedByNpc(parent)) failures.Add("the parent is flagged");
+				if (!MobLootSystem.IsSpawnedByNpc(child)) failures.Add("the child is not flagged");
+				// Vanilla sets variants with SetDefaults right after spawning: the flag stays with the slot
+				child.SetDefaults(NPCID.BlueSlime);
+				if (!MobLootSystem.IsSpawnedByNpc(child)) failures.Add("the flag is lost by SetDefaults");
+				CodexSystem.SpawnLog = slots;
+				RandomNpcDropRule rule = new(child.netID);
+				DropAttemptInfo info = new() { npc = child, player = player, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode };
+				ItemDropAttemptResultState state = rule.TryDroppingItem(info).State;
+				if (state != ItemDropAttemptResultState.DidNotRunCode) failures.Add($"the child's extra-drop rule ran ({state})");
+				if (slots.Count > 0) failures.Add($"the child dropped {slots.Count} items");
+				// A new NPC in the slot (here: the same one spawned again) gets its own flag
+				new SpawnOriginNPC().OnSpawn(child, new Terraria.DataStructures.EntitySource_SpawnNPC());
+				if (MobLootSystem.IsSpawnedByNpc(child)) failures.Add("the flag sticks to the next NPC of the slot");
+				else if (LootConfig.Instance.RandomizeMobDrops && rule.TryDroppingItem(info).State == ItemDropAttemptResultState.DidNotRunCode) failures.Add("an ordinary slime's extra-drop rule did not run");
+				CodexSystem.SpawnLog = null;
+				foreach (int type in new[] { NPCID.GiantWormBody, NPCID.CultistBoss, NPCID.DungeonSpirit })
+				{
+					NPC sample = new();
+					sample.SetDefaults(type);
+					if (SpawnOriginNPC.IsNpcChild(sample, new Terraria.DataStructures.EntitySource_Parent(parent))) failures.Add($"{NpcName(type)} would be flagged");
+				}
+			}
+			finally
+			{
+				CodexSystem.SpawnLog = null;
+				ItemPool.ClearJackpot();
+				foreach (int slot in slots.Distinct())
+				{
+					if (slot < 0 || slot >= Main.maxItems) continue;
+					Main.item[slot].TurnToAir();
+					Main.item[slot].active = false;
+				}
+				foreach (NPC npc in new[] { child, parent })
+				{
+					if (npc == null) continue;
+					EnemySwapSystem.Pending[npc.whoAmI] = false;
+					MobLootSystem.SpawnedByNpc[npc.whoAmI] = false;
+					npc.active = false;
+				}
+			}
+			Check.All(failures, "Enemies spawned by another enemy");
+		}
+
+		// Critters never give a jackpot: not lucky, no madness, even at 100 % (seeded runtime rngs, nothing spawned)
+		private static void CrittersNoJackpot()
+		{
+			LootConfig cfg = LootConfig.Instance;
+			List<string> failures = new();
+			foreach (int critter in new[] { NPCID.Bunny, NPCID.Bird, NPCID.Butterfly })
+			{
+				if (RandomNpcDropRule.JackpotWorth(critter) != 0f) failures.Add($"{NpcName(critter)} is worth {RandomNpcDropRule.JackpotWorth(critter):0.00}");
+			}
+			for (int i = 0; i < 1000; i++)
+			{
+				if (DropHelper.RollLucky(0f))
+				{
+					failures.Add("a lucky roll with no worth");
+					break;
+				}
+			}
+			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal || !cfg.CrittersCanDrop || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent)
+			{
+				Check.All(failures, "Critter jackpots");
+				Check.Skip("critters get no random drops");
+			}
+			if (!ProgressionConfig.Instance.TierGating || ItemPool.GatingLimit(0) >= Tiers.Max) Check.Skip("no progression limit");
+			int drops = 0;
+			try
+			{
+				ItemPool.WildChanceOverride = 100f;
+				for (int i = 0; i < 200; i++)
+				{
+					foreach (int critter in new[] { NPCID.Bunny, NPCID.Bird })
+					{
+						float worth = RandomNpcDropRule.JackpotWorth(critter);
+						foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(critter, critter, Main.expertMode, false, 3f, new Random(i), worth))
+						{
+							drops++;
+							if (drop.JackpotGap > 0 && failures.Count < 10) failures.Add($"{NpcName(critter)}: {Lang.GetItemNameValue(drop.Item)} is a jackpot");
+						}
+					}
+				}
+			}
+			finally
+			{
+				ItemPool.WildChanceOverride = null;
+				ItemPool.ClearJackpot();
+			}
+			if (drops == 0) Check.Skip("critters have no random drops in this world");
+			Check.All(failures, "Critter jackpots");
 		}
 
 		// Critters get a share (CritterDropFactor) of the small frequent drop, here at abundance 3
@@ -313,13 +464,14 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Jackpots rarer than in 1.2.0 (madness 12 %, luck 4 %) and 1.2.1 (9 %, 3 %, decay 3, allowance 3): items up to two
-		// tiers ahead already come normally
+		// tiers ahead already come normally. 1.3.0 raised 5 % / 2 % to 7 % / 3 %: weak enemies only get a share of them
+		// (JackpotWorth), ordinary kills keep about the same rate
 		private static void JackpotRatesLower()
 		{
 			float Default(string field) => Convert.ToSingle(typeof(ProgressionConfig).GetField(field).GetCustomAttributes(typeof(System.ComponentModel.DefaultValueAttribute), false)
 				.OfType<System.ComponentModel.DefaultValueAttribute>().First().Value);
-			Check.Equal(5f, Default("WildDropChance"), "default WildDropChance");
-			Check.Equal(2f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
+			Check.Equal(7f, Default("WildDropChance"), "default WildDropChance");
+			Check.Equal(3f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
 			Check.Equal(4f, Default("WildTierDecay"), "default WildTierDecay");
 			Check.Equal(2f, Default("TierAllowance"), "default TierAllowance");
 		}
