@@ -1,0 +1,71 @@
+[h1]Ultimate Randomizer[/h1]
+A complete randomizer that shuffles nearly everything: loot, chests, crafting, shops, enemies, their stats and where they live. Every world gets its own seed, the randomness follows your progression, and with the default settings everything you need stays findable.
+
+Originally made for the YouTube videos of [b]Pootouf & Nouke[/b]: [url=https://www.youtube.com/@pounouke]youtube.com/@pounouke[/url]
+
+[i]Version française plus bas.[/i]
+
+[h2]What gets randomized[/h2]
+[list]
+[*][b]Loot:[/b] enemy and boss drops, plus extra random drops on every enemy (loot abundance x3 by default), critters included. Treasure bags, crates, chests, pots, fishing, mined ores, shaken trees, herbs, the Extractinator, the Angler's rewards.
+[*][b]Jackpots:[/b] now and then a drop aims a few tiers ahead of your progression, with light and sound.
+[*][b]Crafting:[/b] recipe results, ingredients and crafting stations, planned so that everything can still be crafted. Shimmer transmutations too.
+[*][b]Economy and town:[/b] shops (value-based prices), a random starting kit, the arrival order of town NPCs.
+[*][b]Enemies:[/b] spawns redistributed between the biomes, stats on a bell curve, giants and minis, random boss health and damage. Damage stays within x3 in total, because defense is subtracted from it.
+[*][b]Adaptive power:[/b] gear far ahead of the world makes enemies tougher (mostly their health), so a lucky early weapon stays fun.
+[/list]
+
+[h2]Modes[/h2]
+[list]
+[*][b]Coherent[/b] (default): items keep their category and tier and unlock as you defeat bosses.
+[*][b]Guaranteed shuffle:[/b] every item is swapped with another of the same category and tier.
+[*][b]Chaos:[/b] anything from anywhere.
+[/list]
+Progression items are protected. Basic crafting stations, boss summons and the ingredients you need are guaranteed on common enemies, in pots and in wooden chests.
+
+[h2]Codex and hints[/h2]
+Press [b]J[/b]: drops of the enemies you killed, bags you opened, craft tree, enemies of each biome. The Guide sells hints that tell you where to find an item.
+
+[h2]Settings and multiplayer[/h2]
+Everything is configurable, in English and French. The seed is saved with the world and shared in multiplayer.
+Commands: /rseed (show or change the seed), /rjournal, /rchests (worlds created before the mod), /rdebug.
+Do not enable it together with tRandomizer.
+
+[hr][/hr]
+
+[h1]Ultimate Randomizer (français)[/h1]
+Un randomizer complet qui mélange presque tout : le butin, les coffres, l'artisanat, les boutiques, les ennemis, leurs stats et leurs biomes. Chaque monde a sa propre graine, l'aléatoire suit ta progression, et avec les réglages par défaut tout ce dont tu as besoin reste trouvable.
+
+Créé à l'origine pour les vidéos YouTube de [b]Pootouf & Nouke[/b] : [url=https://www.youtube.com/@pounouke]youtube.com/@pounouke[/url]
+
+[h2]Ce qui est aléatoire[/h2]
+[list]
+[*][b]Butin :[/b] drops des ennemis et des boss, plus des drops aléatoires en bonus sur chaque ennemi (abondance x3 par défaut), créatures comprises. Sacs de trésor, caisses, coffres, pots, pêche, minerais, arbres secoués, herbes, Extractinator, récompenses du Pêcheur.
+[*][b]Jackpots :[/b] de temps en temps, un drop vise quelques tiers au-dessus de ta progression, avec lumière et son.
+[*][b]Artisanat :[/b] résultats, ingrédients et stations des recettes, planifiés pour que tout reste fabricable. Le chatoiement (shimmer) aussi.
+[*][b]Économie et ville :[/b] boutiques (prix selon la valeur), kit de départ aléatoire, ordre d'arrivée des PNJ.
+[*][b]Ennemis :[/b] apparitions redistribuées entre les biomes, stats en cloche, géants et minis, vie et dégâts des boss aléatoires. Les dégâts restent limités à x3 au total, car la défense en est soustraite.
+[*][b]Puissance adaptative :[/b] un équipement très en avance sur le monde rend les ennemis plus coriaces (surtout leur vie), pour qu'une arme chanceuse reste fun.
+[/list]
+
+[h2]Modes[/h2]
+[list]
+[*][b]Cohérent[/b] (par défaut) : les objets gardent leur catégorie et leur tier, et se débloquent en battant les boss.
+[*][b]Mélange garanti :[/b] chaque objet est échangé avec un autre de même catégorie et de même tier.
+[*][b]Chaos :[/b] n'importe quoi, n'importe où.
+[/list]
+Les objets de progression sont protégés. Les stations de base, les invocations de boss et les ingrédients nécessaires sont garantis sur des ennemis courants, dans les pots et les coffres en bois.
+
+[h2]Codex et indices[/h2]
+Touche [b]J[/b] : drops des ennemis tués, sacs ouverts, arbre de fabrication, ennemis de chaque biome. Le Guide vend des indices qui disent où trouver un objet.
+
+[h2]Réglages et multijoueur[/h2]
+Tout est configurable, en français et en anglais. La graine est sauvegardée avec le monde et partagée en multijoueur.
+Commandes : /rseed (voir ou changer la graine), /rjournal, /rchests (mondes créés avant le mod), /rdebug.
+Ne pas l'activer en même temps que tRandomizer.
+
+[hr][/hr]
+
+[h2]Credits[/h2]
+Based on [url=https://github.com/ImplicitSaber/tRandomizer]tRandomizer[/url] by ImplicitSaber (MIT license).
+Ultimate Randomizer by Pootouf, MIT license.

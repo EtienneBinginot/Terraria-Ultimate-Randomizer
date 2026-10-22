@@ -1,24 +1,34 @@
 ==[Ultimate Randomizer]==
-A complete, configurable randomizer for Terraria, tied to each world.
+A complete randomizer that shuffles nearly everything: loot, chests, crafting, shops, enemies, their stats and where they live. Every world gets its own seed, the randomness follows your progression, and with the default settings everything you need stays findable.
 
-Features:
-- Random enemy and boss drops with vanilla-like drop tables (random number of drops, vanilla-like rates), treasure bags, crates and goodie bags
-- Random shops (value-based prices), recipes (same category and tier, value guard), shimmer transmutations
-- Random chests, fishing, mined ores and pot loot
-- Random enemy spawns (same tier, same movement), random arrival order of town NPCs
-- Boss and enemy stat multipliers, random starting kit
-- Coherent mode: items keep their category and tier, and unlock as you defeat bosses (no Zenith from the first slime... unless you are very lucky)
-- Guaranteed shuffle mode: every item is swapped with another one of the same kind, so everything stays obtainable
-- Chaos mode: anything from anywhere
-- One seed per world, saved in the world and shared with every player in multiplayer
-- Coherent stack sizes, protected progression items, everything configurable (English and French)
-- Discovery journal (J key): drops of the monsters you killed and content of the bags you opened
+Originally made for the YouTube videos of Pootouf & Nouke: https://www.youtube.com/@pounouke
 
-Commands: /rseed (show or change the world seed), /rjournal, /rchests (older worlds), /rdebug
+==[What gets randomized]==
+- Enemy and boss drops, plus extra random drops on every enemy (loot abundance x3 by default), critters included
+- Treasure bags, crates, chests, pots, fishing, mined ores, shaken trees, herbs, the Extractinator, the Angler's rewards
+- Jackpots: now and then a drop aims a few tiers ahead of your progression
+- Recipe results, ingredients and crafting stations, planned so that everything can still be crafted
+- Shimmer, shops, the starting kit, the arrival order of town NPCs
+- Enemy spawns redistributed between the biomes
+- Enemy and boss stats on a bell curve, giants and minis (damage stays within x3: defense is subtracted from it)
+- Adaptive power: gear far ahead of the world makes enemies tougher, mostly in health
+
+==[Modes]==
+- Coherent (default): items keep their category and tier and unlock as you defeat bosses
+- Guaranteed shuffle: every item is swapped with another of the same category and tier
+- Chaos: anything from anywhere
+
+Progression items are protected; basic stations, boss summons and needed ingredients are guaranteed on common enemies, in pots and wooden chests.
+
+==[Codex and hints]==
+J key: drops of the enemies you killed, bags you opened, craft tree, enemies of each biome. The Guide sells hints telling you where to find an item.
+
+==[Settings and multiplayer]==
+Everything is configurable (English and French). The seed is saved with the world and shared in multiplayer.
+Commands: /rseed (show or change the seed), /rjournal, /rchests (older worlds), /rdebug
 
 Do not enable it together with tRandomizer.
 
 ==[Credits]==
 Based on tRandomizer by ImplicitSaber (MIT license): https://github.com/ImplicitSaber/tRandomizer
 Ultimate Randomizer by Pootouf, MIT license.
-Originally made for the YouTube videos of Pootouf & Nouke: https://www.youtube.com/@pounouke
