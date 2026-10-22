@@ -1836,8 +1836,8 @@ Configs: {
 		}
 
 		LootBonusStrength: {
-			Label: Force du bonus de loot
-			Tooltip: Les ennemis plus forts (vie x dégâts au-dessus de la normale) ont de meilleures chances de drops bonus. 0 = pas de bonus.
+			Label: "Force du bonus de loot"
+			Tooltip: "Les ennemis plus forts (vie x dégâts x dégâts au-dessus de la normale : les dégâts comptent double, la défense en est soustraite) ont de meilleures chances de drops bonus. 0 = pas de bonus."
 		}
 
 		LootBonusCap: {

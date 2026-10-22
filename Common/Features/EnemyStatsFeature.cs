@@ -389,14 +389,18 @@ namespace UltimateRandomizer.Common.Features
 		{
 			EnemiesConfig cfg = EnemiesConfig.Instance;
 			EnemyMultipliers type = EnemyStatCache.Get(BossParts.Owner(npc.type), EnemyStatsNPC.IsBossLike(npc));
-			float factor = type.Life * type.Damage;
+			float factor = Strength(type.Life, type.Damage);
 			if (npc.TryGetGlobalNPC(out EnemyIndividualNPC individual))
 			{
-				factor *= individual.Life * individual.Damage;
-				if (!withAdaptive) factor /= Math.Max(0.0001f, individual.AdaptiveLife * individual.AdaptiveDamage);
+				factor *= Strength(individual.Life, individual.Damage);
+				if (!withAdaptive) factor /= Math.Max(0.0001f, Strength(individual.AdaptiveLife, individual.AdaptiveDamage));
 			}
 			return Bonus(factor, cfg.LootBonusStrength, cfg.LootBonusCap);
 		}
+
+		// How much harder an enemy is to fight: damage counts twice, since defense is subtracted from it (x1.5 damage
+		// hurts far more than x1.5 health), which also matches its much narrower ranges (x1.6 type, giants size^0.25)
+		public static float Strength(float life, float damage) => life * damage * damage;
 
 		public static float Bonus(float factor, float strength, float cap) => factor <= 1 ? 1 : Math.Min(Math.Max(1, cap), 1 + strength * (factor - 1));
 	}

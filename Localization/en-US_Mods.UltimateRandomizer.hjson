@@ -1836,8 +1836,8 @@ Configs: {
 		}
 
 		LootBonusStrength: {
-			Label: Loot bonus strength
-			Tooltip: Stronger enemies (health x damage above normal) have better extra drop chances. 0 = no bonus.
+			Label: "Loot bonus strength"
+			Tooltip: "Stronger enemies (health x damage x damage above normal: damage counts twice, defense is subtracted from it) have better extra drop chances. 0 = no bonus."
 		}
 
 		LootBonusCap: {

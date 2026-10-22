@@ -172,7 +172,7 @@ namespace UltimateRandomizer.Common.Configs
 		public int MaxGiantPixels;
 
 		[Header("LootBonus")]
-		// Stronger enemies (health x damage) drop more: extra drop chances x (1 + strength x (factor - 1))
+		// Stronger enemies (health x damage squared, EnemyIndividualNPC.Strength) drop more: extra drop chances x (1 + strength x (factor - 1))
 		[Range(0f, 2f)]
 		[Increment(0.1f)]
 		[DefaultValue(0.5f)]
