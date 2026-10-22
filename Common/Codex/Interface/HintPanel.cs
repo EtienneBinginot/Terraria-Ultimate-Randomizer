@@ -284,8 +284,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			// The two tabs, then a smaller filter inside the tab
 			craftingButton = TabButton("Hint.TabCrafting", () => ShowCategory(false), 0f, 0, -4, 0.5f, 54, 34, 0.9f);
 			bossesButton = TabButton("Hint.TabBosses", () => ShowCategory(true), 4, 0.5f, -4, 0.5f, 54, 34, 0.9f);
-			toBuyButton = TabButton("Hint.TabToBuy", () => ShowTab(false), 12, 0f, 150, 0f, 94, 24, 0.68f);
-			knownButton = TabButton("Hint.TabKnown", () => ShowTab(true), 168, 0f, 170, 0f, 94, 24, 0.68f);
+			toBuyButton = TabButton("Hint.TabToBuy", () => ShowTab(false), -166, 0.5f, 162, 0f, 94, 24, 0.68f);
+			knownButton = TabButton("Hint.TabKnown", () => ShowTab(true), 4, 0.5f, 162, 0f, 94, 24, 0.68f);
 
 			// Same search box as the codex: click to type, right click to clear
 			searchPanel = new UIPanel();

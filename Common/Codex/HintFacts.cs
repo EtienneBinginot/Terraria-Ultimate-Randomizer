@@ -730,6 +730,11 @@ namespace UltimateRandomizer.Common.Codex
 		// The critter this item is (caught with a bug net), 0 when none
 		public static int CritterOf(int item) => ContentSamples.ItemsByType.TryGetValue(item, out Item sample) && sample.makeNPC > 0 ? sample.makeNPC : 0;
 
+		// A part that is a hint target itself (a station, a summon, a pickaxe) keeps its own hint: its source shows only once
+		// that hint is bought to the end or the item found, so one hint never gives several targets at once
+		public static bool HiddenInTree(HintTreeNode node, int root) =>
+			node.Item > 0 && node.Item != root && RawTarget(node.Item) != null && CodexSystem.ShownHintLevel(node.Item) < MaxLevel;
+
 		// The name of a part: its item, or the station standing in the world
 		public static string TreeName(HintTreeNode node) => node.Item > 0 ? ItemName(node.Item) : StationName(node.Tile);
 
@@ -793,7 +798,7 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static readonly string[] TreeTextKeys =
 		{
-			"Title", "Also", "Station", "More", "Mined", "Repeat", "Unknown", "Findable", "WorldStation", "Caught", "CaughtAnywhere", "Harvested", "Filled.Water", "Filled.Lava",
+			"Title", "Also", "OwnHint", "Station", "More", "Mined", "Repeat", "Unknown", "Findable", "WorldStation", "Caught", "CaughtAnywhere", "Harvested", "Filled.Water", "Filled.Lava",
 			"Filled.Honey", "Gathered.Dig", "Gathered.Chop", "Gathered.Grow", "Gathered.Gem", "Gathered.Beach", "Gathered.Star", "Gathered.Obsidian", "Gathered.Other",
 			"Recipe", "Creature", "CreatureAnywhere", "Boss", "Shop",
 			"Bag", "Chest", "Pot", "World"

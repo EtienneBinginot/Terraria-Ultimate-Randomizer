@@ -160,6 +160,7 @@ Tests: {
 	HintTreeComplete: Un indice de recette donne la source de chaque ingrédient et station, jusqu'aux matières premières
 	HintTreeDeterministic: Les arbres des indices de recette sont les mêmes après reconstruction
 	HintTabsSplit: Les indices du Guide sont répartis entre artisanat et boss
+	HintTreeKeepsOtherHints: Un arbre d'indice cache les stations et invocations des autres indices tant qu'ils ne sont pas connus
 	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
@@ -441,6 +442,7 @@ Codex: {
 
 	Hint: {
 	Tree: {
+		OwnHint: un autre indice du Guide : achète-le ou trouve-le d'abord
 		Also: "{0} ; aussi : {1}"
 		Filled: {
 			Water: remplir un seau vide dans l'eau

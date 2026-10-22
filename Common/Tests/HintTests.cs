@@ -37,6 +37,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintTreeComplete", HintTreeComplete);
 			TestRunner.Register("HintTreeDeterministic", HintTreeDeterministic);
 			TestRunner.Register("HintTabsSplit", HintTabsSplit);
+			TestRunner.Register("HintTreeKeepsOtherHints", HintTreeKeepsOtherHints);
 		}
 
 		private static List<HintTarget> RecipeTargets() =>
@@ -98,6 +99,40 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = targets.Where(t => backward[t.Item] != forward[t.Item] || Describe(HintFacts.SourceTree(t.Item)) != forward[t.Item])
 				.Select(t => HintFacts.ItemName(t.Item)).ToList();
 			Check.All(failures, "Recipe hint trees depend on the order of the facts");
+		}
+
+		// A hint tree never gives away another hint: a station, summon or pickaxe of the tree whose own hint is not known
+		// shows no source, and nothing below it
+		private static void HintTreeKeepsOtherHints()
+		{
+			List<HintTarget> targets = RecipeTargets();
+			if (targets.Count == 0) Check.Skip("no recipe hint in this world");
+			List<string> failures = new();
+			int hiddenSeen = 0;
+			foreach (HintTarget target in targets)
+			{
+				List<HintTreeNode> tree = HintFacts.SourceTree(target.Item);
+				foreach (HintTreeNode node in tree)
+				{
+					bool other = node.Item > 0 && node.Item != target.Item && HintFacts.RawTarget(node.Item) != null;
+					bool known = CodexSystem.ShownHintLevel(node.Item) >= HintFacts.MaxLevel;
+					if (HintFacts.HiddenInTree(node, target.Item) != (other && !known)) failures.Add($"{HintFacts.ItemName(target.Item)} > {HintFacts.TreeName(node)}: hidden {!(other && !known)}");
+					if (other && !known) hiddenSeen++;
+				}
+				// The rows: a hidden part is followed by no deeper row
+				int rowsShown = HintView.TreeRows(target.Item, false, 500, false).Count;
+				int expected = 1;
+				int below = int.MaxValue;
+				foreach (HintTreeNode node in tree)
+				{
+					if (node.Depth > below) continue;
+					below = HintFacts.HiddenInTree(node, target.Item) ? node.Depth : int.MaxValue;
+					expected++;
+				}
+				if (HintFacts.TreeTruncated(target.Item)) expected++;
+				if (rowsShown != expected) failures.Add($"{HintFacts.ItemName(target.Item)}: {rowsShown} rows, expected {expected}");
+			}
+			Check.All(failures, $"Hint trees giving other hints away ({hiddenSeen} parts kept for their own hint)");
 		}
 
 		// The Guide's two categories: boss and event summons in Bosses, stations and pickaxes in Crafting, each target once
