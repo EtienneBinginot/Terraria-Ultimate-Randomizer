@@ -21,8 +21,9 @@ namespace UltimateRandomizer.Common.Codex
 	// it, gathered or mined in the world, already explained above, or nothing known
 	// Findable: found in the world in a way hints don't name (fishing, chest loot, plants, Extractinator...);
 	// WorldStation: a station that has no item and stands in the world (altars)
-	// Caught: a critter caught with a bug net; Filled: a bucket filled in a pool of its liquid
-	public enum HintTreeLeaf : byte { Recipe, Fact, Gathered, Mined, Repeat, Unknown, Findable, WorldStation, Caught, Filled }
+	// Caught: a critter caught with a bug net; Filled: a bucket filled in a pool of its liquid; Harvested: given by a kind of
+	// plant (plants are randomized)
+	public enum HintTreeLeaf : byte { Recipe, Fact, Gathered, Mined, Repeat, Unknown, Findable, WorldStation, Caught, Filled, Harvested }
 
 	// One ingredient or station of a recipe hint's tree, with its depth (1: a part of the hinted recipe)
 	public sealed class HintTreeNode
@@ -36,6 +37,11 @@ namespace UltimateRandomizer.Common.Codex
 		public HintTreeLeaf Leaf;
 		// Fact and Recipe leaves: the source of the item
 		public HintFact Fact;
+		// Caught: where the critter lives (biome names of BiomeSlots); Harvested: the plant
+		public List<string> Biomes = new();
+		public int Herb;
+		// Gathered, mined or caught: another way to get it (an enemy, a boss, a bag...), when there is one
+		public HintFact Also;
 		// Mined: the ore to mine (another one when mined ores are randomized). Read when shown: an altar deciding a hardmode
 		// ore pair changes it without resetting the hint caches
 		public int Ore => Leaf == HintTreeLeaf.Mined ? HintFacts.MinedFrom(Item) : 0;
@@ -596,29 +602,130 @@ namespace UltimateRandomizer.Common.Codex
 				.Concat(recipe.Tiles.Distinct().Select(t => (StationItem(t), 1, t)).DistinctBy(s => s.Item1 > 0 ? s.Item1 : -1 - s.t));
 			foreach ((int type, int stack, int tile) in parts)
 			{
-				if (tree.Count >= MaxTreeNodes) return false;
-				HintTreeNode node = new() { Item = type, Stack = stack, Depth = depth, Station = tile >= 0, Tile = tile };
-				tree.Add(node);
-				if (type <= 0) node.Leaf = HintTreeLeaf.WorldStation;
-				else if (!explained.Add(type)) node.Leaf = HintTreeLeaf.Repeat;
-				else if (OreMap.IsOre(type) && OreMap.IsFindable(type)) node.Leaf = HintTreeLeaf.Mined;
-				else if (Findability.IsWorldMaterial(type)) node.Leaf = HintTreeLeaf.Gathered;
-				else if (CritterOf(type) > 0) node.Leaf = HintTreeLeaf.Caught;
-				else if (type is ItemID.WaterBucket or ItemID.LavaBucket or ItemID.HoneyBucket) node.Leaf = HintTreeLeaf.Filled;
+				if (!TreePart(type, stack, tile, depth, tree, explained)) return false;
+			}
+			return true;
+		}
+
+		// One part, then what it needs: the parts of its recipe, the bug net of a critter, the empty bucket of a filled one
+		private static bool TreePart(int type, int stack, int tile, int depth, List<HintTreeNode> tree, HashSet<int> explained)
+		{
+			if (tree.Count >= MaxTreeNodes) return false;
+			HintTreeNode node = new() { Item = type, Stack = stack, Depth = depth, Station = tile >= 0, Tile = tile };
+			tree.Add(node);
+			bool Needs(int tool) => depth >= MaxTreeDepth || TreePart(tool, 1, -1, depth + 1, tree, explained);
+			void Raw(HintTreeLeaf leaf)
+			{
+				node.Leaf = leaf;
+				node.Also = AlsoFrom(type);
+			}
+			if (type <= 0) node.Leaf = HintTreeLeaf.WorldStation;
+			else if (!explained.Add(type)) node.Leaf = HintTreeLeaf.Repeat;
+			else if (OreMap.IsOre(type) && OreMap.IsFindable(type)) Raw(HintTreeLeaf.Mined);
+			else if (Findability.IsWorldMaterial(type)) Raw(HintTreeLeaf.Gathered);
+			else if (CritterOf(type) > 0)
+			{
+				node.Leaf = HintTreeLeaf.Caught;
+				node.Also = AlsoFrom(type);
+				node.Biomes = CritterBiomes(CritterOf(type));
+				return Needs(ItemID.BugNet);
+			}
+			else if (type is ItemID.WaterBucket or ItemID.LavaBucket or ItemID.HoneyBucket)
+			{
+				node.Leaf = HintTreeLeaf.Filled;
+				return Needs(ItemID.EmptyBucket);
+			}
+			else
+			{
+				node.Fact = For(type);
+				if (node.Fact == null)
+				{
+					node.Herb = HerbGiving(type);
+					node.Leaf = node.Herb > 0 ? HintTreeLeaf.Harvested : Findability.Tier(type) < Findability.Never ? HintTreeLeaf.Findable : HintTreeLeaf.Unknown;
+				}
+				else if (node.Fact.Kind != HintKind.Recipe) node.Leaf = HintTreeLeaf.Fact;
 				else
 				{
-					node.Fact = For(type);
-					if (node.Fact == null) node.Leaf = Findability.Tier(type) < Findability.Never ? HintTreeLeaf.Findable : HintTreeLeaf.Unknown;
-					else if (node.Fact.Kind != HintKind.Recipe) node.Leaf = HintTreeLeaf.Fact;
-					else
-					{
-						node.Leaf = HintTreeLeaf.Recipe;
-						if (depth < MaxTreeDepth && !TreeParts(node.Fact, depth + 1, tree, explained)) return false;
-					}
+					node.Leaf = HintTreeLeaf.Recipe;
+					if (depth < MaxTreeDepth) return TreeParts(node.Fact, depth + 1, tree, explained);
 				}
 			}
 			return true;
 		}
+
+		// An enemy, boss, bag or shop also giving a raw material (not a recipe, a chest or a pot: the raw source is easier)
+		private static HintFact AlsoFrom(int item)
+		{
+			HintFact fact = For(item);
+			return fact != null && fact.Kind is HintKind.Creature or HintKind.Boss or HintKind.Bag or HintKind.Shop ? fact : null;
+		}
+
+		// Where a critter is caught: the biomes of its critter slots (swapped critters live by habitat)
+		public static List<string> CritterBiomes(int critter)
+		{
+			if (!BiomeSlots.SpawnsPlanned) return new List<string>();
+			int type = BiomeSlots.TypeOf(critter);
+			return BiomeSlots.SpawnMap.Slots.Where(s => s.Critter && SpawnsIn(s, type)).Select(s => s.Biome).Distinct().OrderBy(b => b)
+				.Take(3).Select(BiomeSlots.BiomeName).ToList();
+		}
+
+		// The plant whose harvest gives this item (randomized plants keep a few fixed results), 0 when none
+		public static int HerbGiving(int item)
+		{
+			if (!LootConfig.Instance.RandomizeHerbs) return 0;
+			foreach (int herb in Findability.HerbPlants.Where(ItemPool.IsRandomizable))
+			{
+				if (Features.WorldSources.HerbTable(herb).Contains(item)) return herb;
+			}
+			return 0;
+		}
+
+		// How a world material is gathered, and where
+		private static (string how, SpawnBiome? where) Gathering(int item) => item switch
+		{
+			ItemID.DirtBlock or ItemID.ClayBlock => ("Dig", SpawnBiome.Forest),
+			ItemID.StoneBlock or ItemID.Cobweb => ("Dig", SpawnBiome.Caverns),
+			ItemID.MudBlock => ("Dig", SpawnBiome.Jungle),
+			ItemID.SandBlock or ItemID.Cactus => (item == ItemID.Cactus ? "Grow" : "Dig", SpawnBiome.Desert),
+			ItemID.SnowBlock or ItemID.IceBlock => ("Dig", SpawnBiome.Snow),
+			ItemID.SlushBlock => ("Dig", SpawnBiome.UndergroundSnow),
+			ItemID.SiltBlock => ("Dig", SpawnBiome.Caverns),
+			ItemID.GraniteBlock => ("Dig", SpawnBiome.Granite),
+			ItemID.MarbleBlock => ("Dig", SpawnBiome.Marble),
+			ItemID.Sandstone or ItemID.HardenedSand or ItemID.DesertFossil => ("Dig", SpawnBiome.UndergroundDesert),
+			ItemID.EbonstoneBlock => ("Dig", SpawnBiome.Corruption),
+			ItemID.CrimstoneBlock => ("Dig", SpawnBiome.Crimson),
+			ItemID.PearlstoneBlock => ("Dig", SpawnBiome.Hallow),
+			ItemID.AshBlock => ("Dig", SpawnBiome.Underworld),
+			ItemID.Hive => ("Dig", SpawnBiome.UndergroundJungle),
+			ItemID.CrystalShard => ("Grow", SpawnBiome.UndergroundHallow),
+			ItemID.Wood or ItemID.Acorn => ("Chop", SpawnBiome.Forest),
+			ItemID.BorealWood => ("Chop", SpawnBiome.Snow),
+			ItemID.PalmWood => ("Chop", SpawnBiome.Ocean),
+			ItemID.RichMahogany => ("Chop", SpawnBiome.Jungle),
+			ItemID.Ebonwood => ("Chop", SpawnBiome.Corruption),
+			ItemID.Shadewood => ("Chop", SpawnBiome.Crimson),
+			ItemID.Pearlwood => ("Chop", SpawnBiome.Hallow),
+			ItemID.Daybloom or ItemID.Mushroom or ItemID.Pumpkin => ("Grow", SpawnBiome.Forest),
+			ItemID.Moonglow or ItemID.Vine => ("Grow", SpawnBiome.Jungle),
+			ItemID.JungleSpores => ("Grow", SpawnBiome.UndergroundJungle),
+			ItemID.Blinkroot => ("Grow", SpawnBiome.Underground),
+			ItemID.Waterleaf => ("Grow", SpawnBiome.Desert),
+			ItemID.Shiverthorn => ("Grow", SpawnBiome.Snow),
+			ItemID.Deathweed => ("Grow", WorldGen.crimson ? SpawnBiome.Crimson : SpawnBiome.Corruption),
+			ItemID.Fireblossom => ("Grow", SpawnBiome.Underworld),
+			ItemID.GlowingMushroom => ("Grow", SpawnBiome.Mushroom),
+			ItemID.VileMushroom => ("Grow", SpawnBiome.Corruption),
+			ItemID.ViciousMushroom => ("Grow", SpawnBiome.Crimson),
+			ItemID.Amethyst or ItemID.Topaz or ItemID.Sapphire or ItemID.Emerald or ItemID.Ruby or ItemID.Diamond => ("Gem", null),
+			ItemID.Amber => ("Gem", SpawnBiome.UndergroundDesert),
+			ItemID.Seashell or ItemID.Coral or ItemID.Starfish => ("Beach", null),
+			ItemID.FallenStar => ("Star", null),
+			ItemID.Obsidian => ("Obsidian", null),
+			_ => ("Other", null)
+		};
+
+		public static readonly string[] GatherKinds = { "Dig", "Chop", "Grow", "Gem", "Beach", "Star", "Obsidian", "Other" };
 
 		// The critter this item is (caught with a bug net), 0 when none
 		public static int CritterOf(int item) => ContentSamples.ItemsByType.TryGetValue(item, out Item sample) && sample.makeNPC > 0 ? sample.makeNPC : 0;
@@ -637,38 +744,57 @@ namespace UltimateRandomizer.Common.Codex
 			return ore;
 		}
 
-		// Where a part of the tree comes from, in a few words
+		// Where a part of the tree comes from, in a few words, and another way when there is one
 		public static string TreeSource(HintTreeNode node)
+		{
+			string main = MainSource(node);
+			return node.Also == null ? main : CodexText.Get("Hint.Tree.Also", main, FactSource(node.Also));
+		}
+
+		private static string MainSource(HintTreeNode node)
 		{
 			HintFact fact = node.Fact;
 			return node.Leaf switch
 			{
 				HintTreeLeaf.Mined => CodexText.Get("Hint.Tree.Mined", ItemName(node.Ore)),
-				HintTreeLeaf.Gathered => CodexText.Get("Hint.Tree.Gathered"),
+				HintTreeLeaf.Gathered => GatherText(node.Item),
 				HintTreeLeaf.Repeat => CodexText.Get("Hint.Tree.Repeat"),
 				HintTreeLeaf.Unknown => CodexText.Get("Hint.Tree.Unknown"),
 				HintTreeLeaf.Findable => CodexText.Get("Hint.Tree.Findable"),
 				HintTreeLeaf.WorldStation => CodexText.Get("Hint.Tree.WorldStation"),
-				HintTreeLeaf.Caught => CodexText.Get("Hint.Tree.Caught"),
+				HintTreeLeaf.Caught => node.Biomes.Count > 0
+					? CodexText.Get("Hint.Tree.Caught", string.Join(", ", node.Biomes.Select(BiomeSlots.BiomeDisplayName)))
+					: CodexText.Get("Hint.Tree.CaughtAnywhere"),
+				HintTreeLeaf.Harvested => CodexText.Get("Hint.Tree.Harvested", ItemName(node.Herb), GatherWhere(node.Herb)),
 				HintTreeLeaf.Filled => CodexText.Get("Hint.Tree.Filled." + node.Item switch { ItemID.LavaBucket => "Lava", ItemID.HoneyBucket => "Honey", _ => "Water" }),
 				HintTreeLeaf.Recipe => CodexText.Get("Hint.Tree.Recipe", NamePhrase(fact)),
-				_ => fact.Kind switch
-				{
-					HintKind.Creature when fact.Biomes.Count > 0 => CodexText.Get("Hint.Tree.Creature", NpcName(fact.Npc), BestBiomeName(fact), CodexStats.Percent(fact.Chance)),
-					HintKind.Creature => CodexText.Get("Hint.Tree.CreatureAnywhere", NpcName(fact.Npc), CodexStats.Percent(fact.Chance)),
-					HintKind.Boss => CodexText.Get("Hint.Tree.Boss", NpcName(fact.Npc), CodexStats.Percent(fact.Chance)),
-					HintKind.Shop => CodexText.Get("Hint.Tree.Shop", NpcName(fact.Npc)),
-					HintKind.Bag => CodexText.Get("Hint.Tree.Bag", ItemName(fact.Bag)),
-					HintKind.Chest => CodexText.Get("Hint.Tree.Chest"),
-					HintKind.Pot => CodexText.Get("Hint.Tree.Pot"),
-					_ => CodexText.Get("Hint.Tree.World")
-				}
+				_ => FactSource(fact)
 			};
 		}
 
+		private static string FactSource(HintFact fact)
+		{
+			return fact.Kind switch
+			{
+				HintKind.Creature when fact.Biomes.Count > 0 => CodexText.Get("Hint.Tree.Creature", NpcName(fact.Npc), BestBiomeName(fact), CodexStats.Percent(fact.Chance)),
+				HintKind.Creature => CodexText.Get("Hint.Tree.CreatureAnywhere", NpcName(fact.Npc), CodexStats.Percent(fact.Chance)),
+				HintKind.Boss => CodexText.Get("Hint.Tree.Boss", NpcName(fact.Npc), CodexStats.Percent(fact.Chance)),
+				HintKind.Shop => CodexText.Get("Hint.Tree.Shop", NpcName(fact.Npc)),
+				HintKind.Bag => CodexText.Get("Hint.Tree.Bag", ItemName(fact.Bag)),
+				HintKind.Chest => CodexText.Get("Hint.Tree.Chest"),
+				HintKind.Pot => CodexText.Get("Hint.Tree.Pot"),
+				_ => CodexText.Get("Hint.Tree.World")
+			};
+		}
+
+		private static string GatherWhere(int item) => Gathering(item).where is SpawnBiome biome ? BiomeSlots.BiomeDisplayName(biome.ToString()) : "";
+
+		private static string GatherText(int item) => CodexText.Get("Hint.Tree.Gathered." + Gathering(item).how, GatherWhere(item));
+
 		public static readonly string[] TreeTextKeys =
 		{
-			"Title", "Station", "More", "Mined", "Gathered", "Repeat", "Unknown", "Findable", "WorldStation", "Caught", "Filled.Water", "Filled.Lava", "Filled.Honey",
+			"Title", "Also", "Station", "More", "Mined", "Repeat", "Unknown", "Findable", "WorldStation", "Caught", "CaughtAnywhere", "Harvested", "Filled.Water", "Filled.Lava",
+			"Filled.Honey", "Gathered.Dig", "Gathered.Chop", "Gathered.Grow", "Gathered.Gem", "Gathered.Beach", "Gathered.Star", "Gathered.Obsidian", "Gathered.Other",
 			"Recipe", "Creature", "CreatureAnywhere", "Boss", "Shop",
 			"Bag", "Chest", "Pot", "World"
 		};

@@ -441,19 +441,17 @@ Codex: {
 
 	Hint: {
 	Tree: {
-		Caught: à attraper avec un filet à insectes
+		Also: "{0} ; aussi : {1}"
 		Filled: {
 			Water: remplir un seau vide dans l'eau
 			Lava: remplir un seau vide dans la lave
 			Honey: remplir un seau vide dans le miel
 		}
-		Findable: se trouve dans le monde (pêche, coffres, plantes...)
 		WorldStation: se trouve dans le monde
 		Title: Tout ce qu'il faut, jusqu'aux matières premières
 		Station: (station)
 		More: ...et plus encore : fabrique les premières parties pour voir la suite dans le codex.
 		Mined: miner {0}
-		Gathered: se récolte dans le monde
 		Repeat: voir plus haut
 		Unknown: aucune source connue
 		Recipe: fabriqué à {0}
@@ -465,6 +463,20 @@ Codex: {
 		Chest: coffres en bois
 		Pot: pots
 		World: se trouve dans le monde
+		Caught: "à attraper avec un filet à insectes : {0}"
+		CaughtAnywhere: "à attraper avec un filet à insectes là où vivent les créatures"
+		Harvested: "donné par les plantes {0} ({1}) : les plantes sont randomisées"
+		Findable: "se trouve au hasard dans le monde (coffres, pêche, caisses...)"
+		Gathered: {
+			Dig: "à creuser : {0}"
+			Chop: "couper des arbres : {0}"
+			Grow: "pousse à l'état sauvage : {0}"
+			Gem: "miner les veines de gemmes dans les cavernes"
+			Beach: "se ramasse sur les plages"
+			Star: "tombe du ciel la nuit"
+			Obsidian: "là où l'eau rencontre la lave (il faut une bonne pioche)"
+			Other: "se récolte dans le monde"
+		}
 	}
 	
 	TabCrafting: Artisanat

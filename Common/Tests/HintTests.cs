@@ -73,7 +73,10 @@ namespace UltimateRandomizer.Common.Tests
 					// A crafted part is followed by its own parts, one level deeper
 					bool expanded = i + 1 < tree.Count && tree[i + 1].Depth == node.Depth + 1;
 					if (node.Leaf == HintTreeLeaf.Recipe && node.Depth < HintFacts.MaxTreeDepth && !expanded && !(truncated && i == tree.Count - 1)) failures.Add($"{part}: crafted but not expanded");
-					if (node.Leaf != HintTreeLeaf.Recipe && expanded) failures.Add($"{part}: expanded without a recipe");
+					bool needsTool = node.Leaf is HintTreeLeaf.Caught or HintTreeLeaf.Filled;
+					if (needsTool && node.Depth < HintFacts.MaxTreeDepth && !expanded && !(truncated && i == tree.Count - 1)) failures.Add($"{part}: its tool is missing");
+					if (node.Leaf != HintTreeLeaf.Recipe && !needsTool && expanded) failures.Add($"{part}: expanded without a recipe");
+					if (node.Leaf == HintTreeLeaf.Harvested && !WorldSources.HerbTable(node.Herb).Contains(node.Item)) failures.Add($"{part}: not given by {HintFacts.ItemName(node.Herb)}");
 				}
 			}
 			Check.All(failures, "Incomplete recipe hint trees");

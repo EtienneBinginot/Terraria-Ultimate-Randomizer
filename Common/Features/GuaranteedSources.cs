@@ -574,6 +574,8 @@ namespace UltimateRandomizer.Common.Features
 			(ItemID.AshBlock, 2), (ItemID.Obsidian, 2), (ItemID.Pearlwood, 4), (ItemID.PearlstoneBlock, 4), (ItemID.CrystalShard, 4)
 		};
 
+		public static IReadOnlyList<int> HerbPlants => Herbs;
+
 		private static readonly int[] Herbs =
 		{
 			ItemID.Daybloom, ItemID.Moonglow, ItemID.Blinkroot, ItemID.Deathweed, ItemID.Waterleaf, ItemID.Fireblossom, ItemID.Shiverthorn,
