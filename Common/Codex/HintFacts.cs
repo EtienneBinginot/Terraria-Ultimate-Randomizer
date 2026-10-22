@@ -19,20 +19,25 @@ namespace UltimateRandomizer.Common.Codex
 
 	// How a part of a recipe hint's tree is obtained: crafted (its parts follow), from the source the Guide would name for
 	// it, gathered or mined in the world, already explained above, or nothing known
-	public enum HintTreeLeaf : byte { Recipe, Fact, Gathered, Mined, Repeat, Unknown }
+	// Findable: found in the world in a way hints don't name (fishing, chest loot, plants, Extractinator...);
+	// WorldStation: a station that has no item and stands in the world (altars)
+	public enum HintTreeLeaf : byte { Recipe, Fact, Gathered, Mined, Repeat, Unknown, Findable, WorldStation }
 
 	// One ingredient or station of a recipe hint's tree, with its depth (1: a part of the hinted recipe)
 	public sealed class HintTreeNode
 	{
+		// 0 for a station without an item (Tile)
 		public int Item;
 		public int Stack;
 		public int Depth;
 		public bool Station;
+		public int Tile = -1;
 		public HintTreeLeaf Leaf;
 		// Fact and Recipe leaves: the source of the item
 		public HintFact Fact;
-		// Mined: the ore to mine (another one when mined ores are randomized)
-		public int Ore;
+		// Mined: the ore to mine (another one when mined ores are randomized). Read when shown: an altar deciding a hardmode
+		// ore pair changes it without resetting the hint caches
+		public int Ore => Leaf == HintTreeLeaf.Mined ? HintFacts.MinedFrom(Item) : 0;
 	}
 
 	// An item the Guide can give hints about, and the tier its price follows
@@ -107,6 +112,7 @@ namespace UltimateRandomizer.Common.Codex
 		private static List<HintTarget> candidates;
 		private static readonly Dictionary<int, HintFact> facts = new();
 		private static readonly Dictionary<int, List<HintTreeNode>> trees = new();
+		private static readonly HashSet<int> truncatedTrees = new();
 		private static Dictionary<int, List<(int npc, int tier, float chance)>> planDrops;
 		private static Dictionary<int, List<(int bag, int tier, float chance)>> bagContents;
 		// The first tier at which each natural enemy spawns (EnemySwapPool.NaturalEnemies), bosses at their own
@@ -132,7 +138,7 @@ namespace UltimateRandomizer.Common.Codex
 			rawTargets = null;
 			candidates = null;
 			facts.Clear();
-			trees.Clear();
+			ForgetTrees();
 			planDrops = null;
 			bagContents = null;
 			naturalTiers = null;
@@ -317,7 +323,6 @@ namespace UltimateRandomizer.Common.Codex
 		// bags holding each target: every plan is read once, one enemy or bag per step
 		private static IEnumerator<bool> BuildIndexes()
 		{
-			HashSet<int> wanted = WantedItems();
 			Dictionary<int, List<(int, int, float)>> drops = new();
 			Dictionary<int, List<(int, int, float)>> bags = new();
 			float minChance = ProgressionConfig.Instance.MinFindableChance / 100f;
@@ -343,7 +348,7 @@ namespace UltimateRandomizer.Common.Codex
 			{
 				foreach (PlannedDrop drop in RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false))
 				{
-					if (wanted.Contains(drop.Item) && drop.Chance >= minChance && Findability.WorldAllows(drop.Conditions)) Add(drops, drop.Item, npc, Math.Max(tier, Gated(drop.Item)), drop.Chance);
+					if (drop.Chance >= minChance && Findability.WorldAllows(drop.Conditions)) Add(drops, drop.Item, npc, Math.Max(tier, Gated(drop.Item)), drop.Chance);
 				}
 				yield return true;
 			}
@@ -354,29 +359,13 @@ namespace UltimateRandomizer.Common.Codex
 				HashSet<int> inside = new();
 				foreach (PlannedDrop drop in BagPlan.Plan(bag, lucky: true))
 				{
-					if (wanted.Contains(drop.Item) && drop.Chance >= minChance && Findability.WorldAllows(drop.Conditions) && inside.Add(drop.Item)) Add(bags, drop.Item, bag, Math.Max(bagTier, Gated(drop.Item)), drop.Chance);
+					if (drop.Chance >= minChance && Findability.WorldAllows(drop.Conditions) && inside.Add(drop.Item)) Add(bags, drop.Item, bag, Math.Max(bagTier, Gated(drop.Item)), drop.Chance);
 				}
 				yield return true;
 			}
 			bagContents = bags;
 			naturalTiers = enemies.ToDictionary(e => e.npc, e => e.tier);
 			planDrops = drops;
-		}
-
-		// Items that may become targets (before their facts are known)
-		private static HashSet<int> WantedItems()
-		{
-			HashSet<int> set = Stations.Basic().Select(s => s.info.Item).ToHashSet();
-			foreach (int tile in Stations.RequiredTiles())
-			{
-				if (Stations.Info(tile).Kind == StationKind.Progression) set.UnionWith(Placers(tile));
-			}
-			for (int type = 1; type < ItemPool.Info.Length; type++)
-			{
-				if (Protection.IsBossSummon(type)) set.Add(type);
-			}
-			foreach (GuaranteedSources.Requirement r in GuaranteedSources.Requirements.Where(r => r.Tool)) set.Add(r.Item);
-			return set;
 		}
 
 		// Town NPCs selling an item in their original shop (protected items keep their shop when shops are randomized)
@@ -582,44 +571,54 @@ namespace UltimateRandomizer.Common.Codex
 			if (trees.TryGetValue(item, out List<HintTreeNode> tree)) return tree;
 			tree = new List<HintTreeNode>();
 			HintFact fact = For(item);
-			if (fact != null && fact.Kind == HintKind.Recipe) TreeParts(fact, 1, tree, new HashSet<int> { item });
+			if (fact != null && fact.Kind == HintKind.Recipe && !TreeParts(fact, 1, tree, new HashSet<int> { item })) truncatedTrees.Add(item);
 			trees[item] = tree;
 			return tree;
 		}
 
-		public static bool TreeTruncated(List<HintTreeNode> tree) => tree.Count >= MaxTreeNodes;
+		// Some parts were left out (MaxTreeNodes)
+		public static bool TreeTruncated(int item) => truncatedTrees.Contains(item);
+
+		// The trees only (tests: built again from facts already known)
+		public static void ForgetTrees()
+		{
+			trees.Clear();
+			truncatedTrees.Clear();
+		}
 
 		// The ingredients, then the stations of a recipe fact. An item explained earlier in the tree (or crafted from
 		// itself further down) is not explained again
-		private static void TreeParts(HintFact recipe, int depth, List<HintTreeNode> tree, HashSet<int> explained)
+		// Returns false when parts were left out
+		private static bool TreeParts(HintFact recipe, int depth, List<HintTreeNode> tree, HashSet<int> explained)
 		{
-			IEnumerable<(int type, int stack, bool station)> parts = recipe.Ingredients.Where(x => x.type > 0).Select(x => (x.type, x.stack, false))
-				.Concat(recipe.Tiles.Select(StationItem).Where(s => s > 0).Distinct().Select(s => (s, 1, true)));
-			foreach ((int type, int stack, bool station) in parts)
+			IEnumerable<(int type, int stack, int tile)> parts = recipe.Ingredients.Where(x => x.type > 0).Select(x => (x.type, x.stack, -1))
+				.Concat(recipe.Tiles.Distinct().Select(t => (StationItem(t), 1, t)).DistinctBy(s => s.Item1 > 0 ? s.Item1 : -1 - s.t));
+			foreach ((int type, int stack, int tile) in parts)
 			{
-				if (tree.Count >= MaxTreeNodes) return;
-				HintTreeNode node = new() { Item = type, Stack = stack, Depth = depth, Station = station };
+				if (tree.Count >= MaxTreeNodes) return false;
+				HintTreeNode node = new() { Item = type, Stack = stack, Depth = depth, Station = tile >= 0, Tile = tile };
 				tree.Add(node);
-				if (!explained.Add(type)) node.Leaf = HintTreeLeaf.Repeat;
-				else if (OreMap.IsOre(type) && OreMap.IsFindable(type))
-				{
-					node.Leaf = HintTreeLeaf.Mined;
-					node.Ore = MinedFrom(type);
-				}
+				if (type <= 0) node.Leaf = HintTreeLeaf.WorldStation;
+				else if (!explained.Add(type)) node.Leaf = HintTreeLeaf.Repeat;
+				else if (OreMap.IsOre(type) && OreMap.IsFindable(type)) node.Leaf = HintTreeLeaf.Mined;
 				else if (Findability.IsWorldMaterial(type)) node.Leaf = HintTreeLeaf.Gathered;
 				else
 				{
 					node.Fact = For(type);
-					if (node.Fact == null) node.Leaf = HintTreeLeaf.Unknown;
+					if (node.Fact == null) node.Leaf = Findability.Tier(type) < Findability.Never ? HintTreeLeaf.Findable : HintTreeLeaf.Unknown;
 					else if (node.Fact.Kind != HintKind.Recipe) node.Leaf = HintTreeLeaf.Fact;
 					else
 					{
 						node.Leaf = HintTreeLeaf.Recipe;
-						if (depth < MaxTreeDepth) TreeParts(node.Fact, depth + 1, tree, explained);
+						if (depth < MaxTreeDepth && !TreeParts(node.Fact, depth + 1, tree, explained)) return false;
 					}
 				}
 			}
+			return true;
 		}
+
+		// The name of a part: its item, or the station standing in the world
+		public static string TreeName(HintTreeNode node) => node.Item > 0 ? ItemName(node.Item) : StationName(node.Tile);
 
 		// The ore whose mining gives this one (TileDropFeature: OreMap.Get when mined ores are randomized)
 		public static int MinedFrom(int ore)
@@ -642,6 +641,8 @@ namespace UltimateRandomizer.Common.Codex
 				HintTreeLeaf.Gathered => CodexText.Get("Hint.Tree.Gathered"),
 				HintTreeLeaf.Repeat => CodexText.Get("Hint.Tree.Repeat"),
 				HintTreeLeaf.Unknown => CodexText.Get("Hint.Tree.Unknown"),
+				HintTreeLeaf.Findable => CodexText.Get("Hint.Tree.Findable"),
+				HintTreeLeaf.WorldStation => CodexText.Get("Hint.Tree.WorldStation"),
 				HintTreeLeaf.Recipe => CodexText.Get("Hint.Tree.Recipe", NamePhrase(fact)),
 				_ => fact.Kind switch
 				{
@@ -659,8 +660,8 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static readonly string[] TreeTextKeys =
 		{
-			"Title", "Station", "More", "Mined", "Gathered", "Repeat", "Unknown", "Recipe", "Creature", "CreatureAnywhere", "Boss", "Shop", "Bag", "Chest", "Pot",
-			"World"
+			"Title", "Station", "More", "Mined", "Gathered", "Repeat", "Unknown", "Findable", "WorldStation", "Recipe", "Creature", "CreatureAnywhere", "Boss", "Shop",
+			"Bag", "Chest", "Pot", "World"
 		};
 
 		// ---- Texts ----

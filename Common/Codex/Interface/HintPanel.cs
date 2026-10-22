@@ -251,6 +251,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private const float PanelMaxWidth = 520;
 		private const float PanelMinWidth = 380;
 		private const float Gap = 16;
+		// Share of the panel's height for the targets (the bought hints below)
+		private const float ListShare = 0.6f;
 
 		public bool ContainsMouse => panel != null && panel.ContainsPoint(Main.MouseScreen);
 
@@ -279,35 +281,17 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			close.Left.Set(-36, 1f);
 			panel.Append(close);
 
-			craftingButton = new CodexButton(CodexText.Live("Hint.TabCrafting"), 0, () => ShowCategory(false), 0.8f);
-			craftingButton.Width.Set(-4, 0.5f);
-			craftingButton.Top.Set(54, 0);
-			craftingButton.Height.Set(30, 0);
-			panel.Append(craftingButton);
-			bossesButton = new CodexButton(CodexText.Live("Hint.TabBosses"), 0, () => ShowCategory(true), 0.8f);
-			bossesButton.Width.Set(-4, 0.5f);
-			bossesButton.Left.Set(4, 0.5f);
-			bossesButton.Top.Set(54, 0);
-			bossesButton.Height.Set(30, 0);
-			panel.Append(bossesButton);
-
-			toBuyButton = new CodexButton(CodexText.Live("Hint.TabToBuy"), 0, () => ShowTab(false), 0.8f);
-			toBuyButton.Width.Set(-4, 0.5f);
-			toBuyButton.Top.Set(88, 0);
-			toBuyButton.Height.Set(30, 0);
-			panel.Append(toBuyButton);
-			knownButton = new CodexButton(CodexText.Live("Hint.TabKnown"), 0, () => ShowTab(true), 0.8f);
-			knownButton.Width.Set(-4, 0.5f);
-			knownButton.Left.Set(4, 0.5f);
-			knownButton.Top.Set(88, 0);
-			knownButton.Height.Set(30, 0);
-			panel.Append(knownButton);
+			// One row: the category (crafting, bosses), a gap, then the state (to buy, known)
+			craftingButton = TabButton("Hint.TabCrafting", () => ShowCategory(false), 0f, 0, -6);
+			bossesButton = TabButton("Hint.TabBosses", () => ShowCategory(true), 0.25f, -3, -9);
+			toBuyButton = TabButton("Hint.TabToBuy", () => ShowTab(false), 0.5f, 9, -9);
+			knownButton = TabButton("Hint.TabKnown", () => ShowTab(true), 0.75f, 6, -6);
 
 			// Same search box as the codex: click to type, right click to clear
 			searchPanel = new UIPanel();
 			searchPanel.Width.Set(0, 1f);
 			searchPanel.Height.Set(30, 0);
-			searchPanel.Top.Set(124, 0);
+			searchPanel.Top.Set(88, 0);
 			searchPanel.SetPadding(0);
 			searchPanel.BackgroundColor = new Color(25, 32, 66);
 			panel.Append(searchPanel);
@@ -324,8 +308,19 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			};
 			searchPanel.OnRightClick += (_, _) => searchBar.SetContents("", true);
 
-			targets = MakeList(160, 0f, -164, 0.5f);
-			detail = MakeList(4, 0.5f, -8, 0.5f);
+			targets = MakeList(124, 0f, -128, ListShare);
+			detail = MakeList(4, ListShare, -8, 1 - ListShare);
+		}
+
+		private CodexButton TabButton(string key, Action onClick, float left, float leftPixels, float widthPixels)
+		{
+			CodexButton button = new(CodexText.Live(key), 0, onClick, 0.75f);
+			button.Width.Set(widthPixels, 0.25f);
+			button.Left.Set(leftPixels, left);
+			button.Top.Set(54, 0);
+			button.Height.Set(30, 0);
+			panel.Append(button);
+			return button;
 		}
 
 		private CodexList MakeList(float top, float topPercent, float height, float heightPercent)
@@ -364,7 +359,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				w = Math.Min(PanelMaxWidth, screenW - 2 * Gap);
 				x = (screenW - w) / 2;
 				y = HintSystem.ChatBottom + Gap;
-				h = Math.Max(220, Math.Min(620, screenH - y - Gap));
+				h = Math.Max(420, Math.Min(620, screenH - y - Gap));
 			}
 			if (panel.Left.Pixels == x && panel.Top.Pixels == y && panel.Width.Pixels == w && panel.Height.Pixels == h) return;
 			panel.Left.Set(x, 0);
@@ -419,11 +414,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			dirty = true;
 		}
 
-		// The targets of a tab, in the order progression reaches them: to buy, those offered now and not fully known; known,
-		// every target bought to the end or found
 		// Boss and event summons in the bosses tab, stations and pickaxes in the crafting one
 		public static List<HintTarget> TabTargets(bool known, bool bosses) => TabTargets(known).Where(t => (t.Kind == HintTargetKind.Summon) == bosses).ToList();
 
+		// The targets of a tab, in the order progression reaches them: to buy, those offered now and not fully known; known,
+		// every target bought to the end or found
 		public static List<HintTarget> TabTargets(bool known) => known
 			? HintFacts.ByProgress(HintFacts.AllTargets().Where(t => CodexSystem.ShownHintLevel(t.Item) >= HintFacts.MaxLevel))
 			: HintFacts.ByProgress(HintFacts.Targets().Where(t => CodexSystem.ShownHintLevel(t.Item) < HintFacts.MaxLevel));
@@ -444,7 +439,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			List<HintTarget> all = TabTargets(knownTab, bossTab);
 			List<HintTarget> list = all.Where(Matches).ToList();
 			if (!CodexSystem.CanBuyHints) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get("Hint.Syncing"), 0.8f, CodexDraw.Muted));
-			if (list.Count == 0) rows.Add(new CodexRow(30, 4).WithLabel(all.Count > 0 ? CodexText.Get("NoMatch") : CodexText.Get(knownTab ? "Hint.NothingKnown" : "Hint.Nothing"), 0.8f, CodexDraw.Muted));
+			string empty = all.Count > 0 ? CodexText.Get("NoMatch")
+				: TabTargets(knownTab, !bossTab).Count > 0 ? CodexText.Get("Hint.NothingHere")
+				: CodexText.Get(knownTab ? "Hint.NothingKnown" : "Hint.Nothing");
+			if (list.Count == 0) rows.Add(new CodexRow(30, 4).WithLabel(empty, 0.8f, CodexDraw.Muted));
 			foreach (HintTarget target in list) rows.Add(TargetRow(target));
 			targets.AddRange(rows);
 			targets.Recalculate();
@@ -548,6 +546,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		public override void Update(GameTime gameTime)
 		{
+			// A click outside the panel (the Guide's dialog, the world) also ends the search input: it holds the keyboard
+			if (IsTyping && Main.mouseLeft && Main.mouseLeftRelease && !searchPanel.ContainsPoint(Main.MouseScreen)) StopTyping();
 			if (++timer >= 20)
 			{
 				timer = 0;

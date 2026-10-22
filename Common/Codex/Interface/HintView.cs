@@ -109,17 +109,19 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			foreach (HintTreeNode node in tree)
 			{
 				CodexRow row = new(40, 8 + (node.Depth - 1) * 22);
-				row.Add(Icon(node.Item, node.Stack, 34, silhouette), 6);
-				if (node.Leaf == HintTreeLeaf.Mined && node.Ore != node.Item) row.Add(Icon(node.Ore, 0, 28, silhouette), 6);
+				if (node.Item > 0 || silhouette) row.Add(Icon(node.Item, node.Stack, 34, silhouette), 6);
+				else row.Add(new CodexTileIcon(node.Tile, 34), 6);
+				int ore = node.Ore;
+				if (node.Leaf == HintTreeLeaf.Mined && ore != node.Item) row.Add(Icon(ore, 0, 28, silhouette), 6);
 				HintFact fact = node.Fact;
 				if (node.Leaf == HintTreeLeaf.Fact && fact.Npc != 0 && fact.Kind is HintKind.Creature or HintKind.Boss or HintKind.Shop)
 					row.Add(new CodexNpcPortrait(fact.Npc, 36, 36, false, 0, clickable: false, silhouette: silhouette, textureOnly: !inCodex), 6);
 				else if (node.Leaf == HintTreeLeaf.Fact && fact.Kind == HintKind.Bag) row.Add(Icon(fact.Bag, 0, 28, silhouette), 6);
-				string text = silhouette ? "?" : HintFacts.ItemName(node.Item) + (node.Station ? " " + CodexText.Get("Hint.Tree.Station") : "") + ": " + HintFacts.TreeSource(node);
+				string text = silhouette ? "?" : HintFacts.TreeName(node) + (node.Station ? " " + CodexText.Get("Hint.Tree.Station") : "") + ": " + HintFacts.TreeSource(node);
 				row.Add(new CodexLabel(Fit(text, 0.75f, width - row.Used - 16), 0.75f, node.Leaf == HintTreeLeaf.Repeat ? CodexDraw.Muted : Color.White) { HoverText = silhouette ? null : text });
 				rows.Add(row);
 			}
-			if (HintFacts.TreeTruncated(tree)) rows.Add(new CodexRow(26, 8).WithLabel(CodexText.Get("Hint.Tree.More"), 0.75f, CodexDraw.Muted));
+			if (HintFacts.TreeTruncated(item)) rows.Add(new CodexRow(26, 8).WithLabel(CodexText.Get("Hint.Tree.More"), 0.75f, CodexDraw.Muted));
 			return rows;
 		}
 

@@ -441,6 +441,8 @@ Codex: {
 
 	Hint: {
 	Tree: {
+		Findable: found in the world (fishing, chests, plants...)
+		WorldStation: stands in the world
 		Title: What you need, down to the raw materials
 		Station: (station)
 		More: ...and more: craft the first parts to see the rest in the codex.
@@ -461,6 +463,7 @@ Codex: {
 	
 	TabCrafting: Crafting
 	TabBosses: Bosses
+	NothingHere: Nothing in this tab for now: look in the other one.
 		Syncing: One moment: I am still catching up on what was bought in this world.
 		Refused: I have already told you that much. Ask me about the next step.
 		Conditions: Mind the place: {0}.

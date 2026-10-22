@@ -441,6 +441,8 @@ Codex: {
 
 	Hint: {
 	Tree: {
+		Findable: se trouve dans le monde (pêche, coffres, plantes...)
+		WorldStation: se trouve dans le monde
 		Title: Tout ce qu'il faut, jusqu'aux matières premières
 		Station: (station)
 		More: ...et plus encore : fabrique les premières parties pour voir la suite dans le codex.
@@ -461,6 +463,7 @@ Codex: {
 	
 	TabCrafting: Artisanat
 	TabBosses: Boss
+	NothingHere: Rien dans cet onglet pour l'instant : regarde dans l'autre.
 		Syncing: Un instant : je me renseigne encore sur ce qui a déjà été acheté dans ce monde.
 		Refused: Je t'ai déjà dit tout ça. Demande-moi plutôt la suite.
 		Conditions: Attention à l'endroit : {0}.

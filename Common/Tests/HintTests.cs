@@ -54,18 +54,22 @@ namespace UltimateRandomizer.Common.Tests
 				string name = HintFacts.ItemName(target.Item);
 				List<HintTreeNode> tree = HintFacts.SourceTree(target.Item);
 				HintFact fact = HintFacts.For(target.Item);
-				int parts = fact.Ingredients.Count(x => x.type > 0) + fact.Tiles.Select(HintFacts.StationItem).Where(s => s > 0).Distinct().Count();
+				int parts = fact.Ingredients.Count(x => x.type > 0) + fact.Tiles.Distinct().Select(t => HintFacts.StationItem(t) is int s && s > 0 ? s : -1 - t).Distinct().Count();
 				if (parts > 0 && tree.Count == 0) failures.Add($"{name}: empty tree");
-				if (tree.Count(n => n.Depth == 1) != Math.Min(parts, tree.Count)) failures.Add($"{name}: {tree.Count(n => n.Depth == 1)} first parts, recipe has {parts}");
-				bool truncated = HintFacts.TreeTruncated(tree);
+				bool truncated = HintFacts.TreeTruncated(target.Item);
+				int first = tree.Count(n => n.Depth == 1);
+				if (truncated ? first > parts : first != parts) failures.Add($"{name}: {first} first parts, recipe has {parts}");
 				for (int i = 0; i < tree.Count; i++)
 				{
 					HintTreeNode node = tree[i];
-					string part = $"{name} > {HintFacts.ItemName(node.Item)}";
+					string part = $"{name} > {HintFacts.TreeName(node)}";
 					if (node.Leaf == HintTreeLeaf.Unknown) failures.Add($"{part}: no source");
 					if (node.Depth < 1 || node.Depth > HintFacts.MaxTreeDepth) failures.Add($"{part}: depth {node.Depth}");
 					if (node.Leaf == HintTreeLeaf.Fact && (node.Fact == null || node.Fact.Kind == HintKind.Recipe)) failures.Add($"{part}: fact leaf without a raw source");
 					if (node.Leaf == HintTreeLeaf.Mined && node.Ore <= 0) failures.Add($"{part}: no ore to mine");
+					if (node.Leaf == HintTreeLeaf.WorldStation && (node.Item > 0 || node.Tile < 0)) failures.Add($"{part}: station without its tile");
+					// An ingredient dropped by an enemy is named with that enemy, not left to "found in the world"
+					if (node.Leaf == HintTreeLeaf.Findable && GuaranteedSources.HostsOf(node.Item).Any()) failures.Add($"{part}: guaranteed on an enemy but not named");
 					// A crafted part is followed by its own parts, one level deeper
 					bool expanded = i + 1 < tree.Count && tree[i + 1].Depth == node.Depth + 1;
 					if (node.Leaf == HintTreeLeaf.Recipe && node.Depth < HintFacts.MaxTreeDepth && !expanded && !(truncated && i == tree.Count - 1)) failures.Add($"{part}: crafted but not expanded");
@@ -75,16 +79,22 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Incomplete recipe hint trees");
 		}
 
-		// The same tree after the caches are forgotten (planned data only)
+		// A tree depends on the planned data only, not on the order the facts were asked in: built with every fact still to
+		// find, then again once all of them are known
 		private static void HintTreeDeterministic()
 		{
 			List<HintTarget> targets = RecipeTargets();
 			if (targets.Count == 0) Check.Skip("no recipe hint in this world");
-			static string Describe(List<HintTreeNode> tree) => string.Join(";", tree.Select(n => $"{n.Item}x{n.Stack}@{n.Depth}:{n.Leaf}:{n.Ore}:{n.Fact?.Kind}:{n.Fact?.Npc}"));
-			Dictionary<int, string> before = targets.ToDictionary(t => t.Item, t => Describe(HintFacts.SourceTree(t.Item)));
+			static string Describe(List<HintTreeNode> tree) => string.Join(";", tree.Select(n => $"{n.Item}/{n.Tile}x{n.Stack}@{n.Depth}:{n.Leaf}:{n.Ore}:{n.Fact?.Kind}:{n.Fact?.Npc}:{n.Fact?.Bag}"));
+			// In one order from nothing known, then from nothing known again in the other order, then with every fact known
 			HintFacts.Reset();
-			List<string> failures = targets.Where(t => Describe(HintFacts.SourceTree(t.Item)) != before[t.Item]).Select(t => HintFacts.ItemName(t.Item)).ToList();
-			Check.All(failures, "Recipe hint trees changed after rebuilding");
+			Dictionary<int, string> forward = targets.ToDictionary(t => t.Item, t => Describe(HintFacts.SourceTree(t.Item)));
+			HintFacts.Reset();
+			Dictionary<int, string> backward = Enumerable.Reverse(targets).ToDictionary(t => t.Item, t => Describe(HintFacts.SourceTree(t.Item)));
+			HintFacts.ForgetTrees();
+			List<string> failures = targets.Where(t => backward[t.Item] != forward[t.Item] || Describe(HintFacts.SourceTree(t.Item)) != forward[t.Item])
+				.Select(t => HintFacts.ItemName(t.Item)).ToList();
+			Check.All(failures, "Recipe hint trees depend on the order of the facts");
 		}
 
 		// The Guide's two categories: boss and event summons in Bosses, stations and pickaxes in Crafting, each target once
@@ -97,8 +107,9 @@ namespace UltimateRandomizer.Common.Tests
 				List<HintTarget> all = HintPanelState.TabTargets(known);
 				List<HintTarget> crafting = HintPanelState.TabTargets(known, false), bosses = HintPanelState.TabTargets(known, true);
 				if (crafting.Count + bosses.Count != all.Count || crafting.Intersect(bosses).Any()) failures.Add($"known {known}: {crafting.Count} + {bosses.Count} of {all.Count}");
-				failures.AddRange(bosses.Where(t => t.Kind != HintTargetKind.Summon).Select(t => $"{HintFacts.ItemName(t.Item)} among the bosses"));
-				failures.AddRange(crafting.Where(t => t.Kind == HintTargetKind.Summon).Select(t => $"{HintFacts.ItemName(t.Item)} among crafting"));
+				// Judged on the items themselves, not on the kind the filter reads
+				failures.AddRange(bosses.Where(t => !Protection.IsBossSummon(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among the bosses"));
+				failures.AddRange(crafting.Where(t => Protection.IsBossSummon(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among crafting"));
 			}
 			Check.All(failures, "Hint categories");
 		}

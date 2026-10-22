@@ -599,8 +599,20 @@ namespace UltimateRandomizer.Common.Features
 			return set;
 		}
 
-		// Gathered directly in the world (blocks, wood, gems, herbs...), ores apart
-		public static bool IsWorldMaterial(int item) => WorldMaterials.Any(m => m.item == item);
+		// Gathered directly in this world (blocks, wood, gems, herbs...), ores apart
+		public static bool IsWorldMaterial(int item) => WorldMaterials.Any(m => m.item == item) && InThisWorld(item);
+
+		// The materials of one evil only grow in its worlds (both in drunk worlds), until hardmode spreads them
+		private static bool InThisWorld(int item)
+		{
+			bool Evil(bool crimson) => Main.drunkWorld || WorldGen.crimson == crimson;
+			return item switch
+			{
+				ItemID.Ebonwood or ItemID.EbonstoneBlock or ItemID.VileMushroom => Evil(false),
+				ItemID.Shadewood or ItemID.CrimstoneBlock or ItemID.ViciousMushroom => Evil(true),
+				_ => true
+			};
+		}
 
 		// Including the guaranteed sources
 		public static int Tier(int item)
@@ -646,7 +658,7 @@ namespace UltimateRandomizer.Common.Features
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			int Gated(int item) => progression.TierGating ? Math.Max(0, ItemPool.TierOf(item) - progression.TierAllowance) : 0;
 
-			foreach ((int item, int tier) in WorldMaterials) Add(item, tier);
+			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, tier);
 			if (loot.RandomizeHerbs)
 			{
 				foreach (int herb in Herbs.Where(ItemPool.IsRandomizable))
