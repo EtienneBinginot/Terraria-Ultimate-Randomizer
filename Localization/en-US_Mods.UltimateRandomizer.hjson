@@ -157,6 +157,9 @@ Tests: {
 	GuaranteedSeveralSeeds: Every guaranteed item gets the enemies of a biome with other seeds
 	GuaranteedBiomesSpread: The guaranteed items of a tier are spread over several biomes
 	GuaranteedFindTime: Every guaranteed station, summon and tool drops within about 90 kills of its biome
+	GuaranteedDayAndNight: A guaranteed item whose biome is met by day and by night has at least two enemies at each time
+	GuaranteedHostLoad: No enemy carries more than four guaranteed items, and none gives too many guaranteed drops per kill
+	GuaranteedReachable: Guaranteed items never sit in a biome before it can be farmed (Dungeon, Underworld, Temple, sky), nor in the Graveyard or the Meteor
 	HintSortedByProgress: Hints are sorted by progression, in two tabs
 	HintFoundUnlocks: A found item's hint is fully known for free
 	HintClickOpensCodex: Clicking a hint opens the right codex page
@@ -164,6 +167,7 @@ Tests: {
 	HintTreeDeterministic: Recipe hint trees are the same after rebuilding
 	HintTabsSplit: The Guide's hints are split between crafting and bosses
 	HintTreeKeepsOtherHints: A hint tree keeps the stations and summons of other hints hidden until they are known
+	HintConditionsShown: Hints and craft trees say when a source works: time, weather or event, drop and recipe conditions, altars for hardmode ores
 	GuaranteedHostsNotEvents: Guaranteed drops are never on invasion, moon, seasonal or weather enemies
 	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
 	FindabilityDeterminism: Findability of items is the same after a rebuild
@@ -477,6 +481,7 @@ Codex: {
 			CaughtAnywhere: catch it with a bug net where critters live
 			Harvested: given by {0} plants ({1}): the plants are randomized
 			Findable: found at random in the world (chests, fishing, crates...)
+			When: "({0})"
 
 			Gathered: {
 				Dig: dig it up: {0}
@@ -527,6 +532,21 @@ Codex: {
 			List: "{0} and {1}"
 			AndMore: "{0} and {1} others"
 			Plus: "{0} +{1}"
+			Group: "{1} ({0})"
+		}
+
+		When: {
+			Time: "Only {0}."
+			Conditional: It only comes with an event or a weather (rain, sandstorm...).
+			Drop: "Mind the condition: {0}."
+
+			Short: {
+				Any: any hour
+				Day: day
+				Night: night
+				Conditional: rain or event
+				Altar: after smashing an altar
+			}
 		}
 
 		Coin: {
@@ -744,6 +764,11 @@ Codex: {
 					0: "These carry it, wherever they wander ({2} each): {0}."
 					1: Hunt these wherever you meet them ({2} chance per kill, for each of them): {0}.
 				}
+			}
+
+			HostsTimed: {
+				0: "Look here, {1}, for these ({2} each): {0}."
+				1: "Hunt these in this place, {1} ({2} chance per kill, for each of them): {0}."
 			}
 
 			Roaming: {

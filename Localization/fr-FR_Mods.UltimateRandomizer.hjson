@@ -157,6 +157,9 @@ Tests: {
 	GuaranteedSeveralSeeds: Chaque objet garanti obtient les ennemis d'un biome avec d'autres graines
 	GuaranteedBiomesSpread: Les objets garantis d'un tier sont répartis sur plusieurs biomes
 	GuaranteedFindTime: Chaque station, invocation et outil garanti tombe en environ 90 ennemis tués dans son biome
+	GuaranteedDayAndNight: Un objet garanti dont le biome se visite de jour et de nuit a au moins deux ennemis à chaque moment
+	GuaranteedHostLoad: Aucun ennemi ne porte plus de quatre objets garantis, ni ne donne trop d'objets garantis par victime
+	GuaranteedReachable: Les objets garantis ne sont jamais dans un biome avant qu'on puisse y chasser (donjon, Enfer, temple, ciel), ni dans un cimetière ou une météorite
 	HintSortedByProgress: Les indices sont triés par avancement, en deux onglets
 	HintFoundUnlocks: L'indice d'un objet trouvé est entièrement connu, gratuitement
 	HintClickOpensCodex: Cliquer sur un indice ouvre la bonne page du codex
@@ -164,6 +167,7 @@ Tests: {
 	HintTreeDeterministic: Les arbres des indices de recette sont les mêmes après reconstruction
 	HintTabsSplit: Les indices du Guide sont répartis entre artisanat et boss
 	HintTreeKeepsOtherHints: Un arbre d'indice cache les stations et invocations des autres indices tant qu'ils ne sont pas connus
+	HintConditionsShown: Les indices et arbres de fabrication disent quand une source fonctionne : heure, météo ou événement, conditions de butin et de recette, autels pour les minerais du hardmode
 	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
@@ -477,6 +481,7 @@ Codex: {
 			CaughtAnywhere: à attraper avec un filet à insectes là où vivent les créatures
 			Harvested: donné par les plantes {0} ({1}) : les plantes sont randomisées
 			Findable: se trouve au hasard dans le monde (coffres, pêche, caisses...)
+			When: "({0})"
 
 			Gathered: {
 				Dig: à creuser : {0}
@@ -527,6 +532,21 @@ Codex: {
 			List: "{0} et {1}"
 			AndMore: "{0} et {1} autres"
 			Plus: "{0} +{1}"
+			Group: "{1} ({0})"
+		}
+
+		When: {
+			Time: "Seulement {0}."
+			Conditional: Elle ne vient qu'avec un événement ou une météo particulière (pluie, tempête de sable...).
+			Drop: "Attention à la condition : {0}."
+
+			Short: {
+				Any: à toute heure
+				Day: de jour
+				Night: de nuit
+				Conditional: pluie ou événement
+				Altar: après avoir brisé un autel
+			}
 		}
 
 		Coin: {
@@ -744,6 +764,11 @@ Codex: {
 					0: "Ces créatures le transportent, où qu'elles aillent ({2} chacune) : {0}."
 					1: Chasse-les partout où tu les croises ({2} de chances par créature tuée, pour chacune) : {0}.
 				}
+			}
+
+			HostsTimed: {
+				0: "Va chercher celles-ci ici, {1} ({2} chacune) : {0}."
+				1: "Tes cibles, à cet endroit, {1} ({2} de chances par créature tuée, pour chacune) : {0}."
 			}
 
 			Roaming: {

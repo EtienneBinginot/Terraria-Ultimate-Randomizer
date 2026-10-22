@@ -140,7 +140,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Enemies spawned by another enemy");
 		}
 
-		// Critters never give a jackpot: not lucky, no madness, even at 100 % (seeded runtime rngs, nothing spawned)
+		// Critters never give a jackpot: not lucky, no madness, even with both chances at 100 %, through the real drop rule on
+		// detached critters (the items it spawns are removed, the chances restored)
 		private static void CrittersNoJackpot()
 		{
 			LootConfig cfg = LootConfig.Instance;
@@ -163,29 +164,51 @@ namespace UltimateRandomizer.Common.Tests
 				Check.Skip("critters get no random drops");
 			}
 			if (!ProgressionConfig.Instance.TierGating || ItemPool.GatingLimit(0) >= Tiers.Max) Check.Skip("no progression limit");
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (drops spawn on the server)");
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			float savedLuck = progression.RuntimeJackpotChance;
+			List<int> slots = new();
 			int drops = 0;
 			try
 			{
 				ItemPool.WildChanceOverride = 100f;
-				for (int i = 0; i < 200; i++)
+				progression.RuntimeJackpotChance = 100f;
+				CodexSystem.SpawnLog = slots;
+				foreach (int critter in new[] { NPCID.Bunny, NPCID.Bird })
 				{
-					foreach (int critter in new[] { NPCID.Bunny, NPCID.Bird })
+					NPC npc = new();
+					npc.SetDefaults(critter);
+					npc.Center = Main.LocalPlayer.Center;
+					npc.life = 0;
+					RandomNpcDropRule rule = new(critter);
+					for (int i = 0; i < 150; i++)
 					{
-						float worth = RandomNpcDropRule.JackpotWorth(critter);
-						foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(critter, critter, Main.expertMode, false, 3f, new Random(i), worth))
-						{
-							drops++;
-							if (drop.JackpotGap > 0 && failures.Count < 10) failures.Add($"{NpcName(critter)}: {Lang.GetItemNameValue(drop.Item)} is a jackpot");
-						}
+						rule.TryDroppingItem(new DropAttemptInfo { npc = npc, player = Main.LocalPlayer, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode });
 					}
+				}
+				CodexSystem.SpawnLog = null;
+				foreach (int slot in slots.Distinct())
+				{
+					if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active) continue;
+					drops++;
+					Item item = Main.item[slot];
+					if (JackpotItem.GapOf(item) > 0 && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(item.type)} dropped by a critter is a jackpot");
 				}
 			}
 			finally
 			{
+				CodexSystem.SpawnLog = null;
+				progression.RuntimeJackpotChance = savedLuck;
 				ItemPool.WildChanceOverride = null;
 				ItemPool.ClearJackpot();
+				foreach (int slot in slots.Distinct())
+				{
+					if (slot < 0 || slot >= Main.maxItems) continue;
+					Main.item[slot].TurnToAir();
+					Main.item[slot].active = false;
+				}
 			}
-			if (drops == 0) Check.Skip("critters have no random drops in this world");
+			if (drops == 0) Check.Skip("critters dropped nothing in 300 kills");
 			Check.All(failures, "Critter jackpots");
 		}
 

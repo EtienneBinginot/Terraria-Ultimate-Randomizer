@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.Map;
 using Terraria.ModLoader;
@@ -9,6 +10,7 @@ using UltimateRandomizer.Common.Codex.Interface;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
+using DropRuleConditions = Terraria.GameContent.ItemDropRules.Conditions;
 
 namespace UltimateRandomizer.Common.Codex
 {
@@ -39,6 +41,8 @@ namespace UltimateRandomizer.Common.Codex
 		public HintFact Fact;
 		// Caught: where the critter lives (biome names of BiomeSlots); Harvested: the plant
 		public List<string> Biomes = new();
+		// Caught: when its critter slots are open (fireflies at night...)
+		public SlotTime Time;
 		public int Herb;
 		// Gathered, mined or caught: another way to get it (an enemy, a boss, a bag...), when there is one
 		public HintFact Also;
@@ -86,6 +90,13 @@ namespace UltimateRandomizer.Common.Codex
 		// A guaranteed item: every enemy carrying it in its biome, the most met first (Npc is the first), each with Chance;
 		// empty for any other source
 		public List<int> Hosts = new();
+		// When each of Hosts is met in its biome (empty: unknown, all at any hour)
+		public List<SlotTime> HostTimes = new();
+		// What the creature's, boss's or bag's drop needs beyond the kill or the opening: the descriptions of its drop
+		// conditions (a windy day, an event...), those this world always meets left out
+		public List<string> Conditions = new();
+		// A creature met in its best biome only through slots open with a weather, a season or an event
+		public bool Conditional;
 		// A creature that fails the frequency rules, kept because nothing better than a chest or a pot gives the item
 		public bool Fallback;
 	}
@@ -103,7 +114,7 @@ namespace UltimateRandomizer.Common.Codex
 			"Where.Creature/3", "Where.Roaming/3", "Where.Recipe/3", "Where.Boss/3", "Where.Bag/3", "Where.Chest/3", "Where.Pot/3", "Where.Shop/3",
 			"Shape.Creature/2", "Shape.Roaming/2", "Shape.Recipe/2", "Shape.Boss/2", "Shape.Bag/2", "Shape.Chest/2", "Shape.Pot/2", "Shape.Shop/2",
 			"Name.Creature/2", "Name.Roaming/2", "Name.Recipe/2", "Name.Boss/2", "Name.Bag/2", "Name.Chest/2", "Name.Pot/2", "Name.Shop/2",
-			"Name.Hosts/2", "Kind.Hosts.Roaming/2", "Where.Hosts.Roaming/2", "Shape.Hosts.Roaming/2", "Name.Hosts.Roaming/2"
+			"Name.Hosts/2", "Kind.Hosts.Roaming/2", "Where.Hosts.Roaming/2", "Shape.Hosts.Roaming/2", "Name.Hosts.Roaming/2", "Name.HostsTimed/2"
 		};
 
 		// Vanilla summons found in the world rather than dropped or crafted (Protection.WorldSummons): (item, text key, critter to show)
@@ -553,8 +564,56 @@ namespace UltimateRandomizer.Common.Codex
 			if ((best == null || best.Kind is HintKind.Chest or HintKind.Pot) && rejected.Count + weak.Count > 0) best = Best(rejected.Concat(weak).ToList());
 			if (best == null) return null;
 			if (best.Kind is HintKind.Creature or HintKind.Boss or HintKind.Shop) FillPlaces(best);
+			best.Conditions = DropConditions(best);
 			return best;
 		}
+
+		// The conditions the source's planned drop of the item needs (none when one planned entry of it needs nothing this
+		// world doesn't always meet): the entry with the best chance, as the codex counts them all together
+		public static List<string> DropConditions(HintFact fact)
+		{
+			List<PlannedDrop> plan = fact.Kind switch
+			{
+				// A guaranteed item's enemies carry it without a condition
+				HintKind.Creature when fact.Hosts.Count == 0 => RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true),
+				HintKind.Boss => RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true),
+				HintKind.Bag => BagPlan.Plan(fact.Bag, lucky: true),
+				_ => null
+			};
+			List<PlannedDrop> entries = plan?.Where(d => d.Item == fact.Item && Findability.WorldAllows(d.Conditions)).ToList();
+			if (entries == null || entries.Count == 0 || entries.Any(d => ConditionTexts(d.Conditions).Count == 0)) return new List<string>();
+			return ConditionTexts(entries.OrderByDescending(d => d.Chance).First().Conditions);
+		}
+
+		// The descriptions of drop conditions (IItemDropRuleCondition.GetConditionDescription: "Drops on Windy Days"...),
+		// without those that have none (statue checks, hardmode gates the tier already tells) and those fixed by the world
+		// that this world meets (an expert drop in an expert world)
+		public static List<string> ConditionTexts(List<IItemDropRuleCondition> conditions)
+		{
+			List<string> texts = new();
+			if (conditions == null) return texts;
+			foreach (IItemDropRuleCondition condition in conditions)
+			{
+				if (condition == null || WorldFixed(condition) && Findability.WorldAllows(new List<IItemDropRuleCondition> { condition })) continue;
+				string text;
+				try
+				{
+					text = condition.GetConditionDescription();
+				}
+				catch (Exception)
+				{
+					// A modded condition reading game state that isn't there
+					text = null;
+				}
+				if (!string.IsNullOrWhiteSpace(text) && !texts.Contains(text.Trim())) texts.Add(text.Trim());
+			}
+			return texts;
+		}
+
+		// Conditions Findability.WorldAllows decides from the world alone (difficulty, world evil)
+		private static bool WorldFixed(IItemDropRuleCondition condition) => condition is DropRuleConditions.IsExpert or DropRuleConditions.NotExpert
+			or DropRuleConditions.IsMasterMode or DropRuleConditions.NotMasterMode or DropRuleConditions.IsCrimson or DropRuleConditions.IsCorruption
+			or DropRuleConditions.IsCrimsonAndNotExpert or DropRuleConditions.IsCorruptionAndNotExpert;
 
 		private static HintFact Best(List<HintFact> options) => options.OrderBy(o => o.Tier).ThenBy(o => KindClass(o.Kind)).ThenByDescending(Ease)
 			.ThenBy(StableKey, StringComparer.Ordinal).ThenBy(o => (int)o.Kind).FirstOrDefault();
@@ -572,6 +631,7 @@ namespace UltimateRandomizer.Common.Codex
 				fact.Biomes = new List<string> { BiomeSlots.BiomeName(chosen) };
 				// Day or Night when its biome only holds hosts at that time
 				fact.Time = GuaranteedSources.PlacedTime(fact.Item);
+				fact.HostTimes = fact.Hosts.Select(h => GuaranteedSources.HostTime(fact.Item, h)).ToList();
 				List<BiomeSlot> hostSlots = BiomeSlots.SpawnMap.Slots.Where(s => s.Biome == chosen && SpawnsIn(s, type)).ToList();
 				if (hostSlots.Count > 0) fact.Movement = Math.Min(3, hostSlots.GroupBy(s => s.Movement).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key);
 				if (fact.Movement < 0 && ContentSamples.NpcsByNetId.TryGetValue(fact.Npc, out NPC hostSample)) fact.Movement = hostSample.noGravity ? 1 : 0;
@@ -593,6 +653,8 @@ namespace UltimateRandomizer.Common.Codex
 				fact.Biomes = biomes.Where((b, i) => i == 0 || BiomeSlots.SteadyShare(b.biome, type, fact.Tier) >= GuaranteedSources.MinShare(b.biome, fact.Tier)).Take(3).Select(b => BiomeSlots.BiomeName(b.biome)).ToList();
 				fact.Time = biomes[0].time;
 				List<BiomeSlot> slots = BiomeSlots.SpawnMap.Slots.Where(s => s.Biome == biomes[0].biome && SpawnsIn(s, type)).ToList();
+				// Never met there on an ordinary day: only with its weather, season or event
+				fact.Conditional = fact.Kind == HintKind.Creature && BiomeSlots.SteadyShare(biomes[0].biome, type, fact.Tier) <= 0 && slots.Any(s => s.Conditional);
 				if (slots.Count > 0) fact.Movement = Math.Min(3, slots.GroupBy(s => s.Movement).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key);
 			}
 			if (fact.Movement < 0 && ContentSamples.NpcsByNetId.TryGetValue(fact.Npc, out NPC sample))
@@ -670,6 +732,7 @@ namespace UltimateRandomizer.Common.Codex
 				node.Leaf = HintTreeLeaf.Caught;
 				node.Also = AlsoFrom(type);
 				node.Biomes = CritterBiomes(CritterOf(type));
+				node.Time = CritterTime(CritterOf(type));
 				return Needs(ItemID.BugNet);
 			}
 			else if (type is ItemID.WaterBucket or ItemID.LavaBucket or ItemID.HoneyBucket)
@@ -709,6 +772,15 @@ namespace UltimateRandomizer.Common.Codex
 			int type = BiomeSlots.TypeOf(critter);
 			return BiomeSlots.SpawnMap.Slots.Where(s => s.Critter && SpawnsIn(s, type)).Select(s => s.Biome).Distinct().OrderBy(b => b)
 				.Take(3).Select(BiomeSlots.BiomeName).ToList();
+		}
+
+		// When a critter is met: the times of its critter slots (fireflies at night...)
+		public static SlotTime CritterTime(int critter)
+		{
+			if (!BiomeSlots.SpawnsPlanned) return SlotTime.Any;
+			int type = BiomeSlots.TypeOf(critter);
+			List<SlotTime> times = BiomeSlots.SpawnMap.Slots.Where(s => s.Critter && !s.AbsentEvil && SpawnsIn(s, type)).Select(s => s.Time).Distinct().ToList();
+			return times.Count == 1 ? times[0] : SlotTime.Any;
 		}
 
 		// The plant whose harvest gives this item (randomized plants keep a few fixed results), 0 when none
@@ -794,8 +866,44 @@ namespace UltimateRandomizer.Common.Codex
 		// Where a part of the tree comes from, in a few words, and another way when there is one
 		public static string TreeSource(HintTreeNode node)
 		{
-			string main = MainSource(node);
+			string main = WithWhen(MainSource(node), NodeWhen(node));
 			return node.Also == null ? main : CodexText.Get("Hint.Tree.Also", main, FactSource(node.Also));
+		}
+
+		// "(night)", "(rain or event)", "(near water)", "(after smashing an altar)"... at the end of a tree line
+		private static string WithWhen(string text, List<string> when) => when.Count == 0 ? text : text + " " + CodexText.Get("Hint.Tree.When", string.Join(", ", when));
+
+		// When the main source of a part works: the conditions of a recipe, the altar of a hardmode ore, the time of a critter
+		// (a fact's own are added by FactSource)
+		private static List<string> NodeWhen(HintTreeNode node)
+		{
+			List<string> when = new();
+			switch (node.Leaf)
+			{
+				case HintTreeLeaf.Recipe when node.Fact != null:
+					string recipe = RecipeConditions(node.Fact);
+					if (recipe.Length > 0) when.Add(recipe);
+					break;
+				case HintTreeLeaf.Mined when OreMap.IsHardmodePairOre(node.Ore):
+					when.Add(CodexText.Get("Hint.When.Short.Altar"));
+					break;
+				case HintTreeLeaf.Caught when node.Time != SlotTime.Any:
+					when.Add(CodexText.Get("Hint.When.Short." + node.Time));
+					break;
+			}
+			return when;
+		}
+
+		// The time, weather or event and drop conditions of a fact, in a few words (empty: always). Several enemies met at
+		// different times say it with their names (ShortHosts)
+		public static List<string> FactWhen(HintFact fact)
+		{
+			List<string> when = new();
+			if (fact == null) return when;
+			if (fact.Time != SlotTime.Any && fact.Kind is HintKind.Creature or HintKind.Boss && !MixedTimes(fact)) when.Add(CodexText.Get("Hint.When.Short." + fact.Time));
+			if (fact.Conditional) when.Add(CodexText.Get("Hint.When.Short.Conditional"));
+			when.AddRange(fact.Conditions);
+			return when;
 		}
 
 		private static string MainSource(HintTreeNode node)
@@ -819,7 +927,9 @@ namespace UltimateRandomizer.Common.Codex
 			};
 		}
 
-		private static string FactSource(HintFact fact)
+		private static string FactSource(HintFact fact) => WithWhen(FactSourceText(fact), FactWhen(fact));
+
+		private static string FactSourceText(HintFact fact)
 		{
 			return fact.Kind switch
 			{
@@ -845,7 +955,7 @@ namespace UltimateRandomizer.Common.Codex
 			"Title", "Also", "OwnHint", "Station", "More", "Mined", "Repeat", "Unknown", "Findable", "WorldStation", "Caught", "CaughtAnywhere", "Harvested", "Filled.Water", "Filled.Lava",
 			"Filled.Honey", "Gathered.Dig", "Gathered.Chop", "Gathered.Grow", "Gathered.Gem", "Gathered.Beach", "Gathered.Star", "Gathered.Obsidian", "Gathered.Other",
 			"Recipe", "Creature", "CreatureAnywhere", "Hosts", "HostsAnywhere", "Boss", "Shop",
-			"Bag", "Chest", "Pot", "World"
+			"Bag", "Chest", "Pot", "World", "When"
 		};
 
 		// ---- Texts ----
@@ -860,7 +970,7 @@ namespace UltimateRandomizer.Common.Codex
 				2 => Roaming(fact) ? "Where.Roaming" : "Where." + fact.Kind,
 				3 => Roaming(fact) ? "Shape.Roaming" : "Shape." + fact.Kind,
 				// Several enemies: their names and the chance on each
-				_ => Roaming(fact) ? "Name.Roaming" : fact.Kind == HintKind.Creature && fact.Hosts.Count > 1 ? "Name.Hosts" : "Name." + fact.Kind
+				_ => Roaming(fact) ? "Name.Roaming" : fact.Kind == HintKind.Creature && fact.Hosts.Count > 1 ? (MixedTimes(fact) ? "Name.HostsTimed" : "Name.Hosts") : "Name." + fact.Kind
 			};
 		}
 
@@ -900,7 +1010,22 @@ namespace UltimateRandomizer.Common.Codex
 			if (level is 2 or 4 && fact.Kind is HintKind.Boss or HintKind.Shop && fact.Biomes.Count > 0) text += " " + CodexText.Get("Hint.Around", PlacePhrase(fact));
 			// Where the recipe must be made (near water, in the snow, in a graveyard...)
 			string conditions = level is 2 or 4 ? RecipeConditions(fact) : "";
-			return conditions.Length > 0 ? text + " " + CodexText.Get("Hint.Conditions", conditions) : text;
+			if (conditions.Length > 0) text += " " + CodexText.Get("Hint.Conditions", conditions);
+			// When the source works: the time (level 2 says it already), a weather or event, the drop's conditions
+			if (level is 2 or 4) text += WhenSentences(fact, level == 4);
+			return text;
+		}
+
+		// " Only at night. It only comes with an event or a weather... Mind the condition: Drops on Windy Days." (empty:
+		// always)
+		public static string WhenSentences(HintFact fact, bool withTime)
+		{
+			string text = "";
+			// Several enemies met at different times say it with their names
+			if (withTime && fact.Time != SlotTime.Any && fact.Kind is HintKind.Creature or HintKind.Boss && !MixedTimes(fact)) text += " " + CodexText.Get("Hint.When.Time", TimePhrase(fact));
+			if (fact.Conditional) text += " " + CodexText.Get("Hint.When.Conditional");
+			if (fact.Conditions.Count > 0) text += " " + CodexText.Get("Hint.When.Drop", string.Join("; ", fact.Conditions));
+			return text;
 		}
 
 		public static string RecipeConditions(HintFact fact)
@@ -966,23 +1091,47 @@ namespace UltimateRandomizer.Common.Codex
 		// Names shown before "and N others"
 		public const int NamedHosts = 3;
 
-		// "Zombie, Blue Slime, Demon Eye and 3 others" (every name up to four)
-		public static string HostsPhrase(HintFact fact)
+		// "Zombie, Blue Slime, Demon Eye and 3 others" (every name up to four); enemies met at different times by group:
+		// "Blue Slime and Pinky (by day); Zombie, Demon Eye, Raven and 2 others (at night)"
+		public static string HostsPhrase(HintFact fact) => ByTime(fact, NamesPhrase, "Hint.Time.");
+
+		private static string NamesPhrase(List<string> names)
 		{
-			List<string> names = fact.Hosts.Select(NpcName).ToList();
 			if (names.Count <= 1) return names.FirstOrDefault() ?? "";
 			if (names.Count <= NamedHosts + 1) return CodexText.Get("Hint.Hosts.List", string.Join(", ", names.Take(names.Count - 1)), names[^1]);
 			return CodexText.Get("Hint.Hosts.AndMore", string.Join(", ", names.Take(NamedHosts)), names.Count - NamedHosts);
 		}
 
-		// "Zombie, Blue Slime +4" (craft trees: every name on hover, HostNames)
+		// "Zombie, Blue Slime +4", or by time "Blue Slime +1 (day); Zombie +3 (night)" (craft trees: every name on hover,
+		// HostNames)
 		public static string ShortHosts(HintFact fact)
 		{
-			List<string> names = fact.Hosts.Select(NpcName).ToList();
-			return names.Count <= 2 ? string.Join(", ", names) : CodexText.Get("Hint.Hosts.Plus", string.Join(", ", names.Take(2)), names.Count - 2);
+			if (!MixedTimes(fact))
+			{
+				List<string> names = fact.Hosts.Select(NpcName).ToList();
+				return names.Count <= 2 ? string.Join(", ", names) : CodexText.Get("Hint.Hosts.Plus", string.Join(", ", names.Take(2)), names.Count - 2);
+			}
+			return ByTime(fact, names => names.Count <= 1 ? names.FirstOrDefault() ?? "" : CodexText.Get("Hint.Hosts.Plus", names[0], names.Count - 1), "Hint.When.Short.");
 		}
 
-		public static string HostNames(HintFact fact) => string.Join(", ", fact.Hosts.Select(NpcName));
+		public static string HostNames(HintFact fact) => MixedTimes(fact) ? ByTime(fact, names => string.Join(", ", names), "Hint.Time.") : string.Join(", ", fact.Hosts.Select(NpcName));
+
+		// Are the enemies of a fact met at different times?
+		public static bool MixedTimes(HintFact fact) => fact.HostTimes.Count == fact.Hosts.Count && fact.HostTimes.Distinct().Count() > 1;
+
+		// The names of a fact's enemies, grouped by the time they are met (in the order of the first of each group) when the
+		// times differ
+		private static string ByTime(HintFact fact, Func<List<string>, string> phrase, string timeKey)
+		{
+			if (!MixedTimes(fact)) return phrase(fact.Hosts.Select(NpcName).ToList());
+			List<string> groups = new();
+			foreach (SlotTime time in fact.HostTimes.Distinct())
+			{
+				List<string> names = fact.Hosts.Where((h, i) => fact.HostTimes[i] == time).Select(NpcName).ToList();
+				groups.Add(CodexText.Get("Hint.Hosts.Group", CodexText.Get(timeKey + time), phrase(names)));
+			}
+			return string.Join("; ", groups);
+		}
 
 		// The item placing a station, else its map name
 		public static int StationItem(int tile) => TileLoader.GetItemDropFromTypeAndStyle(tile, Recipe.GetRequiredTileStyle(tile));
@@ -1013,9 +1162,19 @@ namespace UltimateRandomizer.Common.Codex
 			yield return "Hint.Hosts.List";
 			yield return "Hint.Hosts.AndMore";
 			yield return "Hint.Hosts.Plus";
+			yield return "Hint.Hosts.Group";
+			yield return "Hint.When.Time";
+			yield return "Hint.When.Conditional";
+			yield return "Hint.When.Drop";
+			yield return "Hint.When.Short.Conditional";
+			yield return "Hint.When.Short.Altar";
 			foreach (string move in Movements) yield return "Hint.Move." + move;
 			for (int b = 0; b < 4; b++) yield return "Hint.Band." + b;
-			foreach (SlotTime time in Enum.GetValues<SlotTime>()) yield return "Hint.Time." + time;
+			foreach (SlotTime time in Enum.GetValues<SlotTime>())
+			{
+				yield return "Hint.Time." + time;
+				yield return "Hint.When.Short." + time;
+			}
 		}
 
 		// Price as coins ("1 platinum 54 gold")

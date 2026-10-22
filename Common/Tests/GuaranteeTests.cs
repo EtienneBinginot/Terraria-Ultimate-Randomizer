@@ -25,6 +25,9 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("GuaranteedSeveralSeeds", GuaranteedSeveralSeeds);
 			TestRunner.Register("GuaranteedBiomesSpread", GuaranteedBiomesSpread);
 			TestRunner.Register("GuaranteedFindTime", GuaranteedFindTime);
+			TestRunner.Register("GuaranteedDayAndNight", GuaranteedDayAndNight);
+			TestRunner.Register("GuaranteedHostLoad", GuaranteedHostLoad);
+			TestRunner.Register("GuaranteedReachable", GuaranteedReachable);
 			TestRunner.Register("GuaranteedHostsNotEvents", GuaranteedHostsNotEvents);
 			TestRunner.Register("GuaranteedDeterminism", GuaranteedDeterminism);
 			TestRunner.Register("FindabilityDeterminism", FindabilityDeterminism);
@@ -108,7 +111,7 @@ namespace UltimateRandomizer.Common.Tests
 			RecipePlan plan = RecipePlanner.Get();
 			List<string> failures = new();
 			int summons = 0, stations = 0;
-			slotShares.Clear();
+			periodShares.Clear();
 			foreach (GuaranteedSources.Requirement want in wanted)
 			{
 				int item = want.Item;
@@ -135,8 +138,12 @@ namespace UltimateRandomizer.Common.Tests
 				if (bad.Count > 0) failures.Add($"{Name(item)} (tier {tier}): on {string.Join(", ", bad.Select(h => $"{Lang.GetNPCNameValue(h)} (tier {GuaranteedSources.HostTier(h)})"))}");
 				if (biome >= 0 && BiomeSlots.SpawnsPlanned)
 				{
-					double together = hosts.Sum(h => BiomeShareFromSlots(h, biome, placed));
-					if (together < GuaranteedSources.MinBiomeShare - 0.005) failures.Add($"{Name(item)}: its enemies make {together:P1} of {BiomeSlots.BiomeName(biome)}");
+					// In each period the item is met in
+					foreach (SlotTime period in Periods(GuaranteedSources.PlacedTime(item)))
+					{
+						double together = hosts.Sum(h => PeriodShareFromSlots(h, biome, placed, period));
+						if (together < GuaranteedSources.MinBiomeShare - 0.005) failures.Add($"{Name(item)}: its enemies make {together:P1} of {BiomeSlots.BiomeName(biome)} ({period})");
+					}
 				}
 				if (Findability.Tier(item) > tier) failures.Add($"{Name(item)} found at tier {Findability.Tier(item)} > {tier}");
 				if (item < plan.Availability.Length && plan.Availability[item] > tier) failures.Add($"{Name(item)} available at tier {plan.Availability[item]} > {tier}");
@@ -157,20 +164,27 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		private const int ShareRolls = 200;
-		private static readonly Dictionary<(BiomeSlotMap map, int band), Dictionary<int, Dictionary<int, double>>> slotShares = new();
+		private static readonly Dictionary<(BiomeSlotMap map, int band, SlotTime period), Dictionary<int, Dictionary<int, double>>> periodShares = new();
 
-		// Biome, then type, then share of the biome's enemy spawns, from the slots open in a band: each slot weighs 1 (rare 0.1,
-		// conditional 0.5) and is split by sampling Pick
-		private static Dictionary<int, Dictionary<int, double>> SlotShares(BiomeSlotMap map, int band)
+		// The periods a placement's hosts are met in (Any: both)
+		private static SlotTime[] Periods(SlotTime time) => time == SlotTime.Any ? new[] { SlotTime.Day, SlotTime.Night } : new[] { time };
+
+		private static bool OpenIn(SlotTime slot, SlotTime period) => slot == SlotTime.Any || slot == period;
+
+		// Biome, then type, then steady share of the biome's enemy spawns in one period (day or night), from the slots open in
+		// a band and at that time: each slot weighs 1 (rare 0.1, conditional 0.5) in the total, only those neither rare nor
+		// conditional count for the type, split by sampling Pick
+		private static Dictionary<int, Dictionary<int, double>> PeriodShares(BiomeSlotMap map, int band, SlotTime period)
 		{
-			if (slotShares.TryGetValue((map, band), out Dictionary<int, Dictionary<int, double>> cached)) return cached;
+			if (periodShares.TryGetValue((map, band, period), out Dictionary<int, Dictionary<int, double>> cached)) return cached;
 			Dictionary<int, Dictionary<int, double>> result = new();
 			Dictionary<int, double> totals = new();
 			foreach (BiomeSlot slot in map.Slots)
 			{
-				if (slot.Critter || slot.AbsentEvil || slot.Band > band) continue;
+				if (slot.Critter || slot.AbsentEvil || slot.Band > band || !OpenIn(slot.Time, period)) continue;
 				double weight = (slot.Rare ? 0.1 : 1) * (slot.Conditional ? 0.5 : 1);
 				totals[slot.Biome] = totals.GetValueOrDefault(slot.Biome) + weight;
+				if (slot.Rare || slot.Conditional) continue;
 				if (!result.TryGetValue(slot.Biome, out Dictionary<int, double> byType)) result[slot.Biome] = byType = new Dictionary<int, double>();
 				for (int k = 0; k < ShareRolls; k++)
 				{
@@ -182,19 +196,153 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				foreach (int type in byType.Keys.ToList()) byType[type] /= totals[biome];
 			}
-			slotShares[(map, band)] = result;
+			periodShares[(map, band, period)] = result;
 			return result;
 		}
 
-		// A type's share of a biome's spawns at a tier (BiomeVanillaChance mixed in by biome), rare and conditional slots included
-		private static double BiomeShareFromSlots(int type, int biome, int tier)
+		// A type's steady share of a biome's spawns at a tier in one period (BiomeVanillaChance mixed in by biome)
+		private static double PeriodShareFromSlots(int type, int biome, int tier, SlotTime period)
 		{
 			int band = BiomeSlots.BandOf(tier);
 			BiomeSlotMap map = BiomeSlots.Active ? BiomeSlots.Current : BiomeSlots.Vanilla;
 			double keep = BiomeSlots.Active ? EnemiesConfig.Instance.BiomeVanillaChance / 100.0 : 0;
-			double share = (1 - keep) * (SlotShares(map, band).TryGetValue(biome, out Dictionary<int, double> planned) ? planned.GetValueOrDefault(type) : 0);
-			if (keep > 0 && SlotShares(BiomeSlots.Vanilla, band).TryGetValue(biome, out Dictionary<int, double> vanilla)) share += keep * vanilla.GetValueOrDefault(type);
+			double share = (1 - keep) * (PeriodShares(map, band, period).TryGetValue(biome, out Dictionary<int, double> planned) ? planned.GetValueOrDefault(type) : 0);
+			if (keep > 0 && PeriodShares(BiomeSlots.Vanilla, band, period).TryGetValue(biome, out Dictionary<int, double> vanilla)) share += keep * vanilla.GetValueOrDefault(type);
 			return share;
+		}
+
+		// A biome met by day and by night gives each period at least MinPeriodHosts hosts of the item; one met at one time only
+		// says so (its hosts all met then). Recomputed from the slots: a host counts for a period when it spawns in the biome
+		// in a steady slot open then
+		private static void GuaranteedDayAndNight()
+		{
+			if (!BiomeSlots.SpawnsPlanned) Check.Skip("enemies are swapped without biomes");
+			if (GuaranteedSources.HostLimit < 2 * GuaranteedSources.MinPeriodHosts) Check.Skip("GuaranteedHostsPerItem is too low for hosts by day and by night");
+			periodShares.Clear();
+			List<string> failures = new();
+			int both = 0, one = 0;
+			foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements.Where(r => !r.Critical))
+			{
+				int item = requirement.Item;
+				int biome = GuaranteedSources.BiomeOf(item);
+				if (biome < 0) continue;
+				int tier = GuaranteedSources.PlacedTier(item);
+				SlotTime time = GuaranteedSources.PlacedTime(item);
+				List<int> hosts = GuaranteedSources.HostsOf(item).ToList();
+				int day = hosts.Count(h => PeriodShareFromSlots(h, biome, tier, SlotTime.Day) > 0), night = hosts.Count(h => PeriodShareFromSlots(h, biome, tier, SlotTime.Night) > 0);
+				string where = $"{Name(item)} in {BiomeSlots.BiomeName(biome)}";
+				if (time == SlotTime.Any)
+				{
+					both++;
+					if (day < GuaranteedSources.MinPeriodHosts) failures.Add($"{where}: {day} host(s) by day");
+					if (night < GuaranteedSources.MinPeriodHosts) failures.Add($"{where}: {night} host(s) at night");
+				}
+				else
+				{
+					one++;
+					int met = time == SlotTime.Day ? day : night;
+					if (met < hosts.Count) failures.Add($"{where} ({time}): {hosts.Count - met} host(s) not met then");
+				}
+			}
+			if (both + one == 0) Check.Skip("no item placed in a biome");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed periods: {both} items met by day and by night, {one} at one time only");
+			Check.All(failures, "Guaranteed items missing a period");
+		}
+
+		// No host carries more than MaxItemsPerHost guaranteed items (or its critical stations), except those kept because its
+		// biome had too few others (counted); the busiest host gives less than MaxDropsPerKill guaranteed stations, summons
+		// and tools per kill (materials, guaranteed only with vanilla ingredients, come in stacks and much more often: logged)
+		public const double MaxDropsPerKill = 0.6;
+
+		private static void GuaranteedHostLoad()
+		{
+			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
+			if (requirements.Count == 0) Check.Skip("nothing is guaranteed");
+			HashSet<int> critical = requirements.Where(r => r.Critical).Select(r => r.Item).ToHashSet();
+			HashSet<int> single = requirements.Where(r => r.Station || r.Tool).Select(r => r.Item).ToHashSet();
+			Dictionary<int, int> forced = new();
+			HashSet<int> hosts = new();
+			foreach (GuaranteedSources.Requirement requirement in requirements)
+			{
+				hosts.UnionWith(GuaranteedSources.HostsOf(requirement.Item));
+				if (!GuaranteedSources.TryPlacement(requirement.Item, out GuaranteedSources.Placement place) || place.Forced == null) continue;
+				foreach (int host in place.Forced) forced[host] = forced.GetValueOrDefault(host) + 1;
+			}
+			List<string> failures = new();
+			int maxItems = 0, busiest = 0;
+			double maxDrops = 0, maxAll = 0;
+			foreach (int host in hosts.OrderBy(h => h))
+			{
+				List<PlannedDrop> drops = GuaranteedSources.For(host);
+				int items = drops.Select(d => d.Item).Distinct().Count();
+				int criticalItems = drops.Select(d => d.Item).Distinct().Count(critical.Contains);
+				int allowed = System.Math.Max(GuaranteedSources.MaxItemsPerHost, criticalItems) + forced.GetValueOrDefault(host);
+				if (items > allowed) failures.Add($"{Lang.GetNPCNameValue(host)}: {items} items, at most {allowed}");
+				maxItems = System.Math.Max(maxItems, items);
+				maxAll = System.Math.Max(maxAll, drops.Sum(d => (double)d.Chance));
+				double expected = drops.Where(d => single.Contains(d.Item)).Sum(d => (double)d.Chance);
+				if (expected > maxDrops)
+				{
+					maxDrops = expected;
+					busiest = host;
+				}
+			}
+			double bound = MaxDropsPerKill * System.Math.Max(1f, ProgressionConfig.Instance.GuaranteedDropMultiplier);
+			if (maxDrops > bound) failures.Add($"{Lang.GetNPCNameValue(busiest)}: {maxDrops:0.00} guaranteed stations, summons or tools per kill, at most {bound:0.00}");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed load: {hosts.Count} hosts, at most {maxItems} items on one, {forced.Values.Sum()} kept over "
+				+ $"{GuaranteedSources.MaxItemsPerHost}, busiest {(busiest != 0 ? Lang.GetNPCNameValue(busiest) : "none")} {maxDrops:0.000} stations, summons or tools per kill ({maxAll:0.000} with materials)");
+			Check.All(failures, "Guaranteed hosts overloaded");
+		}
+
+		// Planned with other seeds (and this world): no item lands in a biome before it can be farmed (Dungeon after
+		// Skeletron, Underworld after the evil boss, Temple after Plantera, sky islands after the Eye), never in the Graveyard
+		// or the Meteor, and each host is met in its biome through a steady slot of the placement's tier or below
+		private static readonly Dictionary<SpawnBiome, int> Access = new()
+		{
+			[SpawnBiome.Dungeon] = (int)Core.Tier.PostSkeletron,
+			[SpawnBiome.Underworld] = (int)Core.Tier.PostEvilBoss,
+			[SpawnBiome.Temple] = (int)Core.Tier.PostPlantera,
+			[SpawnBiome.Sky] = (int)Core.Tier.PostEyeOfCthulhu,
+			[SpawnBiome.Graveyard] = int.MaxValue,
+			[SpawnBiome.Meteor] = int.MaxValue
+		};
+
+		private static void GuaranteedReachable()
+		{
+			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
+			if (requirements.Count == 0) Check.Skip("nothing is guaranteed");
+			if (!BiomeSlots.SpawnsPlanned) Check.Skip("enemies are swapped without biomes");
+			HashSet<int> critical = requirements.Where(r => r.Critical).Select(r => r.Item).ToHashSet();
+			const int Seeds = 4;
+			List<string> failures = new();
+			int placed = 0;
+			bool mixed = BiomeSlots.Active && EnemiesConfig.Instance.BiomeVanillaChance > 0;
+			for (int i = -1; i < Seeds; i++)
+			{
+				// -1: this world
+				int seed = i < 0 ? SeedSystem.WorldSeed : Seed(i);
+				BiomeSlotMap map = i >= 0 && BiomeSlots.Active ? BiomeSlots.Build(seed, EnemiesConfig.Instance.BiomeExtraEnemies) : BiomeSlots.SpawnMap;
+				GuaranteedSources.PlanWith(seed, map, out _, out Dictionary<int, GuaranteedSources.Placement> places);
+				foreach ((int item, GuaranteedSources.Placement place) in places.OrderBy(p => p.Key))
+				{
+					if (critical.Contains(item) || place.Biome < 0) continue;
+					placed++;
+					string where = $"seed {seed}: {Name(item)} in {BiomeSlots.BiomeName(place.Biome)} at tier {place.Tier}";
+					if (place.Biome < BiomeSlots.ModdedBiomeStart && Access.TryGetValue((SpawnBiome)place.Biome, out int access) && place.Tier < access)
+					{
+						failures.Add(access == int.MaxValue ? $"{where}: never farmable" : $"{where}: reached at tier {access}");
+					}
+					foreach (int host in place.Hosts)
+					{
+						bool Met(BiomeSlotMap m) => m.Slots.Any(s => s.Biome == place.Biome && !s.Critter && !s.AbsentEvil && !s.Rare && !s.Conditional && s.Tier <= place.Tier
+							&& BiomeSlots.Spawners(s).Any(id => BiomeSlots.TypeOf(id) == host));
+						if (!Met(map) && !(mixed && Met(BiomeSlots.Vanilla))) failures.Add($"{where}: {Lang.GetNPCNameValue(host)} only met through stronger slots");
+					}
+				}
+			}
+			if (placed == 0) Check.Skip("no item placed in a biome");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed reachable: {placed} placements in a biome over {Seeds + 1} plans");
+			Check.All(failures, "Guaranteed items in biomes out of reach");
 		}
 
 		// The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) and the
@@ -320,6 +468,7 @@ namespace UltimateRandomizer.Common.Tests
 			if (ProgressionConfig.Instance.GuaranteedDropMultiplier < 1) Check.Skip("GuaranteedDropMultiplier is below 1");
 			List<(string name, double kills)> times = new();
 			List<string> failures = new();
+			periodShares.Clear();
 			foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements.Where(r => r.Station || r.Tool))
 			{
 				// Critical stations get their chance from the pacing model: judged in its minutes
@@ -329,12 +478,29 @@ namespace UltimateRandomizer.Common.Tests
 					if (minutes > GuaranteedSources.MaxCriticalMinutes) failures.Add($"{Name(requirement.Item)}: {minutes:0} minutes of early kills");
 					continue;
 				}
-				(double kills, double bound) = GuaranteedSources.FindKills(requirement.Item, requirement.Tier);
-				// Hosts without any slot (modded enemies without a biome) have no share to judge
-				if (double.IsInfinity(kills)) continue;
-				times.Add((Name(requirement.Item), kills));
 				int biome = GuaranteedSources.BiomeOf(requirement.Item);
-				if (kills > bound) failures.Add($"{Name(requirement.Item)}: {kills:0} kills, at most {bound:0} ({BiomeSlots.BiomeName(biome)}: {string.Join(", ", GuaranteedSources.HostsOf(requirement.Item).Select(h => $"{Lang.GetNPCNameValue(h)} {BiomeSlots.SteadyShare(biome, h, GuaranteedSources.PlacedTier(requirement.Item)):P1}"))})");
+				if (biome < 0) continue;
+				// Recomputed from the slots: in the period where it takes longest (the only one of a one-period placement),
+				// 1 / sum of the hosts' steady share then x their chance
+				int tier = GuaranteedSources.PlacedTier(requirement.Item);
+				List<int> hosts = GuaranteedSources.HostsOf(requirement.Item).ToList();
+				double kills = 0;
+				SlotTime worst = SlotTime.Any;
+				foreach (SlotTime period in Periods(GuaranteedSources.PlacedTime(requirement.Item)))
+				{
+					double rate = hosts.Sum(h => PeriodShareFromSlots(h, biome, tier, period) * GuaranteedSources.For(h).Where(d => d.Item == requirement.Item).Sum(d => d.Chance));
+					double periodKills = rate > 0 ? 1 / rate : double.PositiveInfinity;
+					if (periodKills > kills)
+					{
+						kills = periodKills;
+						worst = period;
+					}
+				}
+				// Hosts without any slot (modded enemies without a biome) have no share to judge
+				if (hosts.All(h => !BiomeSlots.HasAnySlot(h))) continue;
+				double bound = GuaranteedSources.MaxFindKills;
+				times.Add((Name(requirement.Item), kills));
+				if (kills > bound) failures.Add($"{Name(requirement.Item)}: {kills:0} kills ({worst}), at most {bound:0} ({BiomeSlots.BiomeName(biome)}: {string.Join(", ", hosts.Select(h => $"{Lang.GetNPCNameValue(h)} {PeriodShareFromSlots(h, biome, tier, worst):P1}"))})");
 			}
 			if (times.Count == 0) Check.Skip("no station, summon or tool is guaranteed");
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed find time: median {times.Select(t => t.kills).OrderBy(k => k).ElementAt(times.Count / 2):0} biome kills, worst "

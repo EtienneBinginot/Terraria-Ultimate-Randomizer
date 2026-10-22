@@ -147,6 +147,13 @@ namespace UltimateRandomizer.Common.Features
 			public List<int> Forced;
 		}
 
+		// The placement of a guaranteed item in this world (tests)
+		public static bool TryPlacement(int item, out Placement placement)
+		{
+			Build();
+			return placements.TryGetValue(item, out placement);
+		}
+
 		// When the hosts of a guaranteed item are met in its biome (Any: by day and by night, or unknown)
 		public static SlotTime PlacedTime(int item)
 		{
@@ -382,7 +389,10 @@ namespace UltimateRandomizer.Common.Features
 						for (int t = Tiers.Clamp(requirement.Tier); t >= 0 && chosen == null; t--)
 						{
 							if (common[t].Count == 0) continue;
-							chosen = common[t].OrderBy(_ => rng.Next()).Take(perItem).ToList();
+							// The hosts not loaded yet first
+							chosen = common[t].Select(h => (h, roll: rng.Next())).OrderBy(x => load.GetValueOrDefault(x.h) >= MaxItemsPerHost ? 1 : 0).ThenBy(x => x.roll)
+								.Select(x => x.h).Take(perItem).ToList();
+							place.Forced = chosen.Where(h => load.GetValueOrDefault(h) >= MaxItemsPerHost).ToList();
 							chance = (single ? UnknownShareStationChance : UnknownShareMaterialChance) * UnknownShareHosts / chosen.Count;
 							place.Tier = t;
 						}
@@ -505,7 +515,9 @@ namespace UltimateRandomizer.Common.Features
 				forced.Add(h.npc);
 			}
 			free = all.Where(free.Contains).ToList();
-			bool wantDay = free.Any(InDay), wantNight = free.Any(InNight);
+			// A period counts with at least MinPeriodHosts hosts (one of them has them: every host is met in one)
+			bool wantDay = free.Count(InDay) >= MinPeriodHosts, wantNight = free.Count(InNight) >= MinPeriodHosts;
+			if (!wantDay && !wantNight) return null;
 			// Both periods, then the one that worked alone
 			for (int attempt = 0; attempt < 2; attempt++)
 			{

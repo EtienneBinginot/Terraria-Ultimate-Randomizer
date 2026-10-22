@@ -39,6 +39,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintTreeDeterministic", HintTreeDeterministic);
 			TestRunner.Register("HintTabsSplit", HintTabsSplit);
 			TestRunner.Register("HintTreeKeepsOtherHints", HintTreeKeepsOtherHints);
+			TestRunner.Register("HintConditionsShown", HintConditionsShown);
 		}
 
 		private static List<HintTarget> RecipeTargets() =>
@@ -348,7 +349,8 @@ namespace UltimateRandomizer.Common.Tests
 		private static void HintHostsNamed()
 		{
 			List<HintTarget> targets = TargetsOrSkip().Where(t => GuaranteedSources.HostsOf(t.Item).Count() > 1).ToList();
-			List<HintFact> facts = targets.Select(t => HintFacts.For(t.Item)).Where(f => f != null && f.Kind == HintKind.Creature).ToList();
+			// Only the hints that lead to those enemies (another source may be reached first: a recipe, another creature)
+			List<HintFact> facts = targets.Select(t => HintFacts.For(t.Item)).Where(f => f != null && f.Kind == HintKind.Creature && f.Hosts.Count > 0).ToList();
 			if (facts.Count == 0) Check.Skip("no creature hint for an item carried by several enemies");
 			List<string> failures = new();
 			foreach (HintFact fact in facts)
@@ -359,6 +361,8 @@ namespace UltimateRandomizer.Common.Tests
 				if (fact.Npc != hosts[0]) failures.Add($"{name}: first enemy {HintFacts.NpcName(fact.Npc)}, expected {HintFacts.NpcName(hosts[0])}");
 				int biome = GuaranteedSources.BiomeOf(fact.Item);
 				if (biome >= 0 && (fact.Biomes.Count == 0 || fact.Biomes[0] != BiomeSlots.BiomeName(biome))) failures.Add($"{name}: biome {fact.Biomes.FirstOrDefault() ?? "none"}, placed in {BiomeSlots.BiomeName(biome)}");
+				// Several enemies without a biome: none named (each one lives elsewhere)
+				if (biome < 0 && hosts.Count > 1 && fact.Biomes.Count > 0) failures.Add($"{name}: names {fact.Biomes[0]} for enemies placed without a biome");
 				string text = HintFacts.Text(fact, HintFacts.MaxLevel);
 				foreach (int host in hosts.Take(hosts.Count <= HintFacts.NamedHosts + 1 ? hosts.Count : HintFacts.NamedHosts))
 				{
@@ -375,6 +379,89 @@ namespace UltimateRandomizer.Common.Tests
 				if (!HintFacts.ShortHosts(fact).Contains(HintFacts.NpcName(hosts[0]))) failures.Add($"{name}: the short list misses {HintFacts.NpcName(hosts[0])}");
 			}
 			Check.All(failures, "Hints naming the enemies of a guaranteed item");
+		}
+
+		// The conditions a world-fixed check does not settle, as the hint must show them: every planned entry of the item at
+		// the source needs a described condition (not one this world always meets), those of the best entry
+		private static List<string> ExpectedConditions(HintFact fact)
+		{
+			if (fact.Kind is not (HintKind.Creature or HintKind.Boss or HintKind.Bag) || fact.Kind == HintKind.Creature && fact.Hosts.Count > 0) return new List<string>();
+			List<PlannedDrop> plan = fact.Kind == HintKind.Bag ? BagPlan.Plan(fact.Bag, lucky: true) : RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true);
+			List<PlannedDrop> entries = plan.Where(d => d.Item == fact.Item && Findability.WorldAllows(d.Conditions)).ToList();
+			// Allowed in this world, a difficulty or evil condition is always met
+			List<string> Described(PlannedDrop drop) => (drop.Conditions ?? new List<Terraria.GameContent.ItemDropRules.IItemDropRuleCondition>())
+				.Where(c => c is not (Terraria.GameContent.ItemDropRules.Conditions.IsExpert or Terraria.GameContent.ItemDropRules.Conditions.IsMasterMode
+					or Terraria.GameContent.ItemDropRules.Conditions.IsCrimson or Terraria.GameContent.ItemDropRules.Conditions.IsCorruption))
+				.Select(c => c.GetConditionDescription()).Where(d => !string.IsNullOrWhiteSpace(d)).Select(d => d.Trim()).Distinct().ToList();
+			if (entries.Count == 0 || entries.Any(d => Described(d).Count == 0)) return new List<string>();
+			return Described(entries.OrderByDescending(d => d.Chance).First());
+		}
+
+		// Every source says when it works: the drop conditions at levels 2 and 4 and on the tree lines, the time of a creature
+		// met at one time only, the weather or event of one met only then, the times of several enemies met at different
+		// times; recipe conditions, hardmode ores (an altar) and critters' times on the tree lines
+		private static void HintConditionsShown()
+		{
+			List<HintTarget> targets = TargetsOrSkip();
+			List<string> failures = new();
+			int conditions = 0, times = 0, treeLines = 0;
+			foreach (HintTarget target in targets)
+			{
+				HintFact fact = HintFacts.For(target.Item);
+				if (fact == null || fact.Kind == HintKind.World) continue;
+				string name = $"{HintFacts.ItemName(target.Item)} ({fact.Kind})";
+				string level2 = HintFacts.Text(fact, 2), level4 = HintFacts.Text(fact, 4);
+				foreach (string condition in ExpectedConditions(fact))
+				{
+					conditions++;
+					if (!level2.Contains(condition)) failures.Add($"{name}: level 2 without \"{condition}\"");
+					if (!level4.Contains(condition)) failures.Add($"{name}: level 4 without \"{condition}\"");
+				}
+				if (fact.Kind == HintKind.Creature && fact.Time != SlotTime.Any && !HintFacts.MixedTimes(fact))
+				{
+					times++;
+					if (!level4.Contains(CodexText.Get("Hint.Time." + fact.Time))) failures.Add($"{name}: level 4 does not say {fact.Time}");
+				}
+				if (HintFacts.MixedTimes(fact))
+				{
+					times++;
+					foreach (SlotTime time in fact.HostTimes.Distinct())
+					{
+						if (!level4.Contains(CodexText.Get("Hint.Time." + time))) failures.Add($"{name}: level 4 does not group its enemies {time}");
+					}
+				}
+				if (fact.Conditional)
+				{
+					conditions++;
+					if (!level4.Contains(CodexText.Get("Hint.When.Conditional"))) failures.Add($"{name}: level 4 without its weather or event");
+				}
+			}
+			foreach (HintTarget target in RecipeTargets())
+			{
+				foreach (HintTreeNode node in HintFacts.SourceTree(target.Item))
+				{
+					string part = $"{HintFacts.ItemName(target.Item)} > {HintFacts.TreeName(node)}";
+					string line = HintFacts.TreeSource(node);
+					List<string> expected = new();
+					if (node.Leaf == HintTreeLeaf.Fact && node.Fact != null)
+					{
+						expected.AddRange(ExpectedConditions(node.Fact));
+						if (node.Fact.Kind == HintKind.Creature && node.Fact.Time != SlotTime.Any && !HintFacts.MixedTimes(node.Fact)) expected.Add(CodexText.Get("Hint.When.Short." + node.Fact.Time));
+						if (node.Fact.Conditional) expected.Add(CodexText.Get("Hint.When.Short.Conditional"));
+					}
+					if (node.Leaf == HintTreeLeaf.Recipe && node.Fact != null && HintFacts.RecipeConditions(node.Fact).Length > 0) expected.Add(HintFacts.RecipeConditions(node.Fact));
+					if (node.Leaf == HintTreeLeaf.Mined && OreMap.IsHardmodePairOre(node.Ore)) expected.Add(CodexText.Get("Hint.When.Short.Altar"));
+					if (node.Leaf == HintTreeLeaf.Caught && node.Time != SlotTime.Any) expected.Add(CodexText.Get("Hint.When.Short." + node.Time));
+					foreach (string when in expected)
+					{
+						treeLines++;
+						if (!line.Contains(when)) failures.Add($"{part}: \"{line}\" without \"{when}\"");
+					}
+				}
+			}
+			if (conditions + times + treeLines == 0) Check.Skip("no source with a time or a condition in this world");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Hint conditions: {conditions} conditions, {times} times in sentences, {treeLines} on tree lines");
+			Check.All(failures, "Hints hiding when their source works");
 		}
 
 		// The planned shares of every biome sum to 1, on several seeds and both world evils; a rare owner gets less of a
