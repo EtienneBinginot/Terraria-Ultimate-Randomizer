@@ -107,13 +107,22 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Magic Storage indexes the recipes by result, ingredient and station once, when the game loads: without a rebuild its
-		// crafting interface would keep the vanilla recipes. Recipe Browser reads Main.recipe live and needs nothing
+		// crafting interface would keep the vanilla recipes. Recipe Browser reads Main.recipe live and needs nothing.
+		// Its rebuild (MagicCache.RecalculateRecipeCaches) only works once per session as is: WorkManager.StopActiveWork
+		// cancels a token it never recreates when its threads exist (they do after loading), and the recursion trees are
+		// added again under the same recipes. Both are reset first, as a fresh load would find them
 		private static void RefreshOtherMods()
 		{
-			if (!ModLoader.TryGetMod("MagicStorage", out Mod magicStorage)) return;
+			if (!ModLoader.TryGetMod("MagicStorage", out Mod magicStorage) || magicStorage.Code == null) return;
 			try
 			{
-				magicStorage.Code?.GetType("MagicStorage.Common.Systems.MagicCache")?.GetMethod("RecalculateRecipeCaches", BindingFlags.Public | BindingFlags.Static, Type.EmptyTypes)?.Invoke(null, null);
+				const BindingFlags Static = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+				Assembly code = magicStorage.Code;
+				code.GetType("MagicStorage.Common.Threading.WorkManager")?.GetField("_threads", Static)?.SetValue(null, null);
+				object trees = code.GetType("MagicStorage.Common.Systems.RecurrentRecipes.RecursiveRecipe")?.GetField("recipeToRecursiveRecipe", Static)?.GetValue(null);
+				trees?.GetType().GetMethod("Clear", Type.EmptyTypes)?.Invoke(trees, null);
+				code.GetType("MagicStorage.Common.Systems.RecurrentRecipes.NodePool")?.GetMethod("ClearNodes", Static, Type.EmptyTypes)?.Invoke(null, null);
+				code.GetType("MagicStorage.Common.Systems.MagicCache")?.GetMethod("RecalculateRecipeCaches", Static, Type.EmptyTypes)?.Invoke(null, null);
 			}
 			catch (Exception e)
 			{

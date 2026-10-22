@@ -441,49 +441,52 @@ Codex: {
 	}
 
 	Hint: {
-	Tree: {
-		OwnHint: un autre indice du Guide : achète-le ou trouve-le d'abord
-		Also: "{0} ; aussi : {1}"
-		Filled: {
-			Water: remplir un seau vide dans l'eau
-			Lava: remplir un seau vide dans la lave
-			Honey: remplir un seau vide dans le miel
+		Tree: {
+			OwnHint: un autre indice du Guide : achète-le ou trouve-le d'abord
+			Also: "{0} ; aussi : {1}"
+
+			Filled: {
+				Water: remplir un seau vide dans l'eau
+				Lava: remplir un seau vide dans la lave
+				Honey: remplir un seau vide dans le miel
+			}
+
+			WorldStation: se trouve dans le monde
+			Title: Tout ce qu'il faut, jusqu'aux matières premières
+			Station: (station)
+			More: ...et plus encore : fabrique les premières parties pour voir la suite dans le codex.
+			Mined: miner {0}
+			Repeat: voir plus haut
+			Unknown: aucune source connue
+			Recipe: fabriqué à {0}
+			Creature: "{0}, {1} ({2})"
+			CreatureAnywhere: "{0} ({1})"
+			Boss: "{0}, boss ({1})"
+			Shop: vendu par {0}
+			Bag: dans {0}
+			Chest: coffres en bois
+			Pot: pots
+			World: se trouve dans le monde
+			Caught: à attraper avec un filet à insectes : {0}
+			CaughtAnywhere: à attraper avec un filet à insectes là où vivent les créatures
+			Harvested: donné par les plantes {0} ({1}) : les plantes sont randomisées
+			Findable: se trouve au hasard dans le monde (coffres, pêche, caisses...)
+
+			Gathered: {
+				Dig: à creuser : {0}
+				Chop: couper des arbres : {0}
+				Grow: pousse à l'état sauvage : {0}
+				Gem: miner les veines de gemmes dans les cavernes
+				Beach: se ramasse sur les plages
+				Star: tombe du ciel la nuit
+				Obsidian: là où l'eau rencontre la lave (il faut une bonne pioche)
+				Other: se récolte dans le monde
+			}
 		}
-		WorldStation: se trouve dans le monde
-		Title: Tout ce qu'il faut, jusqu'aux matières premières
-		Station: (station)
-		More: ...et plus encore : fabrique les premières parties pour voir la suite dans le codex.
-		Mined: miner {0}
-		Repeat: voir plus haut
-		Unknown: aucune source connue
-		Recipe: fabriqué à {0}
-		Creature: "{0}, {1} ({2})"
-		CreatureAnywhere: "{0} ({1})"
-		Boss: "{0}, boss ({1})"
-		Shop: vendu par {0}
-		Bag: dans {0}
-		Chest: coffres en bois
-		Pot: pots
-		World: se trouve dans le monde
-		Caught: "à attraper avec un filet à insectes : {0}"
-		CaughtAnywhere: "à attraper avec un filet à insectes là où vivent les créatures"
-		Harvested: "donné par les plantes {0} ({1}) : les plantes sont randomisées"
-		Findable: "se trouve au hasard dans le monde (coffres, pêche, caisses...)"
-		Gathered: {
-			Dig: "à creuser : {0}"
-			Chop: "couper des arbres : {0}"
-			Grow: "pousse à l'état sauvage : {0}"
-			Gem: "miner les veines de gemmes dans les cavernes"
-			Beach: "se ramasse sur les plages"
-			Star: "tombe du ciel la nuit"
-			Obsidian: "là où l'eau rencontre la lave (il faut une bonne pioche)"
-			Other: "se récolte dans le monde"
-		}
-	}
-	
-	TabCrafting: Artisanat
-	TabBosses: Boss
-	NothingHere: Rien dans cet onglet pour l'instant : regarde dans l'autre.
+
+		TabCrafting: Artisanat
+		TabBosses: Boss
+		NothingHere: Rien dans cet onglet pour l'instant : regarde dans l'autre.
 		Syncing: Un instant : je me renseigne encore sur ce qui a déjà été acheté dans ce monde.
 		Refused: Je t'ai déjà dit tout ça. Demande-moi plutôt la suite.
 		Conditions: Attention à l'endroit : {0}.
@@ -850,6 +853,7 @@ Commands: {
 		Warning: Ceci randomise une fois les coffres naturels de ce monde. Les coffres renommés, et ceux près du point d'apparition ou des maisons des PNJ (sûrement les tiens), sont ignorés. Tape /rchests confirm pour continuer.
 		Done: "{0} coffres randomisés."
 	}
+
 	DebugOff: Les outils de débogage sont désactivés : active-les dans les réglages du mod (réglages client d'Ultimate Randomizer > Outils de débogage).
 }
 
@@ -2004,8 +2008,8 @@ Configs: {
 		}
 
 		DebugTools: {
-			Label: "Outils de débogage (touche K)"
-			Tooltip: "Outils de test pour le développement du mod : le panneau K (état du randomizer, inspecteur, triche, tests automatiques) et les commandes /rdebug et /rtest. Ils dévoilent tout le tirage : désactivés par défaut."
+			Label: Outils de débogage (touche K)
+			Tooltip: Outils de test pour le développement du mod : le panneau K (état du randomizer, inspecteur, triche, tests automatiques) et les commandes /rdebug et /rtest. Ils dévoilent tout le tirage : désactivés par défaut.
 		}
 
 		AdaptiveMessages: {

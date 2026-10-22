@@ -441,49 +441,52 @@ Codex: {
 	}
 
 	Hint: {
-	Tree: {
-		OwnHint: another hint of the Guide: buy it or find it first
-		Also: "{0}; also {1}"
-		Filled: {
-			Water: fill an empty bucket in water
-			Lava: fill an empty bucket in lava
-			Honey: fill an empty bucket in honey
+		Tree: {
+			OwnHint: another hint of the Guide: buy it or find it first
+			Also: "{0}; also {1}"
+
+			Filled: {
+				Water: fill an empty bucket in water
+				Lava: fill an empty bucket in lava
+				Honey: fill an empty bucket in honey
+			}
+
+			WorldStation: stands in the world
+			Title: What you need, down to the raw materials
+			Station: (station)
+			More: ...and more: craft the first parts to see the rest in the codex.
+			Mined: mine {0}
+			Repeat: see above
+			Unknown: no known source
+			Recipe: crafted at {0}
+			Creature: "{0}, {1} ({2})"
+			CreatureAnywhere: "{0} ({1})"
+			Boss: "{0}, boss ({1})"
+			Shop: sold by the {0}
+			Bag: inside {0}
+			Chest: wooden chests
+			Pot: pots
+			World: found in the world
+			Caught: catch it with a bug net: {0}
+			CaughtAnywhere: catch it with a bug net where critters live
+			Harvested: given by {0} plants ({1}): the plants are randomized
+			Findable: found at random in the world (chests, fishing, crates...)
+
+			Gathered: {
+				Dig: dig it up: {0}
+				Chop: chop trees: {0}
+				Grow: grows wild: {0}
+				Gem: mine gem veins in the caves
+				Beach: lies on the beaches
+				Star: falls from the sky at night
+				Obsidian: where water meets lava (needs a good pickaxe)
+				Other: gathered in the world
+			}
 		}
-		WorldStation: stands in the world
-		Title: What you need, down to the raw materials
-		Station: (station)
-		More: ...and more: craft the first parts to see the rest in the codex.
-		Mined: mine {0}
-		Repeat: see above
-		Unknown: no known source
-		Recipe: crafted at {0}
-		Creature: "{0}, {1} ({2})"
-		CreatureAnywhere: "{0} ({1})"
-		Boss: "{0}, boss ({1})"
-		Shop: sold by the {0}
-		Bag: inside {0}
-		Chest: wooden chests
-		Pot: pots
-		World: found in the world
-		Caught: "catch it with a bug net: {0}"
-		CaughtAnywhere: "catch it with a bug net where critters live"
-		Harvested: "given by {0} plants ({1}): the plants are randomized"
-		Findable: "found at random in the world (chests, fishing, crates...)"
-		Gathered: {
-			Dig: "dig it up: {0}"
-			Chop: "chop trees: {0}"
-			Grow: "grows wild: {0}"
-			Gem: "mine gem veins in the caves"
-			Beach: "lies on the beaches"
-			Star: "falls from the sky at night"
-			Obsidian: "where water meets lava (needs a good pickaxe)"
-			Other: "gathered in the world"
-		}
-	}
-	
-	TabCrafting: Crafting
-	TabBosses: Bosses
-	NothingHere: Nothing in this tab for now: look in the other one.
+
+		TabCrafting: Crafting
+		TabBosses: Bosses
+		NothingHere: Nothing in this tab for now: look in the other one.
 		Syncing: One moment: I am still catching up on what was bought in this world.
 		Refused: I have already told you that much. Ask me about the next step.
 		Conditions: Mind the place: {0}.
@@ -850,6 +853,7 @@ Commands: {
 		Warning: This randomizes once the natural chests of this world. Chests with a name, and chests near the spawn point or town NPC houses (probably yours) are skipped. Type /rchests confirm to proceed.
 		Done: "{0} chests randomized."
 	}
+
 	DebugOff: Debug tools are off: enable them in the mod settings (Ultimate Randomizer client settings > Debug tools).
 }
 
@@ -2004,8 +2008,8 @@ Configs: {
 		}
 
 		DebugTools: {
-			Label: "Debug tools (K key)"
-			Tooltip: "Testing tools for the mod's developers: the K panel (state of the randomizer, inspector, cheats, automated tests) and the /rdebug and /rtest commands. They reveal the whole randomization: off by default."
+			Label: Debug tools (K key)
+			Tooltip: Testing tools for the mod's developers: the K panel (state of the randomizer, inspector, cheats, automated tests) and the /rdebug and /rtest commands. They reveal the whole randomization: off by default.
 		}
 
 		AdaptiveMessages: {
