@@ -581,6 +581,13 @@ Codex: {
 				2: It falls from the pockets of some creature.
 			}
 
+			Hosts: {
+				Roaming: {
+					0: Several kinds of creatures carry it. Hunt, and you will find it.
+					1: No one crafts this one: a few kinds of creatures drop it.
+				}
+			}
+
 			Recipe: {
 				0: It is crafted, {0}.
 				1: No one finds it lying around: it is made {0}.
@@ -631,6 +638,13 @@ Codex: {
 				2: "{0} comes and goes {2}; it holds what you seek."
 			}
 
+			Hosts: {
+				Roaming: {
+					0: Several kinds of creatures carry one; they wander the world {2}.
+					1: Nobody knows where they live: several kinds of creatures, seen {2}, keep one.
+				}
+			}
+
 			Recipe: {
 				0: It is made from things found {0}.
 				1: Its parts are gathered {0}.
@@ -679,6 +693,13 @@ Codex: {
 				1: I sketched it for you, as best I could. It could turn up anywhere:
 			}
 
+			Hosts: {
+				Roaming: {
+					0: Here are their shapes. They go where they like, so keep your eyes open.
+					1: I sketched them for you, as best I could. They could turn up anywhere:
+				}
+			}
+
 			Recipe: {
 				0: These are the shapes of what you need:
 				1: Here is the recipe, in shadows:
@@ -719,6 +740,10 @@ Codex: {
 			Hosts: {
 				0: "{0} carry it: look here, {1} ({2} each)."
 				1: "Hunt these: {0}, in this place: {1} ({2} chance per kill, for each of them)."
+				Roaming: {
+					0: "These carry it, wherever they wander ({2} each): {0}."
+					1: Hunt these wherever you meet them ({2} chance per kill, for each of them): {0}.
+				}
 			}
 
 			Roaming: {

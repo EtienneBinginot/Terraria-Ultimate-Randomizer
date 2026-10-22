@@ -53,8 +53,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				{
 					rows.Add(new CodexRow(24, 8).WithLabel(line, 0.85f, l == level ? Color.White : CodexDraw.Muted));
 				}
-				if (l == 3 && level == 3) rows.Add(Visual(fact, true, inCodex));
-				if (l == 4) rows.Add(Visual(fact, false, inCodex));
+				if (l == 3 && level == 3) rows.Add(Visual(fact, true, inCodex, width));
+				if (l == 4) rows.Add(Visual(fact, false, inCodex, width));
 				// A recipe is only worth something with where its parts come from: the tree as shapes at level 3, then clear
 				if (fact.Kind == HintKind.Recipe && (l == 4 || (l == 3 && level == 3))) rows.AddRange(TreeRows(fact.Item, l == 3, width, inCodex));
 			}
@@ -62,23 +62,30 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		}
 
 		public const int MaxPortraits = 6;
+		// A small portrait and its gap; the room kept for the row's indent and the "+N" label
+		public const float PortraitStep = 68;
+		public const float PortraitRowMargin = 60;
+
+		// How many portraits of several enemies fit a row of this width (at least one, at most MaxPortraits)
+		public static int PortraitsFitting(float width) => Math.Clamp((int)((width - PortraitRowMargin) / PortraitStep), 1, MaxPortraits);
 
 		// The host (or the hosts), the recipe or the container, as a shape (level 3) or as it is (level 4)
-		public static UIElement Visual(HintFact fact, bool silhouette, bool inCodex)
+		public static UIElement Visual(HintFact fact, bool silhouette, bool inCodex, float width)
 		{
 			CodexRow row = new(silhouette || fact.Kind != HintKind.Recipe ? 92 : 50, 20);
 			switch (fact.Kind)
 			{
 				case HintKind.Creature when fact.Hosts.Count > 1:
-					// Every enemy carrying it (up to MaxPortraits), smaller
-					foreach (int host in fact.Hosts.Take(MaxPortraits))
+					// Every enemy carrying it (as many as the row holds), smaller
+					int shown = PortraitsFitting(width);
+					foreach (int host in fact.Hosts.Take(shown))
 					{
 						row.Add(new CodexNpcPortrait(host, 64, 60, false, 0, clickable: inCodex && !silhouette, silhouette: silhouette, textureOnly: !inCodex)
 						{
 							HoverText = silhouette ? null : HintFacts.NpcName(host)
 						}, 4);
 					}
-					if (fact.Hosts.Count > MaxPortraits) row.Add(new CodexLabel("+" + (fact.Hosts.Count - MaxPortraits), 0.9f, CodexDraw.Muted), 6);
+					if (fact.Hosts.Count > shown) row.Add(new CodexLabel("+" + (fact.Hosts.Count - shown), 0.9f, CodexDraw.Muted), 6);
 					break;
 				case HintKind.Creature:
 				case HintKind.Boss:

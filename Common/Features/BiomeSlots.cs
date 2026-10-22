@@ -113,6 +113,8 @@ namespace UltimateRandomizer.Common.Features
 		internal readonly Dictionary<int, ShareTable> Shares = new();
 		internal HashSet<int> SlotTypes;
 		internal Dictionary<int, int> MeetTiers;
+		// Steady shares by (tier, period): biome, then type (BiomeSlots.SteadyShareAt)
+		internal readonly Dictionary<(int tier, SlotTime period), Dictionary<int, Dictionary<int, double>>> PeriodShares = new();
 		// For each type (slime colours are Blue Slimes): the tier from which it spawns somewhere, as an owner or an extra
 		public readonly Dictionary<int, int> SpawnTier = new();
 
@@ -810,6 +812,63 @@ namespace UltimateRandomizer.Common.Features
 
 		// The part of that share that comes from slots neither rare nor conditional (no weather, season or event needed)
 		public static double SteadyShare(int biome, int type, int tier = Tiers.Max) => Mixed(biome, type, tier, true);
+
+		// Is a slot of this time open in a period (Any: always)?
+		public static bool OpenIn(SlotTime slot, SlotTime period) => period == SlotTime.Any || slot == SlotTime.Any || slot == period;
+
+		// Steady share of a type among the spawns of a biome in one period (Day: the day and any-hour slots; Night: the night
+		// and any-hour ones; Any: all), counting for the type only the slots whose original is of that tier or below: an
+		// enemy met there only through the slots of stronger originals doesn't make the biome reachable at that tier. Every
+		// slot open in the tier's band (rare and conditional ones with their weights) counts in the total, as in SteadyShare;
+		// the vanilla share of BiomeVanillaChance is mixed in by biome
+		public static double SteadyShareAt(int biome, int type, int tier, SlotTime period)
+		{
+			tier = Tiers.Clamp(tier);
+			if (!Active) return PeriodShareIn(Vanilla, tier, period, biome, type);
+			double keep = VanillaKeep;
+			double share = (1 - keep) * PeriodShareIn(Current, tier, period, biome, type);
+			return keep > 0 ? share + keep * PeriodShareIn(Vanilla, tier, period, biome, type) : share;
+		}
+
+		private static double PeriodShareIn(BiomeSlotMap map, int tier, SlotTime period, int biome, int type) =>
+			PeriodTable(map, tier, period).TryGetValue(biome, out Dictionary<int, double> byType) && byType.TryGetValue(type, out double share) ? share : 0;
+
+		private static Dictionary<int, Dictionary<int, double>> PeriodTable(BiomeSlotMap map, int tier, SlotTime period)
+		{
+			if (map.PeriodShares.TryGetValue((tier, period), out Dictionary<int, Dictionary<int, double>> cached)) return cached;
+			int band = BandOf(tier);
+			Dictionary<int, double> totals = new();
+			Dictionary<int, Dictionary<int, double>> result = new();
+			foreach (BiomeSlot slot in map.Slots)
+			{
+				if (!Counted(slot, band) || !OpenIn(slot.Time, period)) continue;
+				double weight = SlotWeight(slot);
+				totals[slot.Biome] = totals.GetValueOrDefault(slot.Biome) + weight;
+				if (slot.Rare || slot.Conditional || slot.Tier > tier) continue;
+				if (!result.TryGetValue(slot.Biome, out Dictionary<int, double> byType)) result[slot.Biome] = byType = new Dictionary<int, double>();
+				// Split as Pick splits it
+				foreach ((int id, double part) in SpawnParts(slot))
+				{
+					int type = TypeOf(id);
+					byType[type] = byType.GetValueOrDefault(type) + weight * part;
+				}
+			}
+			foreach ((int biome, Dictionary<int, double> byType) in result)
+			{
+				foreach (int type in byType.Keys.ToList()) byType[type] /= totals[biome];
+			}
+			map.PeriodShares[(tier, period)] = result;
+			return result;
+		}
+
+		// Enemy slots of a biome open at a tier whose original is of that tier or below, in the spawn map (how big the biome is
+		// for the enemies of that tier)
+		public static int SlotCountAt(int biome, int tier)
+		{
+			tier = Tiers.Clamp(tier);
+			int band = BandOf(tier);
+			return SpawnMap.Slots.Count(s => s.Biome == biome && Counted(s, band) && s.Tier <= tier);
+		}
 
 		// Every biome where a type spawns at a tier, the highest steady share first (then the whole share), with the time of
 		// its slots there. The share given is the whole one

@@ -103,7 +103,7 @@ namespace UltimateRandomizer.Common.Codex
 			"Where.Creature/3", "Where.Roaming/3", "Where.Recipe/3", "Where.Boss/3", "Where.Bag/3", "Where.Chest/3", "Where.Pot/3", "Where.Shop/3",
 			"Shape.Creature/2", "Shape.Roaming/2", "Shape.Recipe/2", "Shape.Boss/2", "Shape.Bag/2", "Shape.Chest/2", "Shape.Pot/2", "Shape.Shop/2",
 			"Name.Creature/2", "Name.Roaming/2", "Name.Recipe/2", "Name.Boss/2", "Name.Bag/2", "Name.Chest/2", "Name.Pot/2", "Name.Shop/2",
-			"Name.Hosts/2"
+			"Name.Hosts/2", "Kind.Hosts.Roaming/2", "Where.Hosts.Roaming/2", "Shape.Hosts.Roaming/2", "Name.Hosts.Roaming/2"
 		};
 
 		// Vanilla summons found in the world rather than dropped or crafted (Protection.WorldSummons): (item, text key, critter to show)
@@ -569,13 +569,21 @@ namespace UltimateRandomizer.Common.Codex
 			int chosen = fact.Kind == HintKind.Creature && fact.Hosts.Count > 0 && BiomeSlots.SpawnsPlanned ? GuaranteedSources.BiomeOf(fact.Item) : -1;
 			if (chosen >= 0)
 			{
-				int tier = Math.Max(0, GuaranteedSources.PlacedTier(fact.Item));
 				fact.Biomes = new List<string> { BiomeSlots.BiomeName(chosen) };
-				List<SlotTime> times = fact.Hosts.Select(h => BiomeSlots.PlannedBiomes(BiomeSlots.TypeOf(h), tier).Where(b => b.biome == chosen).Select(b => b.time).DefaultIfEmpty(SlotTime.Any).First()).Distinct().ToList();
-				fact.Time = times.Count == 1 ? times[0] : SlotTime.Any;
+				// Day or Night when its biome only holds hosts at that time
+				fact.Time = GuaranteedSources.PlacedTime(fact.Item);
 				List<BiomeSlot> hostSlots = BiomeSlots.SpawnMap.Slots.Where(s => s.Biome == chosen && SpawnsIn(s, type)).ToList();
 				if (hostSlots.Count > 0) fact.Movement = Math.Min(3, hostSlots.GroupBy(s => s.Movement).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key);
 				if (fact.Movement < 0 && ContentSamples.NpcsByNetId.TryGetValue(fact.Npc, out NPC hostSample)) fact.Movement = hostSample.noGravity ? 1 : 0;
+				return;
+			}
+			// Several enemies without a biome (common hosts of the tier, spawns swapped another way): each lives elsewhere, so
+			// no biome is named (the first one's would be wrong for the others, and the codex would see them all there)
+			if (fact.Kind == HintKind.Creature && fact.Hosts.Count > 1)
+			{
+				fact.Biomes = new List<string>();
+				fact.Time = SlotTime.Any;
+				if (ContentSamples.NpcsByNetId.TryGetValue(fact.Npc, out NPC firstSample)) fact.Movement = firstSample.noGravity ? 1 : 0;
 				return;
 			}
 			// Swapped another way, an enemy spawns anywhere: no biome is named
@@ -842,14 +850,19 @@ namespace UltimateRandomizer.Common.Codex
 
 		// ---- Texts ----
 
-		public static string LevelFamily(HintFact fact, int level) => level switch
+		public static string LevelFamily(HintFact fact, int level)
 		{
-			1 => Roaming(fact) ? "Kind.Roaming" : "Kind." + fact.Kind,
-			2 => Roaming(fact) ? "Where.Roaming" : "Where." + fact.Kind,
-			3 => Roaming(fact) ? "Shape.Roaming" : "Shape." + fact.Kind,
-			// Several enemies: their names and the chance on each
-			_ => Roaming(fact) ? "Name.Roaming" : fact.Kind == HintKind.Creature && fact.Hosts.Count > 1 ? "Name.Hosts" : "Name." + fact.Kind
-		};
+			// Several enemies without a biome: plural sentences
+			if (Roaming(fact) && fact.Hosts.Count > 1) return (level switch { 1 => "Kind", 2 => "Where", 3 => "Shape", _ => "Name" }) + ".Hosts.Roaming";
+			return level switch
+			{
+				1 => Roaming(fact) ? "Kind.Roaming" : "Kind." + fact.Kind,
+				2 => Roaming(fact) ? "Where.Roaming" : "Where." + fact.Kind,
+				3 => Roaming(fact) ? "Shape.Roaming" : "Shape." + fact.Kind,
+				// Several enemies: their names and the chance on each
+				_ => Roaming(fact) ? "Name.Roaming" : fact.Kind == HintKind.Creature && fact.Hosts.Count > 1 ? "Name.Hosts" : "Name." + fact.Kind
+			};
+		}
 
 		// A creature without a known biome: its own sentences, never "here: anywhere"
 		private static bool Roaming(HintFact fact) => fact.Kind == HintKind.Creature && fact.Biomes.Count == 0;

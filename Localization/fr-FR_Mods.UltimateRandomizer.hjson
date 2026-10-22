@@ -581,6 +581,13 @@ Codex: {
 				2: Il tombe des poches d'une créature.
 			}
 
+			Hosts: {
+				Roaming: {
+					0: Plusieurs sortes de créatures le transportent. Chasse, et tu le trouveras.
+					1: Personne ne fabrique celui-ci : plusieurs sortes de créatures le lâchent.
+				}
+			}
+
 			Recipe: {
 				0: Ça se fabrique, {0}.
 				1: Personne ne le trouve par terre : on le fabrique {0}.
@@ -631,6 +638,13 @@ Codex: {
 				2: "{0} va et vient {2} ; elle détient ce que tu cherches."
 			}
 
+			Hosts: {
+				Roaming: {
+					0: Plusieurs sortes de créatures en portent un ; elles errent de par le monde {2}.
+					1: Personne ne sait où elles vivent : plusieurs sortes de créatures, aperçues {2}, en gardent un exemplaire.
+				}
+			}
+
 			Recipe: {
 				0: On le fabrique avec des choses trouvées {0}.
 				1: Ses composants se récoltent {0}.
@@ -679,6 +693,13 @@ Codex: {
 				1: Je te l'ai dessinée du mieux que j'ai pu. Elle peut surgir n'importe où :
 			}
 
+			Hosts: {
+				Roaming: {
+					0: Voici leurs silhouettes. Elles vont où bon leur semble, alors garde les yeux ouverts.
+					1: Je te les ai dessinées du mieux que j'ai pu. Elles peuvent surgir n'importe où :
+				}
+			}
+
 			Recipe: {
 				0: Voici les silhouettes de ce qu'il te faut :
 				1: Voici la recette, en ombres chinoises :
@@ -719,6 +740,10 @@ Codex: {
 			Hosts: {
 				0: "Ces créatures le transportent : {0}. Va les chercher ici : {1} ({2} chacune)."
 				1: "Tes cibles : {0}, à cet endroit : {1} ({2} de chances par créature tuée, pour chacune)."
+				Roaming: {
+					0: "Ces créatures le transportent, où qu'elles aillent ({2} chacune) : {0}."
+					1: Chasse-les partout où tu les croises ({2} de chances par créature tuée, pour chacune) : {0}.
+				}
 			}
 
 			Roaming: {
