@@ -40,6 +40,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintTabsSplit", HintTabsSplit);
 			TestRunner.Register("HintTreeKeepsOtherHints", HintTreeKeepsOtherHints);
 			TestRunner.Register("HintConditionsShown", HintConditionsShown);
+			TestRunner.Register("HintSummonTiers", HintSummonTiers);
+			TestRunner.Register("HintLockedShown", HintLockedShown);
 		}
 
 		private static List<HintTarget> RecipeTargets() =>
@@ -519,6 +521,60 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Hint conditions: {conditions} conditions, {times} times in sentences, {treeLines} on tree lines");
 			Check.All(failures, "Hints hiding when their source works");
+		}
+
+		// A boss summon is offered when its boss is the next step, whatever its rarity: the Suspicious Looking Eye from the
+		// start, the Mechanical Eye in hardmode, the Lihzahrd Power Cell after Plantera (it was offered long before Golem)
+		private static void HintSummonTiers()
+		{
+			List<string> failures = new();
+			foreach ((int item, Tier expected) in new[] { (ItemID.SuspiciousLookingEye, Tier.PreBoss), (ItemID.MechanicalEye, Tier.Hardmode), (ItemID.LihzahrdPowerCell, Tier.PostPlantera),
+				(ItemID.SlimeCrown, Tier.PreBoss), (ItemID.TruffleWorm, Tier.PostPlantera), (ItemID.CelestialSigil, Tier.PostCultist) })
+			{
+				int tier = Protection.SummonTier(item);
+				if (tier != (int)expected) failures.Add($"{HintFacts.ItemName(item)}: tier {tier}, expected {(int)expected}");
+				HintTarget target = HintFacts.Ready ? HintFacts.RawTarget(item) : null;
+				if (target != null && target.Tier != (int)expected) failures.Add($"{HintFacts.ItemName(item)}: offered from tier {target.Tier}, expected {(int)expected}");
+			}
+			// Event summons keep their own moment
+			if (Protection.SummonTier(ItemID.PirateMap) < (int)Tier.Hardmode) failures.Add($"Pirate Map at tier {Protection.SummonTier(ItemID.PirateMap)}");
+			if (Protection.SummonTier(ItemID.GuideVoodooDoll) < (int)Tier.PostEvilBoss) failures.Add($"Guide Voodoo Doll at tier {Protection.SummonTier(ItemID.GuideVoodooDoll)}");
+			Check.All(failures, "Summon tiers");
+		}
+
+		// Targets more than one tier ahead are listed (greyed, with when they come) but never sold: the shop refuses them before
+		// taking coins, the server refuses them too; every target with a source is either on sale, known or listed as locked
+		private static void HintLockedShown()
+		{
+			if (!HintFacts.Ready) Check.Skip("no world");
+			List<HintTarget> locked = HintFacts.LockedTargets();
+			if (locked.Count == 0) Check.Skip("nothing is more than one tier ahead");
+			List<string> failures = new();
+			foreach (bool bosses in new[] { false, true })
+			{
+				HashSet<int> onSale = HintPanelState.TabTargets(false, bosses).Select(t => t.Item).ToHashSet();
+				HashSet<int> known = HintPanelState.TabTargets(true, bosses).Select(t => t.Item).ToHashSet();
+				HashSet<int> later = HintPanelState.LockedTabTargets(bosses).Select(t => t.Item).ToHashSet();
+				foreach (HintTarget target in HintFacts.AllTargets().Where(t => (t.Kind == HintTargetKind.Summon) == bosses))
+				{
+					string name = HintFacts.ItemName(target.Item);
+					bool isLocked = HintFacts.IsLocked(target);
+					if (isLocked && onSale.Contains(target.Item)) failures.Add($"{name} (tier {target.Tier}) on sale");
+					if (isLocked && !later.Contains(target.Item) && !known.Contains(target.Item)) failures.Add($"{name} (tier {target.Tier}) not shown");
+					if (!isLocked && later.Contains(target.Item)) failures.Add($"{name} (tier {target.Tier}) shown as locked");
+				}
+			}
+			int unlocked = ProgressionSystem.UnlockedTier;
+			foreach (HintTarget target in locked)
+			{
+				string name = HintFacts.ItemName(target.Item);
+				if (HintShop.Check(target, CodexSystem.HintLevel(target.Item) + 1) == HintPurchase.Bought) failures.Add($"{name}: the shop would sell it");
+				CodexEntry entry = CodexEntry.Hint(CodexNames.Item(target.Item), CodexSystem.Data.HintLevel(CodexNames.Item(target.Item)) + 1);
+				if (CodexSystem.AcceptHint(entry, CodexSystem.Data, unlocked)) failures.Add($"{name}: the server would accept it");
+				if (!Language.Exists(CodexText.Prefix + "Hint.Unlock." + (Tier)Tiers.Clamp(target.Tier - 1))) failures.Add($"{name}: no text for when it comes");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Hint locked targets: {locked.Count} ({string.Join(", ", locked.Take(6).Select(t => HintFacts.ItemName(t.Item) + " " + HintFacts.UnlockText(t)))})");
+			Check.All(failures, "Locked hint targets");
 		}
 
 		// The planned shares of every biome sum to 1, on several seeds and both world evils; a rare owner gets less of a

@@ -171,6 +171,8 @@ Tests: {
 	HintTabsSplit: Les indices du Guide sont répartis entre artisanat et boss
 	HintTreeKeepsOtherHints: Un arbre d'indice cache les stations et invocations des autres indices tant qu'ils ne sont pas connus
 	HintConditionsShown: Les indices et arbres de fabrication disent quand une source fonctionne : heure, météo ou événement, conditions de butin et de recette, autels pour les minerais du hardmode
+	HintSummonTiers: Les invocations de boss sont proposées quand leur boss est la prochaine étape (cellule énergétique après Plantera, œil mécanique en mode difficile)
+	HintLockedShown: Les indices pour plus tard sont listés en grisé avec le moment où ils viendront, et ne sont jamais vendus
 	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
@@ -503,6 +505,22 @@ Codex: {
 		TabCrafting: Artisanat
 		TabBosses: Boss
 		NothingHere: Rien dans cet onglet pour l'instant : regarde dans l'autre.
+		LockedTitle: Plus tard
+		LockedSay: "{0} ? Pas encore : redemande-moi {1}."
+		
+		Unlock: {
+			PreBoss: dès le début
+			PostEyeOfCthulhu: après l'Œil de Cthulhu
+			PostEvilBoss: après le Dévoreur des mondes ou le Cerveau de Cthulhu
+			PostSkeletron: après Skeletron
+			Hardmode: après le Mur de chair
+			PostMechBoss: après un boss mécanique
+			PostPlantera: après Plantera
+			PostGolem: après Golem
+			PostCultist: après le Cultiste lunatique
+			PostMoonLord: après le Seigneur de la lune
+		}
+		
 		Syncing: Un instant : je me renseigne encore sur ce qui a déjà été acheté dans ce monde.
 		Refused: Je t'ai déjà dit tout ça. Demande-moi plutôt la suite.
 		Conditions: Attention à l'endroit : {0}.

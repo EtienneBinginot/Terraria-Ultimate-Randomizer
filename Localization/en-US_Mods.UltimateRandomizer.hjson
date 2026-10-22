@@ -171,6 +171,8 @@ Tests: {
 	HintTabsSplit: The Guide's hints are split between crafting and bosses
 	HintTreeKeepsOtherHints: A hint tree keeps the stations and summons of other hints hidden until they are known
 	HintConditionsShown: Hints and craft trees say when a source works: time, weather or event, drop and recipe conditions, altars for hardmode ores
+	HintSummonTiers: Boss summons are offered when their boss is the next step (Power Cell after Plantera, Mechanical Eye in hardmode)
+	HintLockedShown: Hints for later are listed greyed with when they come, and are never sold
 	GuaranteedHostsNotEvents: Guaranteed drops are never on invasion, moon, seasonal or weather enemies
 	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
 	FindabilityDeterminism: Findability of items is the same after a rebuild
@@ -503,6 +505,22 @@ Codex: {
 		TabCrafting: Crafting
 		TabBosses: Bosses
 		NothingHere: Nothing in this tab for now: look in the other one.
+		LockedTitle: Later on
+		LockedSay: "{0}? Not yet: ask me again {1}."
+		
+		Unlock: {
+			PreBoss: from the start
+			PostEyeOfCthulhu: after the Eye of Cthulhu
+			PostEvilBoss: after the Eater of Worlds or the Brain of Cthulhu
+			PostSkeletron: after Skeletron
+			Hardmode: after the Wall of Flesh
+			PostMechBoss: after a mechanical boss
+			PostPlantera: after Plantera
+			PostGolem: after Golem
+			PostCultist: after the Lunatic Cultist
+			PostMoonLord: after the Moon Lord
+		}
+		
 		Syncing: One moment: I am still catching up on what was bought in this world.
 		Refused: I have already told you that much. Ask me about the next step.
 		Conditions: Mind the place: {0}.

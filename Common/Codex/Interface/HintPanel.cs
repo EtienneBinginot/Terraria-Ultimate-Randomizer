@@ -18,7 +18,7 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Codex.Interface
 {
-	public enum HintPurchase { Bought, TooPoor, NotNext, NotSynced, NoTarget }
+	public enum HintPurchase { Bought, TooPoor, NotNext, NotSynced, NoTarget, Locked }
 
 	// Buying hint levels: the local player pays with its own coins (inventory, piggy bank, safe...: Player.BuyItem, like
 	// a shop purchase, which vanilla also does on the client) and records the level. In multiplayer the level goes to
@@ -26,14 +26,24 @@ namespace UltimateRandomizer.Common.Codex.Interface
 	// it, or refuses it and the coins come back (CodexSystem).
 	public static class HintShop
 	{
-		public static HintPurchase TryBuy(Player player, HintTarget target, int level, out long price)
+		// Why a level can't be bought now (Bought: it can), before any coin is taken
+		public static HintPurchase Check(HintTarget target, int level)
 		{
-			price = target == null ? 0 : HintFacts.Price(target, level);
 			if (target == null) return HintPurchase.NoTarget;
 			// Joining: the levels already bought by others are not known yet
 			if (!CodexSystem.CanBuyHints) return HintPurchase.NotSynced;
+			// Shown for what comes later, not sold yet (the server refuses it too: CodexSystem.AcceptHint)
+			if (HintFacts.IsLocked(target)) return HintPurchase.Locked;
 			// A target already found needs no hint (its last level is given for free)
 			if (CodexSystem.IsFound(target.Item) || level < 1 || level > HintFacts.MaxLevel || level != CodexSystem.HintLevel(target.Item) + 1) return HintPurchase.NotNext;
+			return HintPurchase.Bought;
+		}
+
+		public static HintPurchase TryBuy(Player player, HintTarget target, int level, out long price)
+		{
+			price = target == null ? 0 : HintFacts.Price(target, level);
+			HintPurchase check = Check(target, level);
+			if (check != HintPurchase.Bought) return check;
 			if (price > 0 && !player.BuyItem(price, -1)) return HintPurchase.TooPoor;
 			HintFact fact = HintFacts.For(target.Item);
 			// The last level shows the recipe: discovered in the codex once the level is accepted
@@ -418,6 +428,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		// Boss and event summons in the bosses tab, stations and pickaxes in the crafting one
 		public static List<HintTarget> TabTargets(bool known, bool bosses) => TabTargets(known).Where(t => (t.Kind == HintTargetKind.Summon) == bosses).ToList();
 
+		// What a tab shows below the targets on sale: those that come later (to buy tab only), greyed and not sold, in the
+		// order progression reaches them, so that the whole road is visible
+		public static List<HintTarget> LockedTabTargets(bool bosses) =>
+			HintFacts.ByProgress(HintFacts.LockedTargets().Where(t => (t.Kind == HintTargetKind.Summon) == bosses && CodexSystem.ShownHintLevel(t.Item) < HintFacts.MaxLevel));
+
 		// The targets of a tab, in the order progression reaches them: to buy, those offered now and not fully known; known,
 		// every target bought to the end or found
 		public static List<HintTarget> TabTargets(bool known) => known
@@ -439,12 +454,18 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			bossesButton.Active = bossTab;
 			List<HintTarget> all = TabTargets(knownTab, bossTab);
 			List<HintTarget> list = all.Where(Matches).ToList();
+			List<HintTarget> locked = knownTab ? new List<HintTarget>() : LockedTabTargets(bossTab).Where(Matches).ToList();
 			if (!CodexSystem.CanBuyHints) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get("Hint.Syncing"), 0.8f, CodexDraw.Muted));
 			string empty = all.Count > 0 ? CodexText.Get("NoMatch")
 				: TabTargets(knownTab, !bossTab).Count > 0 ? CodexText.Get("Hint.NothingHere")
 				: CodexText.Get(knownTab ? "Hint.NothingKnown" : "Hint.Nothing");
 			if (list.Count == 0) rows.Add(new CodexRow(30, 4).WithLabel(empty, 0.8f, CodexDraw.Muted));
 			foreach (HintTarget target in list) rows.Add(TargetRow(target));
+			if (locked.Count > 0)
+			{
+				rows.Add(new CodexSection(CodexText.Get("Hint.LockedTitle")));
+				foreach (HintTarget target in locked) rows.Add(LockedRow(target));
+			}
 			targets.AddRange(rows);
 			targets.Recalculate();
 			targets.ViewPosition = scroll;
@@ -478,6 +499,28 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			buy.Left.Set(-162, 1f);
 			buy.VAlign = 0.5f;
 			row.Append(buy);
+			return row;
+		}
+
+		// A target that comes later: its icon and name greyed, when it will be offered, nothing to buy nor to read
+		private UIElement LockedRow(HintTarget target)
+		{
+			string when = HintFacts.UnlockText(target);
+			CodexRow row = new(44, 2) { Highlight = true };
+			row.OnLeftClick += (_, _) => HintShop.Say(CodexText.Get("Hint.LockedSay", HintFacts.ItemName(target.Item), when));
+			row.Add(new CodexItemIcon(target.Item, 0, 40) { Silhouette = !CodexSystem.HasSeen(target.Item), HoverText = when }, 6);
+			float nameWidth = panelWidth - 330;
+			string name = HintFacts.ItemName(target.Item);
+			if (CodexDraw.TextWidth(name, 0.8f) > nameWidth)
+			{
+				while (name.Length > 4 && CodexDraw.TextWidth(name + "...", 0.8f) > nameWidth) name = name.Substring(0, name.Length - 1);
+				name += "...";
+			}
+			row.Add(new CodexLabel(name, 0.8f, CodexDraw.Muted));
+			CodexLabel unlock = new(when, 0.72f, CodexDraw.Muted);
+			unlock.Left.Set(-232, 1f);
+			unlock.VAlign = 0.5f;
+			row.Append(unlock);
 			return row;
 		}
 
@@ -516,6 +559,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 					break;
 				case HintPurchase.NotSynced:
 					HintShop.Say(CodexText.Get("Hint.Syncing"));
+					break;
+				case HintPurchase.Locked:
+					HintShop.Say(CodexText.Get("Hint.LockedSay", HintFacts.ItemName(target.Item), HintFacts.UnlockText(target)));
+					dirty = true;
 					break;
 				default:
 					HintShop.Say(CodexText.Get("Hint.Refused"));

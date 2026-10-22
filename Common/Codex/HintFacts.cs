@@ -234,6 +234,17 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static List<HintTarget> Targets() => Targets(ProgressionSystem.UnlockedTier);
 
+		// A target beyond what is offered now (more than one tier above the unlocked one): shown, never sold
+		public static bool IsLocked(HintTarget target, int unlockedTier) => target.Tier > unlockedTier + 1;
+
+		public static bool IsLocked(HintTarget target) => IsLocked(target, ProgressionSystem.UnlockedTier);
+
+		// Every target with a source that is not offered yet
+		public static List<HintTarget> LockedTargets() => AllTargets().Where(t => IsLocked(t)).ToList();
+
+		// "after Plantera": when a locked target will be offered (the boss of the tier before its own)
+		public static string UnlockText(HintTarget target) => CodexText.Of("Hint.Unlock", (Tier)Tiers.Clamp(target.Tier - 1));
+
 		public static HintTarget Target(int item) => AllTargets().FirstOrDefault(t => t.Item == item);
 
 		// The target and tier of an item without building its facts (server checks)
@@ -1183,6 +1194,9 @@ namespace UltimateRandomizer.Common.Codex
 			yield return "Hint.When.Drop";
 			yield return "Hint.When.Short.Conditional";
 			yield return "Hint.When.Short.Altar";
+			foreach (Tier tier in Enum.GetValues<Tier>()) yield return "Hint.Unlock." + tier;
+			yield return "Hint.LockedTitle";
+			yield return "Hint.LockedSay";
 			foreach (string move in Movements) yield return "Hint.Move." + move;
 			for (int b = 0; b < 4; b++) yield return "Hint.Band." + b;
 			foreach (SlotTime time in Enum.GetValues<SlotTime>())

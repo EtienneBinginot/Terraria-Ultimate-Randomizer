@@ -56,13 +56,14 @@ namespace UltimateRandomizer.Common.Core
 			[ItemID.SolarTablet] = Tier.PostMechBoss, [ItemID.PumpkinMoonMedallion] = Tier.PostPlantera, [ItemID.NaughtyPresent] = Tier.PostPlantera
 		};
 
-		// The tier a summon is needed at: its own tier (event summons: not before their event matters), but never later than
-		// the tier before the one its boss opens (the Suspicious Looking Eye is needed before the Eye of Cthulhu is beaten)
+		// The tier a summon is needed at. A boss summon: the tier before the one its boss opens, when that boss is the next
+		// step (the Suspicious Looking Eye from the start, the Lihzahrd Power Cell after Plantera), whatever its rarity: a
+		// cheap-looking summon was offered by the Guide long before its boss. Other summons: their own tier, not before their
+		// event matters (NeededFrom, which also keeps the Guide Voodoo Doll until the Underworld is in reach)
 		public static int SummonTier(int item)
 		{
-			int tier = ItemPool.TierOf(item);
+			int tier = SummonedBoss.TryGetValue(item, out int boss) ? NpcTiers.BaseTier(boss) - 1 : ItemPool.TierOf(item);
 			if (NeededFrom.TryGetValue(item, out Tier from)) tier = Math.Max(tier, (int)from);
-			if (SummonedBoss.TryGetValue(item, out int boss)) tier = Math.Min(tier, NpcTiers.BaseTier(boss) - 1);
 			return Tiers.Clamp(tier);
 		}
 
