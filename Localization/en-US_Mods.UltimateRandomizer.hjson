@@ -441,6 +441,12 @@ Codex: {
 
 	Hint: {
 	Tree: {
+		Caught: catch it with a bug net
+		Filled: {
+			Water: fill an empty bucket in water
+			Lava: fill an empty bucket in lava
+			Honey: fill an empty bucket in honey
+		}
 		Findable: found in the world (fishing, chests, plants...)
 		WorldStation: stands in the world
 		Title: What you need, down to the raw materials

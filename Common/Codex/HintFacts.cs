@@ -21,7 +21,8 @@ namespace UltimateRandomizer.Common.Codex
 	// it, gathered or mined in the world, already explained above, or nothing known
 	// Findable: found in the world in a way hints don't name (fishing, chest loot, plants, Extractinator...);
 	// WorldStation: a station that has no item and stands in the world (altars)
-	public enum HintTreeLeaf : byte { Recipe, Fact, Gathered, Mined, Repeat, Unknown, Findable, WorldStation }
+	// Caught: a critter caught with a bug net; Filled: a bucket filled in a pool of its liquid
+	public enum HintTreeLeaf : byte { Recipe, Fact, Gathered, Mined, Repeat, Unknown, Findable, WorldStation, Caught, Filled }
 
 	// One ingredient or station of a recipe hint's tree, with its depth (1: a part of the hinted recipe)
 	public sealed class HintTreeNode
@@ -602,6 +603,8 @@ namespace UltimateRandomizer.Common.Codex
 				else if (!explained.Add(type)) node.Leaf = HintTreeLeaf.Repeat;
 				else if (OreMap.IsOre(type) && OreMap.IsFindable(type)) node.Leaf = HintTreeLeaf.Mined;
 				else if (Findability.IsWorldMaterial(type)) node.Leaf = HintTreeLeaf.Gathered;
+				else if (CritterOf(type) > 0) node.Leaf = HintTreeLeaf.Caught;
+				else if (type is ItemID.WaterBucket or ItemID.LavaBucket or ItemID.HoneyBucket) node.Leaf = HintTreeLeaf.Filled;
 				else
 				{
 					node.Fact = For(type);
@@ -616,6 +619,9 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			return true;
 		}
+
+		// The critter this item is (caught with a bug net), 0 when none
+		public static int CritterOf(int item) => ContentSamples.ItemsByType.TryGetValue(item, out Item sample) && sample.makeNPC > 0 ? sample.makeNPC : 0;
 
 		// The name of a part: its item, or the station standing in the world
 		public static string TreeName(HintTreeNode node) => node.Item > 0 ? ItemName(node.Item) : StationName(node.Tile);
@@ -643,6 +649,8 @@ namespace UltimateRandomizer.Common.Codex
 				HintTreeLeaf.Unknown => CodexText.Get("Hint.Tree.Unknown"),
 				HintTreeLeaf.Findable => CodexText.Get("Hint.Tree.Findable"),
 				HintTreeLeaf.WorldStation => CodexText.Get("Hint.Tree.WorldStation"),
+				HintTreeLeaf.Caught => CodexText.Get("Hint.Tree.Caught"),
+				HintTreeLeaf.Filled => CodexText.Get("Hint.Tree.Filled." + node.Item switch { ItemID.LavaBucket => "Lava", ItemID.HoneyBucket => "Honey", _ => "Water" }),
 				HintTreeLeaf.Recipe => CodexText.Get("Hint.Tree.Recipe", NamePhrase(fact)),
 				_ => fact.Kind switch
 				{
@@ -660,7 +668,8 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static readonly string[] TreeTextKeys =
 		{
-			"Title", "Station", "More", "Mined", "Gathered", "Repeat", "Unknown", "Findable", "WorldStation", "Recipe", "Creature", "CreatureAnywhere", "Boss", "Shop",
+			"Title", "Station", "More", "Mined", "Gathered", "Repeat", "Unknown", "Findable", "WorldStation", "Caught", "Filled.Water", "Filled.Lava", "Filled.Honey",
+			"Recipe", "Creature", "CreatureAnywhere", "Boss", "Shop",
 			"Bag", "Chest", "Pot", "World"
 		};
 

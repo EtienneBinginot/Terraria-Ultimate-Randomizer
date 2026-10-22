@@ -441,6 +441,12 @@ Codex: {
 
 	Hint: {
 	Tree: {
+		Caught: à attraper avec un filet à insectes
+		Filled: {
+			Water: remplir un seau vide dans l'eau
+			Lava: remplir un seau vide dans la lave
+			Honey: remplir un seau vide dans le miel
+		}
 		Findable: se trouve dans le monde (pêche, coffres, plantes...)
 		WorldStation: se trouve dans le monde
 		Title: Tout ce qu'il faut, jusqu'aux matières premières

@@ -281,17 +281,17 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			close.Left.Set(-36, 1f);
 			panel.Append(close);
 
-			// One row: the category (crafting, bosses), a gap, then the state (to buy, known)
-			craftingButton = TabButton("Hint.TabCrafting", () => ShowCategory(false), 0f, 0, -6);
-			bossesButton = TabButton("Hint.TabBosses", () => ShowCategory(true), 0.25f, -3, -9);
-			toBuyButton = TabButton("Hint.TabToBuy", () => ShowTab(false), 0.5f, 9, -9);
-			knownButton = TabButton("Hint.TabKnown", () => ShowTab(true), 0.75f, 6, -6);
+			// The two tabs, then a smaller filter inside the tab
+			craftingButton = TabButton("Hint.TabCrafting", () => ShowCategory(false), 0f, 0, -4, 0.5f, 54, 34, 0.9f);
+			bossesButton = TabButton("Hint.TabBosses", () => ShowCategory(true), 4, 0.5f, -4, 0.5f, 54, 34, 0.9f);
+			toBuyButton = TabButton("Hint.TabToBuy", () => ShowTab(false), 12, 0f, 150, 0f, 94, 24, 0.68f);
+			knownButton = TabButton("Hint.TabKnown", () => ShowTab(true), 168, 0f, 170, 0f, 94, 24, 0.68f);
 
 			// Same search box as the codex: click to type, right click to clear
 			searchPanel = new UIPanel();
 			searchPanel.Width.Set(0, 1f);
 			searchPanel.Height.Set(30, 0);
-			searchPanel.Top.Set(88, 0);
+			searchPanel.Top.Set(124, 0);
 			searchPanel.SetPadding(0);
 			searchPanel.BackgroundColor = new Color(25, 32, 66);
 			panel.Append(searchPanel);
@@ -308,17 +308,18 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			};
 			searchPanel.OnRightClick += (_, _) => searchBar.SetContents("", true);
 
-			targets = MakeList(124, 0f, -128, ListShare);
+			targets = MakeList(158, 0f, -162, ListShare);
 			detail = MakeList(4, ListShare, -8, 1 - ListShare);
 		}
 
-		private CodexButton TabButton(string key, Action onClick, float left, float leftPixels, float widthPixels)
+		private CodexButton TabButton(string key, Action onClick, float leftPixels, float leftPercent, float widthPixels, float widthPercent, float top, float height, float scale)
 		{
-			CodexButton button = new(CodexText.Live(key), 0, onClick, 0.75f);
-			button.Width.Set(widthPixels, 0.25f);
-			button.Left.Set(leftPixels, left);
-			button.Top.Set(54, 0);
-			button.Height.Set(30, 0);
+			CodexButton button = new(CodexText.Live(key), 0, onClick, scale);
+			button.Width.Set(widthPixels, widthPercent);
+			button.Left.Set(leftPixels, leftPercent);
+			button.Top.Set(top, 0);
+			button.Height.Set(height, 0);
+			if (height < 30) button.SetPadding(2);
 			panel.Append(button);
 			return button;
 		}
@@ -359,7 +360,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				w = Math.Min(PanelMaxWidth, screenW - 2 * Gap);
 				x = (screenW - w) / 2;
 				y = HintSystem.ChatBottom + Gap;
-				h = Math.Max(420, Math.Min(620, screenH - y - Gap));
+				h = Math.Max(460, Math.Min(620, screenH - y - Gap));
 			}
 			if (panel.Left.Pixels == x && panel.Top.Pixels == y && panel.Width.Pixels == w && panel.Height.Pixels == h) return;
 			panel.Left.Set(x, 0);
