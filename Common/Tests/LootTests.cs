@@ -64,11 +64,13 @@ namespace UltimateRandomizer.Common.Tests
 				if (worth < RandomNpcDropRule.MinJackpotWorth - 0.0001f || worth > 1.0001f) failures.Add($"{NpcName(npc)}: worth {worth:0.00}");
 				if (worth + 0.0001f < previous && life > previousLife) failures.Add($"{NpcName(npc)} ({life} HP) worth {worth:0.00}, less than a weaker enemy ({previous:0.00})");
 				if (worth > 0.999f) atOne++;
+				// At or above the median life: a typical enemy, worth 1; below, its share of the median
+				float expected = RandomNpcDropRule.WorthOf(life, median);
+				if (median > 0f && Math.Abs(worth - expected) > 0.001f) failures.Add($"{NpcName(npc)} ({life} HP, median {median:0}): worth {worth:0.00}, expected {expected:0.00}");
 				previous = worth;
 				previousLife = life;
 			}
-			// The median enemy and the sturdier half
-			if (atOne < enemies.Count / 2) failures.Add($"only {atOne} of {enemies.Count} tier 0 enemies are worth 1 (median {median:0} HP)");
+			if (atOne == 0) failures.Add($"no tier 0 enemy is worth 1 (median {median:0} HP)");
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"JackpotWorth: median life {median:0} at tier 0, {atOne} of {enemies.Count} enemies worth 1");
 			Check.All(failures, "Jackpot worth");
 		}

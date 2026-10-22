@@ -157,6 +157,17 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(1f)]
 		public float GuaranteedDropMultiplier;
 
+		// Each guaranteed item is carried by the enemies of one biome, the most met first, up to this many (the same chance
+		// on each, see GuaranteedSources.Assign)
+		[Range(2, 12)]
+		[DefaultValue(6)]
+		public int GuaranteedHostsPerItem;
+
+		// Kills in its biome to find a guaranteed station, summon or tool on average, all its enemies together
+		[Range(20, 300)]
+		[DefaultValue(60)]
+		public int StationFindKills;
+
 		// Chance that a pot also gives one of the guaranteed items (basic stations...) already unlocked
 		[Range(0f, 20f)]
 		[Increment(0.5f)]

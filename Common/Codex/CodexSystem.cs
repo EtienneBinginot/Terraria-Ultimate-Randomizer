@@ -269,9 +269,9 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (string item in items) Reveal(item);
 		}
 
-		// The enemy or boss of the item's hint counts as discovered, through the usual entries (saved, and sent to
-		// everyone): its page and portrait open (no kill is counted), the item shows among its drops, and it is seen in its
-		// best biome (once, if it never was there). Running it again changes nothing
+		// The enemy or boss of the item's hint (every enemy, for a guaranteed item) counts as discovered, through the usual
+		// entries (saved, and sent to everyone): its page and portrait open (no kill is counted), the item shows among its
+		// drops, and it is seen in its best biome (once, if it never was there). Running it again changes nothing
 		private static void Reveal(string itemName)
 		{
 			try
@@ -279,10 +279,15 @@ namespace UltimateRandomizer.Common.Codex
 				int item = CodexNames.ItemType(itemName);
 				HintFact fact = item > 0 ? HintFacts.For(item) : null;
 				if (fact == null || fact.Kind is not (HintKind.Creature or HintKind.Boss) || fact.Npc == 0) return;
-				string npc = CodexNames.Npc(RevealKey(fact));
-				Submit(CodexEntry.Reveal(npc, itemName));
+				// A guaranteed item names every enemy of its biome carrying it: all of them are revealed
+				IEnumerable<int> sources = fact.Kind == HintKind.Creature && fact.Hosts.Count > 0 ? fact.Hosts : new[] { RevealKey(fact) };
 				string biome = fact.Biomes.FirstOrDefault();
-				if (!string.IsNullOrEmpty(biome) && !(Data.Sightings.TryGetValue(biome, out Dictionary<string, int> seen) && seen.ContainsKey(npc))) Submit(CodexEntry.Sighting(biome, npc, 1));
+				foreach (int source in sources)
+				{
+					string npc = CodexNames.Npc(source);
+					Submit(CodexEntry.Reveal(npc, itemName));
+					if (!string.IsNullOrEmpty(biome) && !(Data.Sightings.TryGetValue(biome, out Dictionary<string, int> seen) && seen.ContainsKey(npc))) Submit(CodexEntry.Sighting(biome, npc, 1));
+				}
 			}
 			catch (Exception e)
 			{

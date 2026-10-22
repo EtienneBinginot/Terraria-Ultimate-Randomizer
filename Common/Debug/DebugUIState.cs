@@ -156,7 +156,9 @@ namespace UltimateRandomizer.Common.Debug
 				int available = RecipeSystem.Applied && item.type < RecipePlanner.Get().Availability.Length ? RecipePlanner.Get().Availability[item.type] : found;
 				Text(T("Findable", found == Findability.Never ? "-" : found.ToString(), available == Findability.Never ? "-" : available.ToString()));
 				List<int> hosts = GuaranteedSources.HostsOf(item.type).ToList();
-				if (hosts.Count > 0) Text(T("GuaranteedOn", string.Join(", ", hosts.Select(h => ContentSamples.NpcsByNetId[h].TypeName))));
+				int biome = GuaranteedSources.BiomeOf(item.type);
+				string where = biome >= 0 ? $" ({BiomeSlots.BiomeDisplayName(BiomeSlots.BiomeName(biome))})" : "";
+				if (hosts.Count > 0) Text(T("GuaranteedOn", string.Join(", ", hosts.Select(h => ContentSamples.NpcsByNetId[h].TypeName)) + where));
 			}
 
 			NPC npc = NearestNpc();

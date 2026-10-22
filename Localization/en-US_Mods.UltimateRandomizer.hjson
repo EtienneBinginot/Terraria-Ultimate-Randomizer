@@ -153,10 +153,10 @@ Tests: {
 	WorldSummonsProtected: The summons found in the world stay protected, crafted ones are randomized
 	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier
-	GuaranteedLoadBalanced: No enemy carries too many guaranteed items
-	GuaranteedSeveralSeeds: Every guaranteed item gets all its hosts with other seeds
-	GuaranteedSpread: Guaranteed items are spread over many common enemies
-	GuaranteedFindTime: Every guaranteed station, summon and tool drops within a few hundred biome kills
+	GuaranteedBiomeHosts: Each guaranteed item is carried by 3 or more enemies of one biome, with the same chance on each
+	GuaranteedSeveralSeeds: Every guaranteed item gets the enemies of a biome with other seeds
+	GuaranteedBiomesSpread: The guaranteed items of a tier are spread over several biomes
+	GuaranteedFindTime: Every guaranteed station, summon and tool drops within about 90 kills of its biome
 	HintSortedByProgress: Hints are sorted by progression, in two tabs
 	HintFoundUnlocks: A found item's hint is fully known for free
 	HintClickOpensCodex: Clicking a hint opens the right codex page
@@ -243,10 +243,11 @@ Tests: {
 	HintPurchaseFlow: Buying a hint takes the coins, raises its level, and is refused when coins are short
 	HintSyncRoundTrip: Hint levels survive the codex wire format, the save and the server checks
 	HintTextsResolved: Every hint sentence is a full sentence in this language
-	HintSourceFrequent: Creature hints lead to an enemy met often (5 % of a biome or more) with a 1 % chance or more
+	HintSourceFrequent: Creature hints lead to enemies met often (5 % of a biome or more, together for a guaranteed item) with a 1 % chance or more
 	HintTargetsHaveSource: Every guaranteed station and summon has a creature or recipe hint, never a rare fallback
 	HintBiomeEveryLevel: Levels 2 to 4 of a creature hint name its best biome
-	HintRevealDiscovers: The last level of a hint reveals the enemy in the codex (page, drop, biome), saved and synced
+	HintRevealDiscovers: The last level of a hint reveals its enemies in the codex (page, drop, biome), saved and synced
+	HintHostsNamed: A guaranteed item's hint names every enemy of its biome carrying it, with the chance on each
 	PlannedShareSums: The planned spawn shares of each biome sum to 100 %, rare enemies get less
 }
 
@@ -464,6 +465,8 @@ Codex: {
 			Recipe: crafted at {0}
 			Creature: "{0}, {1} ({2})"
 			CreatureAnywhere: "{0} ({1})"
+			Hosts: "{0}, {1} ({2} each)"
+			HostsAnywhere: "{0} ({1} each)"
 			Boss: "{0}, boss ({1})"
 			Shop: sold by the {0}
 			Bag: inside {0}
@@ -519,6 +522,12 @@ Codex: {
 		Around: Look around: {0}.
 		Place.Known: "{0}, {1}"
 		Share: " (about {0} of the creatures of this place: {1})"
+
+		Hosts: {
+			List: "{0} and {1}"
+			AndMore: "{0} and {1} others"
+			Plus: "{0} +{1}"
+		}
 
 		Coin: {
 			Copper: "{0} copper"
@@ -705,6 +714,11 @@ Codex: {
 			Creature: {
 				0: "{0} carries it: look here, {1}. About {2} of them drop it."
 				1: Hunt this one: {0}, in this place: {1} ({2} chance per kill).
+			}
+
+			Hosts: {
+				0: "{0} carry it: look here, {1} ({2} each)."
+				1: "Hunt these: {0}, in this place: {1} ({2} chance per kill, for each of them)."
 			}
 
 			Roaming: {
@@ -1148,8 +1162,18 @@ Configs: {
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: Guaranteed drop chance multiplier
-			Tooltip: Basic stations (and vanilla ingredients, if chosen) are placed on two common enemies of their tier. Raise this to find them sooner.
+			Label: "Guaranteed drop chance multiplier"
+			Tooltip: "Basic stations (and vanilla ingredients, if chosen) are placed on the common enemies of one biome of their tier. Raise this to find them sooner."
+		}
+
+		GuaranteedHostsPerItem: {
+			Label: "Enemies carrying each guaranteed item"
+			Tooltip: "Each guaranteed item (stations, boss summons, pickaxes, needed ingredients) is placed on the enemies of one biome of its tier, the most frequent first, up to this many. The hints name them all."
+		}
+
+		StationFindKills: {
+			Label: "Kills in its biome to find a station"
+			Tooltip: "Average number of kills in its biome before a guaranteed station, boss summon or pickaxe drops, all its enemies together. Pots and wooden chests help too. The work bench and the first stations follow the first hour of play instead."
 		}
 
 		PotGuaranteeChance: {

@@ -61,12 +61,25 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			return rows;
 		}
 
-		// The host, the recipe or the container, as a shape (level 3) or as it is (level 4)
+		public const int MaxPortraits = 6;
+
+		// The host (or the hosts), the recipe or the container, as a shape (level 3) or as it is (level 4)
 		public static UIElement Visual(HintFact fact, bool silhouette, bool inCodex)
 		{
 			CodexRow row = new(silhouette || fact.Kind != HintKind.Recipe ? 92 : 50, 20);
 			switch (fact.Kind)
 			{
+				case HintKind.Creature when fact.Hosts.Count > 1:
+					// Every enemy carrying it (up to MaxPortraits), smaller
+					foreach (int host in fact.Hosts.Take(MaxPortraits))
+					{
+						row.Add(new CodexNpcPortrait(host, 64, 60, false, 0, clickable: inCodex && !silhouette, silhouette: silhouette, textureOnly: !inCodex)
+						{
+							HoverText = silhouette ? null : HintFacts.NpcName(host)
+						}, 4);
+					}
+					if (fact.Hosts.Count > MaxPortraits) row.Add(new CodexLabel("+" + (fact.Hosts.Count - MaxPortraits), 0.9f, CodexDraw.Muted), 6);
+					break;
 				case HintKind.Creature:
 				case HintKind.Boss:
 				case HintKind.Shop:
@@ -126,7 +139,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				string source = hidden ? CodexText.Get("Hint.Tree.OwnHint") : HintFacts.TreeSource(node);
 				string text = silhouette ? "?" : HintFacts.TreeName(node) + (node.Station ? " " + CodexText.Get("Hint.Tree.Station") : "") + ": " + source;
 				Color color = hidden ? CodexDraw.Gold : node.Leaf == HintTreeLeaf.Repeat ? CodexDraw.Muted : Color.White;
-				row.Add(new CodexLabel(Fit(text, 0.75f, width - row.Used - 16), 0.75f, color) { HoverText = silhouette ? null : text });
+				// Several enemies are shortened ("Zombie, Blue Slime +4"): every name on hover
+				string hover = !silhouette && fact != null && fact.Hosts.Count > 2 ? text + "\n" + HintFacts.HostNames(fact) : text;
+				row.Add(new CodexLabel(Fit(text, 0.75f, width - row.Used - 16), 0.75f, color) { HoverText = silhouette ? null : hover });
 				rows.Add(row);
 			}
 			if (HintFacts.TreeTruncated(item)) rows.Add(new CodexRow(26, 8).WithLabel(CodexText.Get("Hint.Tree.More"), 0.75f, CodexDraw.Muted));

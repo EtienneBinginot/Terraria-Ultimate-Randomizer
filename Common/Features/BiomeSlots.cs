@@ -863,6 +863,15 @@ namespace UltimateRandomizer.Common.Features
 			return biomes.Count > 0 ? biomes[0] : (-1, 0, SlotTime.Any);
 		}
 
+		// Every biome with enemy spawns at a tier (the vanilla slots mixed in by biome included), in a fixed order
+		public static List<int> BiomesAt(int tier)
+		{
+			int band = BandOf(Tiers.Clamp(tier));
+			HashSet<int> biomes = new(Table(SpawnMap, band).ByBiome.Keys);
+			if (Active && VanillaKeep > 0) biomes.UnionWith(Table(Vanilla, band).ByBiome.Keys);
+			return biomes.OrderBy(b => b).ToList();
+		}
+
 		// Every type's share of the enemy spawns of a biome in a map (no vanilla mix), for the tests
 		public static Dictionary<int, double> SharesIn(BiomeSlotMap map, int biome, int tier = Tiers.Max) =>
 			Table(map, BandOf(Tiers.Clamp(tier))).ByBiome.TryGetValue(biome, out Dictionary<int, double> byType) ? new Dictionary<int, double>(byType) : new Dictionary<int, double>();

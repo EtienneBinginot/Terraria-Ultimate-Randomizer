@@ -153,10 +153,10 @@ Tests: {
 	WorldSummonsProtected: Les invocations trouvées dans le monde restent protégées, celles qu'on fabrique sont randomisées
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
-	GuaranteedLoadBalanced: Aucun ennemi ne porte trop d'objets garantis
-	GuaranteedSeveralSeeds: Chaque objet garanti a tous ses porteurs avec d'autres graines
-	GuaranteedSpread: Les objets garantis sont répartis sur de nombreux ennemis courants
-	GuaranteedFindTime: Chaque station, invocation et outil garanti tombe en quelques centaines de victimes dans le biome
+	GuaranteedBiomeHosts: Chaque objet garanti est porté par au moins 3 ennemis d'un même biome, avec la même chance sur chacun
+	GuaranteedSeveralSeeds: Chaque objet garanti obtient les ennemis d'un biome avec d'autres graines
+	GuaranteedBiomesSpread: Les objets garantis d'un tier sont répartis sur plusieurs biomes
+	GuaranteedFindTime: Chaque station, invocation et outil garanti tombe en environ 90 ennemis tués dans son biome
 	HintSortedByProgress: Les indices sont triés par avancement, en deux onglets
 	HintFoundUnlocks: L'indice d'un objet trouvé est entièrement connu, gratuitement
 	HintClickOpensCodex: Cliquer sur un indice ouvre la bonne page du codex
@@ -243,10 +243,11 @@ Tests: {
 	HintPurchaseFlow: Acheter un indice prend les pièces, monte son niveau, et est refusé sans assez de pièces
 	HintSyncRoundTrip: Les niveaux d'indice survivent au format réseau du codex, à la sauvegarde et aux vérifications du serveur
 	HintTextsResolved: Chaque phrase d'indice est une vraie phrase dans cette langue
-	HintSourceFrequent: Les indices de créature mènent à un ennemi fréquent (5 % d'un biome ou plus) avec 1 % de chances ou plus
+	HintSourceFrequent: Les indices de créature mènent à des ennemis fréquents (5 % d'un biome ou plus, ensemble pour un objet garanti) avec 1 % de chances ou plus
 	HintTargetsHaveSource: Chaque station et invocation garantie a un indice de créature ou de recette, jamais une source rare de secours
 	HintBiomeEveryLevel: Les niveaux 2 à 4 d'un indice de créature nomment son meilleur biome
-	HintRevealDiscovers: Le dernier niveau d'un indice révèle l'ennemi dans le codex (page, butin, biome), sauvegardé et synchronisé
+	HintRevealDiscovers: Le dernier niveau d'un indice révèle ses ennemis dans le codex (page, butin, biome), sauvegardé et synchronisé
+	HintHostsNamed: L'indice d'un objet garanti nomme chaque ennemi de son biome qui le porte, avec la chance sur chacun
 	PlannedShareSums: Les parts d'apparition prévues de chaque biome font 100 %, les ennemis rares en ont moins
 }
 
@@ -464,6 +465,8 @@ Codex: {
 			Recipe: fabriqué à {0}
 			Creature: "{0}, {1} ({2})"
 			CreatureAnywhere: "{0} ({1})"
+			Hosts: "{0}, {1} ({2} chacun)"
+			HostsAnywhere: "{0} ({1} chacun)"
 			Boss: "{0}, boss ({1})"
 			Shop: vendu par {0}
 			Bag: dans {0}
@@ -519,6 +522,12 @@ Codex: {
 		Around: Cherche du côté de ces lieux : {0}.
 		Place.Known: "{0}, {1}"
 		Share: " (environ {0} des créatures de ce lieu : {1})"
+
+		Hosts: {
+			List: "{0} et {1}"
+			AndMore: "{0} et {1} autres"
+			Plus: "{0} +{1}"
+		}
 
 		Coin: {
 			Copper: "{0} cuivre"
@@ -705,6 +714,11 @@ Codex: {
 			Creature: {
 				0: Cette créature le transporte : {0}. Va la chercher ici : {1}. Elle le lâche dans {2} des cas.
 				1: Ta cible : {0}, à cet endroit : {1} ({2} de chances par créature tuée).
+			}
+
+			Hosts: {
+				0: "Ces créatures le transportent : {0}. Va les chercher ici : {1} ({2} chacune)."
+				1: "Tes cibles : {0}, à cet endroit : {1} ({2} de chances par créature tuée, pour chacune)."
 			}
 
 			Roaming: {
@@ -1148,8 +1162,18 @@ Configs: {
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: Multiplicateur des drops garantis
-			Tooltip: Les stations de base (et les ingrédients vanilla, si choisis) sont placés sur deux ennemis courants de leur tier. Augmente pour les trouver plus vite.
+			Label: "Multiplicateur des drops garantis"
+			Tooltip: "Les stations de base (et les ingrédients vanilla, si choisis) sont placées sur les ennemis courants d'un biome de leur tier. Augmente pour les trouver plus vite."
+		}
+
+		GuaranteedHostsPerItem: {
+			Label: "Ennemis portant chaque objet garanti"
+			Tooltip: "Chaque objet garanti (stations, invocations de boss, pioches, ingrédients nécessaires) est placé sur les ennemis d'un biome de son tier, les plus fréquents d'abord, jusqu'à ce nombre. Les indices les nomment tous."
+		}
+
+		StationFindKills: {
+			Label: "Ennemis tués dans son biome pour trouver une station"
+			Tooltip: "Nombre moyen d'ennemis tués dans son biome avant qu'une station, une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les pots et les coffres en bois aident aussi. L'établi et les premières stations suivent plutôt la première heure de jeu."
 		}
 
 		PotGuaranteeChance: {

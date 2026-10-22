@@ -30,6 +30,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintTargetsHaveSource", HintTargetsHaveSource);
 			TestRunner.Register("HintBiomeEveryLevel", HintBiomeEveryLevel);
 			TestRunner.Register("HintRevealDiscovers", HintRevealDiscovers);
+			TestRunner.Register("HintHostsNamed", HintHostsNamed);
 			TestRunner.Register("PlannedShareSums", PlannedShareSums);
 			TestRunner.Register("HintSortedByProgress", HintSortedByProgress);
 			TestRunner.Register("HintFoundUnlocks", HintFoundUnlocks);
@@ -179,7 +180,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// A creature hint leads to an enemy met often (at least 5 % of the steady spawns of its best biome, no rare enemy)
-		// that drops the item with the chance the codex shows (1 % or more). Fallbacks are counted by HintTargetsHaveSource
+		// that drops the item with the chance the codex shows (1 % or more); a guaranteed item's enemies are judged together,
+		// on the share they make of its biome. Fallbacks are counted by HintTargetsHaveSource
 		private static void HintSourceFrequent()
 		{
 			List<HintFact> facts = CreatureFacts().Where(f => !f.Fallback).ToList();
@@ -190,7 +192,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				string name = $"{HintFacts.ItemName(fact.Item)} on {HintFacts.NpcName(fact.Npc)}";
 				int type = BiomeSlots.TypeOf(fact.Npc);
-				if (ContentSamples.NpcsByNetId[fact.Npc].rarity > 0) failures.Add($"{name}: a rare enemy");
+				if (fact.Hosts.Append(fact.Npc).Any(h => ContentSamples.NpcsByNetId[h].rarity > 0)) failures.Add($"{name}: a rare enemy");
 				if (fact.Chance < 0.01f - 1e-6f) failures.Add($"{name}: {fact.Chance:P2} chance");
 				// Recomputed from the enemy's lucky plan: every planned entry of the item together
 				float missing = 1f;
@@ -200,6 +202,17 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				if (Math.Abs((1f - missing) - fact.Chance) > 1e-4f) failures.Add($"{name}: states {fact.Chance:P2}, planned {1f - missing:P2}");
 				if (!shares || !BiomeSlots.HasAnySlot(type)) continue;
+				// Several enemies: the share they make together of the biome named first
+				int biome = GuaranteedSources.BiomeOf(fact.Item);
+				if (fact.Hosts.Count > 1 && biome >= 0)
+				{
+					int placed = GuaranteedSources.PlacedTier(fact.Item);
+					double together = fact.Hosts.Sum(h => SteadyFromSlots(BiomeSlots.TypeOf(h), placed).GetValueOrDefault(biome));
+					if (fact.Biomes.Count == 0 || fact.Biomes[0] != BiomeSlots.BiomeName(biome)) failures.Add($"{name}: does not name {BiomeSlots.BiomeName(biome)} first");
+					if (together < GuaranteedSources.MinShare(biome, placed) - 0.005) failures.Add($"{name}: its enemies make {together:P1} of {BiomeSlots.BiomeName(biome)}");
+					if (Math.Abs(together - fact.Share) > 0.02) failures.Add($"{name}: states {fact.Share:P1} of {BiomeSlots.BiomeName(biome)}, slots give {together:P1}");
+					continue;
+				}
 				// Judged at the requirement's tier for a guaranteed host, like the guarantees
 				GuaranteedSources.Requirement requirement = GuaranteedSources.Requirements.FirstOrDefault(r => r.Item == fact.Item);
 				int tier = requirement.Item == fact.Item && GuaranteedSources.HostsOf(fact.Item).Contains(fact.Npc) ? Math.Max(fact.Tier, requirement.Tier) : fact.Tier;
@@ -276,7 +289,9 @@ namespace UltimateRandomizer.Common.Tests
 		private static void HintRevealDiscovers()
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (the server records the reveal)");
-			HintFact fact = TargetsOrSkip().Select(t => HintFacts.For(t.Item)).FirstOrDefault(f => f != null && f.Kind is HintKind.Creature or HintKind.Boss);
+			List<HintFact> facts = TargetsOrSkip().Select(t => HintFacts.For(t.Item)).Where(f => f != null && f.Kind is HintKind.Creature or HintKind.Boss).ToList();
+			// Several enemies when there are (a guaranteed item), else any
+			HintFact fact = facts.FirstOrDefault(f => f.Hosts.Count > 1) ?? facts.FirstOrDefault();
 			if (fact == null) Check.Skip("no creature or boss hint in this world");
 			// Reveals of the real codex first: they must not land in the copy
 			CodexSystem.ProcessReveals(force: true);
@@ -294,15 +309,20 @@ namespace UltimateRandomizer.Common.Tests
 				CodexSystem.ProcessReveals(force: true);
 				CodexSystem.RefreshIndex();
 				List<int> known = CodexSystem.KnownNpcs();
-				Check.That(known.Count == 1, $"{known.Count} enemies known after the reveal");
-				int npc = known[0];
-				Check.Equal(0, CodexSystem.KillCount(npc), "kills of the revealed enemy");
-				Check.That(CodexSystem.DropsOf(npc).Any(d => d.item == fact.Item && d.count == 0), "the item is not among its drops");
-				Check.That(CodexSystem.NpcsDropping(fact.Item).Any(d => d.npc == npc), "the item page does not list the enemy");
-				if (fact.Biomes.Count > 0)
+				// A guaranteed item: every enemy named
+				int expected = fact.Kind == HintKind.Creature && fact.Hosts.Count > 0 ? fact.Hosts.Distinct().Count() : 1;
+				Check.That(known.Count == expected, $"{known.Count} enemies known after the reveal, expected {expected}");
+				foreach (int npc in known)
 				{
-					Check.That(CodexSystem.BiomesWhereSeen(npc).Contains(fact.Biomes[0]), $"not seen in {fact.Biomes[0]}");
-					Check.Equal(1, CodexSystem.SightingCount(npc), "sightings of the revealed enemy");
+					string what = HintFacts.NpcName(npc);
+					Check.Equal(0, CodexSystem.KillCount(npc), $"kills of the revealed {what}");
+					Check.That(CodexSystem.DropsOf(npc).Any(d => d.item == fact.Item && d.count == 0), $"the item is not among the drops of {what}");
+					Check.That(CodexSystem.NpcsDropping(fact.Item).Any(d => d.npc == npc), $"the item page does not list {what}");
+					if (fact.Biomes.Count > 0)
+					{
+						Check.That(CodexSystem.BiomesWhereSeen(npc).Contains(fact.Biomes[0]), $"{what} not seen in {fact.Biomes[0]}");
+						Check.Equal(1, CodexSystem.SightingCount(npc), $"sightings of the revealed {what}");
+					}
 				}
 				// Saved and synced like any discovery
 				TagCompound tag = new();
@@ -321,6 +341,40 @@ namespace UltimateRandomizer.Common.Tests
 				CodexSystem.Data = saved;
 				CodexSystem.RefreshIndex();
 			}
+		}
+
+		// A guaranteed station's creature hint names exactly the enemies carrying it, the most met first, in the biome they
+		// were chosen in: level 4 lists them with the chance on each, the craft trees shorten the list
+		private static void HintHostsNamed()
+		{
+			List<HintTarget> targets = TargetsOrSkip().Where(t => GuaranteedSources.HostsOf(t.Item).Count() > 1).ToList();
+			List<HintFact> facts = targets.Select(t => HintFacts.For(t.Item)).Where(f => f != null && f.Kind == HintKind.Creature).ToList();
+			if (facts.Count == 0) Check.Skip("no creature hint for an item carried by several enemies");
+			List<string> failures = new();
+			foreach (HintFact fact in facts)
+			{
+				string name = HintFacts.ItemName(fact.Item);
+				List<int> hosts = GuaranteedSources.HostsOf(fact.Item).ToList();
+				if (!fact.Hosts.SequenceEqual(hosts)) failures.Add($"{name}: names {string.Join(", ", fact.Hosts.Select(HintFacts.NpcName))}, carried by {string.Join(", ", hosts.Select(HintFacts.NpcName))}");
+				if (fact.Npc != hosts[0]) failures.Add($"{name}: first enemy {HintFacts.NpcName(fact.Npc)}, expected {HintFacts.NpcName(hosts[0])}");
+				int biome = GuaranteedSources.BiomeOf(fact.Item);
+				if (biome >= 0 && (fact.Biomes.Count == 0 || fact.Biomes[0] != BiomeSlots.BiomeName(biome))) failures.Add($"{name}: biome {fact.Biomes.FirstOrDefault() ?? "none"}, placed in {BiomeSlots.BiomeName(biome)}");
+				string text = HintFacts.Text(fact, HintFacts.MaxLevel);
+				foreach (int host in hosts.Take(hosts.Count <= HintFacts.NamedHosts + 1 ? hosts.Count : HintFacts.NamedHosts))
+				{
+					if (!text.Contains(HintFacts.NpcName(host))) failures.Add($"{name}: level 4 does not name {HintFacts.NpcName(host)}");
+				}
+				if (!text.Contains(CodexStats.Percent(fact.Chance))) failures.Add($"{name}: level 4 without the chance on each");
+				// The same chance on every enemy named
+				foreach (int host in hosts)
+				{
+					float chance = GuaranteedSources.For(host).Where(d => d.Item == fact.Item).Sum(d => d.Chance);
+					float first = GuaranteedSources.For(hosts[0]).Where(d => d.Item == fact.Item).Sum(d => d.Chance);
+					if (Math.Abs(chance - first) > 1e-5f) failures.Add($"{name}: {HintFacts.NpcName(host)} at {chance:P2}, {HintFacts.NpcName(hosts[0])} at {first:P2}");
+				}
+				if (!HintFacts.ShortHosts(fact).Contains(HintFacts.NpcName(hosts[0]))) failures.Add($"{name}: the short list misses {HintFacts.NpcName(hosts[0])}");
+			}
+			Check.All(failures, "Hints naming the enemies of a guaranteed item");
 		}
 
 		// The planned shares of every biome sum to 1, on several seeds and both world evils; a rare owner gets less of a
