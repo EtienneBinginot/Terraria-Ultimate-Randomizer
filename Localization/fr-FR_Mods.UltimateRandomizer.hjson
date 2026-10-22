@@ -124,6 +124,7 @@ Tests: {
 	CodexManyItemsBounded: Interface du codex : avec 3000 objets et 300 ennemis, seules les lignes visibles sont construites
 	CodexTextsResolved: Interface du codex : aucune clé de texte brute n'est affichée
 	CodexShowsChances: Interface du codex : le butin découvert affiche sa chance prévue, les biomes la part des apparitions
+	CodexShowsConditions: Le codex indique quand un ennemi se rencontre (le jour, la nuit) sur ses pages de biome, d'ennemi et d'objet
 	BiomeSlotsReachable: Par biome : chaque lieu d'apparition d'un ennemi qui en a plusieurs peut être atteint
 	NegativeNetIdSwap: Le remplacement par une couleur de slime (Pinky) fonctionne et garde le type Slime bleu
 	EvilSlotsShared: Par biome : dans un monde à un seul mal, les ennemis des lieux du mal absent apparaissent dans le mal présent (20 graines)
@@ -286,6 +287,8 @@ Codex: {
 	SeenTimesIn: Vu {0} fois, dans :
 	SpawnShareHover: Part de cet ennemi parmi les apparitions vues dans ce biome
 	ChanceHover: Chance prévue par ennemi vaincu (le bonus de butin des ennemis renforcés peut l'augmenter)
+	WhenCondition: condition
+	WhenRecipe: "À fabriquer : {0}."
 	ChanceUnknown: ?
 	Percent: "{0} %"
 	DropsFound: Butin trouvé

@@ -475,25 +475,37 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		}
 	}
 
-	// A cell of a grid with a small caption under its icon or portrait (drop chance, spawn share)
+	// A cell of a grid with a small caption under its icon or portrait (drop chance, spawn share), and a note under it when
+	// the source only works at some time or with a condition (CodexWhen: "night", "condition"; the full text on hover)
 	public class CodexCaptioned : UIElement
 	{
 		public const float CaptionHeight = 18;
 		public readonly UIElement Inner;
 		public readonly CodexLabel Caption;
+		// Null without a note
+		public readonly CodexLabel Note;
 
-		public CodexCaptioned(UIElement inner, string caption, float width, string hover = null)
+		public CodexCaptioned(UIElement inner, string caption, float width, string hover = null, CodexNote note = default)
 		{
 			Inner = inner;
 			Width.Set(width, 0);
-			Height.Set(inner.Height.Pixels + CaptionHeight, 0);
+			bool noted = note.Short != null && !note.IsEmpty;
+			Height.Set(inner.Height.Pixels + CaptionHeight * (noted ? 2 : 1), 0);
 			inner.HAlign = 0.5f;
 			Append(inner);
 			Caption = new CodexLabel(caption, 0.7f, CodexDraw.Muted) { HoverText = hover };
 			Caption.HAlign = 0.5f;
 			Caption.Top.Set(inner.Height.Pixels, 0);
 			Append(Caption);
+			if (!noted) return;
+			Note = new CodexLabel(note.Short, 0.65f, CodexWhen.NoteColor) { HoverText = note.Full };
+			Note.HAlign = 0.5f;
+			Note.Top.Set(inner.Height.Pixels + CaptionHeight, 0);
+			Append(Note);
 		}
+
+		// The height of a grid's cells: one more line when one of them has a note
+		public static float CellHeight(float inner, bool anyNote) => inner + CaptionHeight * (anyNote ? 2 : 1);
 	}
 
 	// A section title with a line under it
@@ -581,10 +593,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				if (item > 0) Add(new CodexItemIcon(item, 0, iconSize - 6) { Tint = new Color(170, 230, 170) }, 4);
 				else Add(new CodexLabel(Lang.GetMapObjectName(MapHelper.TileToLookup(tile, style)), 0.8f), 6);
 			}
+			// Where it must be made (near water, in the snow, in a graveyard...), the whole sentence on hover
+			string where = CodexWhen.Recipe(recipeIndex).Full;
 			foreach (Condition condition in recipe.Conditions)
 			{
 				string description = condition?.Description?.Value;
-				if (!string.IsNullOrEmpty(description)) Add(new CodexLabel(description, 0.75f, CodexDraw.Muted), 8);
+				if (!string.IsNullOrEmpty(description)) Add(new CodexLabel(description, 0.75f, CodexWhen.NoteColor) { HoverText = where }, 8);
 			}
 		}
 	}

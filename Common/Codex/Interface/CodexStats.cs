@@ -54,7 +54,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		// The same chance once the enemy's drops are all unlocked (lucky plan): what the hints state, on every machine.
 		// It equals what the codex shows once the progression reaches it
-		public static float LuckyChance(int netId, int item)
+		public static float LuckyChance(int netId, int item) => CombinedChance(LuckyPlan(netId), item);
+
+		// The enemy's drop plan once its drops are all unlocked (cached until the hint facts are forgotten)
+		public static List<PlannedDrop> LuckyPlan(int netId)
 		{
 			if (luckyVersion != Codex.HintFacts.CacheVersion || luckyExpert != Main.expertMode)
 			{
@@ -67,7 +70,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				if (luckyPlans.Count > 500) luckyPlans.Clear();
 				luckyPlans[netId] = plan = RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true);
 			}
-			return CombinedChance(plan, item);
+			return plan;
 		}
 
 		// null: not in the plan (a madness drop, a drop of other settings, an event...)

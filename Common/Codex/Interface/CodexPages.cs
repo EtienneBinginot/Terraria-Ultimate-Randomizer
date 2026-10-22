@@ -128,7 +128,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				{
 					seen.Add(new CodexBiomeIcon(biome), 2);
 					string text = $"{BiomeSlots.BiomeDisplayName(biome)} {CodexStats.Percent(CodexSystem.SpawnShare(biome, netId))}";
-					seen.Add(new CodexLabel(text, 0.8f) { HoverText = shareHover }, 12);
+					CodexNote when = CodexWhen.Spawn(biome, netId);
+					seen.Add(new CodexLabel(text, 0.8f) { HoverText = shareHover }, when.IsEmpty ? 12 : 4);
+					if (!when.IsEmpty) seen.Add(new CodexLabel($"({when.Short})", 0.75f, CodexWhen.NoteColor) { HoverText = when.Full }, 12);
 				}
 				Add(seen);
 			}
@@ -140,8 +142,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			else
 			{
 				string chanceHover = CodexText.Get("ChanceHover");
-				Grid(drops, d => new CodexCaptioned(new CodexItemIcon(d.item, d.count, Icon), CodexStats.DropChanceText(netId, d.item), CaptionedIcon, chanceHover),
-					CaptionedIcon, Icon + CodexCaptioned.CaptionHeight);
+				Dictionary<int, CodexNote> notes = drops.Select(d => d.item).Distinct().ToDictionary(i => i, i => CodexWhen.DropConditions(netId, i));
+				Grid(drops, d => new CodexCaptioned(new CodexItemIcon(d.item, d.count, Icon), CodexStats.DropChanceText(netId, d.item), CaptionedIcon, chanceHover, notes[d.item]),
+					CaptionedIcon, CodexCaptioned.CellHeight(Icon, notes.Values.Any(n => !n.IsEmpty)));
 			}
 
 			// Only how many: the planned items stay secret until they drop
@@ -247,8 +250,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				any = true;
 				Section(CodexText.Get("DroppedBy"));
 				string chanceHover = CodexText.Get("ChanceHover");
+				Dictionary<int, CodexNote> notes = droppedBy.Select(d => d.npc).Distinct().ToDictionary(n => n, n => CodexWhen.Drop(n, type));
 				Grid(droppedBy.OrderByDescending(d => d.count).ToList(), d => new CodexCaptioned(new CodexNpcPortrait(d.npc, 64, 64, false, d.count),
-					CodexStats.DropChanceText(d.npc, type), 64, chanceHover), 64, 64 + CodexCaptioned.CaptionHeight);
+					CodexStats.DropChanceText(d.npc, type), 64, chanceHover, notes[d.npc]), 64, CodexCaptioned.CellHeight(64, notes.Values.Any(n => !n.IsEmpty)));
 			}
 			List<(CodexSource kind, int from, int count)> sources = CodexSystem.SourcesOf(type);
 			if (sources.Count > 0)
@@ -264,7 +268,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 						row.Add(new CodexItemIcon(from, 0, 36), 6);
 						row.Add(new CodexLabel(CodexDraw.ItemName(from), 0.85f), 10);
 					}
-					row.Add(new CodexLabel("x" + CodexDraw.Count(count), 0.9f, CodexDraw.Gold));
+					row.Add(new CodexLabel("x" + CodexDraw.Count(count), 0.9f, CodexDraw.Gold), 10);
+					CodexNote when = kind == CodexSource.Bag && from > 0 ? CodexWhen.Bag(from, type) : CodexNote.None;
+					if (!when.IsEmpty) row.Add(new CodexLabel($"({when.Short})", 0.8f, CodexWhen.NoteColor) { HoverText = when.Full });
 					Add(row);
 				}
 			}
@@ -391,7 +397,16 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				row.Add(new CodexLabel(CodexText.Get("NoSource"), 0.8f, CodexDraw.Muted));
 				return;
 			}
-			foreach ((int npc, int count) in droppedBy.OrderByDescending(d => d.count).Take(4)) row.Add(new CodexNpcPortrait(npc, 38, 38, false, count), 4);
+			foreach ((int npc, int count) in droppedBy.OrderByDescending(d => d.count).Take(4))
+			{
+				CodexNote when = CodexWhen.Drop(npc, item);
+				CodexNpcPortrait portrait = row.Add(new CodexNpcPortrait(npc, 38, 38, false, count), 4);
+				if (!when.IsEmpty)
+				{
+					portrait.HoverText = $"{CodexDraw.NpcName(npc)} ({when.Short})\n{when.Full}";
+					row.Add(new CodexLabel($"({when.Short})", 0.7f, CodexWhen.NoteColor) { HoverText = when.Full }, 6);
+				}
+			}
 			row.Space(6);
 			foreach (IGrouping<CodexSource, (CodexSource kind, int from, int count)> group in sources.GroupBy(s => s.kind).OrderBy(g => g.Key))
 			{
@@ -451,8 +466,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				string description = BiomeSlots.BiomeDescription(biome);
 				if (description.Length > 0) Text(description, CodexDraw.Muted);
 				string shareHover = CodexText.Get("SpawnShareHover");
-				Grid(npcs, id => new CodexCaptioned(new CodexNpcPortrait(id, 64, 64, false, CodexSystem.KillCount(id)), CodexStats.Percent(CodexSystem.SpawnShare(biome, id)), 64, shareHover),
-					64, 64 + CodexCaptioned.CaptionHeight, 20);
+				Dictionary<int, CodexNote> notes = npcs.Distinct().ToDictionary(id => id, id => CodexWhen.Spawn(biome, id));
+				Grid(npcs, id => new CodexCaptioned(new CodexNpcPortrait(id, 64, 64, false, CodexSystem.KillCount(id)), CodexStats.Percent(CodexSystem.SpawnShare(biome, id)), 64, shareHover, notes[id]),
+					64, CodexCaptioned.CellHeight(64, notes.Values.Any(n => !n.IsEmpty)), 20);
 			}
 			if (!any) Empty(biomes.Count == 0);
 		}

@@ -25,6 +25,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CodexManyItemsBounded", CodexManyItemsBounded);
 			TestRunner.Register("CodexTextsResolved", CodexTextsResolved);
 			TestRunner.Register("CodexShowsChances", CodexShowsChances);
+			TestRunner.Register("CodexShowsConditions", CodexShowsConditions);
 		}
 
 		private static IEnumerable<UIElement> Walk(UIElement element)
@@ -297,6 +298,81 @@ namespace UltimateRandomizer.Common.Tests
 				state.RestoreNavigation(saved);
 			}
 			Check.All(failures, "Chances shown");
+		}
+
+		// An enemy met only by day or only at night in a biome (found from the spawn map's slots here) shows that time on the
+		// biome page (under its portrait) and on its own page (after the biome); on an item page, an enemy met at one time in
+		// every biome shows it under its portrait. The codex data is put back afterwards
+		private static void CodexShowsConditions()
+		{
+			CodexUIState state = StateOrSkip();
+			if (!SeedSystem.WorldReady || !ItemPool.Ready) Check.Skip("no world");
+			if (!BiomeSlots.SpawnsPlanned) Check.Skip("enemies are swapped without biomes");
+			List<BiomeSlot> all = BiomeSlots.SpawnMap.Slots.ToList();
+			if (BiomeSlots.Active && Configs.EnemiesConfig.Instance.BiomeVanillaChance > 0) all.AddRange(BiomeSlots.Vanilla.Slots);
+			bool Steady(BiomeSlot s) => !s.Critter && !s.Rare && !s.Conditional;
+			// The steady times of a type (in one biome, or all with -1)
+			List<SlotTime> Times(int type, int biome) => all.Where(s => Steady(s) && (biome < 0 || s.Biome == biome) && HintFacts.SpawnsIn(s, type)).Select(s => s.Time).Distinct().ToList();
+			int npc = 0, biome = -1;
+			SlotTime time = SlotTime.Any;
+			foreach (BiomeSlot slot in all.Where(s => Steady(s) && !s.AbsentEvil && s.Time != SlotTime.Any && s.Biome < BiomeSlots.ModdedBiomeStart))
+			{
+				int type = BiomeSlots.TypeOf(slot.Owner);
+				List<SlotTime> times = Times(type, slot.Biome);
+				if (times.Count != 1 || !ContentSamples.NpcsByNetId.ContainsKey(type)) continue;
+				npc = type;
+				biome = slot.Biome;
+				time = times[0];
+				break;
+			}
+			if (npc == 0) Check.Skip("no enemy met at one time only in a biome");
+			string expected = CodexText.Get("Hint.When.Short." + time);
+			string biomeName = BiomeSlots.BiomeName(biome);
+			List<PlannedDrop> plan = RandomNpcDropRule.Plan(npc, Main.expertMode);
+			int planned = plan.Select(d => d.Item).FirstOrDefault(i => i > ItemID.None);
+			List<SlotTime> everywhere = Times(npc, -1);
+			string key = CodexNames.Npc(npc);
+			CodexData savedData = CodexSystem.Data;
+			var saved = state.SaveNavigation();
+			List<string> failures = new();
+			try
+			{
+				CodexData fresh = new() { Seed = SeedSystem.WorldSeed, HasSeed = true };
+				fresh.Apply(CodexEntry.Kill(key, 2));
+				fresh.Apply(CodexEntry.Sighting(biomeName, key, 3));
+				if (planned > 0) fresh.Apply(CodexEntry.Drop(key, CodexNames.Item(planned), 1));
+				CodexSystem.Data = fresh;
+				CodexSystem.RefreshIndex();
+				state.ClearFilters();
+				string who = $"{Lang.GetNPCNameValue(npc)} ({time} in {biomeName})";
+
+				state.Navigate(new CodexPage(CodexPageKind.Biomes));
+				state.BuildNow();
+				CodexCaptioned card = WalkAll(state.Content).OfType<CodexCaptioned>().FirstOrDefault(c => c.Inner is CodexNpcPortrait portrait && portrait.NetId == npc);
+				if (card == null) failures.Add($"biome page: no card for {who}");
+				else if (card.Note == null || !card.Note.Text.Contains(expected)) failures.Add($"biome page: {who} shows \"{card.Note?.Text ?? "no note"}\"");
+
+				state.Navigate(CodexPage.NpcPage(npc));
+				state.BuildNow();
+				if (!WalkAll(state.Content).OfType<CodexLabel>().Any(l => l.Text.Contains("(") && l.Text.Contains(expected))) failures.Add($"enemy page: {who} without \"{expected}\"");
+
+				if (planned > 0 && everywhere.Count == 1 && everywhere[0] != SlotTime.Any)
+				{
+					string always = CodexText.Get("Hint.When.Short." + everywhere[0]);
+					state.Navigate(CodexPage.ItemPage(planned));
+					state.BuildNow();
+					CodexCaptioned dropper = WalkAll(state.Content).OfType<CodexCaptioned>().FirstOrDefault(c => c.Inner is CodexNpcPortrait portrait && portrait.NetId == npc);
+					if (dropper == null) failures.Add($"item page: {Lang.GetItemNameValue(planned)} without {who}");
+					else if (dropper.Note == null || !dropper.Note.Text.Contains(always)) failures.Add($"item page: {who} shows \"{dropper.Note?.Text ?? "no note"}\", expected {always}");
+				}
+			}
+			finally
+			{
+				CodexSystem.Data = savedData;
+				CodexSystem.RefreshIndex();
+				state.RestoreNavigation(saved);
+			}
+			Check.All(failures, "Times shown in the codex");
 		}
 
 		// No text of the codex (window, tabs, every tab's page, an item and an enemy page) is a raw localization key

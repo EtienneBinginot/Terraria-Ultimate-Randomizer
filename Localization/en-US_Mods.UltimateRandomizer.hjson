@@ -124,6 +124,7 @@ Tests: {
 	CodexManyItemsBounded: Codex interface: 3000 items and 300 enemies only build the visible rows
 	CodexTextsResolved: Codex interface: no raw text key is shown
 	CodexShowsChances: Codex interface: discovered drops show their planned chance, biomes the spawn shares
+	CodexShowsConditions: The codex shows when an enemy is met (by day, at night) on its biome, enemy and item pages
 	BiomeSlotsReachable: By biome: every spawn place of an enemy with several places can be reached
 	NegativeNetIdSwap: Swapping into a slime colour (Pinky) works and keeps the Blue Slime type
 	EvilSlotsShared: By biome: in a world with a single evil, the owners of the missing evil's places spawn through the present evil (20 seeds)
@@ -286,6 +287,8 @@ Codex: {
 	SeenTimesIn: Seen {0} times, in:
 	SpawnShareHover: Share of this enemy among the spawns seen in this biome
 	ChanceHover: Planned chance per kill (the loot bonus of strong enemies can raise it)
+	WhenCondition: condition
+	WhenRecipe: "Must be made: {0}."
 	ChanceUnknown: ?
 	Percent: "{0}%"
 	DropsFound: Drops found

@@ -580,10 +580,16 @@ namespace UltimateRandomizer.Common.Codex
 				HintKind.Bag => BagPlan.Plan(fact.Bag, lucky: true),
 				_ => null
 			};
-			// Only the entries that count as a source (MinFindableChance, as the indexes): a 0.01 % entry without a condition
-			// must not hide the condition of the real one
+			return PlanConditions(plan, fact.Item);
+		}
+
+		// The conditions an item's entries of a drop plan need (none when one of them needs nothing this world doesn't always
+		// meet): the entry with the best chance. Only the entries that count as a source (MinFindableChance, as the indexes):
+		// a 0.01 % entry without a condition must not hide the condition of the real one
+		public static List<string> PlanConditions(List<PlannedDrop> plan, int item)
+		{
 			float minChance = ProgressionConfig.Instance.MinFindableChance / 100f;
-			List<PlannedDrop> entries = plan?.Where(d => d.Item == fact.Item && d.Chance >= minChance && Findability.WorldAllows(d.Conditions)).ToList();
+			List<PlannedDrop> entries = plan?.Where(d => d.Item == item && d.Chance >= minChance && Findability.WorldAllows(d.Conditions)).ToList();
 			if (entries == null || entries.Count == 0 || entries.Any(d => ConditionTexts(d.Conditions).Count == 0)) return new List<string>();
 			return ConditionTexts(entries.OrderByDescending(d => d.Chance).First().Conditions);
 		}
@@ -1034,10 +1040,13 @@ namespace UltimateRandomizer.Common.Codex
 			return text;
 		}
 
-		public static string RecipeConditions(HintFact fact)
+		public static string RecipeConditions(HintFact fact) => fact.Kind == HintKind.Recipe ? RecipeConditions(fact.Recipe) : "";
+
+		// Where a recipe must be made ("near water, in the snow..."), empty when anywhere
+		public static string RecipeConditions(int recipe)
 		{
-			if (fact.Kind != HintKind.Recipe || fact.Recipe < 0 || fact.Recipe >= Recipe.numRecipes) return "";
-			return string.Join(", ", Main.recipe[fact.Recipe].Conditions.Select(c => c?.Description?.Value).Where(d => !string.IsNullOrWhiteSpace(d)));
+			if (recipe < 0 || recipe >= Recipe.numRecipes) return "";
+			return string.Join(", ", Main.recipe[recipe].Conditions.Select(c => c?.Description?.Value).Where(d => !string.IsNullOrWhiteSpace(d)));
 		}
 
 		public static string ItemName(int type) => type > 0 && type < ItemLoader.ItemCount ? Lang.GetItemNameValue(type) : "?";
