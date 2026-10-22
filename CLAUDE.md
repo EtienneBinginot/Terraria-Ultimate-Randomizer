@@ -20,7 +20,7 @@ Everything is deterministic per world seed, follows progression tiers, and stays
 - `bash tools/verify.sh`: Roslyn type-check of the whole mod against the installed tModLoader assemblies, both hjson
   files parse, and every setting/enum/header/test/text key has an en-US and fr-FR entry. Must print `VERIFY: OK`.
 - The real build is in game: Workshop > Develop Mods > Build + Reload (the user does it).
-- In-game tests: debug panel (key K) > Tests, or `/rtest`. Read the results yourself with `bash tools/test-results.sh`
+- In-game tests: debug panel (key K) > Tests, or `/rtest` (both need Client settings > Debug tools on, off by default). Read the results yourself with `bash tools/test-results.sh`
   (never ask the user to copy them). Pacing tests log `Pacing:`, `Drops:`, `First work bench:` values.
 - Vanilla/tML behaviour: `bash tools/api.sh "<Type.FullName>" "<regex>"` (member signatures),
   `bash tools/ildump.sh <Type.FullName> <Method>` / `callers "Type::Method"` (IL from tModLoader.dll), and

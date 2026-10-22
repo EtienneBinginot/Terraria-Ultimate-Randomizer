@@ -599,6 +599,9 @@ namespace UltimateRandomizer.Common.Features
 			return set;
 		}
 
+		// Gathered directly in the world (blocks, wood, gems, herbs...), ores apart
+		public static bool IsWorldMaterial(int item) => WorldMaterials.Any(m => m.item == item);
+
 		// Including the guaranteed sources
 		public static int Tier(int item)
 		{

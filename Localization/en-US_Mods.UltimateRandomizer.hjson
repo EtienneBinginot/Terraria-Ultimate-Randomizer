@@ -157,6 +157,9 @@ Tests: {
 	HintSortedByProgress: Hints are sorted by progression, in two tabs
 	HintFoundUnlocks: A found item's hint is fully known for free
 	HintClickOpensCodex: Clicking a hint opens the right codex page
+	HintTreeComplete: A recipe hint names the source of every ingredient and station, down to raw materials
+	HintTreeDeterministic: Recipe hint trees are the same after rebuilding
+	HintTabsSplit: The Guide's hints are split between crafting and bosses
 	GuaranteedHostsNotEvents: Guaranteed drops are never on invasion, moon, seasonal or weather enemies
 	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
 	FindabilityDeterminism: Findability of items is the same after a rebuild
@@ -228,6 +231,7 @@ Tests: {
 	ConfigTexts: Every setting has a text
 	OtherTexts: Every message has a text
 	ConfigRanges: Settings are consistent
+	DebugToolsDefaultOff: Debug tools are off by default
 	CacheSignatureScope: Saving an enemy stat setting keeps findability and the recipe plan; loot and swap pool settings rebuild them
 	ConfigResetDefaults: Settings: the reset button restores every default and covers every config
 	HintFactsTrue: Hints say what the planners do: the host carries the item, the recipe makes it
@@ -436,6 +440,27 @@ Codex: {
 	}
 
 	Hint: {
+	Tree: {
+		Title: What you need, down to the raw materials
+		Station: (station)
+		More: ...and more: craft the first parts to see the rest in the codex.
+		Mined: mine {0}
+		Gathered: gathered in the world
+		Repeat: see above
+		Unknown: no known source
+		Recipe: crafted at {0}
+		Creature: "{0}, {1} ({2})"
+		CreatureAnywhere: "{0} ({1})"
+		Boss: "{0}, boss ({1})"
+		Shop: sold by the {0}
+		Bag: inside {0}
+		Chest: wooden chests
+		Pot: pots
+		World: found in the world
+	}
+	
+	TabCrafting: Crafting
+	TabBosses: Bosses
 		Syncing: One moment: I am still catching up on what was bought in this world.
 		Refused: I have already told you that much. Ask me about the next step.
 		Conditions: Mind the place: {0}.
@@ -802,6 +827,7 @@ Commands: {
 		Warning: This randomizes once the natural chests of this world. Chests with a name, and chests near the spawn point or town NPC houses (probably yours) are skipped. Type /rchests confirm to proceed.
 		Done: "{0} chests randomized."
 	}
+	DebugOff: Debug tools are off: enable them in the mod settings (Ultimate Randomizer client settings > Debug tools).
 }
 
 Configs: {
@@ -1042,8 +1068,8 @@ Configs: {
 		}
 
 		DamageGrowthPerTier: {
-			Label: "Enemy damage per tier of power"
-			Tooltip: "Enemy damage multiplier for each tier of power too many (multiplied again for each tier). Kept low on purpose: defense is subtracted from damage, so health does most of the scaling."
+			Label: Enemy damage per tier of power
+			Tooltip: Enemy damage multiplier for each tier of power too many (multiplied again for each tier). Kept low on purpose: defense is subtracted from damage, so health does most of the scaling.
 		}
 
 		BossLifeGrowthPerTier: {
@@ -1052,18 +1078,18 @@ Configs: {
 		}
 
 		BossDamageGrowthPerTier: {
-			Label: "Boss damage per tier of power"
-			Tooltip: "Same for the damage of bosses, their parts and their projectiles."
+			Label: Boss damage per tier of power
+			Tooltip: Same for the damage of bosses, their parts and their projectiles.
 		}
 
 		AdaptiveCap: {
-			Label: "Maximum health multiplier"
-			Tooltip: "Enemy health is never multiplied by more than this by adaptive power."
+			Label: Maximum health multiplier
+			Tooltip: Enemy health is never multiplied by more than this by adaptive power.
 		}
 
 		AdaptiveDamageCap: {
-			Label: "Maximum damage multiplier"
-			Tooltip: "Enemy damage is never multiplied by more than this by adaptive power (the total damage cap of the enemy settings applies too)."
+			Label: Maximum damage multiplier
+			Tooltip: Enemy damage is never multiplied by more than this by adaptive power (the total damage cap of the enemy settings applies too).
 		}
 
 		ProtectedItems: {
@@ -1692,7 +1718,7 @@ Configs: {
 			EnemySwap: Random enemies
 			GiantsAndMinis: Giants and minis
 			LootBonus: Loot of strong enemies
-			DamageLimit: "Damage limit"
+			DamageLimit: Damage limit
 		}
 
 		RandomizeBossHealth: {
@@ -1721,8 +1747,8 @@ Configs: {
 		}
 
 		BossDamageMax: {
-			Label: "Boss damage: maximum multiplier"
-			Tooltip: "Keep it low: defense is subtracted from damage, so a small multiplier already hurts a lot more."
+			Label: Boss damage: maximum multiplier
+			Tooltip: Keep it low: defense is subtracted from damage, so a small multiplier already hurts a lot more.
 		}
 
 		BossStatExtremeness: {
@@ -1761,8 +1787,8 @@ Configs: {
 		}
 
 		EnemyDamageMax: {
-			Label: "Damage: maximum multiplier"
-			Tooltip: "Keep it low: defense is subtracted from damage, so a small multiplier already hurts a lot more. Health is the place for big multipliers."
+			Label: Damage: maximum multiplier
+			Tooltip: Keep it low: defense is subtracted from damage, so a small multiplier already hurts a lot more. Health is the place for big multipliers.
 		}
 
 		EnemyDefenseMin: {
@@ -1836,8 +1862,8 @@ Configs: {
 		}
 
 		LootBonusStrength: {
-			Label: "Loot bonus strength"
-			Tooltip: "Stronger enemies (health x damage x damage above normal: damage counts twice, defense is subtracted from it) have better extra drop chances. 0 = no bonus."
+			Label: Loot bonus strength
+			Tooltip: Stronger enemies (health x damage x damage above normal: damage counts twice, defense is subtracted from it) have better extra drop chances. 0 = no bonus.
 		}
 
 		LootBonusCap: {
@@ -1896,8 +1922,8 @@ Configs: {
 		}
 
 		MaxDamageMultiplier: {
-			Label: "Total damage: maximum multiplier"
-			Tooltip: "The randomizer never multiplies the damage of an enemy, boss or boss part by more than this in total (type, variation, giant and adaptive power together; expert and master scaling still apply on top). Damage is far stronger than health in Terraria: defense is subtracted from it, so x10 damage turns a 1 damage hit into a one-shot."
+			Label: Total damage: maximum multiplier
+			Tooltip: The randomizer never multiplies the damage of an enemy, boss or boss part by more than this in total (type, variation, giant and adaptive power together; expert and master scaling still apply on top). Damage is far stronger than health in Terraria: defense is subtracted from it, so x10 damage turns a 1 damage hit into a one-shot.
 		}
 	}
 
@@ -1955,8 +1981,8 @@ Configs: {
 		}
 
 		DebugTools: {
-			Label: Debug tools (K key)
-			Tooltip: Shows the debug panel with the K key: state of the randomizer, inspector, testing tools and automated tests.
+			Label: "Debug tools (K key)"
+			Tooltip: "Testing tools for the mod's developers: the K panel (state of the randomizer, inspector, cheats, automated tests) and the /rdebug and /rtest commands. They reveal the whole randomization: off by default."
 		}
 
 		AdaptiveMessages: {

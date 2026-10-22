@@ -80,6 +80,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		public static bool IsOpen => userInterface?.CurrentState != null;
 
+		// Typing in the panel's search: letters are text, not hotkeys
+		public static bool IsTyping => IsOpen && state != null && state.IsTyping;
+
 		public override void Load()
 		{
 			if (Main.dedServ) return;
@@ -103,6 +106,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		public static void Close()
 		{
+			state?.StopTyping();
 			userInterface?.SetState(null);
 			hovered = false;
 		}
@@ -232,6 +236,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		// The tab shown: targets still to buy, or those fully known (bought to the end, or found)
 		private bool knownTab;
 		private CodexButton toBuyButton, knownButton;
+		// The category shown: crafting (stations, pickaxes) or bosses (boss and event summons)
+		private bool bossTab;
+		private CodexButton craftingButton, bossesButton;
+		private UIPanel searchPanel;
+		private UISearchBar searchBar;
+		private string search = "";
 		private bool dirty = true;
 		private (long structure, int pending, int tier, int caches, bool synced) built = (-1, -1, -1, -1, false);
 		private int timer;
@@ -243,6 +253,13 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private const float Gap = 16;
 
 		public bool ContainsMouse => panel != null && panel.ContainsPoint(Main.MouseScreen);
+
+		public bool IsTyping => searchBar != null && searchBar.IsWritingText;
+
+		public void StopTyping()
+		{
+			if (IsTyping) searchBar.ToggleTakingText();
+		}
 
 		public override void OnInitialize()
 		{
@@ -262,19 +279,52 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			close.Left.Set(-36, 1f);
 			panel.Append(close);
 
+			craftingButton = new CodexButton(CodexText.Live("Hint.TabCrafting"), 0, () => ShowCategory(false), 0.8f);
+			craftingButton.Width.Set(-4, 0.5f);
+			craftingButton.Top.Set(54, 0);
+			craftingButton.Height.Set(30, 0);
+			panel.Append(craftingButton);
+			bossesButton = new CodexButton(CodexText.Live("Hint.TabBosses"), 0, () => ShowCategory(true), 0.8f);
+			bossesButton.Width.Set(-4, 0.5f);
+			bossesButton.Left.Set(4, 0.5f);
+			bossesButton.Top.Set(54, 0);
+			bossesButton.Height.Set(30, 0);
+			panel.Append(bossesButton);
+
 			toBuyButton = new CodexButton(CodexText.Live("Hint.TabToBuy"), 0, () => ShowTab(false), 0.8f);
 			toBuyButton.Width.Set(-4, 0.5f);
-			toBuyButton.Top.Set(54, 0);
+			toBuyButton.Top.Set(88, 0);
 			toBuyButton.Height.Set(30, 0);
 			panel.Append(toBuyButton);
 			knownButton = new CodexButton(CodexText.Live("Hint.TabKnown"), 0, () => ShowTab(true), 0.8f);
 			knownButton.Width.Set(-4, 0.5f);
 			knownButton.Left.Set(4, 0.5f);
-			knownButton.Top.Set(54, 0);
+			knownButton.Top.Set(88, 0);
 			knownButton.Height.Set(30, 0);
 			panel.Append(knownButton);
 
-			targets = MakeList(90, 0f, -94, 0.5f);
+			// Same search box as the codex: click to type, right click to clear
+			searchPanel = new UIPanel();
+			searchPanel.Width.Set(0, 1f);
+			searchPanel.Height.Set(30, 0);
+			searchPanel.Top.Set(124, 0);
+			searchPanel.SetPadding(0);
+			searchPanel.BackgroundColor = new Color(25, 32, 66);
+			panel.Append(searchPanel);
+			searchBar = new UISearchBar(CodexText.Live("Search"), 0.8f);
+			searchBar.Width.Set(-12, 1f);
+			searchBar.Height.Set(0, 1f);
+			searchBar.Left.Set(8, 0);
+			searchBar.VAlign = 0.5f;
+			searchBar.OnContentsChanged += SearchChanged;
+			searchPanel.Append(searchBar);
+			searchPanel.OnLeftClick += (_, _) =>
+			{
+				if (!searchBar.IsWritingText) searchBar.ToggleTakingText();
+			};
+			searchPanel.OnRightClick += (_, _) => searchBar.SetContents("", true);
+
+			targets = MakeList(160, 0f, -164, 0.5f);
 			detail = MakeList(4, 0.5f, -8, 0.5f);
 		}
 
@@ -335,6 +385,32 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			CloseRequested = false;
 		}
 
+		private void SearchChanged(string contents)
+		{
+			string text = (contents ?? "").Trim();
+			if (text == search) return;
+			search = text;
+			targets.ViewPosition = 0;
+			dirty = true;
+		}
+
+		private bool Matches(HintTarget target) => search.Length == 0 || HintFacts.ItemName(target.Item).Contains(search, StringComparison.OrdinalIgnoreCase);
+
+		public override void LeftMouseDown(UIMouseEvent evt)
+		{
+			base.LeftMouseDown(evt);
+			// A click anywhere else ends the search input
+			if (IsTyping && !searchPanel.ContainsPoint(evt.MousePosition)) searchBar.ToggleTakingText();
+		}
+
+		private void ShowCategory(bool bosses)
+		{
+			if (bossTab == bosses) return;
+			bossTab = bosses;
+			targets.ViewPosition = 0;
+			dirty = true;
+		}
+
 		private void ShowTab(bool known)
 		{
 			if (knownTab == known) return;
@@ -345,6 +421,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		// The targets of a tab, in the order progression reaches them: to buy, those offered now and not fully known; known,
 		// every target bought to the end or found
+		// Boss and event summons in the bosses tab, stations and pickaxes in the crafting one
+		public static List<HintTarget> TabTargets(bool known, bool bosses) => TabTargets(known).Where(t => (t.Kind == HintTargetKind.Summon) == bosses).ToList();
+
 		public static List<HintTarget> TabTargets(bool known) => known
 			? HintFacts.ByProgress(HintFacts.AllTargets().Where(t => CodexSystem.ShownHintLevel(t.Item) >= HintFacts.MaxLevel))
 			: HintFacts.ByProgress(HintFacts.Targets().Where(t => CodexSystem.ShownHintLevel(t.Item) < HintFacts.MaxLevel));
@@ -360,9 +439,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			List<UIElement> rows = new();
 			toBuyButton.Active = !knownTab;
 			knownButton.Active = knownTab;
-			List<HintTarget> list = TabTargets(knownTab);
+			craftingButton.Active = !bossTab;
+			bossesButton.Active = bossTab;
+			List<HintTarget> all = TabTargets(knownTab, bossTab);
+			List<HintTarget> list = all.Where(Matches).ToList();
 			if (!CodexSystem.CanBuyHints) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get("Hint.Syncing"), 0.8f, CodexDraw.Muted));
-			if (list.Count == 0) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get(knownTab ? "Hint.NothingKnown" : "Hint.Nothing"), 0.8f, CodexDraw.Muted));
+			if (list.Count == 0) rows.Add(new CodexRow(30, 4).WithLabel(all.Count > 0 ? CodexText.Get("NoMatch") : CodexText.Get(knownTab ? "Hint.NothingKnown" : "Hint.Nothing"), 0.8f, CodexDraw.Muted));
 			foreach (HintTarget target in list) rows.Add(TargetRow(target));
 			targets.AddRange(rows);
 			targets.Recalculate();

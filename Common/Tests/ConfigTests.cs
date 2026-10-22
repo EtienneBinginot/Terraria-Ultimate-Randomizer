@@ -53,6 +53,14 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ConfigRanges", ConfigRanges);
 			TestRunner.Register("CacheSignatureScope", CacheSignatureScope);
 			TestRunner.Register("ConfigResetDefaults", ConfigResetDefaults);
+			TestRunner.Register("DebugToolsDefaultOff", DebugToolsDefaultOff);
+		}
+
+		// Players get no debug panel nor debug commands unless they ask for them (they reveal the whole randomization)
+		private static void DebugToolsDefaultOff()
+		{
+			DefaultValueAttribute attribute = typeof(ClientConfig).GetField(nameof(ClientConfig.DebugTools))?.GetCustomAttribute<DefaultValueAttribute>();
+			Check.That(attribute != null && attribute.Value is false, $"DebugTools defaults to {attribute?.Value ?? "nothing"}");
 		}
 
 		private static readonly Type[] ConfigTypes =

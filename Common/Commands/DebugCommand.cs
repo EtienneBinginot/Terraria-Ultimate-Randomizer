@@ -33,6 +33,11 @@ namespace UltimateRandomizer.Common.Commands
 
 		public override void Action(CommandCaller caller, string input, string[] args)
 		{
+			if (!Debug.DebugTools.Allowed)
+			{
+				caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.DebugOff"), Color.Yellow);
+				return;
+			}
 			if (args.Length == 0)
 			{
 				caller.Reply(Usage, Color.Yellow);

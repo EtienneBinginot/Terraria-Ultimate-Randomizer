@@ -20,7 +20,7 @@ namespace UltimateRandomizer.Common.Journal
 		public override void ProcessTriggers(TriggersSet triggersSet)
 		{
 			// J typed in the codex search is text, not the hotkey
-			if (JournalSystem.State != null && JournalSystem.IsOpen && JournalSystem.State.IsTyping) return;
+			if (JournalSystem.IsTyping || Codex.Interface.HintSystem.IsTyping) return;
 			if (JournalSystem.ToggleKeybind != null && JournalSystem.ToggleKeybind.JustPressed) JournalSystem.Toggle();
 		}
 

@@ -34,6 +34,73 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintSortedByProgress", HintSortedByProgress);
 			TestRunner.Register("HintFoundUnlocks", HintFoundUnlocks);
 			TestRunner.Register("HintClickOpensCodex", HintClickOpensCodex);
+			TestRunner.Register("HintTreeComplete", HintTreeComplete);
+			TestRunner.Register("HintTreeDeterministic", HintTreeDeterministic);
+			TestRunner.Register("HintTabsSplit", HintTabsSplit);
+		}
+
+		private static List<HintTarget> RecipeTargets() =>
+			TargetsOrSkip().Concat(HintFacts.AllTargets()).Distinct().Where(t => HintFacts.For(t.Item)?.Kind == HintKind.Recipe).ToList();
+
+		// A recipe hint gives every ingredient and station down to a raw source: every crafted part is expanded (within the
+		// depth limit), nothing is left without a source, and the parts follow the planned recipe
+		private static void HintTreeComplete()
+		{
+			List<HintTarget> targets = RecipeTargets();
+			if (targets.Count == 0) Check.Skip("no recipe hint in this world");
+			List<string> failures = new();
+			foreach (HintTarget target in targets)
+			{
+				string name = HintFacts.ItemName(target.Item);
+				List<HintTreeNode> tree = HintFacts.SourceTree(target.Item);
+				HintFact fact = HintFacts.For(target.Item);
+				int parts = fact.Ingredients.Count(x => x.type > 0) + fact.Tiles.Select(HintFacts.StationItem).Where(s => s > 0).Distinct().Count();
+				if (parts > 0 && tree.Count == 0) failures.Add($"{name}: empty tree");
+				if (tree.Count(n => n.Depth == 1) != Math.Min(parts, tree.Count)) failures.Add($"{name}: {tree.Count(n => n.Depth == 1)} first parts, recipe has {parts}");
+				bool truncated = HintFacts.TreeTruncated(tree);
+				for (int i = 0; i < tree.Count; i++)
+				{
+					HintTreeNode node = tree[i];
+					string part = $"{name} > {HintFacts.ItemName(node.Item)}";
+					if (node.Leaf == HintTreeLeaf.Unknown) failures.Add($"{part}: no source");
+					if (node.Depth < 1 || node.Depth > HintFacts.MaxTreeDepth) failures.Add($"{part}: depth {node.Depth}");
+					if (node.Leaf == HintTreeLeaf.Fact && (node.Fact == null || node.Fact.Kind == HintKind.Recipe)) failures.Add($"{part}: fact leaf without a raw source");
+					if (node.Leaf == HintTreeLeaf.Mined && node.Ore <= 0) failures.Add($"{part}: no ore to mine");
+					// A crafted part is followed by its own parts, one level deeper
+					bool expanded = i + 1 < tree.Count && tree[i + 1].Depth == node.Depth + 1;
+					if (node.Leaf == HintTreeLeaf.Recipe && node.Depth < HintFacts.MaxTreeDepth && !expanded && !(truncated && i == tree.Count - 1)) failures.Add($"{part}: crafted but not expanded");
+					if (node.Leaf != HintTreeLeaf.Recipe && expanded) failures.Add($"{part}: expanded without a recipe");
+				}
+			}
+			Check.All(failures, "Incomplete recipe hint trees");
+		}
+
+		// The same tree after the caches are forgotten (planned data only)
+		private static void HintTreeDeterministic()
+		{
+			List<HintTarget> targets = RecipeTargets();
+			if (targets.Count == 0) Check.Skip("no recipe hint in this world");
+			static string Describe(List<HintTreeNode> tree) => string.Join(";", tree.Select(n => $"{n.Item}x{n.Stack}@{n.Depth}:{n.Leaf}:{n.Ore}:{n.Fact?.Kind}:{n.Fact?.Npc}"));
+			Dictionary<int, string> before = targets.ToDictionary(t => t.Item, t => Describe(HintFacts.SourceTree(t.Item)));
+			HintFacts.Reset();
+			List<string> failures = targets.Where(t => Describe(HintFacts.SourceTree(t.Item)) != before[t.Item]).Select(t => HintFacts.ItemName(t.Item)).ToList();
+			Check.All(failures, "Recipe hint trees changed after rebuilding");
+		}
+
+		// The Guide's two categories: boss and event summons in Bosses, stations and pickaxes in Crafting, each target once
+		private static void HintTabsSplit()
+		{
+			TargetsOrSkip();
+			List<string> failures = new();
+			foreach (bool known in new[] { false, true })
+			{
+				List<HintTarget> all = HintPanelState.TabTargets(known);
+				List<HintTarget> crafting = HintPanelState.TabTargets(known, false), bosses = HintPanelState.TabTargets(known, true);
+				if (crafting.Count + bosses.Count != all.Count || crafting.Intersect(bosses).Any()) failures.Add($"known {known}: {crafting.Count} + {bosses.Count} of {all.Count}");
+				failures.AddRange(bosses.Where(t => t.Kind != HintTargetKind.Summon).Select(t => $"{HintFacts.ItemName(t.Item)} among the bosses"));
+				failures.AddRange(crafting.Where(t => t.Kind == HintTargetKind.Summon).Select(t => $"{HintFacts.ItemName(t.Item)} among crafting"));
+			}
+			Check.All(failures, "Hint categories");
 		}
 
 		private static List<HintFact> CreatureFacts() => TargetsOrSkip().Select(t => HintFacts.For(t.Item)).Where(f => f != null && f.Kind == HintKind.Creature).ToList();

@@ -21,11 +21,11 @@ Originally made for the YouTube videos of Pootouf & Nouke: https://www.youtube.c
 Progression items are protected; basic stations, boss summons and needed ingredients are guaranteed on common enemies, in pots and wooden chests.
 
 ==[Codex and hints]==
-J key: drops of the enemies you killed, bags you opened, craft tree, enemies of each biome. The Guide sells hints telling you where to find an item.
+J key: drops of the enemies you killed, bags you opened, craft tree, enemies of each biome. The Guide sells hints about crafting stations, pickaxes and boss summons; for a crafted item, the whole tree down to the enemies and ores.
 
 ==[Settings and multiplayer]==
 Everything is configurable (English and French). The seed is saved with the world and shared in multiplayer.
-Commands: /rseed (show or change the seed), /rjournal, /rchests (older worlds), /rdebug
+Commands: /rseed (show or change the seed), /rjournal, /rchests (older worlds)
 
 Do not enable it together with tRandomizer.
 

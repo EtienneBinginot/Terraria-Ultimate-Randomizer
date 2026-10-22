@@ -157,6 +157,9 @@ Tests: {
 	HintSortedByProgress: Les indices sont triés par avancement, en deux onglets
 	HintFoundUnlocks: L'indice d'un objet trouvé est entièrement connu, gratuitement
 	HintClickOpensCodex: Cliquer sur un indice ouvre la bonne page du codex
+	HintTreeComplete: Un indice de recette donne la source de chaque ingrédient et station, jusqu'aux matières premières
+	HintTreeDeterministic: Les arbres des indices de recette sont les mêmes après reconstruction
+	HintTabsSplit: Les indices du Guide sont répartis entre artisanat et boss
 	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
@@ -228,6 +231,7 @@ Tests: {
 	ConfigTexts: Chaque réglage a un texte
 	OtherTexts: Chaque message a un texte
 	ConfigRanges: Les réglages sont cohérents
+	DebugToolsDefaultOff: Les outils de débogage sont désactivés par défaut
 	CacheSignatureScope: Sauvegarder un réglage de stats d'ennemis garde la trouvabilité et le plan des recettes ; les réglages de butin et du pool d'échanges les recalculent
 	ConfigResetDefaults: Réglages : le bouton de réinitialisation remet chaque valeur par défaut, sur toutes les pages
 	HintFactsTrue: Les indices disent ce que prévoient les planificateurs : l'hôte porte l'objet, la recette le fabrique
@@ -436,6 +440,27 @@ Codex: {
 	}
 
 	Hint: {
+	Tree: {
+		Title: Tout ce qu'il faut, jusqu'aux matières premières
+		Station: (station)
+		More: ...et plus encore : fabrique les premières parties pour voir la suite dans le codex.
+		Mined: miner {0}
+		Gathered: se récolte dans le monde
+		Repeat: voir plus haut
+		Unknown: aucune source connue
+		Recipe: fabriqué à {0}
+		Creature: "{0}, {1} ({2})"
+		CreatureAnywhere: "{0} ({1})"
+		Boss: "{0}, boss ({1})"
+		Shop: vendu par {0}
+		Bag: dans {0}
+		Chest: coffres en bois
+		Pot: pots
+		World: se trouve dans le monde
+	}
+	
+	TabCrafting: Artisanat
+	TabBosses: Boss
 		Syncing: Un instant : je me renseigne encore sur ce qui a déjà été acheté dans ce monde.
 		Refused: Je t'ai déjà dit tout ça. Demande-moi plutôt la suite.
 		Conditions: Attention à l'endroit : {0}.
@@ -802,6 +827,7 @@ Commands: {
 		Warning: Ceci randomise une fois les coffres naturels de ce monde. Les coffres renommés, et ceux près du point d'apparition ou des maisons des PNJ (sûrement les tiens), sont ignorés. Tape /rchests confirm pour continuer.
 		Done: "{0} coffres randomisés."
 	}
+	DebugOff: Les outils de débogage sont désactivés : active-les dans les réglages du mod (réglages client d'Ultimate Randomizer > Outils de débogage).
 }
 
 Configs: {
@@ -1042,8 +1068,8 @@ Configs: {
 		}
 
 		DamageGrowthPerTier: {
-			Label: "Dégâts des ennemis par tier de puissance"
-			Tooltip: "Multiplicateur de dégâts des ennemis pour chaque tier de puissance en trop (cumulé à chaque tier). Volontairement bas : la défense est soustraite des dégâts, c'est donc la vie qui fait l'essentiel de la hausse."
+			Label: Dégâts des ennemis par tier de puissance
+			Tooltip: Multiplicateur de dégâts des ennemis pour chaque tier de puissance en trop (cumulé à chaque tier). Volontairement bas : la défense est soustraite des dégâts, c'est donc la vie qui fait l'essentiel de la hausse.
 		}
 
 		BossLifeGrowthPerTier: {
@@ -1052,18 +1078,18 @@ Configs: {
 		}
 
 		BossDamageGrowthPerTier: {
-			Label: "Dégâts des boss par tier de puissance"
-			Tooltip: "Pareil pour les dégâts des boss, de leurs parties et de leurs projectiles."
+			Label: Dégâts des boss par tier de puissance
+			Tooltip: Pareil pour les dégâts des boss, de leurs parties et de leurs projectiles.
 		}
 
 		AdaptiveCap: {
-			Label: "Multiplicateur de vie maximum"
-			Tooltip: "La puissance adaptative ne multiplie jamais la vie des ennemis par plus que ça."
+			Label: Multiplicateur de vie maximum
+			Tooltip: La puissance adaptative ne multiplie jamais la vie des ennemis par plus que ça.
 		}
 
 		AdaptiveDamageCap: {
-			Label: "Multiplicateur de dégâts maximum"
-			Tooltip: "La puissance adaptative ne multiplie jamais les dégâts des ennemis par plus que ça (le plafond de dégâts totaux des réglages ennemis s'applique aussi)."
+			Label: Multiplicateur de dégâts maximum
+			Tooltip: La puissance adaptative ne multiplie jamais les dégâts des ennemis par plus que ça (le plafond de dégâts totaux des réglages ennemis s'applique aussi).
 		}
 
 		ProtectedItems: {
@@ -1692,7 +1718,7 @@ Configs: {
 			EnemySwap: Ennemis aléatoires
 			GiantsAndMinis: Géants et minis
 			LootBonus: Loot des ennemis forts
-			DamageLimit: "Limite de dégâts"
+			DamageLimit: Limite de dégâts
 		}
 
 		RandomizeBossHealth: {
@@ -1721,8 +1747,8 @@ Configs: {
 		}
 
 		BossDamageMax: {
-			Label: "Dégâts des boss : multiplicateur maximum"
-			Tooltip: "À garder bas : la défense est soustraite des dégâts, donc un petit multiplicateur fait déjà beaucoup plus mal."
+			Label: Dégâts des boss : multiplicateur maximum
+			Tooltip: À garder bas : la défense est soustraite des dégâts, donc un petit multiplicateur fait déjà beaucoup plus mal.
 		}
 
 		BossStatExtremeness: {
@@ -1761,8 +1787,8 @@ Configs: {
 		}
 
 		EnemyDamageMax: {
-			Label: "Dégâts : multiplicateur maximum"
-			Tooltip: "À garder bas : la défense est soustraite des dégâts, donc un petit multiplicateur fait déjà beaucoup plus mal. Les gros multiplicateurs, c'est pour la vie."
+			Label: Dégâts : multiplicateur maximum
+			Tooltip: À garder bas : la défense est soustraite des dégâts, donc un petit multiplicateur fait déjà beaucoup plus mal. Les gros multiplicateurs, c'est pour la vie.
 		}
 
 		EnemyDefenseMin: {
@@ -1836,8 +1862,8 @@ Configs: {
 		}
 
 		LootBonusStrength: {
-			Label: "Force du bonus de loot"
-			Tooltip: "Les ennemis plus forts (vie x dégâts x dégâts au-dessus de la normale : les dégâts comptent double, la défense en est soustraite) ont de meilleures chances de drops bonus. 0 = pas de bonus."
+			Label: Force du bonus de loot
+			Tooltip: Les ennemis plus forts (vie x dégâts x dégâts au-dessus de la normale : les dégâts comptent double, la défense en est soustraite) ont de meilleures chances de drops bonus. 0 = pas de bonus.
 		}
 
 		LootBonusCap: {
@@ -1896,8 +1922,8 @@ Configs: {
 		}
 
 		MaxDamageMultiplier: {
-			Label: "Dégâts totaux : multiplicateur maximum"
-			Tooltip: "Le randomizer ne multiplie jamais les dégâts d'un ennemi, d'un boss ou d'une partie de boss par plus que ça au total (type, variation, géant et puissance adaptative cumulés ; le bonus expert et maître s'ajoute toujours). Les dégâts sont bien plus forts que la vie dans Terraria : la défense en est soustraite, donc x10 de dégâts transforme un coup à 1 dégât en one-shot."
+			Label: Dégâts totaux : multiplicateur maximum
+			Tooltip: Le randomizer ne multiplie jamais les dégâts d'un ennemi, d'un boss ou d'une partie de boss par plus que ça au total (type, variation, géant et puissance adaptative cumulés ; le bonus expert et maître s'ajoute toujours). Les dégâts sont bien plus forts que la vie dans Terraria : la défense en est soustraite, donc x10 de dégâts transforme un coup à 1 dégât en one-shot.
 		}
 	}
 
@@ -1955,8 +1981,8 @@ Configs: {
 		}
 
 		DebugTools: {
-			Label: Outils de débogage (touche K)
-			Tooltip: Affiche le panneau de débogage avec la touche K : état du randomizer, inspecteur, outils de test et tests automatiques.
+			Label: "Outils de débogage (touche K)"
+			Tooltip: "Outils de test pour le développement du mod : le panneau K (état du randomizer, inspecteur, triche, tests automatiques) et les commandes /rdebug et /rtest. Ils dévoilent tout le tirage : désactivés par défaut."
 		}
 
 		AdaptiveMessages: {

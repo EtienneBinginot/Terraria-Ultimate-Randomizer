@@ -24,11 +24,11 @@ Originally made for the YouTube videos of [b]Pootouf & Nouke[/b]: [url=https://w
 Progression items are protected. Basic crafting stations, boss summons and the ingredients you need are guaranteed on common enemies, in pots and in wooden chests.
 
 [h2]Codex and hints[/h2]
-Press [b]J[/b]: drops of the enemies you killed, bags you opened, craft tree, enemies of each biome. The Guide sells hints that tell you where to find an item.
+Press [b]J[/b]: drops of the enemies you killed, bags you opened, craft tree, enemies of each biome. The Guide sells hints about crafting stations, pickaxes and boss summons (Crafting and Bosses tabs, with a search box). For a crafted item, the hint gives the whole tree: every ingredient and station, down to the enemy that drops it or the ore to mine.
 
 [h2]Settings and multiplayer[/h2]
 Everything is configurable, in English and French. The seed is saved with the world and shared in multiplayer.
-Commands: /rseed (show or change the seed), /rjournal, /rchests (worlds created before the mod), /rdebug.
+Commands: /rseed (show or change the seed), /rjournal, /rchests (worlds created before the mod).
 Do not enable it together with tRandomizer.
 
 [hr][/hr]
@@ -57,11 +57,11 @@ Créé à l'origine pour les vidéos YouTube de [b]Pootouf & Nouke[/b] : [url=ht
 Les objets de progression sont protégés. Les stations de base, les invocations de boss et les ingrédients nécessaires sont garantis sur des ennemis courants, dans les pots et les coffres en bois.
 
 [h2]Codex et indices[/h2]
-Touche [b]J[/b] : drops des ennemis tués, sacs ouverts, arbre de fabrication, ennemis de chaque biome. Le Guide vend des indices qui disent où trouver un objet.
+Touche [b]J[/b] : drops des ennemis tués, sacs ouverts, arbre de fabrication, ennemis de chaque biome. Le Guide vend des indices sur les stations, les pioches et les invocations de boss (onglets Artisanat et Boss, avec une recherche). Pour un objet fabriqué, l'indice donne tout l'arbre : chaque ingrédient et station, jusqu'à l'ennemi qui le donne ou au minerai à miner.
 
 [h2]Réglages et multijoueur[/h2]
 Tout est configurable, en français et en anglais. La graine est sauvegardée avec le monde et partagée en multijoueur.
-Commandes : /rseed (voir ou changer la graine), /rjournal, /rchests (mondes créés avant le mod), /rdebug.
+Commandes : /rseed (voir ou changer la graine), /rjournal, /rchests (mondes créés avant le mod).
 Ne pas l'activer en même temps que tRandomizer.
 
 [hr][/hr]

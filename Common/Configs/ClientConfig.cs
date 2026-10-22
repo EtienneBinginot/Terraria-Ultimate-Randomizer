@@ -10,8 +10,9 @@ namespace UltimateRandomizer.Common.Configs
 
 		public static ClientConfig Instance => ModContent.GetInstance<ClientConfig>();
 
+		// Testing tools (K panel, /rdebug, /rtest): off for players, they can cheat and show the whole randomization
 		[Header("Debug")]
-		[DefaultValue(true)]
+		[DefaultValue(false)]
 		public bool DebugTools;
 
 		// Chat messages when adaptive power makes enemies stronger or weaker

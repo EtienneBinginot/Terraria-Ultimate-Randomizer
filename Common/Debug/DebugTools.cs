@@ -170,6 +170,8 @@ namespace UltimateRandomizer.Common.Debug
 	{
 		public override void ProcessTriggers(TriggersSet triggersSet)
 		{
+			// K typed in a search box (codex, Guide's hints) is text, not the hotkey
+			if (Journal.JournalSystem.IsTyping || Codex.Interface.HintSystem.IsTyping) return;
 			if (DebugSystem.ToggleKeybind != null && DebugSystem.ToggleKeybind.JustPressed && DebugTools.Allowed) DebugSystem.Toggle();
 		}
 

@@ -44,8 +44,9 @@ can be found in time. All of this can be changed in the settings.
 
 ## Randomizer codex (J key)
 Everything you discovered: the drops of the enemies you killed, the content of the bags you opened, the craft tree, the
-enemies of each biome. The Guide sells **hints** (Hint button) that tell you where to find an item, more precisely at
-each level.
+enemies of each biome. The Guide sells **hints** (Hint button) about crafting stations, pickaxes and boss summons, more
+precise at each level, with a search box and separate Crafting and Bosses tabs. When an item is crafted, the hint gives the
+whole tree: every ingredient and station, down to the enemy that drops it, the ore to mine or what to gather.
 
 ## Settings
 Everything is configurable in Mod Configuration, in English and French: modes, seed, drop rates and abundance, surprise
@@ -59,7 +60,9 @@ The seed is saved with the world and shared with every player; enemy stats, reci
 - `/rseed` shows the world seed; `/rseed set <number>` and `/rseed random` change it (host only)
 - `/rjournal` opens the codex (same as the J key)
 - `/rchests confirm` randomizes the chests of a world created before the mod (host only, once)
-- `/rdebug item <name>`, `npc <name>`, `tier`, `pool`, `swaps`, `recipes`, `biomes`, `codex`: what the randomizer plans
+
+Debug tools (K panel, `/rdebug`, `/rtest`) are off by default: they reveal the whole randomization. They can be enabled
+in the client settings.
 
 Do not enable it together with tRandomizer.
 

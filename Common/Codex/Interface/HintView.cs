@@ -55,6 +55,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				}
 				if (l == 3 && level == 3) rows.Add(Visual(fact, true, inCodex));
 				if (l == 4) rows.Add(Visual(fact, false, inCodex));
+				// A recipe is only worth something with where its parts come from: the tree as shapes at level 3, then clear
+				if (fact.Kind == HintKind.Recipe && (l == 4 || (l == 3 && level == 3))) rows.AddRange(TreeRows(fact.Item, l == 3, width, inCodex));
 			}
 			return rows;
 		}
@@ -95,6 +97,38 @@ namespace UltimateRandomizer.Common.Codex.Interface
 					break;
 			}
 			return row;
+		}
+
+		// Every ingredient and station of the recipe, down to raw sources, indented by depth
+		public static List<UIElement> TreeRows(int item, bool silhouette, float width, bool inCodex)
+		{
+			List<UIElement> rows = new();
+			List<HintTreeNode> tree = HintFacts.SourceTree(item);
+			if (tree.Count == 0) return rows;
+			rows.Add(new CodexSection(CodexText.Get("Hint.Tree.Title")));
+			foreach (HintTreeNode node in tree)
+			{
+				CodexRow row = new(40, 8 + (node.Depth - 1) * 22);
+				row.Add(Icon(node.Item, node.Stack, 34, silhouette), 6);
+				if (node.Leaf == HintTreeLeaf.Mined && node.Ore != node.Item) row.Add(Icon(node.Ore, 0, 28, silhouette), 6);
+				HintFact fact = node.Fact;
+				if (node.Leaf == HintTreeLeaf.Fact && fact.Npc != 0 && fact.Kind is HintKind.Creature or HintKind.Boss or HintKind.Shop)
+					row.Add(new CodexNpcPortrait(fact.Npc, 36, 36, false, 0, clickable: false, silhouette: silhouette, textureOnly: !inCodex), 6);
+				else if (node.Leaf == HintTreeLeaf.Fact && fact.Kind == HintKind.Bag) row.Add(Icon(fact.Bag, 0, 28, silhouette), 6);
+				string text = silhouette ? "?" : HintFacts.ItemName(node.Item) + (node.Station ? " " + CodexText.Get("Hint.Tree.Station") : "") + ": " + HintFacts.TreeSource(node);
+				row.Add(new CodexLabel(Fit(text, 0.75f, width - row.Used - 16), 0.75f, node.Leaf == HintTreeLeaf.Repeat ? CodexDraw.Muted : Color.White) { HoverText = silhouette ? null : text });
+				rows.Add(row);
+			}
+			if (HintFacts.TreeTruncated(tree)) rows.Add(new CodexRow(26, 8).WithLabel(CodexText.Get("Hint.Tree.More"), 0.75f, CodexDraw.Muted));
+			return rows;
+		}
+
+		// Shortened with "..." to fit a width (the full text shows on hover)
+		private static string Fit(string text, float scale, float width)
+		{
+			if (CodexDraw.TextWidth(text, scale) <= width) return text;
+			while (text.Length > 4 && CodexDraw.TextWidth(text + "...", scale) > width) text = text.Substring(0, text.Length - 1);
+			return text + "...";
 		}
 
 		private static CodexItemIcon Icon(int type, int count, float size, bool silhouette) =>

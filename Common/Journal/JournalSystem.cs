@@ -32,6 +32,9 @@ namespace UltimateRandomizer.Common.Journal
 
 		public static bool IsOpen => userInterface?.CurrentState != null;
 
+		// Typing in the codex search: letters are text, not hotkeys
+		public static bool IsTyping => IsOpen && state != null && state.IsTyping;
+
 		public override void Load()
 		{
 			ToggleKeybind = KeybindLoader.RegisterKeybind(Mod, "Journal", "J");
