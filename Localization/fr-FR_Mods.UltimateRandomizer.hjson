@@ -227,6 +227,7 @@ Tests: {
 	RecipeNoCycles: Aucun objet n'est fabriqué à partir de lui-même par un nouvel ingrédient, directement ou via d'autres recettes
 	RecipeKeyed: Chaque recette reconstruite au-dessus du tier 0 a une clé et n'est pas faisable avant son tier
 	RecipeSwapsShare: Environ la chance d'échange des recettes échangent leur résultat, par paires du même tier, surtout de types différents
+	RecipeSwapCancelClean: Une paire d'échange annulée laisse les candidats exactement comme avant, et ses recettes redonnent leur propre résultat
 	ZenithWeapons: Le Zénith garde des armes parmi ses ingrédients
 	IngredientReuse: La pénalité de réutilisation répartit les matériaux sur plus de recettes
 	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement

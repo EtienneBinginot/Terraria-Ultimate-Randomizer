@@ -227,6 +227,7 @@ Tests: {
 	RecipeNoCycles: No item is made from itself through a new ingredient, directly or through other recipes
 	RecipeKeyed: Every rebuilt recipe above tier 0 has a key and can't be made before its tier
 	RecipeSwapsShare: About the swap chance of the recipes swap their results, by pairs of the same tier, mostly of different kinds
+	RecipeSwapCancelClean: A cancelled swap pair leaves the candidates exactly as before, and its recipes give their own result again
 	ZenithWeapons: The Zenith keeps weapons among its ingredients
 	IngredientReuse: The reuse penalty spreads the materials over more recipes
 	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks

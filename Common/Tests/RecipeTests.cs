@@ -43,6 +43,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("RecipeNoCycles", RecipeNoCycles);
 			TestRunner.Register("RecipeKeyed", RecipeKeyed);
 			TestRunner.Register("RecipeSwapsShare", RecipeSwapsShare);
+			TestRunner.Register("RecipeSwapCancelClean", RecipeSwapCancelClean);
 			TestRunner.Register("ZenithWeapons", ZenithWeapons);
 			TestRunner.Register("IngredientReuse", IngredientReuse);
 			TestRunner.Register("CraftedValueFromIngredients", CraftedValueFromIngredients);
@@ -90,8 +91,9 @@ namespace UltimateRandomizer.Common.Tests
 			for (int i = 0; i < Count; i++)
 			{
 				if (plan.Ingredients[i] == null) continue;
-				bool rebuilt = plan.IngredientTiers[i] >= 0;
-				int rt = rebuilt ? plan.IngredientTiers[i] : RecipePlanner.RecipeTier(i);
+				// A repaired recipe keeps its vanilla ingredients: only its replacements are new, had by its T
+				bool rebuilt = plan.IngredientTiers[i] >= 0 && !plan.Repaired[i];
+				int rt = plan.IngredientTiers[i] >= 0 ? plan.IngredientTiers[i] : RecipePlanner.RecipeTier(i);
 				if (plan.KeyIngredient[i]) rt = Math.Max(rt, Math.Min(plan.ResultTiers[i] + 1, Tiers.Max));
 				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
 				foreach ((int type, _) in plan.Ingredients[i])
@@ -297,7 +299,7 @@ namespace UltimateRandomizer.Common.Tests
 				// worth 0.6 to 1.6 times the vanilla one
 				bool capped = plan.Ingredients[i].Any(p => p.stack >= Math.Min(cap, StackRules.MaxStackOf(p.type)));
 				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
-				bool rebuilt = plan.IngredientTiers[i] >= 0;
+				bool rebuilt = plan.IngredientTiers[i] >= 0 && !plan.Repaired[i];
 				long roundUp = plan.Ingredients[i].Where(p => rebuilt ? RecipePlanner.IngredientReplaceable(p.type) : !originals.Contains(p.type)).Sum(p => (long)Math.Max(StackRules.ValueOf(p.type), 1));
 				if ((!capped && after < before / 2) || after > before * 2 + Item.silver + roundUp) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {before} -> {after}");
 			}
@@ -700,6 +702,35 @@ namespace UltimateRandomizer.Common.Tests
 			return next;
 		}
 
+		// The same graph for the recipes as set up (original ingredients, groups and results)
+		private static Dictionary<int, HashSet<int>> OriginalGraph()
+		{
+			Dictionary<int, HashSet<int>> next = new();
+			for (int i = 0; i < Count; i++)
+			{
+				if (RecipeSystem.IsShell(i) || RecipeSystem.VanillaDisabled(i)) continue;
+				int[] groups = RecipeSystem.OriginalGroups(i);
+				foreach ((int type, _) in RecipeSystem.OriginalIngredients(i))
+				{
+					IEnumerable<int> members = new[] { type };
+					foreach (int id in groups)
+					{
+						if (RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group) && group.ContainsItem(type))
+						{
+							members = group.ValidItems;
+							break;
+						}
+					}
+					foreach (int from in members)
+					{
+						if (!next.TryGetValue(from, out HashSet<int> set)) next[from] = set = new HashSet<int>();
+						set.Add(RecipeSystem.OriginalResult(i));
+					}
+				}
+			}
+			return next;
+		}
+
 		// The items a live recipe's ingredient slot accepts (its group's members, or the item itself)
 		private static IEnumerable<int> Members(Recipe recipe, int type)
 		{
@@ -729,15 +760,18 @@ namespace UltimateRandomizer.Common.Tests
 		// No item is made from itself, directly or not, through the plan: the result of a rebuilt recipe (or a live shell) never
 		// leads back, through the live recipes, to one of its new ingredients; nor that of a swapped recipe to any of its
 		// ingredients (its kept ones give another item now), nor that of a recipe the planner could not rebuild (it keeps its
-		// vanilla ingredients only when they make no loop). Vanilla ingredients kept by a rebuilt recipe keeping its result are
-		// not the plan's
+		// vanilla ingredients only when they make no loop), nor that of a rebuilt recipe to one of its protected ingredients
+		// (they lead to its result from the start of the planning). Replaceable vanilla ingredients kept by a rebuilt recipe
+		// keeping its result are not the plan's, and neither is a loop the recipes as set up already have (Wood <-> Wood
+		// Platform: left as it is)
 		private static void RecipeNoCycles()
 		{
 			RequireRandomIngredients();
 			RecipePlan plan = RecipePlanner.Get();
 			Dictionary<int, HashSet<int>> next = LiveGraph();
+			Dictionary<int, HashSet<int>> vanillaNext = OriginalGraph();
 			List<string> failures = new();
-			int checkedCount = 0, slots = 0, kept = 0;
+			int checkedCount = 0, slots = 0, kept = 0, vanillaLoops = 0;
 			for (int i = 0; i < Count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
@@ -747,17 +781,26 @@ namespace UltimateRandomizer.Common.Tests
 				checkedCount++;
 				if (failed) kept++;
 				int result = recipe.createItem.type;
-				HashSet<int> originals = failed || plan.SwapPartner[i] >= 0 ? new HashSet<int>() : RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
+				bool swapped = plan.SwapPartner[i] >= 0;
+				HashSet<int> originals = failed || swapped || plan.Repaired[i] ? new HashSet<int>()
+					: RecipeSystem.OriginalIngredients(i).Select(x => x.type).Where(RecipePlanner.IngredientReplaceable).ToHashSet();
 				HashSet<int> from = Reach(next, result);
+				// What the result already led to as set up (a recipe still giving its own result)
+				HashSet<int> vanillaFrom = swapped || RecipeSystem.IsShell(i) ? new HashSet<int>() : Reach(vanillaNext, result);
 				foreach (Item ingredient in recipe.requiredItem)
 				{
 					if (originals.Contains(ingredient.type)) continue;
+					if (Members(recipe, ingredient.type).Any(vanillaFrom.Contains))
+					{
+						vanillaLoops++;
+						continue;
+					}
 					slots++;
 					int loop = Members(recipe, ingredient.type).FirstOrDefault(from.Contains, 0);
 					if (loop > 0) failures.Add($"{Name(result)} (recipe {i}) needs {Name(ingredient.type)}, made from {Name(result)} again (through {Name(loop)})");
 				}
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoCycles: {checkedCount} recipes ({kept} left vanilla by the planner), {slots} ingredients checked");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoCycles: {checkedCount} recipes ({kept} left vanilla by the planner), {slots} ingredients checked, {vanillaLoops} on a loop the recipes as set up have");
 			Check.That(checkedCount > 0, "no rebuilt recipe");
 			Check.All(failures, "Recipe loops");
 		}
@@ -774,7 +817,8 @@ namespace UltimateRandomizer.Common.Tests
 			for (int i = 0; i < Count; i++)
 			{
 				int tier = plan.IngredientTiers[i];
-				if (tier <= 0 || plan.Ingredients[i] == null || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i) || SpecialRecipe(plan, i)) continue;
+				// A repaired recipe found no key: it keeps its vanilla ingredients (LockResults locks it at U)
+				if (tier <= 0 || plan.Ingredients[i] == null || plan.Repaired[i] || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i) || SpecialRecipe(plan, i)) continue;
 				checkedCount++;
 				byTier[tier] = byTier.GetValueOrDefault(tier) + 1;
 				string where = $"{Name(RecipeSystem.OriginalResult(i))} -> {Name(plan.Results[i].type)} (tier {tier}: {Ingredients(plan.Ingredients[i])})";
@@ -785,6 +829,35 @@ namespace UltimateRandomizer.Common.Tests
 			if (checkedCount == 0) Check.Skip("no rebuilt recipe above tier 0");
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeKeyed: {checkedCount} rebuilt recipes above tier 0 ({string.Join(", ", byTier.OrderBy(p => p.Key).Select(p => $"tier {p.Key}: {p.Value}"))})");
 			Check.All(failures, "Rebuilt recipes without a key of their tier");
+		}
+
+		// A cancelled swap pair leaves the planning as if it never was: when each item is had, as which candidate, and the order
+		// of the candidate lists (the picks walk them in order) are exactly as before the pair was tried. Plans built with high
+		// swap chances (explicit values, without shells), so some pairs are cancelled; every cancelled recipe gives its own
+		// vanilla result again
+		private static void RecipeSwapCancelClean()
+		{
+			RequireRandomIngredients();
+			List<string> failures = new();
+			int cancelledPairs = 0;
+			foreach (float chance in new[] { 30f, 60f })
+			{
+				RecipePlan plan = RecipePlanner.BuildWith(false, swapChance: chance);
+				int[] setting = RecipePlanner.SwappedResults(chance).partners;
+				int cancelled = 0;
+				for (int i = 0; i < Count; i++)
+				{
+					if (setting[i] < 0 || plan.SwapPartner[i] >= 0) continue;
+					cancelled++;
+					if (plan.Results[i] != (RecipeSystem.OriginalResult(i), RecipeSystem.OriginalStack(i)) && failures.Count < 20)
+						failures.Add($"{chance}%: {Name(RecipeSystem.OriginalResult(i))}: cancelled but gives {Name(plan.Results[i].type)} x{plan.Results[i].stack}");
+				}
+				cancelledPairs += cancelled / 2;
+				if (plan.RestoreMismatches > 0) failures.Add($"{chance}%: {plan.RestoreMismatches} of the {cancelled / 2} cancelled pairs left the candidates changed");
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeSwapCancelClean: at {chance}%, {cancelled / 2} pairs cancelled, {plan.RestoreMismatches} left the candidates changed");
+			}
+			if (cancelledPairs == 0 && failures.Count == 0) Check.Skip("no swap pair was cancelled");
+			Check.All(failures, "Cancelled swaps");
 		}
 
 		// About RecipeResultSwapChance of the swappable recipes swap their results (explicit chances: the config is not read for
@@ -831,7 +904,8 @@ namespace UltimateRandomizer.Common.Tests
 					continue;
 				}
 				double expected = chance / 100.0;
-				Check.That(share >= expected * 0.5 && share <= expected * 1.1 + 0.01, $"{share:P1} of the recipes swapped at {chance}%");
+				// Each pair is drawn on its own: the share moves around the chance (by tier groups of a few dozen recipes)
+				Check.That(share >= expected * 0.5 && share <= expected * 1.3 + 0.01, $"{share:P1} of the recipes swapped at {chance}%");
 				Check.That(cross * 2 >= swapped, $"only {cross} of {swapped} swaps change category at {chance}%");
 			}
 			int lost = 0;
@@ -853,6 +927,8 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			int planned = setting.Count(p => p >= 0);
 			mod.Logger.Info($"RecipeSwapsShare: the plan cancelled {cancelled} of the {planned} swapped recipes of the setting (no key for one of a pair)");
+			// A cancel is the exception (a tier without a key material): most swaps of the setting stay
+			Check.That(cancelled <= planned / 4, $"the plan cancelled {cancelled} of the {planned} swapped recipes");
 			// A few swapped recipes of the live plan, as the crafting menu shows them
 			foreach (int i in Enumerable.Range(0, Count).Where(i => plan.SwapPartner[i] >= 0 && i < plan.SwapPartner[i]).Take(6))
 			{
@@ -898,7 +974,7 @@ namespace UltimateRandomizer.Common.Tests
 				Dictionary<int, int> uses = new();
 				for (int i = 0; i < Count; i++)
 				{
-					if (plan.IngredientTiers[i] != 0 || plan.Ingredients[i] == null || RecipeSystem.HouseRecipe(i) || RecipeSystem.IsShell(i)) continue;
+					if (plan.IngredientTiers[i] != 0 || plan.Ingredients[i] == null || plan.Repaired[i] || RecipeSystem.HouseRecipe(i) || RecipeSystem.IsShell(i)) continue;
 					int[] groups = RecipePlanner.GroupsOf(plan, i);
 					foreach ((int type, _) in plan.Ingredients[i])
 					{
@@ -1069,7 +1145,7 @@ namespace UltimateRandomizer.Common.Tests
 			Dictionary<string, int> seen = new();
 			List<string> failures = new();
 			List<string> examples = new();
-			int copies = 0;
+			int copies = 0, loopOff = 0;
 			string Key(Recipe recipe) => $"{recipe.createItem.type}x{recipe.createItem.stack}|"
 				+ string.Join(",", recipe.requiredItem.Select(item => $"{item.type}x{item.stack}").OrderBy(s => s, StringComparer.Ordinal))
 				+ "|" + string.Join(",", recipe.acceptedGroups.OrderBy(g => g)) + "|" + string.Join(",", recipe.Conditions.Select(c => c.Description.Key));
@@ -1079,9 +1155,11 @@ namespace UltimateRandomizer.Common.Tests
 				Recipe recipe = Main.recipe[i];
 				if (plan.Twin[i])
 				{
-					copies++;
-					if (!recipe.Disabled) failures.Add($"{Name(recipe.createItem.type)}: copy (recipe {i}) still enabled");
-					if (examples.Count < 5) examples.Add($"{Name(recipe.createItem.type)} ({Ingredients(recipe.requiredItem.Select(item => (item.type, item.stack)).ToArray())})");
+					// A recipe switched off for a loop (KeepOriginals) is no copy
+					if (plan.LoopOff[i]) loopOff++;
+					else copies++;
+					if (!recipe.Disabled) failures.Add($"{Name(recipe.createItem.type)}: switched off (recipe {i}) but still enabled");
+					if (examples.Count < 5 && !plan.LoopOff[i]) examples.Add($"{Name(recipe.createItem.type)} ({Ingredients(recipe.requiredItem.Select(item => (item.type, item.stack)).ToArray())})");
 				}
 				if (recipe.Disabled || RecipeSystem.IsModded(i)) continue;
 				string key = Key(recipe);
@@ -1096,7 +1174,7 @@ namespace UltimateRandomizer.Common.Tests
 					failures.Add($"{Name(recipe.createItem.type)} ({Ingredients(recipe.requiredItem.Select(item => (item.type, item.stack)).ToArray())}): recipes {other} and {i} on different stations");
 				}
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoStationTwins: {copies} identical copies switched off; e.g. {(examples.Count == 0 ? "none" : string.Join("; ", examples))}");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoStationTwins: {copies} identical copies switched off ({loopOff} other recipes switched off for a loop); e.g. {(examples.Count == 0 ? "none" : string.Join("; ", examples))}");
 			Check.All(failures, "Same recipe on different stations");
 		}
 
@@ -1251,7 +1329,7 @@ namespace UltimateRandomizer.Common.Tests
 			for (int i = 0; i < Count; i++)
 			{
 				int tier = plan.IngredientTiers[i];
-				if (tier <= 0 || plan.Ingredients[i] == null || SpecialRecipe(plan, i)) continue;
+				if (tier <= 0 || plan.Ingredients[i] == null || plan.Repaired[i] || SpecialRecipe(plan, i)) continue;
 				checkedCount++;
 				int allowed = plan.KeyIngredient[i] ? Math.Max(tier, Math.Min(plan.ResultTiers[i] + 1, Tiers.Max)) : tier;
 				int highest = plan.Ingredients[i].Where(x => RecipePlanner.IngredientReplaceable(x.type)).Select(x => IngredientAvail(plan, i, x.type)).DefaultIfEmpty(0).Max();
@@ -1286,9 +1364,11 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null) continue;
 				int[] groups = RecipePlanner.GroupsOf(plan, i);
+				// A repaired recipe's vanilla ingredients are not the plan's
+				HashSet<int> vanilla = plan.Repaired[i] ? RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet() : new HashSet<int>();
 				foreach ((int type, _) in plan.Ingredients[i])
 				{
-					if (!RecipePlanner.IngredientReplaceable(type)) continue;
+					if (!RecipePlanner.IngredientReplaceable(type) || vanilla.Contains(type)) continue;
 					IEnumerable<int> choices = new[] { type };
 					foreach (int id in groups)
 					{
@@ -1317,9 +1397,11 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null || RecipeSystem.HouseRecipe(i) || SpecialRecipe(plan, i) || plan.KeyIngredient[i]) continue;
 				int[] groups = RecipePlanner.GroupsOf(plan, i);
+				// A repaired recipe: its replacements only (within the caps too)
+				HashSet<int> vanilla = plan.Repaired[i] ? RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet() : new HashSet<int>();
 				foreach ((int type, _) in plan.Ingredients[i])
 				{
-					if (type == plan.PlannedKeys[i] || !RecipePlanner.IngredientReplaceable(type) || RecipeSystem.InGroups(groups, type)) continue;
+					if (type == plan.PlannedKeys[i] || vanilla.Contains(type) || !RecipePlanner.IngredientReplaceable(type) || RecipeSystem.InGroups(groups, type)) continue;
 					uses[type] = uses.GetValueOrDefault(type) + 1;
 				}
 			}

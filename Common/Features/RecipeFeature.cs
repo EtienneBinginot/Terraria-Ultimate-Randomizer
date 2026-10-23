@@ -276,6 +276,8 @@ namespace UltimateRandomizer.Common.Features
 				// A copy of another recipe (same result, ingredients and stations) would show twice: switched off. A shell is on
 				// only when this world planned it
 				SetDisabled(recipe, shell[i] ? !RecipePlanner.ShellActive(plan, i) : originalDisabled[i] || plan.Twin[i]);
+				// Shimmer decrafting ignores Recipe.Disabled (it reads CraftingRecipeIndices): a recipe switched off leaves them
+				if (plan.Twin[i]) changed[i] = true;
 				// Decrafting gives the current ingredients back: not when they are worth clearly more than before (protected
 				// results too, their ingredients may be replaced), nor when the result is had before the recipe's tier, found or made
 				// by another recipe (it would shimmer into that tier's key early)
