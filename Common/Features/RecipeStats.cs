@@ -47,7 +47,8 @@ namespace UltimateRandomizer.Common.Features
 			int count = Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
 			for (int i = 0; i < count; i++)
 			{
-				if (Main.recipe[i].Disabled) continue;
+				// A shell is a new recipe, not a vanilla one (its item no recipe made)
+				if (Main.recipe[i].Disabled || RecipeSystem.IsShell(i)) continue;
 				if (RecipeSystem.IsModded(i))
 				{
 					share.Modded++;

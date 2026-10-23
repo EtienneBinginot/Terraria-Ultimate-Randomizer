@@ -239,6 +239,9 @@ Tests: {
 	RecipeIngredientsAcyclic: Chaque ingrédient fabriqué d'une recette reconstruite est donné par une recette planifiée avant elle
 	RecipeIngredientUseCaps: Aucun matériau n'est ingrédient de plus de recettes reconstruites que sa limite d'usage
 	RecipeExamples: Journalise 10 recettes reconstruites (dont le Zénith et l'armure de chlorophyte), réellement changées
+	UncraftableRecipesValid: Les objets qu'aucune recette ne fabrique reçoivent une recette active, faisable à partir de leur palier et jamais avant, qui ne se décompose jamais au miroitement ; journalise des exemples
+	UncraftableRecipesOff: Réglage désactivé (planificateur appelé avec des paramètres explicites) : aucune recette coquille n'est planifiée et les autres recettes sont planifiées à l'identique
+	UncraftableNoSpecials: Les recettes coquilles ne donnent jamais d'amélioration de vie ou de mana, gardent leur objet et ne sont jamais désactivées comme copies
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares
@@ -1868,6 +1871,11 @@ Configs: {
 		IngredientMax: {
 			Label: "Nombre maximal d'ingrédients par recette"
 			Tooltip: "Une recette reconstruite n'a jamais plus d'ingrédients que cela (les ingrédients qui ne peuvent pas être remplacés, comme les objets de boss, sont gardés quand même)."
+		}
+
+		RecipesForUncraftable: {
+			Label: "Recettes pour les objets non fabricables"
+			Tooltip: "Les objets qu'aucune recette ne fabrique (murs, blocs obtenus seulement en les cassant, meubles trouvés dans le monde, objets de style, teintures, nourriture, matériaux) reçoivent une recette aléatoire sur une station aléatoire. Elle n'est faisable qu'à partir du palier où l'objet serait trouvé, jamais avant. L'équipement, les munitions, les potions, les minerais, les stations, les invocations de boss et les sacs n'en reçoivent jamais."
 		}
 
 		IngredientStackCap: {

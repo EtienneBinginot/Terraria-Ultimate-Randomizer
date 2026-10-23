@@ -54,6 +54,9 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("RecipeIngredientsAcyclic", RecipeIngredientsAcyclic);
 			TestRunner.Register("RecipeIngredientUseCaps", RecipeIngredientUseCaps);
 			TestRunner.Register("RecipeExamples", RecipeExamples);
+			TestRunner.Register("UncraftableRecipesValid", UncraftableRecipesValid);
+			TestRunner.Register("UncraftableRecipesOff", UncraftableRecipesOff);
+			TestRunner.Register("UncraftableNoSpecials", UncraftableNoSpecials);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -347,7 +350,8 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			for (int i = 0; i < Count; i++)
 			{
-				if (RecipeSystem.Touchable(i)) continue;
+				// A shell is planned from nothing (UncraftableRecipesValid)
+				if (RecipeSystem.Touchable(i) || RecipeSystem.IsShell(i)) continue;
 				Recipe recipe = Main.recipe[i];
 				if (!RecipeSystem.IngredientsTouchable(i) && !recipe.requiredItem.Select(item => (item.type, item.stack)).SequenceEqual(RecipeSystem.OriginalIngredients(i))) failures.Add($"{Name(recipe.createItem.type)} ingredients");
 				if (!recipe.requiredTile.SequenceEqual(RecipeSystem.OriginalTiles(i))) failures.Add($"{Name(recipe.createItem.type)} stations");
@@ -448,7 +452,7 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			for (int i = 0; i < Count; i++)
 			{
-				if (RecipeSystem.OriginalTiles(i).Length == 0 && Main.recipe[i].requiredTile.Count > 0) failures.Add(Name(RecipeSystem.OriginalResult(i)));
+				if (!RecipeSystem.IsShell(i) && RecipeSystem.OriginalTiles(i).Length == 0 && Main.recipe[i].requiredTile.Count > 0) failures.Add(Name(RecipeSystem.OriginalResult(i)));
 			}
 			Check.All(failures, "Hand-made recipes now need a station");
 		}
@@ -1009,7 +1013,7 @@ namespace UltimateRandomizer.Common.Tests
 			int rebuilt = 0;
 			for (int i = 0; i < Count; i++)
 			{
-				if (plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null || SpecialRecipe(plan, i)) continue;
+				if (plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null || SpecialRecipe(plan, i) || RecipeSystem.IsShell(i)) continue;
 				rebuilt++;
 				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
 				int vanilla = original.Length;
@@ -1135,7 +1139,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			RequireRandomIngredients();
 			RecipePlan plan = RecipePlanner.Get();
-			List<int> rebuilt = Enumerable.Range(0, Count).Where(i => plan.IngredientTiers[i] >= 0 && plan.Ingredients[i] != null)
+			List<int> rebuilt = Enumerable.Range(0, Count).Where(i => plan.IngredientTiers[i] >= 0 && plan.Ingredients[i] != null && !RecipeSystem.IsShell(i))
 				.OrderBy(i => plan.IngredientTiers[i]).ThenBy(i => (uint)RecipeSystem.RecipeKey(i)).ToList();
 			if (rebuilt.Count == 0) Check.Skip("no rebuilt recipe");
 			List<string> failures = new();
@@ -1161,6 +1165,116 @@ namespace UltimateRandomizer.Common.Tests
 					(groups.Length > 0 ? $" (groups: {groups})" : "") + $" at {string.Join(", ", Main.recipe[i].requiredTile.Select(t => TileID.Search.GetName(t)))}");
 			}
 			Check.All(failures, "Example recipes");
+		}
+
+		// Items no recipe makes get a shell recipe switched on, with ingredients, giving that item, doable from the item's tier
+		// (when it is found, and the unlocked tier of its true tier) and never before; switched-off shells stay off, and no
+		// shell ever shimmers back
+		private static void UncraftableRecipesValid()
+		{
+			RequireApplied();
+			if (!CraftingConfig.Instance.RecipesForUncraftable) Check.Skip("no recipes for uncraftable items");
+			RecipePlan plan = RecipePlanner.Get();
+			int[] results = plan.Results.Select(r => r.type).ToArray();
+			(int type, int stack)[][] ingredients = Enumerable.Range(0, Count).Select(i => Main.recipe[i].requiredItem.Select(x => (x.type, x.stack)).ToArray()).ToArray();
+			int[][] tiles = Enumerable.Range(0, Count).Select(i => Main.recipe[i].requiredTile.ToArray()).ToArray();
+			RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doable, plan.Twin);
+			List<string> failures = new();
+			List<int> active = new();
+			int eligible = 0;
+			Dictionary<ItemCategory, int> byCategory = new();
+			for (int i = 0; i < Count; i++)
+			{
+				if (!RecipeSystem.IsShell(i)) continue;
+				Recipe recipe = Main.recipe[i];
+				int item = RecipeSystem.OriginalResult(i);
+				if (plan.ShellTiers[i] >= 0) eligible++;
+				if (!RecipePlanner.ShellActive(plan, i))
+				{
+					if (!recipe.Disabled) failures.Add($"{Name(item)}: unplanned shell switched on");
+					continue;
+				}
+				active.Add(i);
+				ItemCategory category = ItemPool.Info[item].Category;
+				byCategory[category] = byCategory.GetValueOrDefault(category) + 1;
+				string where = $"{Name(item)} ({Ingredients(ingredients[i])})";
+				int tier = plan.ShellTiers[i];
+				if (recipe.Disabled) failures.Add($"{where}: switched off");
+				if (recipe.createItem.type != item) failures.Add($"{where}: gives {Name(recipe.createItem.type)}");
+				if (recipe.requiredItem.Count == 0) failures.Add($"{where}: no ingredient");
+				if (recipe.requiredItem.Any(x => x.type == item)) failures.Add($"{where}: uses its own item");
+				if (tier < 0) failures.Add($"{where}: planned but not eligible");
+				int found = Findability.Tier(item);
+				int unlock = ItemPool.UnlockTier(ItemPool.TrueTierOf(item));
+				if (found < Findability.Never && tier < Math.Min(found, Tiers.Max) || tier < Math.Min(unlock, Tiers.Max)) failures.Add($"{where}: tier {tier}, found at {Show(found)}, unlocked at {unlock}");
+				if (doable[i] >= Findability.Never) failures.Add($"{where}: never doable");
+				else if (doable[i] < tier) failures.Add($"{where}: doable at {doable[i]}, before its tier {tier}");
+				if (Terraria.GameContent.ShimmerTransforms.GetDecraftingRecipeIndex(item) == i || (ItemID.Sets.CraftingRecipeIndices[item]?.Contains(i) ?? false)) failures.Add($"{where}: shimmers back");
+			}
+			if (eligible == 0) Check.Skip("no item may get a shell recipe");
+			Check.That(active.Count > 0, $"none of the {eligible} eligible shells is switched on");
+			UltimateRandomizer mod = ModContent.GetInstance<UltimateRandomizer>();
+			mod.Logger.Info($"UncraftableRecipesValid: {active.Count} of {eligible} eligible shells switched on ({string.Join(", ", byCategory.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}"))})");
+			for (int k = 0; k < 8 && k < active.Count; k++)
+			{
+				int i = active[k * active.Count / 8];
+				mod.Logger.Info($"Uncraftable: example {Name(RecipeSystem.OriginalResult(i))} x{Main.recipe[i].createItem.stack} (tier {plan.ShellTiers[i]}, doable at {Show(doable[i])}): " +
+					$"{Ingredients(ingredients[i])} at {string.Join(", ", Main.recipe[i].requiredTile.Select(t => TileID.Search.GetName(t)))}");
+			}
+			Check.All(failures, "Shell recipes");
+		}
+
+		// With the setting off, the planner (called with an explicit setting, the config is not touched) switches no shell on,
+		// and plans every other recipe exactly as with it on: the shells take nothing from them
+		private static void UncraftableRecipesOff()
+		{
+			if (!CraftingConfig.Instance.RandomizeRecipes || RecipeSystem.RecipeCount == 0) Check.Skip("recipes are not randomized");
+			RecipePlan on = RecipePlanner.BuildWith(true);
+			RecipePlan off = RecipePlanner.BuildWith(false);
+			List<string> failures = new();
+			int shells = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				if (RecipeSystem.IsShell(i))
+				{
+					shells++;
+					if (RecipePlanner.ShellActive(off, i) || off.Tiles[i] != null) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: shell planned with the setting off");
+					continue;
+				}
+				string Plan(RecipePlan plan) => (plan.Ingredients[i] == null ? "-" : string.Join(",", plan.Ingredients[i].Select(p => p.type + "x" + p.stack)))
+					+ "@" + (plan.Tiles[i] == null ? "-" : string.Join(",", plan.Tiles[i])) + "=" + plan.Results[i].type + "x" + plan.Results[i].stack + "/" + plan.Twin[i];
+				if (Plan(on) != Plan(off) && failures.Count < 20) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: planned differently with shells ({Plan(on)} / {Plan(off)})");
+			}
+			if (shells == 0) Check.Skip("no shell recipe registered");
+			int activeOn = Enumerable.Range(0, Count).Count(i => RecipePlanner.ShellActive(on, i));
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"UncraftableRecipesOff: {shells} shells registered, {activeOn} planned with the setting on, none off");
+			Check.All(failures, "Shell setting");
+		}
+
+		// The upgrades never land on a shell (AssignSpecials only takes randomized vanilla recipes), a shell always gives its own
+		// item, and is never a twin (copies are found among the vanilla recipes only)
+		private static void UncraftableNoSpecials()
+		{
+			if (!CraftingConfig.Instance.RandomizeRecipes || RecipeSystem.RecipeCount == 0) Check.Skip("recipes are not randomized");
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			int shells = 0;
+			foreach (int item in Protection.Upgrades)
+			{
+				int i = RecipePlanner.SpecialRecipe(item);
+				if (i >= 0 && RecipeSystem.IsShell(i)) failures.Add($"{Name(item)} given by the shell of {Name(RecipeSystem.OriginalResult(i))}");
+			}
+			for (int i = 0; i < Count; i++)
+			{
+				if (!RecipeSystem.IsShell(i)) continue;
+				shells++;
+				int item = RecipeSystem.OriginalResult(i);
+				if (plan.Results[i].type != item) failures.Add($"{Name(item)}: shell planned to give {Name(plan.Results[i].type)}");
+				if (plan.Twin[i]) failures.Add($"{Name(item)}: shell switched off as a copy");
+				if (plan.KeyIngredient[i] || plan.ResultRepicked[i]) failures.Add($"{Name(item)}: shell locked like a randomized recipe");
+			}
+			if (shells == 0) Check.Skip("no shell recipe registered");
+			Check.All(failures, "Shells and special recipes");
 		}
 
 		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));

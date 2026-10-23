@@ -196,7 +196,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				for (int i = 0; i < RecipeSystem.RecipeCount; i++)
 				{
-					if (!RecipeSystem.IsModded(i)) crafted.Add(RecipeSystem.OriginalResult(i));
+					if (!RecipeSystem.IsModded(i) && !RecipeSystem.IsShell(i)) crafted.Add(RecipeSystem.OriginalResult(i));
 				}
 			}
 			else

@@ -239,6 +239,9 @@ Tests: {
 	RecipeIngredientsAcyclic: Every crafted ingredient of a rebuilt recipe is made by a recipe planned before it
 	RecipeIngredientUseCaps: No material is an ingredient of more rebuilt recipes than its use cap
 	RecipeExamples: Logs 10 rebuilt recipes (Zenith and Chlorophyte armor among them), which really changed
+	UncraftableRecipesValid: Items no recipe makes get a live recipe, doable from their tier and never before, that never shimmers back; logs examples
+	UncraftableRecipesOff: With the setting off (planner called with explicit parameters), no shell recipe is planned and the other recipes are planned the same
+	UncraftableNoSpecials: Shell recipes never give a life or mana upgrade, keep their item and are never switched off as copies
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
@@ -1868,6 +1871,11 @@ Configs: {
 		IngredientMax: {
 			Label: "Maximum ingredients per recipe"
 			Tooltip: "A rebuilt recipe never has more ingredients than this (ingredients that can't be replaced, like boss items, are kept anyway)."
+		}
+
+		RecipesForUncraftable: {
+			Label: "Recipes for uncraftable items"
+			Tooltip: "Items that no recipe makes (walls, blocks only obtained by breaking them, furniture found in the world, vanity, dyes, food, materials) get a random recipe at a random station. It can only be made from the tier at which the item would be found, never earlier. Gear, ammo, potions, ores, stations, boss summons and bags never get one."
 		}
 
 		IngredientStackCap: {

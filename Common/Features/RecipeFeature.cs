@@ -24,7 +24,14 @@ namespace UltimateRandomizer.Common.Features
 		private static bool[] modded;
 		private static int[][] originalDecraft;
 		private static bool[] originalDisabled;
+		private static bool[] shell;
 		private static bool applied;
+
+		// Shell recipes: one per item no recipe made when this mod added its recipes (walls, blocks, furniture found in the
+		// world...), with no ingredient and no station, switched off as set up (so the item classification, the guaranteed
+		// sources and the decraft sets never see them). RecipePlanner gives the eligible ones ingredients and a station in each
+		// world; Apply switches on those it planned. Kept by reference until PostSetupRecipes maps them to their index
+		private static readonly HashSet<Recipe> shellRecipes = new();
 
 		// Recipe.Disabled has no public setter (DisableRecipe only works while recipes are set up, for good): twin copies are
 		// switched off and back through it
@@ -53,6 +60,47 @@ namespace UltimateRandomizer.Common.Features
 
 		public static bool Applied => applied;
 
+		// A shell recipe of this mod (an item no other recipe makes), whether or not this world planned it
+		public static bool IsShell(int i) => shell != null && i >= 0 && i < shell.Length && shell[i];
+
+		// Items a shell may be registered for: not gear, ammo, potions, critters, bags or summons (ItemClassifier.Classify;
+		// Item.material is not set yet, so a material may still read as Misc: RecipePlanner.ShellEligible decides per world)
+		private static readonly ItemCategory[] ShellRegistered =
+		{
+			ItemCategory.Block, ItemCategory.Furniture, ItemCategory.Material, ItemCategory.Vanity, ItemCategory.Dye, ItemCategory.Food, ItemCategory.Misc
+		};
+
+		// Walls come by four, like the vanilla wall recipes; anything else by one
+		private static int ShellStack(Item item) => item.createWall > WallID.None && item.maxStack >= 4 ? 4 : 1;
+
+		// Runs on every machine at load, with the same mods: the shells have the same indices everywhere
+		public override void AddRecipes()
+		{
+			shellRecipes.Clear();
+			HashSet<int> made = new();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				if (Main.recipe[i]?.createItem != null) made.Add(Main.recipe[i].createItem.type);
+			}
+			Dictionary<ItemCategory, int> counts = new();
+			for (int type = 1; type < ItemLoader.ItemCount; type++)
+			{
+				if (made.Contains(type) || !ContentSamples.ItemsByType.TryGetValue(type, out Item item) || item.IsAir || item.type != type) continue;
+				if (ItemID.Sets.Deprecated[type] || ItemID.Sets.ItemsThatShouldNotBeInInventory[type] || ItemID.Sets.IsAPickup[type] || ItemID.Sets.CommonCoin[type] || item.questItem) continue;
+				if (ItemClassifier.IsBanned(item)) continue;
+				ItemCategory category = ItemClassifier.Classify(type, item);
+				if (Array.IndexOf(ShellRegistered, category) < 0) continue;
+				Recipe recipe = Recipe.Create(type, ShellStack(item));
+				// Never shimmered back into its (random) ingredients
+				recipe.DisableDecraft();
+				recipe.Register();
+				recipe.DisableRecipe();
+				shellRecipes.Add(recipe);
+				counts[category] = counts.GetValueOrDefault(category) + 1;
+			}
+			Mod.Logger.Info($"{shellRecipes.Count} shell recipes registered for items no recipe makes ({string.Join(", ", counts.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}"))})");
+		}
+
 
 		public override void PostSetupRecipes()
 		{
@@ -67,10 +115,12 @@ namespace UltimateRandomizer.Common.Features
 			ingredientValues = new long[count];
 			modded = new bool[count];
 			originalDisabled = new bool[count];
+			shell = new bool[count];
 			if (SetDisabledMethod == null) Mod.Logger.Warn("Recipe.Disabled has no setter: identical recipe copies stay enabled.");
 			for (int i = 0; i < count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
+				shell[i] = shellRecipes.Contains(recipe);
 				originalDisabled[i] = recipe.Disabled;
 				originalTypes[i] = recipe.createItem.type;
 				originalStacks[i] = recipe.createItem.stack;
@@ -87,8 +137,10 @@ namespace UltimateRandomizer.Common.Features
 					value += (long)Math.Max(StackRules.ValueOf(ingredient.type), 1) * ingredient.stack;
 				}
 				recipeKeys[i] = key;
+				// A shell has no ingredient: its ingredients are planned to be worth about what it makes
+				if (shell[i]) value = (long)Math.Max(StackRules.ValueOf(recipe.createItem.type), 1) * recipe.createItem.stack;
 				ingredientValues[i] = value;
-				Obtainability.RecipeResults.Add(recipe.createItem.type);
+				if (!shell[i]) Obtainability.RecipeResults.Add(recipe.createItem.type);
 			}
 			int[][] decraft = ItemID.Sets.CraftingRecipeIndices;
 			originalDecraft = new int[decraft.Length][];
@@ -116,6 +168,8 @@ namespace UltimateRandomizer.Common.Features
 			modded = null;
 			originalDecraft = null;
 			originalDisabled = null;
+			shell = null;
+			shellRecipes.Clear();
 		}
 
 		private static void Refresh()
@@ -151,31 +205,33 @@ namespace UltimateRandomizer.Common.Features
 
 		// Recipes whose result, ingredients and station may change: vanilla recipes of randomizable items, except the mining chain.
 		// A house recipe (HouseRecipe) is touchable but keeps its result (RecipePlanner)
-		public static bool Touchable(int i) => !modded[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+		public static bool Touchable(int i) => !modded[i] && !shell[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
 
 		// What a house needs besides the table and the chair (basic stations, guaranteed in the world): hint targets. Their
 		// recipes keep their result but get random ingredients found at tier 0 and a basic station (RecipePlanner), so a
 		// house can always be built at once
 		public static readonly int[] HouseItems = { ItemID.WoodenDoor, ItemID.WoodPlatform, ItemID.Torch };
 
-		public static bool HouseRecipe(int i) => originalTypes != null && i >= 0 && i < originalTypes.Length && !modded[i]
+		public static bool HouseRecipe(int i) => originalTypes != null && i >= 0 && i < originalTypes.Length && !modded[i] && !shell[i]
 			&& Array.IndexOf(HouseItems, originalTypes[i]) >= 0 && ItemPool.IsRandomizable(originalTypes[i]);
 
 		// Recipes whose ingredients may change: protected results (boss summons, progression stations...) keep their result
 		// and stations, but an ingredient that can't be found in time is replaced like in any recipe (protected ingredients
 		// stay); modded recipes and excluded results stay as they are
-		public static bool IngredientsTouchable(int i) => !modded[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded;
+		public static bool IngredientsTouchable(int i) => !modded[i] && !shell[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded;
 
 		public static bool IsModded(int i) => modded != null && i >= 0 && i < modded.Length && modded[i];
 
 		// A recipe kept only because the mining chain is protected
-		public static bool KeptForMining(int i) => !modded[i] && ItemPool.IsRandomizable(originalTypes[i]) && KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+		public static bool KeptForMining(int i) => !modded[i] && !shell[i] && ItemPool.IsRandomizable(originalTypes[i]) && KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
 
 		// The live recipe differs from the vanilla one (result or ingredients): what it makes sells for its ingredients
 		public static bool IsRandomized(int i)
 		{
 			if (!applied || originalTypes == null || i < 0 || i >= originalTypes.Length || i >= Recipe.numRecipes || modded[i]) return false;
 			Recipe recipe = Main.recipe[i];
+			// A shell switched on is a random recipe of its own
+			if (shell[i]) return !recipe.Disabled;
 			if (recipe.createItem.type != originalTypes[i] || recipe.createItem.stack != originalStacks[i]) return true;
 			return !recipe.requiredItem.Select(item => (item.type, item.stack)).SequenceEqual(originalIngredients[i]);
 		}
@@ -193,8 +249,9 @@ namespace UltimateRandomizer.Common.Features
 				SetIngredients(recipe, plan.Ingredients[i] ?? originalIngredients[i]);
 				SetGroups(recipe, plan.Groups[i] ?? originalGroups[i]);
 				SetTiles(recipe, plan.Tiles[i] ?? originalTiles[i]);
-				// A copy of another recipe (same result, ingredients and stations) would show twice: switched off
-				SetDisabled(recipe, originalDisabled[i] || plan.Twin[i]);
+				// A copy of another recipe (same result, ingredients and stations) would show twice: switched off. A shell is on
+				// only when this world planned it
+				SetDisabled(recipe, shell[i] ? !RecipePlanner.ShellActive(plan, i) : originalDisabled[i] || plan.Twin[i]);
 				// Decrafting gives the current ingredients back: not when they are worth clearly more than before (protected
 				// results too, their ingredients may be replaced)
 				if (plan.Ingredients[i] != null && plan.IngredientValues[i] > ingredientValues[i] * 5 / 4) changed[i] = true;

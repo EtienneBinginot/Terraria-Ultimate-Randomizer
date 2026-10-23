@@ -49,6 +49,8 @@ namespace UltimateRandomizer.Common.Core
 		public const int KeyIngredient = 38;
 		// The recipe each life or mana upgrade is the result of (RecipePlanner.AssignSpecials)
 		public const int Special = 39;
+		// The recipe given to an item no recipe makes (RecipePlanner, shell recipes), keyed by that item
+		public const int Uncraftable = 40;
 		public const int Fallback = 0xFA11;
 	}
 

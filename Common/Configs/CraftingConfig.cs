@@ -80,6 +80,10 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(8)]
 		public int IngredientMax;
 
+		// Items no recipe makes (walls, blocks, furniture, vanity, materials...) get a random recipe, doable from their tier
+		[DefaultValue(true)]
+		public bool RecipesForUncraftable;
+
 		// Largest amount of a replaced ingredient
 		[Range(1, 999)]
 		[DefaultValue(30)]
