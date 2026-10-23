@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.ModLoader.Default;
@@ -77,19 +78,35 @@ namespace UltimateRandomizer.Common.Core
 
 		public static bool HasKnownTier(int type) => KnownTiers.ContainsKey(type);
 
-		// Magic Storage items that are creative tools or internal parts, never meant to be found
-		private static readonly string[] BannedMagicStorage = { "CreativeStorageUnit", "StorageDeactivator", "StorageUnitEmpty", "BiomeGlobeThrown" };
+		// Vanilla items no player can get: the guides already read (Critter Companionship, Environmental Preservation and
+		// both, "(inactive)"), which ItemID.Sets.Deprecated does not flag
+		private static readonly HashSet<int> BannedVanilla = new()
+		{
+			ItemID.DontHurtCrittersBookInactive, ItemID.DontHurtNatureBookInactive, ItemID.DontHurtComboBookInactive
+		};
+
+		// Items of storage mods other than Magic Storage (its own are all banned by mod name): storage units, hearts, cores,
+		// upgrades, access points and remotes, matched by their ModItem name
+		private static readonly string[] StorageItemNames =
+		{
+			"StorageUnit", "StorageHeart", "StorageCore", "StorageUpgrade", "StorageAccess", "StorageConnector", "StorageComponent",
+			"CraftingAccess", "RemoteAccess", "PortableRemote", "PortableAccess"
+		};
 
 		// Never given at random (they stay replaceable when something gives them): tModLoader's own items (start bag...),
-		// Recipe Browser's, and Magic Storage's creative and internal items
+		// Recipe Browser's, every item of a storage mod (Magic Storage and the like: a kit gives them, a random unit or
+		// upgrade breaks storage progression), and unobtainable vanilla items
 		public static bool IsBanned(Item item)
 		{
-			string mod = item?.ModItem?.Mod?.Name;
+			if (item == null) return false;
+			if (BannedVanilla.Contains(item.type)) return true;
+			string mod = item.ModItem?.Mod?.Name;
 			if (mod == null) return false;
 			if (mod is "ModLoader" or "RecipeBrowser") return true;
-			if (mod != "MagicStorage") return false;
-			string name = item.ModItem.Name;
-			return name.StartsWith("StorageCore") || System.Array.IndexOf(BannedMagicStorage, name) >= 0;
+			// MagicStorage, MagicStorageExtra...
+			if (mod.Contains("Storage")) return true;
+			string name = item.ModItem.Name ?? "";
+			return StorageItemNames.Any(name.Contains);
 		}
 
 		public static bool IsExcluded(int type, Item item, HashSet<int> excludedItems, HashSet<string> excludedMods)
@@ -193,8 +210,10 @@ namespace UltimateRandomizer.Common.Core
 		// Crafted items that no vanilla recipe makes before a tier above theirs (Pearlwood Sword: rarity 0, but Pearlwood is a
 		// hardmode block): their true tier is raised to the earliest of their recipes (the highest tier among its ingredients,
 		// a group by its earliest item, and stations), repeated until nothing changes. Only items nothing drops, holds in a bag
-		// or sells (lootSources), without a modded recipe, and not set by KnownTiers or the config; never lowers. trueTiers
-		// holds the final tiers (after LowerByRecipes) and is raised in place. Returns how many items it raised, and examples
+		// or sells (lootSources), without a modded recipe, and not set by KnownTiers or the config; never lowers. A thematic
+		// station (Solidifier, Living Loom...) raises nothing (RaisingStationTier), and furniture that world generation places
+		// (dungeon and Lihzahrd furniture, Water Candle, books) keeps its tier. trueTiers holds the final tiers (after
+		// LowerByRecipes) and is raised in place. Returns how many items it raised, and examples
 		public static int RaiseByRecipes(int[] trueTiers, Dictionary<int, Tier> overrides, HashSet<int> lootSources, out string examples)
 		{
 			HashSet<int> moddedResults = new();
@@ -211,6 +230,7 @@ namespace UltimateRandomizer.Common.Core
 				}
 				if (!SetsTier(recipe, recipe.requiredItem.Select(i => i.type).ToList())) continue;
 				if (result >= trueTiers.Length || overrides.ContainsKey(result) || KnownTiers.ContainsKey(result) || lootSources.Contains(result)) continue;
+				if (PlacedByWorldGen(result)) continue;
 				List<int[]> parts = new();
 				foreach (Item ingredient in recipe.requiredItem)
 				{
@@ -232,7 +252,7 @@ namespace UltimateRandomizer.Common.Core
 				{
 					int tier = 0;
 					foreach (int[] part in parts) tier = System.Math.Max(tier, part.Length == 0 ? Tiers.Max : part.Min(t => trueTiers[t]));
-					foreach (int tile in tiles) tier = System.Math.Max(tier, StationTier(tile, placers, t => t < trueTiers.Length ? trueTiers[t] : Tiers.Max));
+					foreach (int tile in tiles) tier = System.Math.Max(tier, RaisingStationTier(tile, placers, t => t < trueTiers.Length ? trueTiers[t] : Tiers.Max));
 					earliest[result] = earliest.TryGetValue(result, out int other) ? System.Math.Min(other, tier) : tier;
 				}
 				foreach ((int result, int tier) in earliest)
@@ -246,6 +266,266 @@ namespace UltimateRandomizer.Common.Core
 			examples = string.Join(", ", new int[] { ItemID.PearlwoodSword, ItemID.PearlwoodWorkBench }.Concat(Enumerable.Range(1, trueTiers.Length - 1).Where(t => trueTiers[t] > before[t]).Take(6))
 				.Distinct().Where(t => t < trueTiers.Length).Select(t => $"{Lang.GetItemNameValue(t)} {before[t]} > {trueTiers[t]}"));
 			return count;
+		}
+
+		// Kinds of vanilla sources (RaiseBySources, TierAudit)
+		private const int SourceGathered = 0, SourceDrop = 1, SourceBag = 2, SourceShop = 3, SourceRecipe = 4;
+
+		// The true tier of every item from its vanilla sources, the earliest of:
+		// - NPC drops (LootSnapshot.Npcs): a boss at its tier (NpcTiers.BaseTier: the boss table), any other enemy at 0: its
+		//   BaseTier is a guess from its stats (Doctor Bones, Tim or the Dungeon Guardian would look mid or late game), and
+		//   EffectiveTier follows the world's progression and the config, unknown at load; then raised by the drop's known
+		//   conditions (hardmode, mechanical bosses, Plantera, the moon events...); a drop that needs a special seed is none;
+		// - bags and crates (LootSnapshot.Items): a boss bag at its boss's tier, any other at its own true tier, + conditions;
+		// - shops (Obtainability.ShopEntries): from when the NPC moves in (Wizard: hardmode, Cyborg: Plantera...), + the
+		//   entry's conditions; an entry of a special seed is none;
+		// - vanilla recipes, as in RaiseByRecipes (thematic stations raise nothing);
+		// - gathered in the world (ores, gems, herbs, Fallen Star, blocks) or placed by world generation (dungeon furniture):
+		//   their own tier, so these are never raised.
+		// The true tier is raised to that source tier, never lowered; items without any source, set by KnownTiers or the
+		// config, or with a modded recipe (their mod chose the rarity) keep theirs. Repeated until nothing changes (a bag or
+		// an ingredient raised raises what comes from it). sourceTiers / sources (filled, per item): the earliest source and
+		// its description, -1 / null without one. Load time (ItemPool.Build), the same on every machine: the snapshots, shops
+		// and recipes are the vanilla ones, read in a fixed order. Returns how many items it raised, and examples
+		public static int RaiseBySources(int[] trueTiers, Dictionary<int, Tier> overrides, int[] sourceTiers, string[] sources, out string examples)
+		{
+			int count = trueTiers.Length;
+			int[] before = (int[])trueTiers.Clone();
+			bool Valid(int t) => t > 0 && t < count;
+			List<(int item, int kind, int reference, int tier)> fixedSources = new();
+
+			// Gathered or placed by world generation: their own tier
+			HashSet<int> gathered = Features.Findability.GatheredMaterials.Where(Valid).ToHashSet();
+			for (int type = 1; type < count; type++)
+			{
+				if (!ContentSamples.ItemsByType.TryGetValue(type, out Item sample) || sample == null) continue;
+				if (sample.createTile >= TileID.Dirt && sample.createTile < TileID.Sets.Ore.Length && TileID.Sets.Ore[sample.createTile] || PlacedByWorldGen(type)) gathered.Add(type);
+			}
+			foreach (int item in gathered.OrderBy(t => t)) fixedSources.Add((item, SourceGathered, 0, before[item]));
+
+			// Drops, and the tier of each boss bag (its earliest boss)
+			Dictionary<int, int> bossBags = new();
+			foreach (int netId in LootSnapshot.Npcs.Keys.OrderBy(k => k))
+			{
+				int npcTier = NpcSourceTier(netId);
+				foreach (DropRateInfo drop in LootSnapshot.Npcs[netId])
+				{
+					int condition = DropConditionTier(drop.conditions);
+					if (condition < 0 || !Valid(drop.itemId)) continue;
+					int tier = System.Math.Max(npcTier, condition);
+					fixedSources.Add((drop.itemId, SourceDrop, netId, tier));
+					if (ItemID.Sets.BossBag[drop.itemId] && npcTier > 0) bossBags[drop.itemId] = bossBags.TryGetValue(drop.itemId, out int other) ? System.Math.Min(other, tier) : tier;
+				}
+			}
+
+			// Bags: a boss bag at its boss's tier, any other at its own (current) true tier
+			List<(int item, int bag, int condition)> bagSources = new();
+			foreach (int bag in LootSnapshot.Items.Keys.OrderBy(k => k))
+			{
+				foreach (DropRateInfo drop in LootSnapshot.Items[bag])
+				{
+					int condition = DropConditionTier(drop.conditions);
+					if (condition < 0 || !Valid(drop.itemId)) continue;
+					if (bossBags.TryGetValue(bag, out int bossTier)) fixedSources.Add((drop.itemId, SourceBag, bag, System.Math.Max(bossTier, condition)));
+					else if (Valid(bag)) bagSources.Add((drop.itemId, bag, condition));
+				}
+			}
+
+			// Shops
+			Dictionary<Condition, int> shopConditions = ShopConditionTiers();
+			foreach ((int npc, int item, Condition[] conditions) in Obtainability.ShopEntries)
+			{
+				if (!Valid(item) || conditions.Any(c => SeedConditions.Contains(c))) continue;
+				int tier = TownNpcTiers.TryGetValue(npc, out Tier arrival) ? (int)arrival : 0;
+				foreach (Condition c in conditions) tier = System.Math.Max(tier, shopConditions.TryGetValue(c, out int t) ? t : 0);
+				fixedSources.Add((item, SourceShop, npc, tier));
+			}
+
+			// Vanilla recipes (every one of them is a source); a modded recipe makes its result keep its tier
+			HashSet<int> keep = new(overrides.Keys.Concat(KnownTiers.Keys));
+			List<(int result, List<int[]> parts, List<int> tiles)> recipes = new();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe == null || recipe.Disabled || recipe.createItem == null || recipe.createItem.type <= 0) continue;
+				int result = recipe.createItem.type;
+				if (!IsVanillaRecipe(recipe))
+				{
+					keep.Add(result);
+					continue;
+				}
+				if (!Valid(result) || !SetsTier(recipe, recipe.requiredItem.Select(i => i.type).ToList())) continue;
+				List<int[]> parts = new();
+				foreach (Item ingredient in recipe.requiredItem)
+				{
+					if (ingredient == null || !Valid(ingredient.type)) continue;
+					parts.Add(IngredientChoices(recipe, ingredient.type).Where(Valid).ToArray());
+				}
+				recipes.Add((result, parts, recipe.requiredTile.Where(t => t >= 0).Distinct().ToList()));
+			}
+			Dictionary<int, List<int>> placers = Stations.PlacersByTile();
+
+			int[] best = new int[count];
+			int[] bestKind = new int[count];
+			int[] bestReference = new int[count];
+			// The first source of the lowest tier stays (fixed order: gathered, drops, bags, shops, recipes)
+			void Offer(int item, int tier, int kind, int reference)
+			{
+				if (tier >= best[item]) return;
+				best[item] = tier;
+				bestKind[item] = kind;
+				bestReference[item] = reference;
+			}
+			bool changed = true;
+			for (int pass = 0; pass < 32 && changed; pass++)
+			{
+				changed = false;
+				System.Array.Fill(best, int.MaxValue);
+				foreach ((int item, int kind, int reference, int tier) in fixedSources) Offer(item, tier, kind, reference);
+				foreach ((int item, int bag, int condition) in bagSources) Offer(item, System.Math.Max(trueTiers[bag], condition), SourceBag, bag);
+				foreach ((int result, List<int[]> parts, List<int> tiles) in recipes)
+				{
+					int tier = 0;
+					foreach (int[] part in parts) tier = System.Math.Max(tier, part.Length == 0 ? Tiers.Max : part.Min(t => trueTiers[t]));
+					foreach (int tile in tiles) tier = System.Math.Max(tier, RaisingStationTier(tile, placers, t => t < count ? trueTiers[t] : Tiers.Max));
+					Offer(result, tier, SourceRecipe, 0);
+				}
+				for (int type = 1; type < count; type++)
+				{
+					if (best[type] == int.MaxValue || keep.Contains(type) || best[type] <= trueTiers[type]) continue;
+					trueTiers[type] = Tiers.Clamp(best[type]);
+					changed = true;
+				}
+			}
+			for (int type = 0; type < count; type++)
+			{
+				bool found = type > 0 && best[type] != int.MaxValue;
+				sourceTiers[type] = found ? Tiers.Clamp(best[type]) : -1;
+				sources[type] = found ? DescribeSource(bestKind[type], bestReference[type]) : null;
+			}
+			int raised = Enumerable.Range(1, count - 1).Count(t => trueTiers[t] > before[t]);
+			examples = string.Join(", ", new int[] { ItemID.PortalGun, ItemID.IchorArrow, ItemID.EndlessMusketPouch, ItemID.RocketIII }
+				.Concat(Enumerable.Range(1, count - 1).Where(t => trueTiers[t] > before[t]).Take(6)).Distinct().Where(Valid)
+				.Select(t => $"{Lang.GetItemNameValue(t)} {before[t]} > {trueTiers[t]} ({sources[t] ?? "no source"})"));
+			return raised;
+		}
+
+		private static string DescribeSource(int kind, int reference) => kind switch
+		{
+			SourceGathered => "gathered",
+			SourceDrop => "drop: " + Lang.GetNPCNameValue(reference),
+			SourceBag => "bag: " + Lang.GetItemNameValue(reference),
+			SourceShop => "shop: " + Lang.GetNPCNameValue(reference),
+			_ => "recipe"
+		};
+
+		// The tier of an NPC as a drop source: a boss (its parts too) at its tier, any other enemy at 0 (see RaiseBySources)
+		private static int NpcSourceTier(int netId)
+		{
+			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
+			// Flagged as a boss, but only a guard of the dungeon before Skeletron is beaten (its stats say Moon Lord)
+			if (type == NPCID.DungeonGuardian) return (int)Tier.PostSkeletron;
+			return NpcTiers.HasBossTier(type) || NpcTiers.IsBoss(type) ? NpcTiers.BaseTier(type) : 0;
+		}
+
+		// The tier a drop's conditions need (vanilla conditions known to wait for a stage of the game, others ignored), -1 when
+		// it never happens in a normal world (special seeds)
+		public static int DropConditionTier(List<IItemDropRuleCondition> conditions)
+		{
+			int tier = 0;
+			if (conditions == null) return 0;
+			foreach (IItemDropRuleCondition condition in conditions)
+			{
+				int needed = condition switch
+				{
+					Conditions.NeverTrue or Conditions.RemixSeed or Conditions.RemixSeedEasymode or Conditions.RemixSeedHardmode or Conditions.DrunkWorldIsUp
+						or Conditions.ForTheWorthyIsUp or Conditions.BeesSeed or Conditions.NoTrapsSeed or Conditions.ZenithSeedIsUp or Conditions.DontStarveIsUp
+						or Conditions.TenthAnniversaryIsUp => -1,
+					// Cascade: hardmode, or the Underworld once Skeletron is beaten
+					Conditions.YoyoCascade => (int)Tier.PostSkeletron,
+					Conditions.IsHardmode or Conditions.SoulOfNight or Conditions.SoulOfLight or Conditions.LivingFlames or Conditions.PirateMap
+						or Conditions.HallowKeyCondition or Conditions.JungleKeyCondition or Conditions.CorruptKeyCondition or Conditions.CrimsonKeyCondition
+						or Conditions.FrozenKeyCondition or Conditions.DesertKeyCondition or Conditions.YoyosAmarok or Conditions.YoyosHelFire => (int)Tier.Hardmode,
+					Conditions.BeatAnyMechBoss or Conditions.DownedAllMechBosses or Conditions.YoyosYelets => (int)Tier.PostMechBoss,
+					// The moon events: their medallions are made of Ectoplasm
+					Conditions.DownedPlantera or Conditions.FirstTimeKillingPlantera or Conditions.YoyosKraken or Conditions.IsPumpkinMoon
+						or Conditions.PumpkinMoonDropGatingChance or Conditions.PumpkinMoonDropGateForTrophies or Conditions.FrostMoonDropGatingChance
+						or Conditions.FrostMoonDropGateForTrophies => (int)Tier.PostPlantera,
+					_ => 0
+				};
+				if (needed < 0) return -1;
+				tier = System.Math.Max(tier, needed);
+			}
+			return tier;
+		}
+
+		// When a town NPC can move in (the others: from the start)
+		private static readonly Dictionary<int, Tier> TownNpcTiers = new()
+		{
+			[NPCID.GoblinTinkerer] = Tier.PostEyeOfCthulhu,
+			[NPCID.Dryad] = Tier.PostEyeOfCthulhu,
+			[NPCID.WitchDoctor] = Tier.PostEvilBoss,
+			[NPCID.DD2Bartender] = Tier.PostEvilBoss,
+			[NPCID.Mechanic] = Tier.PostSkeletron,
+			[NPCID.Clothier] = Tier.PostSkeletron,
+			[NPCID.Wizard] = Tier.Hardmode,
+			[NPCID.Truffle] = Tier.Hardmode,
+			[NPCID.Pirate] = Tier.Hardmode,
+			[NPCID.SantaClaus] = Tier.Hardmode,
+			[NPCID.Steampunker] = Tier.PostMechBoss,
+			[NPCID.Cyborg] = Tier.PostPlantera
+		};
+
+		// Shop entries of a special seed: no source in a normal world
+		private static readonly Condition[] SeedConditions =
+		{
+			Condition.DrunkWorld, Condition.RemixWorld, Condition.NotTheBeesWorld, Condition.ForTheWorthyWorld, Condition.TenthAnniversaryWorld,
+			Condition.DontStarveWorld, Condition.NoTrapsWorld, Condition.ZenithWorld
+		};
+
+		// The tier each known shop condition waits for (the others: none)
+		private static Dictionary<Condition, int> ShopConditionTiers()
+		{
+			Dictionary<Condition, int> map = new();
+			void Set(int tier, params Condition[] conditions)
+			{
+				foreach (Condition c in conditions) map[c] = tier;
+			}
+			Set((int)Tier.PostEyeOfCthulhu, Condition.DownedKingSlime, Condition.DownedEyeOfCthulhu, Condition.DownedEarlygameBoss, Condition.DownedGoblinArmy);
+			Set((int)Tier.PostEvilBoss, Condition.DownedEowOrBoc, Condition.DownedEaterOfWorlds, Condition.DownedBrainOfCthulhu, Condition.DownedOldOnesArmyAny,
+				Condition.DownedOldOnesArmyT1);
+			Set((int)Tier.PostSkeletron, Condition.DownedQueenBee, Condition.DownedSkeletron, Condition.DownedDeerclops);
+			Set((int)Tier.Hardmode, Condition.Hardmode, Condition.Eclipse, Condition.DownedClown, Condition.DownedPirates, Condition.DownedFrostLegion);
+			Set((int)Tier.PostMechBoss, Condition.DownedQueenSlime, Condition.DownedMechBossAny, Condition.DownedTwins, Condition.DownedDestroyer,
+				Condition.DownedSkeletronPrime, Condition.DownedMechBossAll, Condition.DownedOldOnesArmyT2);
+			Set((int)Tier.PostPlantera, Condition.DownedPlantera, Condition.DownedMourningWood, Condition.DownedPumpking, Condition.DownedEverscream,
+				Condition.DownedSantaNK1, Condition.DownedIceQueen);
+			Set((int)Tier.PostGolem, Condition.DownedEmpressOfLight, Condition.DownedDukeFishron, Condition.DownedGolem, Condition.DownedMartians,
+				Condition.DownedOldOnesArmyT3);
+			Set((int)Tier.PostCultist, Condition.DownedCultist, Condition.DownedSolarPillar, Condition.DownedVortexPillar, Condition.DownedNebulaPillar,
+				Condition.DownedStardustPillar);
+			Set((int)Tier.PostMoonLord, Condition.DownedMoonLord);
+			return map;
+		}
+
+		// A recipe station, for the tiers raised by recipes: a thematic station (Glass Kiln, Solidifier, Living Loom...) only
+		// reshapes its materials and raises nothing (0), the others as StationTier
+		public static int RaisingStationTier(int tile, Dictionary<int, List<int>> placers, System.Func<int, int> tierOf) =>
+			Stations.Info(tile).Kind == StationKind.Thematic ? 0 : StationTier(tile, placers, tierOf);
+
+		// Name parts of dungeon and Lihzahrd items that are no furniture placed by world generation
+		private static readonly string[] NotWorldFurniture = { "Brick", "Banner", "MusicBox", "Crate", "Desert", "Fake_", "Altar", "Furnace", "PowerCell", "Key" };
+
+		// Furniture that world generation places (dungeon and Lihzahrd furniture, Water Candle, dungeon shelves, books): found
+		// with its structure, never raised by its recipe (vanilla items, by internal name)
+		public static bool PlacedByWorldGen(int type)
+		{
+			if (type <= 0 || type >= ItemID.Count) return false;
+			if (type is ItemID.WaterCandle or ItemID.Book or ItemID.DungeonShelf) return true;
+			string name = ItemID.Search.GetName(type);
+			if (!name.Contains("Dungeon") && !name.StartsWith("Lihzahrd")) return false;
+			if (!ContentSamples.ItemsByType.TryGetValue(type, out Item sample) || sample.createTile < TileID.Dirt) return false;
+			return !NotWorldFurniture.Any(name.Contains);
 		}
 
 		// World kinds a recipe may need: such a recipe is no way to make the item in every world

@@ -14,7 +14,9 @@ namespace UltimateRandomizer.Common.Features
 		{
 			foreach (NPCShop.Entry entry in shop.Entries)
 			{
-				if (entry?.Item != null && !entry.Item.IsAir) Obtainability.ShopItems.Add(entry.Item.type);
+				if (entry?.Item == null || entry.Item.IsAir) continue;
+				Obtainability.ShopItems.Add(entry.Item.type);
+				Obtainability.ShopEntries.Add((shop.NpcType, entry.Item.type, System.Linq.Enumerable.ToArray(entry.Conditions)));
 			}
 		}
 

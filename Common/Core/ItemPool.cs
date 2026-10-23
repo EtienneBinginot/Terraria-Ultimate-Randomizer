@@ -19,7 +19,12 @@ namespace UltimateRandomizer.Common.Core
 		// (Pearlwood Sword: rarity 0, Pearlwood is hardmode). The buckets and the plans keep Tier; rolls re-pick an item
 		// whose TrueTier is above their ceiling (ItemClassifier.RaiseByRecipes, ItemPool.Repick)
 		public int TrueTier;
-		// Never given at random (Magic Storage creative and internal items, tModLoader's own items): re-picked
+		// The earliest vanilla source (drop, bag, shop, recipe, gathered: ItemClassifier.RaiseBySources), -1 without any;
+		// Source describes it, SourceRaised: it raised TrueTier (TierAudit)
+		public int SourceTier;
+		public string Source;
+		public bool SourceRaised;
+		// Never given at random (storage mod items, inactive vanilla guides, tModLoader's own items: ItemClassifier.IsBanned): re-picked
 		public bool Banned;
 		public bool Excluded;
 		public bool Protected;
@@ -112,6 +117,11 @@ namespace UltimateRandomizer.Common.Core
 			// Then the true tiers: never below the final tiers, raised for crafted items without any loot source
 			int[] trueTiers = (int[])tiers.Clone();
 			int raised = ItemClassifier.RaiseByRecipes(trueTiers, overrides, LootSources(), out string raisedExamples);
+			// Then by the earliest vanilla source of every item (Portal Gun: only the Moon Lord drops it)
+			int[] beforeSources = (int[])trueTiers.Clone();
+			int[] sourceTiers = new int[count];
+			string[] sourceNames = new string[count];
+			int bySources = ItemClassifier.RaiseBySources(trueTiers, overrides, sourceTiers, sourceNames, out string sourceExamples);
 			int banned = 0;
 			for (int type = 1; type < count; type++)
 			{
@@ -127,7 +137,8 @@ namespace UltimateRandomizer.Common.Core
 				// Banned items stay in their bucket (the buckets never change): rolls re-pick them
 				bool isBanned = ItemClassifier.IsBanned(item);
 				if (isBanned) banned++;
-				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = Math.Max(tier, trueTiers[type]), Banned = isBanned, Protected = isProtected };
+				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = Math.Max(tier, trueTiers[type]), Banned = isBanned, Protected = isProtected,
+					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = trueTiers[type] > Math.Max(tier, beforeSources[type]) };
 				if (!isProtected) lists[(int)category, tier].Add(type);
 			}
 
@@ -149,7 +160,8 @@ namespace UltimateRandomizer.Common.Core
 			progressionStations = null;
 			log4net.ILog logger = ModContent.GetInstance<UltimateRandomizer>().Logger;
 			logger.Info($"Classified {count} items in {watch.ElapsedMilliseconds} ms ({protectedItems.Count} protected, {banned} banned), "
-				+ $"tiers from recipes: {lowered} lowered ({loweredExamples}), {raised} raised ({raisedExamples}).");
+				+ $"tiers from recipes: {lowered} lowered ({loweredExamples}), {raised} raised ({raisedExamples}); "
+				+ $"tiers from sources: {bySources} raised ({sourceExamples}).");
 			LogSuspicious(logger);
 		}
 

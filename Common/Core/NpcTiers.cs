@@ -62,6 +62,9 @@ namespace UltimateRandomizer.Common.Core
 
 		public static IEnumerable<int> BossTypes => BossTiers.Keys;
 
+		// Its tier comes from the boss table (not estimated from its stats)
+		public static bool HasBossTier(int type) => BossTiers.ContainsKey(type);
+
 		public static int BaseTier(int npcType)
 		{
 			if (cache.TryGetValue(npcType, out int tier)) return tier;

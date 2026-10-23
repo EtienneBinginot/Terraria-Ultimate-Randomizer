@@ -8,6 +8,9 @@ namespace UltimateRandomizer.Common.Core
 	{
 		public static readonly HashSet<int> ShopItems = new();
 		public static readonly HashSet<int> RecipeResults = new();
+		// Every shop entry at load (selling NPC, item, its conditions), in load order: the tiers from sources
+		// (ItemClassifier.RaiseBySources) read when each item is first sold
+		public static readonly List<(int npc, int item, Terraria.Condition[] conditions)> ShopEntries = new();
 
 		public static HashSet<int> Collect()
 		{
@@ -33,6 +36,7 @@ namespace UltimateRandomizer.Common.Core
 		{
 			ShopItems.Clear();
 			RecipeResults.Clear();
+			ShopEntries.Clear();
 		}
 	}
 }

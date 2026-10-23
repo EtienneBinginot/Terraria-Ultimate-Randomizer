@@ -246,7 +246,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Rolls changed by the re-pick");
 		}
 
-		// Crafted items that no recipe makes before hardmode wait for it (true tier), nothing is lowered
+		// Crafted items that no recipe makes before hardmode wait for it (true tier), so do items whose every vanilla source
+		// is late (Portal Gun: the Moon Lord only), nothing is lowered
 		private static void RaisedTiers()
 		{
 			List<string> failures = new();
@@ -265,17 +266,40 @@ namespace UltimateRandomizer.Common.Tests
 					failures.Add($"{Name(item)}: true tier {ItemPool.TrueTierOf(item)}, hardmode expected");
 				}
 			}
+			(int item, Tier tier)[] bySources =
+			{
+				(ItemID.PortalGun, Tier.PostMoonLord), (ItemID.IchorArrow, Tier.Hardmode), (ItemID.EndlessMusketPouch, Tier.Hardmode), (ItemID.RocketIII, Tier.Hardmode)
+			};
+			foreach ((int item, Tier tier) in bySources)
+			{
+				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.TrueTierOf(item) < (int)tier)
+				{
+					failures.Add($"{Name(item)}: true tier {ItemPool.TrueTierOf(item)} ({ItemPool.Info[item].Source ?? "no source"}), {(int)tier} expected");
+				}
+			}
+			// Gathered and world-generated items keep their tier
+			foreach (int item in new[] { ItemID.Ruby, ItemID.Diamond, ItemID.FallenStar, ItemID.WaterCandle, ItemID.BlueDungeonChair })
+			{
+				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.TrueTierOf(item) > ItemPool.TierOf(item))
+				{
+					failures.Add($"{Name(item)}: raised from {ItemPool.TierOf(item)} to {ItemPool.TrueTierOf(item)}");
+				}
+			}
 			Log($"Raised tiers: {raised} items");
 			Check.All(failures, "True tiers");
 		}
 
-		// Magic Storage's creative and internal items and tModLoader's own items are banned, and no roll gives a banned item
+		// Magic Storage's items, the inactive vanilla guides and tModLoader's own items are banned, and no roll gives a banned item
 		private static void BannedNeverRolled()
 		{
 			List<string> failures = new();
 			if (ModContent.TryFind("ModLoader", "StartBag", out ModItem startBag) && ItemPool.IsValid(startBag.Type) && !ItemPool.IsBanned(startBag.Type))
 			{
 				failures.Add("tModLoader's start bag is not banned");
+			}
+			foreach (int item in new[] { ItemID.DontHurtCrittersBookInactive, ItemID.DontHurtNatureBookInactive, ItemID.DontHurtComboBookInactive })
+			{
+				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && !ItemPool.IsBanned(item)) failures.Add($"{Name(item)} is not banned");
 			}
 			RandomizerMode mode = GeneralConfig.Instance.RandomizerMode;
 			for (int i = 0; i < 6000; i++)
@@ -301,7 +325,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			Check.All(failures, "Banned items");
 			if (!ModLoader.HasMod("MagicStorage")) Check.Skip("Magic Storage is not loaded");
-			foreach (string name in new[] { "CreativeStorageUnit", "StorageDeactivator", "StorageCoreAdamantite" })
+			foreach (string name in new[] { "CreativeStorageUnit", "StorageDeactivator", "StorageCoreAdamantite", "StorageHeart", "StorageUnit", "UpgradeHallowed" })
 			{
 				if (ModContent.TryFind("MagicStorage", name, out ModItem item) && ItemPool.IsValid(item.Type) && !ItemPool.Info[item.Type].Excluded && !ItemPool.IsBanned(item.Type))
 				{
