@@ -22,6 +22,88 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("TierAudit", TierAudit);
 			TestRunner.Register("ItemTierDump", ItemTierDump);
 			TestRunner.Register("WorldChestTrueTiers", WorldChestTrueTiers);
+			TestRunner.Register("TierFloorsHold", TierFloorsHold);
+		}
+
+		// The tier floors of the audits hold: hard gates get no allowance and are never found before their tier; the Creeper's
+		// drops are its Brain's (2); temple and hardmode drops wait for their enemies (Lihzahrd Power Cell 6, Pirate Map 4 from
+		// the global rules); the Golden Lock Box counts with its key (Muramasa 3); a pickaxe is no earlier than the gated ore it
+		// mines; a reliable boss drop lowers its item (Slimy Saddle: the King Slime). Config overrides are left out
+		private static void TierFloorsHold()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			HashSet<int> overridden = ProgressionConfig.Instance.TierOverrides.Where(o => o?.Item != null && !o.Item.IsUnloaded).Select(o => o.Item.Type).ToHashSet();
+			bool Usable(int item) => ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && !overridden.Contains(item);
+			List<string> failures = new();
+			void AtLeast(int item, int tier)
+			{
+				if (Usable(item) && ItemPool.TrueTierOf(item) < tier) failures.Add($"{Name(item)}: true tier {ItemPool.TrueTierOf(item)}, at least {tier} expected");
+			}
+			void Exactly(int item, int tier)
+			{
+				if (Usable(item) && ItemPool.TrueTierOf(item) != tier) failures.Add($"{Name(item)}: true tier {ItemPool.TrueTierOf(item)}, {tier} expected");
+			}
+			bool gating = ProgressionConfig.Instance.TierGating;
+			bool world = SeedSystem.WorldReady;
+			// Hard gates: flagged, no allowance, never found (guarantees included) before their true tier
+			foreach (int item in ItemClassifier.HardGateMaterials.Where(Usable))
+			{
+				if (!ItemPool.IsHardGate(item)) failures.Add($"{Name(item)} is no hard gate");
+				if (gating && ItemPool.UnlockTierOf(item) != ItemPool.TrueTierOf(item)) failures.Add($"{Name(item)}: unlocked at {ItemPool.UnlockTierOf(item)}, true tier {ItemPool.TrueTierOf(item)}");
+				int found = world ? Findability.Tier(item) : Never;
+				if (gating && found < ItemPool.TrueTierOf(item)) failures.Add($"{Name(item)}: found at {found}, true tier {ItemPool.TrueTierOf(item)}");
+			}
+			if (Usable(ItemID.ChlorophytePickaxe) && !ItemPool.IsHardGate(ItemID.ChlorophytePickaxe)) failures.Add("Chlorophyte Pickaxe (only made of Chlorophyte Bars) is no hard gate");
+			// The Creeper drops as its Brain; Queen Bee and Deerclops sit with the evil bosses
+			if (ItemClassifier.NpcSourceTier(NPCID.Creeper) != (int)Tier.PostEvilBoss) failures.Add($"Creeper: source tier {ItemClassifier.NpcSourceTier(NPCID.Creeper)}, 2 expected");
+			Exactly(ItemID.TissueSample, (int)Tier.PostEvilBoss);
+			AtLeast(ItemID.CrimsonHelmet, (int)Tier.PostEvilBoss);
+			AtLeast(ItemID.DeathbringerPickaxe, (int)Tier.PostEvilBoss);
+			foreach (int boss in new[] { NPCID.QueenBee, NPCID.Deerclops })
+			{
+				if (NpcTiers.BaseTier(boss) != (int)Tier.PostEvilBoss) failures.Add($"{Lang.GetNPCNameValue(boss)}: boss tier {NpcTiers.BaseTier(boss)}, 2 expected");
+			}
+			// Late enemies and the global rules
+			if (ItemClassifier.NpcSourceTier(NPCID.Lihzahrd) != (int)Tier.PostPlantera) failures.Add($"Lihzahrd: source tier {ItemClassifier.NpcSourceTier(NPCID.Lihzahrd)}, 6 expected");
+			if (ItemClassifier.NpcSourceTier(NPCID.WyvernHead) != (int)Tier.Hardmode) failures.Add($"Wyvern: source tier {ItemClassifier.NpcSourceTier(NPCID.WyvernHead)}, 4 expected");
+			AtLeast(ItemID.LihzahrdPowerCell, (int)Tier.PostPlantera);
+			AtLeast(ItemID.LizardEgg, (int)Tier.PostPlantera);
+			Exactly(ItemID.PirateMap, (int)Tier.Hardmode);
+			if (!LootSnapshot.GlobalDrops().Any(d => d.itemId == ItemID.PirateMap)) failures.Add("the global drop rules hold no Pirate Map");
+			else if (Usable(ItemID.PirateMap) && ItemPool.Info[ItemID.PirateMap].SourceTier != (int)Tier.Hardmode)
+			{
+				failures.Add($"Pirate Map: source tier {ItemPool.Info[ItemID.PirateMap].SourceTier} ({ItemPool.Info[ItemID.PirateMap].Source ?? "none"}), 4 expected");
+			}
+			// Lock boxes wait for their key
+			foreach (int item in new[] { ItemID.Muramasa, ItemID.CobaltShield, ItemID.ShadowKey, ItemID.TreasureMagnet }) Exactly(item, (int)Tier.PostSkeletron);
+			if (world && Usable(ItemID.Muramasa) && BagPlan.Plan(ItemID.LockBox, lucky: true).Any(d => d.Item == ItemID.Muramasa) && Findability.Tier(ItemID.Muramasa) >= Never)
+			{
+				failures.Add("Muramasa stays in the Golden Lock Box but is never found");
+			}
+			// Mining: pickaxes and pick-gated blocks no earlier than the gated ore
+			for (int type = 1; type < Math.Min(ItemID.Count, ItemPool.Info.Length); type++)
+			{
+				if (!Usable(type) || ItemClassifier.HasKnownTier(type) || ItemPool.Info[type].FromTable || ItemClassifier.TrueTierFixes.ContainsKey(type)) continue;
+				int power = Math.Max(RecipePlanner.PickPower(type), RecipePlanner.PickToMine(type));
+				foreach ((int pick, int ore) in ItemClassifier.PickGates)
+				{
+					if (power >= pick && ItemPool.TrueTierOf(type) < ItemPool.TrueTierOf(ore) && failures.Count < 30)
+					{
+						failures.Add($"{Name(type)} (pick {power}): true tier {ItemPool.TrueTierOf(type)}, below {Name(ore)}'s {ItemPool.TrueTierOf(ore)}");
+					}
+				}
+			}
+			foreach (int item in new[] { ItemID.EbonstoneBlock, ItemID.CrimstoneBlock, ItemID.Hellforge, ItemID.NightmarePickaxe, ItemID.MoltenPickaxe }) AtLeast(item, (int)Tier.PostEvilBoss);
+			Exactly(ItemID.Hellstone, (int)Tier.PostEvilBoss);
+			Exactly(ItemID.Obsidian, (int)Tier.PreBoss);
+			AtLeast(ItemID.PickaxeAxe, (int)Tier.PostMechBoss);
+			// Reliable sources lower: boss drops, the Plantera era, the material table followed by crafted items
+			foreach ((int item, int most) in new[] { (ItemID.SlimySaddle, 1), (ItemID.HoneyedGoggles, 2), (ItemID.Binoculars, 1), (ItemID.TerraBlade, 6), (ItemID.FrozenWings, 4) })
+			{
+				if (Usable(item) && ItemPool.TrueTierOf(item) > most) failures.Add($"{Name(item)}: true tier {ItemPool.TrueTierOf(item)}, at most {most} expected ({ItemPool.Info[item].Source ?? "no source"})");
+			}
+			AtLeast(ItemID.BoneWings, (int)Tier.PostPlantera);
+			Check.All(failures, "Tier floors");
 		}
 
 		// World-generated chests lower the true tier of what they hold to the tier the chest is opened (Trident: a water chest,
@@ -295,7 +377,7 @@ namespace UltimateRandomizer.Common.Tests
 				ItemInfo info = ItemPool.Info[type];
 				int found = world ? Findability.Tier(type) : Never;
 				tsv.AppendLine(string.Join("	", type, ItemID.Search.GetName(type), Name(type), info.Category, info.RarityTier, info.Tier, info.TrueTier,
-					ItemPool.UnlockTier(info.TrueTier), found >= Never ? -1 : found, info.SourceTier, info.Source ?? "none", crafted.Contains(type) ? "yes" : "no",
+					ItemPool.UnlockTierOf(type), found >= Never ? -1 : found, info.SourceTier, info.Source ?? "none", crafted.Contains(type) ? "yes" : "no",
 					candidates.Contains(type) ? "yes" : "no"));
 			}
 			string path = Path.Combine(dir, "TierMaterials.tsv");
@@ -381,7 +463,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (recipe == null || recipe.Disabled || !RecipeSystem.Touchable(i)) continue;
 				int result = plan.Results[i].type;
 				if (!ItemPool.IsValid(result)) continue;
-				int u = Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(result)));
+				int u = Tiers.Clamp(ItemPool.UnlockTierOf(result));
 				(int type, int stack)[] ingredients = plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i);
 				int[] tiles = plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i);
 				foreach ((int type, _) in ingredients) uses[type] = uses.GetValueOrDefault(type) + 1;

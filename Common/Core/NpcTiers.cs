@@ -26,9 +26,10 @@ namespace UltimateRandomizer.Common.Core
 			[NPCID.EaterofWorldsBody] = Tier.PostEvilBoss,
 			[NPCID.EaterofWorldsTail] = Tier.PostEvilBoss,
 			[NPCID.BrainofCthulhu] = Tier.PostEvilBoss,
-			[NPCID.QueenBee] = Tier.PostSkeletron,
+			// Optional fights usually done before Skeletron (user decision): Queen Bee and Deerclops sit with the evil bosses
+			[NPCID.QueenBee] = Tier.PostEvilBoss,
 			[NPCID.SkeletronHead] = Tier.PostSkeletron,
-			[NPCID.Deerclops] = Tier.PostSkeletron,
+			[NPCID.Deerclops] = Tier.PostEvilBoss,
 			[NPCID.DD2DarkMageT1] = Tier.PostSkeletron,
 			[NPCID.WallofFlesh] = Tier.Hardmode,
 			[NPCID.PirateShip] = Tier.Hardmode,
@@ -59,6 +60,68 @@ namespace UltimateRandomizer.Common.Core
 			[NPCID.MoonLordHead] = Tier.PostMoonLord,
 			[NPCID.MoonLordHand] = Tier.PostMoonLord
 		};
+
+		// Enemies that only spawn from a stage of the game on (terraria.wiki.gg, per enemy and event): the tier from which they are
+		// a source of their drops (ItemClassifier.NpcSourceTier). Others spawn from the start, or are bosses (BossTiers)
+		private static readonly Dictionary<int, Tier> SpawnTiers = BuildSpawnTiers();
+
+		private static Dictionary<int, Tier> BuildSpawnTiers()
+		{
+			Dictionary<int, Tier> map = new();
+			void Set(Tier tier, params int[] types)
+			{
+				foreach (int type in types) map[type] = tier;
+			}
+			// The Dungeon's own enemies, once Skeletron no longer guards it
+			Set(Tier.PostSkeletron, NPCID.AngryBones, NPCID.AngryBonesBig, NPCID.AngryBonesBigMuscle, NPCID.AngryBonesBigHelmet, NPCID.DarkCaster, NPCID.CursedSkull,
+				NPCID.DungeonSlime);
+			// Old One's Army, tier 1: the Tavernkeep moves in after an evil boss
+			Set(Tier.PostEvilBoss, NPCID.DD2GoblinT1, NPCID.DD2GoblinBomberT1, NPCID.DD2WyvernT1, NPCID.DD2JavelinstT1, NPCID.DD2SkeletonT1);
+			// Hardmode only: biome enemies of hardmode, mimics, the Wyvern, hardmode Blood Moon and invasions (pirates, the Frost
+			// Legion, the Goblin Summoner)
+			Set(Tier.Hardmode, NPCID.WyvernHead, NPCID.Mimic, NPCID.IceMimic, NPCID.PresentMimic, NPCID.BigMimicCorruption, NPCID.BigMimicCrimson, NPCID.BigMimicHallow,
+				NPCID.BigMimicJungle, NPCID.Pixie, NPCID.Unicorn, NPCID.Gastropod, NPCID.LightMummy, NPCID.DarkMummy, NPCID.BloodMummy, NPCID.Mummy, NPCID.Wraith,
+				NPCID.PossessedArmor, NPCID.Werewolf, NPCID.Corruptor, NPCID.Clinger, NPCID.CursedHammer, NPCID.CrimsonAxe, NPCID.EnchantedSword, NPCID.IchorSticker,
+				NPCID.FloatyGross, NPCID.Herpling, NPCID.Crimslime, NPCID.PigronCorruption, NPCID.PigronCrimson, NPCID.PigronHallow, NPCID.Slimer, NPCID.Slimer2,
+				NPCID.SeekerHead, NPCID.DiggerHead, NPCID.Derpling, NPCID.AngryTrapper, NPCID.GiantTortoise, NPCID.IceTortoise, NPCID.IceElemental, NPCID.IcyMerman,
+				NPCID.IceGolem, NPCID.Wolf, NPCID.ArmoredViking, NPCID.GiantBat, NPCID.GiantFlyingFox, NPCID.Arapaima, NPCID.MossHornet, NPCID.Moth, NPCID.JungleCreeper,
+				NPCID.JungleCreeperWall, NPCID.BlackRecluse, NPCID.BlackRecluseWall, NPCID.RedDevil, NPCID.Lavabat, NPCID.SkeletonArcher, NPCID.ArmoredSkeleton,
+				NPCID.RuneWizard, NPCID.ChaosElemental, NPCID.IlluminantBat, NPCID.IlluminantSlime, NPCID.ToxicSludge, NPCID.AnglerFish, NPCID.GreenJellyfish,
+				NPCID.BloodJelly, NPCID.FungoFish, NPCID.FungiBulb, NPCID.GiantFungiBulb, NPCID.DesertBeast, NPCID.DesertScorpionWalk, NPCID.DesertScorpionWall,
+				NPCID.DesertLamiaDark, NPCID.DesertLamiaLight, NPCID.DesertGhoul, NPCID.DesertGhoulCorruption, NPCID.DesertGhoulCrimson, NPCID.DesertGhoulHallow,
+				NPCID.DesertDjinn, NPCID.SandShark, NPCID.SandsharkCorrupt, NPCID.SandsharkCrimson, NPCID.SandsharkHallow, NPCID.DuneSplicerHead, NPCID.SandElemental,
+				NPCID.GiantWalkingAntlion, NPCID.GiantFlyingAntlion, NPCID.Medusa, NPCID.AngryNimbus, NPCID.WanderingEye, NPCID.Clown, NPCID.BloodEelHead,
+				NPCID.GoblinShark, NPCID.BloodNautilus, NPCID.PirateDeckhand, NPCID.PirateCorsair, NPCID.PirateDeadeye, NPCID.PirateCrossbower, NPCID.PirateCaptain,
+				NPCID.Parrot, NPCID.MisterStabby, NPCID.SnowmanGangsta, NPCID.SnowBalla, NPCID.GoblinSummoner, NPCID.ShadowFlameApparition);
+			// Solar Eclipse (a mechanical boss beaten), the Reaper; Old One's Army tier 2
+			Set(Tier.PostMechBoss, NPCID.Eyezor, NPCID.Frankenstein, NPCID.SwampThing, NPCID.Vampire, NPCID.VampireBat, NPCID.CreatureFromTheDeep, NPCID.Fritz,
+				NPCID.ThePossessed, NPCID.Reaper, NPCID.DD2GoblinT2, NPCID.DD2GoblinBomberT2, NPCID.DD2WyvernT2, NPCID.DD2JavelinstT2, NPCID.DD2WitherBeastT2,
+				NPCID.DD2DrakinT2, NPCID.DD2KoboldWalkerT2, NPCID.DD2KoboldFlyerT2, NPCID.DD2DarkMageT3);
+			// After Plantera: the Jungle Temple (Temple Key), the dungeon's new enemies, the eclipse's late enemies, both moon events
+			Set(Tier.PostPlantera, NPCID.Lihzahrd, NPCID.LihzahrdCrawler, NPCID.FlyingSnake, NPCID.GiantCursedSkull, NPCID.BoneLee, NPCID.Paladin, NPCID.SkeletonSniper,
+				NPCID.TacticalSkeleton, NPCID.SkeletonCommando, NPCID.RaggedCaster, NPCID.RaggedCasterOpenCoat, NPCID.Necromancer, NPCID.NecromancerArmored,
+				NPCID.DiabolistRed, NPCID.DiabolistWhite, NPCID.DungeonSpirit, NPCID.BlueArmoredBones, NPCID.BlueArmoredBonesMace, NPCID.BlueArmoredBonesNoPants,
+				NPCID.BlueArmoredBonesSword, NPCID.RustyArmoredBonesAxe, NPCID.RustyArmoredBonesFlail, NPCID.RustyArmoredBonesSword, NPCID.RustyArmoredBonesSwordNoArmor,
+				NPCID.HellArmoredBones, NPCID.HellArmoredBonesSpikeShield, NPCID.HellArmoredBonesMace, NPCID.HellArmoredBonesSword, NPCID.Mothron, NPCID.MothronEgg,
+				NPCID.MothronSpawn, NPCID.Butcher, NPCID.DeadlySphere, NPCID.DrManFly, NPCID.Nailhead, NPCID.Psycho, NPCID.Scarecrow1, NPCID.Scarecrow2, NPCID.Scarecrow3,
+				NPCID.Scarecrow4, NPCID.Scarecrow5, NPCID.Scarecrow6, NPCID.Scarecrow7, NPCID.Scarecrow8, NPCID.Scarecrow9, NPCID.Scarecrow10, NPCID.Splinterling,
+				NPCID.Hellhound, NPCID.Poltergeist, NPCID.HeadlessHorseman, NPCID.ZombieElf, NPCID.ZombieElfBeard, NPCID.ZombieElfGirl, NPCID.GingerbreadMan,
+				NPCID.ElfArcher, NPCID.Nutcracker, NPCID.NutcrackerSpinning, NPCID.Yeti, NPCID.ElfCopter, NPCID.Krampus, NPCID.Flocko);
+			// Martian Madness (the probe comes after Golem); Old One's Army tier 3
+			Set(Tier.PostGolem, NPCID.MartianProbe, NPCID.Scutlix, NPCID.ScutlixRider, NPCID.MartianWalker, NPCID.MartianDrone, NPCID.MartianTurret, NPCID.GigaZapper,
+				NPCID.MartianEngineer, NPCID.MartianOfficer, NPCID.RayGunner, NPCID.GrayGrunt, NPCID.BrainScrambler, NPCID.DD2GoblinT3, NPCID.DD2GoblinBomberT3,
+				NPCID.DD2WyvernT3, NPCID.DD2JavelinstT3, NPCID.DD2SkeletonT3, NPCID.DD2WitherBeastT3, NPCID.DD2DrakinT3, NPCID.DD2KoboldWalkerT3, NPCID.DD2KoboldFlyerT3,
+				NPCID.DD2LightningBugT3, NPCID.DD2OgreT3);
+			// The Celestial Pillars' enemies
+			Set(Tier.PostCultist, NPCID.SolarCorite, NPCID.SolarCrawltipedeHead, NPCID.SolarDrakomire, NPCID.SolarDrakomireRider, NPCID.SolarSroller, NPCID.SolarSolenian,
+				NPCID.SolarSpearman, NPCID.VortexHornet, NPCID.VortexHornetQueen, NPCID.VortexLarva, NPCID.VortexRifleman, NPCID.VortexSoldier, NPCID.NebulaBeast,
+				NPCID.NebulaBrain, NPCID.NebulaHeadcrab, NPCID.NebulaSoldier, NPCID.StardustCellBig, NPCID.StardustCellSmall, NPCID.StardustJellyfishBig,
+				NPCID.StardustSoldier, NPCID.StardustSpiderBig, NPCID.StardustSpiderSmall, NPCID.StardustWormHead);
+			return map;
+		}
+
+		// The tier from which an enemy spawns (SpawnTiers), -1 when it spawns from the start or is not listed
+		public static int SpawnTier(int type) => SpawnTiers.TryGetValue(type, out Tier tier) ? (int)tier : -1;
 
 		private static readonly Dictionary<int, int> cache = new();
 

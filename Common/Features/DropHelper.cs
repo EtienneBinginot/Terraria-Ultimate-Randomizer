@@ -49,7 +49,8 @@ namespace UltimateRandomizer.Common.Features
 		public static int LockGap(int item, int minLimit)
 		{
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent || !ItemPool.IsValid(item)) return 0;
-			return Math.Max(0, ItemPool.TrueTierOf(item) - ItemPool.GatingLimit(minLimit));
+			// A hard gate (Chlorophyte Bar...) gets no allowance
+			return Math.Max(0, ItemPool.TrueTierOf(item) - ItemPool.GatingLimitFor(item, minLimit));
 		}
 
 		// What an original drop (enemy) or bag item becomes as it spawns: the final replacement (everything unlocked, the one

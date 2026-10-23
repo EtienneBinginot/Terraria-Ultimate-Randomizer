@@ -122,6 +122,7 @@ Tests: {
 	TierAudit: Lists the vanilla items whose tier looks doubtful (raised by their sources, a source much earlier, or no source at all) in TierAudit.tsv, and counts the banned items of the enemy plan (logged)
 	ItemTierDump: Writes ItemTiers.tsv, one row per vanilla item with its tiers, findability, vanilla and planned recipe tiers, planned ingredients and mining data (read-only)
 	WorldChestTrueTiers: Items of world-generated chests are found from their chest's tier (true tier lowered, never raised)
+	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
 	LockedVanillaDropRemoved: A replaced original drop still locked by progression does not drop; an unlocked one drops as planned

@@ -122,6 +122,7 @@ Tests: {
 	TierAudit: Liste dans TierAudit.tsv les objets vanilla dont le palier semble douteux (relevé par leurs sources, une source bien plus précoce, ou aucune source), et compte les objets bannis du plan des monstres (dans le journal)
 	ItemTierDump: Écrit ItemTiers.tsv, une ligne par objet vanilla avec ses paliers, sa trouvabilité, les paliers de recette vanilla et planifiés, les ingrédients planifiés et les données de minage (lecture seule)
 	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
+	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
 	LockedVanillaDropRemoved: Un butin d'origine remplacé encore verrouillé par la progression ne tombe pas ; un butin débloqué tombe comme prévu
