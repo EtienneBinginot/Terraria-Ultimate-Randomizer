@@ -102,11 +102,11 @@ namespace UltimateRandomizer.Common.Tests
 			return Obtainability.ShopItems.Where(i => ItemPool.IsValid(i) && !other.Contains(i)).ToHashSet();
 		}
 
-		// Found or crafted by the item's tier + 1 (a later source leaves the item to the shops)
-		private static bool Found(int item) => Findability.Tier(item) <= ItemPool.TierOf(item) + 1;
+		// Found or crafted in this world at any tier (a late source is enough: only an item obtainable nowhere needs a shop)
+		private static bool Found(int item) => Findability.Tier(item) != Findability.Never;
 
 		private static bool Crafted(int item, RecipePlan recipes) =>
-			recipes?.Availability != null && item < recipes.Availability.Length && recipes.Availability[item] <= ItemPool.TierOf(item) + 1;
+			recipes?.Availability != null && item < recipes.Availability.Length && recipes.Availability[item] != Findability.Never;
 
 		private static int CraftedTier(int item, RecipePlan recipes) =>
 			recipes?.Availability != null && item < recipes.Availability.Length ? recipes.Availability[item] : Findability.Never;
@@ -239,7 +239,8 @@ namespace UltimateRandomizer.Common.Tests
 			logger.Info($"ShopDump: early {early}, other category {otherCategory}, duplicates {duplicates} (all entries at once: in game only those whose conditions are met)");
 			logger.Info($"ShopDump: {permutation.ShopOnly.Count} shop-only items in this world, added slots per merchant: "
 				+ string.Join(", ", permutation.Merchants.Where(m => m.Items.Count > 0).Select(m => $"{Lang.GetNPCNameValue(m.Npc)} {m.Items.Count}/{m.Capacity} (arrival {m.Arrival})"))
-				+ $"; {permutation.OutOfWindow.Count} late, {permutation.OverCapacity.Count} over capacity");
+				+ $"; {permutation.OutOfWindow.Count} late, {permutation.OverCapacity.Count} over capacity; {permutation.LateSource.Count} rolled shop items found or crafted "
+				+ "only later than their tier + 1 (no slot): " + string.Join(", ", permutation.LateSource.Select(Name)));
 			logger.Info($"ShopDump: {shopOnly.Count} vanilla shop-only items, {lost.Count} lost in this world: {string.Join(", ", lost.Select(Name))}");
 		}
 
@@ -338,8 +339,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Duplicates in a shop");
 		}
 
-		// This world's shop-only items, computed again from the shop database, Findability and the recipe plan (sources by the
-		// item's tier + 1), are exactly the plan's; each has one added slot at a reliable merchant, shown from its unlock tier
+		// This world's shop-only items, computed again from the shop database, Findability and the recipe plan (no source at
+		// any tier), are exactly the plan's; each has one added slot at a reliable merchant, shown from its unlock tier
 		// (not before), no shop gets more than its capacity unless every shop is full, no roll of the shop gives the item again,
 		// and the same seed gives the same merchants. Merchants arriving after the item's tier + 1 are logged (late, not a
 		// failure). None in Shuffle mode
@@ -432,7 +433,7 @@ namespace UltimateRandomizer.Common.Tests
 			log4net.ILog logger = ModContent.GetInstance<UltimateRandomizer>().Logger;
 			logger.Info($"ShopOnlyPlacement: {plan.ShopOnly.Count} shop-only items, added slots per merchant (used/capacity): "
 				+ string.Join(", ", plan.Merchants.Select(m => $"{Lang.GetNPCNameValue(m.Npc)} {m.Items.Count}/{m.Capacity} (arrival {m.Arrival})"))
-				+ $"; {plan.OverCapacity.Count} over capacity");
+				+ $"; {plan.OverCapacity.Count} over capacity; {plan.LateSource.Count} other rolled shop items obtainable only later than their tier + 1 (no slot)");
 			if (late.Count > 0) logger.Warn($"ShopOnlyPlacement: {late.Count} shop-only items sold late: " + string.Join(", ", late));
 			Check.All(failures, "Shop-only items");
 		}

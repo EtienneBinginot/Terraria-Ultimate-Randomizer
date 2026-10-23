@@ -10,8 +10,8 @@ using UltimateRandomizer.Common.Core;
 namespace UltimateRandomizer.Common.Features
 {
 	// Randomized shops keep the items only a shop gives in this world. Every vanilla shop entry is a random roll
-	// (ShopPlanner.PlanShop); each shop-only item (sold by a rolled vanilla entry, and neither found nor crafted in this world
-	// within one tier of the item: Findability and the recipe plan, which count no shop) gets an ADDED slot, after the rolled
+	// (ShopPlanner.PlanShop); each shop-only item (sold by a rolled vanilla entry, and neither found nor crafted anywhere in
+	// this world, at any tier: Findability and the recipe plan, which count no shop) gets an ADDED slot, after the rolled
 	// entries, at one reliable merchant (known arrival: not the Princess, the Skeleton Merchant, the Traveling Merchant nor
 	// Santa), shown once progression reaches the item's unlock tier. Merchants are chosen by arrival (this world's town NPC
 	// order) and free capacity (Build). Built from the world seed, the synced settings and plans and the shop database built
@@ -143,6 +143,9 @@ namespace UltimateRandomizer.Common.Features
 			public List<int> OutOfWindow = new();
 			// Every merchant was full: added beyond the estimated capacity (a full shop then gives up its last rolls for it)
 			public List<int> OverCapacity = new();
+			// Sold by a rolled entry and found or crafted only later than the item's tier + 1: no added slot (late is fine,
+			// only an item obtainable nowhere needs one), logged for the review
+			public List<int> LateSource = new();
 		}
 
 		private static WorldPlan cached;
@@ -246,23 +249,35 @@ namespace UltimateRandomizer.Common.Features
 			return best + Math.Min(situational, SituationalReserve);
 		}
 
-		// Found (drops, bags, gathered, guaranteed sources) or crafted in this world by the item's tier + 1: Findability and the
-		// recipe plan, which never count a shop. A later source does not replace the shop
-		public static bool HasOtherSource(int item, RecipePlan recipes)
+		// The first tier the item is found (drops, bags, gathered, guaranteed sources) or crafted in this world: Findability and
+		// the recipe plan, which never count a shop (Findability.Never: obtainable nowhere but in a shop)
+		public static int SourceTier(int item, RecipePlan recipes)
 		{
 			int crafted = recipes?.Availability != null && item < recipes.Availability.Length ? recipes.Availability[item] : Findability.Never;
-			return Math.Min(Findability.Tier(item), crafted) <= ItemPool.TierOf(item) + 1;
+			return Math.Min(Findability.Tier(item), crafted);
 		}
 
-		// Sold by a rolled entry that can be sold in this world (solo as hosted), with no other source in time. None in
-		// Shuffle mode: every shop roll there comes from the guaranteed permutation (ItemPool.Shuffled), which keeps every item
-		public static List<int> ShopOnlyItems(List<Place> places, RecipePlan recipes)
+		// Found or crafted in this world at any tier: lateness is acceptable, only an item obtainable nowhere needs a shop slot
+		public static bool HasOtherSource(int item, RecipePlan recipes) => SourceTier(item, recipes) < Findability.Never;
+
+		// Found or crafted, but only later than the item's tier + 1 (informative: no added slot)
+		public static bool OnlyLateSource(int item, RecipePlan recipes)
+		{
+			int tier = SourceTier(item, recipes);
+			return tier < Findability.Never && tier > ItemPool.TierOf(item) + 1;
+		}
+
+		// The items sold by a rolled entry that can be sold in this world (solo as hosted), in a stable order. None in Shuffle
+		// mode: every shop roll there comes from the guaranteed permutation (ItemPool.Shuffled), which keeps every item
+		private static List<int> RolledItems(List<Place> places)
 		{
 			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) return new List<int>();
 			return places.Where(p => p.Rolled && p.Possible && !p.MultiplayerOnly).Select(p => p.Original).Distinct()
-				.Where(i => !HasOtherSource(i, recipes))
 				.OrderBy(ItemPool.TierOf).ThenBy(i => ItemID.Search.GetName(i), StringComparer.Ordinal).ToList();
 		}
+
+		// Rolled items with no other source at all in this world
+		public static List<int> ShopOnlyItems(List<Place> places, RecipePlan recipes) => RolledItems(places).Where(i => !HasOtherSource(i, recipes)).ToList();
 
 		// From which progression an added slot sells its item: the item's unlock tier (no allowance for a hard gate, never before
 		// hardmode for a hardmode item: ItemPool.UnlockTierOf)
@@ -297,7 +312,8 @@ namespace UltimateRandomizer.Common.Features
 			}
 			WorldPlan plan = new()
 			{
-				Places = places, Merchants = merchants, ShopOnly = shopOnly, SellerOf = new Dictionary<int, int>(), ShopItems = new Dictionary<string, List<int>>()
+				Places = places, Merchants = merchants, ShopOnly = shopOnly, SellerOf = new Dictionary<int, int>(), ShopItems = new Dictionary<string, List<int>>(),
+				LateSource = RolledItems(places).Where(i => OnlyLateSource(i, recipes)).ToList()
 			};
 			if (merchants.Count == 0) return plan;
 			int Rank(int m, int item) => DetRandom.Hash(seed, RollKey.ShopPermutation, DetRandom.StableHash(merchants[m].Shop), DetRandom.ItemKey(item));
@@ -346,6 +362,8 @@ namespace UltimateRandomizer.Common.Features
 				if (cached != null) return cached;
 				if (!ItemPool.Ready || !SeedSystem.WorldReady) return null;
 				WorldPlan plan = Build(SeedSystem.WorldSeed, RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null);
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Shop-only items: {plan.ShopOnly.Count} obtainable nowhere else (added slots), "
+					+ $"{plan.LateSource.Count} other rolled shop items found or crafted only later than their tier + 1 (no slot)");
 				if (plan.OutOfWindow.Count + plan.OverCapacity.Count > 0)
 				{
 					ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Shop-only items: {plan.ShopOnly.Count} added slots, {plan.OutOfWindow.Count} at a merchant arriving "
