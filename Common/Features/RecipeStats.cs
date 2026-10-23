@@ -45,6 +45,8 @@ namespace UltimateRandomizer.Common.Features
 			RecipePlan plan = RecipePlanner.Get();
 			CraftingConfig cfg = CraftingConfig.Instance;
 			int count = Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
+			// What the permutation would give without the value cap
+			(int type, int stack)[] uncapped = cfg.LimitRecipeValue ? RecipePlanner.PermutedResults(limitValue: false) : null;
 			for (int i = 0; i < count; i++)
 			{
 				// A shell is a new recipe, not a vanilla one (its item no recipe made)
@@ -63,20 +65,12 @@ namespace UltimateRandomizer.Common.Features
 				string reason;
 				if (!ItemPool.IsRandomizable(original)) reason = Protected;
 				else if (RecipeSystem.KeptForMining(i)) reason = Mining;
-				else if (cfg.LimitRecipeValue && Uncapped(i) != original) reason = Cap;
+				else if (uncapped != null && uncapped[i].type != original) reason = Cap;
 				else reason = Redrawn;
 				if (!share.Kept.TryGetValue(reason, out List<int> list)) share.Kept[reason] = list = new List<int>();
 				list.Add(i);
 			}
 			return share;
-		}
-
-		// What the recipe would give without the value cap (as RecipePlanner.ResultFor rolls it, from the original recipe)
-		private static int Uncapped(int i)
-		{
-			(int type, int stack)[] ingredients = RecipeSystem.OriginalIngredients(i);
-			return RecipeSystem.RollResult(i, ingredients.Select(x => x.type).ToList(), ingredients.Sum(x => x.stack), lucky: true,
-				RecipeSystem.OriginalIngredientValue(i), limitValue: false).type;
 		}
 	}
 }
