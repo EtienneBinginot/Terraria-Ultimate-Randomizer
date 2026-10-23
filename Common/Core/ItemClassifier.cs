@@ -326,7 +326,7 @@ namespace UltimateRandomizer.Common.Core
 					if (condition < 0 || !Valid(drop.itemId)) continue;
 					int tier = System.Math.Max(npcTier, condition);
 					fixedSources.Add((drop.itemId, SourceDrop, netId, tier));
-					if (ReliableDrop(netId, drop.dropRate)) Reliable(drop.itemId, tier);
+					if (ReliableDrop(netId, drop.dropRate, drop.itemId)) Reliable(drop.itemId, tier);
 					if (ItemID.Sets.BossBag[drop.itemId] && npcTier > 0) bossBags[drop.itemId] = bossBags.TryGetValue(drop.itemId, out int other) ? System.Math.Min(other, tier) : tier;
 				}
 			}
@@ -468,11 +468,12 @@ namespace UltimateRandomizer.Common.Core
 		// A drop that may lower its item's true tier to its source's: a boss's (parts, minions) or an enemy's of known spawn tier
 		// with a fair chance, never a rare enemy (Nymph, Tim...) nor an unlisted enemy whose stats look like hardmode (its
 		// spawn tier is unknown: it stays a source, not a reliable one), nor another mod's enemy (its tier is a guess; a modded
-		// boss's estimate is trusted)
-		private static bool ReliableDrop(int netId, float chance)
+		// boss's estimate is trusted, for its mod's items only: a vanilla item dropped by a modded boss keeps its vanilla tier)
+		private static bool ReliableDrop(int netId, float chance, int item)
 		{
 			if (!ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample)) return false;
 			int type = BossParts.Leader(sample.type);
+			if ((sample.type >= NPCID.Count || type >= NPCID.Count) && item < ItemID.Count) return false;
 			if (IsBossSource(type)) return chance >= ReliableBossChance;
 			if (type >= NPCID.Count) return false;
 			if (sample.rarity > 0 || NPCID.Sets.CountsAsCritter[sample.type] || sample.friendly) return false;
@@ -959,12 +960,13 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		// The tier from which a station is had, for the tiers from recipes: a progression station at its tier, a basic one at
-		// 0, any other (and any modded one: its tier is not known yet) at the earliest item placing it (never, without one)
+		// 0, any other (and any modded one: its tier is not known yet) at the earliest item placing it (never, without one;
+		// another mod's tile that no item places is part of its world, as the Demon Altar)
 		public static int StationTier(int tile, Dictionary<int, List<int>> placers, System.Func<int, int> tierOf)
 		{
 			Stations.StationInfo info = Stations.Info(tile);
 			if (info.Kind == StationKind.Progression && !info.Modded) return info.Tier;
-			if (info.Kind == StationKind.Basic) return 0;
+			if (info.Kind == StationKind.Basic || info.World && info.Modded) return 0;
 			return placers.TryGetValue(tile, out List<int> list) && list.Count > 0 ? list.Min(tierOf) : Tiers.Max;
 		}
 

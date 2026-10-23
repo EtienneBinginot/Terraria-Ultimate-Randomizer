@@ -222,12 +222,14 @@ namespace UltimateRandomizer.Common.Core
 				(int life, int damage, int defense) = FightStats(boss, parts);
 				bossReferences.Add((Log(life), Log(damage), Log(defense + 1), (int)tier));
 			}
-			// Natural vanilla enemies (no boss, part, minion, town NPC, critter or harmless NPC), by the stage they spawn from
+			// Natural vanilla enemies (no boss, part, minion, town NPC, critter or harmless NPC), by the stage they spawn from. Not
+			// the Old One's Army: its waves scale with the event, not with the stage it opens at
 			Dictionary<int, List<(double life, double damage)>> byTier = new();
 			for (int type = 1; type < NPCID.Count; type++)
 			{
 				if (!ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample) || sample.boss || IsBoss(type) || BossParts.IsPart(type) || BossParts.IsMinion(type)
-					|| sample.townNPC || sample.friendly || NPCID.Sets.CountsAsCritter[type] || NPCID.Sets.ProjectileNPC[type] || sample.lifeMax <= 5 || sample.damage <= 0) continue;
+					|| sample.townNPC || sample.friendly || NPCID.Sets.CountsAsCritter[type] || NPCID.Sets.ProjectileNPC[type] || NPCID.Sets.BelongsToInvasionOldOnesArmy[type]
+					|| sample.lifeMax <= 5 || sample.damage <= 0) continue;
 				(int life, int damage, _) = SampleStats(type);
 				int tier = SpawnTier(type);
 				if (!byTier.TryGetValue(tier, out List<(double, double)> list)) byTier[tier] = list = new List<(double, double)>();
@@ -236,8 +238,6 @@ namespace UltimateRandomizer.Common.Core
 			enemyReferences = new List<(double, double, int)>();
 			foreach ((int tier, List<(double life, double damage)> list) in byTier.OrderBy(p => p.Key))
 			{
-				// A stage with too few enemies says little (the Old One's Army's first wave)
-				if (list.Count < 5) continue;
 				enemyReferences.Add((Median(list.Select(s => s.life)), Median(list.Select(s => s.damage)), tier));
 			}
 		}

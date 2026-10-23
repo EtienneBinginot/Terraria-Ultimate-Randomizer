@@ -780,7 +780,7 @@ namespace UltimateRandomizer.Common.Tests
 			for (int i = 0; i < Count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (recipe.Disabled || RecipeSystem.IsModded(i)) continue;
+				if (recipe.Disabled || RecipeSystem.LeftAlone(i)) continue;
 				bool failed = plan.Ingredients[i] == null && !RecipeSystem.IsShell(i) && RecipePlanner.Rebuildable(i);
 				if (plan.Ingredients[i] == null && !failed) continue;
 				checkedCount++;
@@ -1167,7 +1167,7 @@ namespace UltimateRandomizer.Common.Tests
 					if (!recipe.Disabled) failures.Add($"{Name(recipe.createItem.type)}: switched off (recipe {i}) but still enabled");
 					if (examples.Count < 5 && !plan.LoopOff[i]) examples.Add($"{Name(recipe.createItem.type)} ({Ingredients(recipe.requiredItem.Select(item => (item.type, item.stack)).ToArray())})");
 				}
-				if (recipe.Disabled || RecipeSystem.IsModded(i)) continue;
+				if (recipe.Disabled || RecipeSystem.LeftAlone(i)) continue;
 				string key = Key(recipe);
 				if (!seen.TryGetValue(key, out int other))
 				{
@@ -1756,7 +1756,7 @@ namespace UltimateRandomizer.Common.Tests
 			int checkedCount = 0;
 			for (int i = 0; i < Count; i++)
 			{
-				if (Main.recipe[i].Disabled || RecipeSystem.IsShell(i) || RecipeSystem.IsModded(i)) continue;
+				if (Main.recipe[i].Disabled || RecipeSystem.IsShell(i) || RecipeSystem.LeftAlone(i)) continue;
 				int item = results[i];
 				string where = $"{Name(item)} ({Ingredients(ingredients[i])}): doable at {Show(doable[i])}";
 				if (item is ItemID.NightKey or ItemID.LightKey)

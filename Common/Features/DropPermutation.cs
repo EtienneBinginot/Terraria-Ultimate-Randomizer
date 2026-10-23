@@ -75,8 +75,13 @@ namespace UltimateRandomizer.Common.Features
 			Conditions.NotUsedDemonHeart or Conditions.NoPortalGun => ConditionClass.ItemSelf,
 			Conditions.EmpressOfLightIsGenuinelyEnraged => ConditionClass.Fight,
 			Conditions.FirstTimeKillingPlantera => ConditionClass.OneTime,
+			// Another mod's condition: nothing says what it reads (a modded biome, event or boss beaten), so its entries only
+			// travel between places with the same condition (AccessOf: by its full type name)
+			_ when IsModdedCondition(condition) => ConditionClass.Restrictive,
 			_ => ConditionClass.Place
 		};
+
+		public static bool IsModdedCondition(IItemDropRuleCondition condition) => condition != null && condition.GetType().Assembly != typeof(Conditions).Assembly;
 
 		public static bool Has(List<IItemDropRuleCondition> conditions, ConditionClass kind) => conditions != null && conditions.Any(c => c != null && ClassOf(c) == kind);
 
@@ -120,7 +125,7 @@ namespace UltimateRandomizer.Common.Features
 		public static string AccessOf(List<IItemDropRuleCondition> conditions)
 		{
 			if (conditions == null || conditions.Count == 0) return "";
-			return string.Join("+", conditions.Where(c => ClassOf(c) is ConditionClass.Restrictive or ConditionClass.Seasonal).Select(c => c.GetType().Name).Distinct().OrderBy(n => n, StringComparer.Ordinal));
+			return string.Join("+", conditions.Where(c => ClassOf(c) is ConditionClass.Restrictive or ConditionClass.Seasonal).Select(c => IsModdedCondition(c) ? c.GetType().FullName : c.GetType().Name).Distinct().OrderBy(n => n, StringComparer.Ordinal));
 		}
 
 		// One entry position of an enemy's drop table
@@ -240,7 +245,9 @@ namespace UltimateRandomizer.Common.Features
 				result = type > 0 && !sample.boss && !BossParts.IsPart(type) && !BossParts.IsMinion(type) && !NpcTiers.IsBoss(type)
 					&& !sample.townNPC && !NPCID.Sets.ActsLikeTownNPC[type] && !NPCID.Sets.IsTownPet[type] && type != NPCID.TorchGod
 					&& !NPCID.Sets.CountsAsCritter[type] && !NPCID.Sets.ProjectileNPC[type] && sample.lifeMax > 5 && !sample.friendly
-					&& (LootSnapshot.ForNpc(netId).Count > 0 || sample.value > 0);
+					// The synthetic place (no drops, a coin value) for vanilla enemies only: a modded one without drops is often a
+					// worm segment or a summoned minion, a farm of free loot
+					&& (LootSnapshot.ForNpc(netId).Count > 0 || sample.value > 0 && type < NPCID.Count);
 			}
 			eligible[netId] = result;
 			return result;

@@ -346,13 +346,13 @@ namespace UltimateRandomizer.Common.Tests
 					for (int t = 0; t < Tiers.Count; t++) candidates.UnionWith(buckets[c, t]);
 				}
 			}
-			// Results of the original vanilla recipes (live ones when the recipes are not stored yet)
+			// Results of the original vanilla recipes (and of the randomized ones of other mods) (live ones when the recipes are not stored yet)
 			HashSet<int> crafted = new();
 			if (RecipeSystem.RecipeCount > 0)
 			{
 				for (int i = 0; i < RecipeSystem.RecipeCount; i++)
 				{
-					if (!RecipeSystem.IsModded(i) && !RecipeSystem.IsShell(i)) crafted.Add(RecipeSystem.OriginalResult(i));
+					if (!RecipeSystem.LeftAlone(i) && !RecipeSystem.IsShell(i)) crafted.Add(RecipeSystem.OriginalResult(i));
 				}
 			}
 			else

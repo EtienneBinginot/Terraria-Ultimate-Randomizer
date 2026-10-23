@@ -23,13 +23,18 @@ namespace UltimateRandomizer.Common.Features
 			HashSet<int> running = bossBag ? RunningOnBoss(item.type) : null;
 			List<DropRateInfo> drops = new();
 			List<int> ruleOf = new();
+			List<List<DropRateInfo>> parts = rules.Select(rule => LootSnapshot.Capture(new List<IItemDropRule> { rule })).ToList();
+			// Boss bags only, vanilla or modded (their vanilla rule types); a rule holding an item its boss's own rules still
+			// drop as vanilla (Deerclops' weapons) keeps running too, so that normal and expert mode give the same
+			bool[] wraps = rules.Select((rule, r) => bossBag && DropPermutation.Permutable(rule, parts[r], item.type, true) && !parts[r].Any(d => running.Contains(d.itemId))).ToArray();
+			// Another mod's bag joins the permutation whole or not at all: its own rule classes may hand out what the wrapped
+			// ones would no longer give (a half-permuted bag could lose or double its loot)
+			if (item.type >= ItemID.Count && wraps.Contains(false)) wraps = new bool[rules.Count];
 			for (int r = 0; r < rules.Count; r++)
 			{
 				IItemDropRule rule = rules[r];
-				List<DropRateInfo> part = LootSnapshot.Capture(new List<IItemDropRule> { rule });
-				// Boss bags only, vanilla or modded (their vanilla rule types); a rule holding an item its boss's own rules still
-				// drop as vanilla (Deerclops' weapons) keeps running too, so that normal and expert mode give the same
-				bool wrap = bossBag && DropPermutation.Permutable(rule, part, item.type, true) && !part.Any(d => running.Contains(d.itemId));
+				List<DropRateInfo> part = parts[r];
+				bool wrap = wraps[r];
 				drops.AddRange(part);
 				ruleOf.AddRange(Enumerable.Repeat(wrap ? r : -1, part.Count));
 				if (!wrap) continue;

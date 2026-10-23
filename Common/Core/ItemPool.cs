@@ -203,12 +203,17 @@ namespace UltimateRandomizer.Common.Core
 			for (int type = 1; type < count; type++)
 			{
 				if (fixedTier[type]) continue;
-				floors[type] = ItemClassifier.MiningFloor(type, trueTiers);
+				floors[type] = Math.Max(ItemClassifier.MiningFloor(type, trueTiers), Stations.ActingFloor(type));
 				trueTiers[type] = Math.Max(trueTiers[type], floors[type]);
 			}
 			HashSet<int> lootSources = LootSources();
 			int settled = ItemClassifier.SettleByRecipes(trueTiers, fixedTier, floors, lootSources, fromChest, corrected, out string settleExamples);
 			bool[] hardGates = ItemClassifier.HardGates(trueTiers, lootSources, fromChest);
+			// An item acting as progression stations (Stations.ActingFloor) is gated like them: no allowance, never rolled early
+			for (int type = 1; type < count; type++)
+			{
+				if (!fixedTier[type] && Stations.ActingFloor(type) > 0) hardGates[type] = true;
+			}
 			int banned = 0;
 			HashSet<int> sourced = Sourced();
 			for (int type = 1; type < count; type++)

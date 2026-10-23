@@ -269,7 +269,8 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			foreach (int tile in tiles.OrderBy(t => t))
 			{
-				if (Stations.Info(tile).Kind == StationKind.Unknown) continue;
+				// Unknown tiles, and tiles of the world that no item places (another mod's altar...)
+				if (Stations.Info(tile).Kind == StationKind.Unknown || Stations.Info(tile).World) continue;
 				if (RecipePlanner.StationTier(tile, plan.Availability) >= Findability.Never) failures.Add($"{Stations.Name(tile)} can never be placed");
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed: {stations} progression or themed stations, {summons} boss summons");

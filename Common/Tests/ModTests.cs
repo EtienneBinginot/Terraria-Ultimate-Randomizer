@@ -190,8 +190,43 @@ namespace UltimateRandomizer.Common.Tests
 				if (bosses.GroupOfUnit.TryGetValue(unit, out int g) && !bosses.BossGroups[g].Any(Vanilla)) failures.Add($"{Lang.GetNPCNameValue(unit)}: in a boss group without vanilla bosses");
 			}
 			Log($"ModdedDropsPermuted: {checkedUnits} modded tables checked; e.g. {string.Join(", ", shown)}");
-			if (checkedUnits == 0) Check.Skip("no modded enemy or boss with permutable drops");
+			// No modded enemy or boss with permutable drops here: the pure planner with explicit places instead
+			if (checkedUnits == 0) SyntheticModdedPlaces(failures);
 			Check.All(failures, "Modded drops");
+		}
+
+		// A drop condition of another assembly than tModLoader's, as another mod's would be
+		private sealed class ForeignDropCondition : IItemDropRuleCondition, IProvideItemConditionDescription
+		{
+			public bool CanDrop(DropAttemptInfo info) => true;
+			public bool CanShowItemDropInUI() => true;
+			public string GetConditionDescription() => null;
+		}
+
+		// A modded owner's ordinary entry is grouped with the vanilla entries of its tier; an entry under another mod's
+		// condition is Restrictive and only grouped with entries under the same condition (its access class)
+		private static void SyntheticModdedPlaces(List<string> failures)
+		{
+			List<IItemDropRuleCondition> foreign = new() { new ForeignDropCondition() };
+			if (DropPermutation.ClassOf(foreign[0]) != DropPermutation.ConditionClass.Restrictive) failures.Add($"a modded condition is {DropPermutation.ClassOf(foreign[0])}, not Restrictive");
+			string access = DropPermutation.AccessOf(foreign);
+			if (!access.Contains(typeof(ForeignDropCondition).FullName)) failures.Add($"a modded condition's access class is \"{access}\", not its full type name");
+			List<DropPermutation.Place> places = new();
+			void Add(int owner, int index, string placeAccess) => places.Add(new DropPermutation.Place { Owner = owner, Index = index, OwnerKey = owner * 31 + index, Tier = 0, Access = placeAccess });
+			foreach (int owner in new[] { NPCID.BlueSlime, NPCID.Zombie, NPCID.DemonEye, NPCID.Skeleton }) Add(owner, 0, "");
+			int modded = NPCLoader.NPCCount + 5;
+			Add(modded, 0, "");
+			Add(modded, 1, access);
+			Add(NPCID.Zombie, 1, access);
+			Add(NPCID.DemonEye, 1, access);
+			DropPermutation.Permute(places, 12345, out List<List<int>> groups);
+			List<int> plain = groups.FirstOrDefault(g => g.Contains(4));
+			if (plain == null || !plain.Any(q => places[q].Owner < NPCID.Count && places[q].Access == "")) failures.Add("synthetic: the modded entry is not grouped with vanilla entries");
+			foreach (List<int> group in groups)
+			{
+				if (group.Select(q => places[q].Access).Distinct().Count() > 1) failures.Add("synthetic: a group mixes a modded condition with other entries");
+			}
+			Log($"ModdedDropsPermuted: no modded table, synthetic places checked ({groups.Count} groups, access \"{access}\")");
 		}
 
 		// Every modded station some recipe needs is known (themed, or progression when many recipes need it) at its item's true

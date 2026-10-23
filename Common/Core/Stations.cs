@@ -177,18 +177,46 @@ namespace UltimateRandomizer.Common.Core
 
 		private static Dictionary<int, List<int>> placers;
 
-		// Items placing each tile (content samples are fixed once loaded). Do not modify the lists
+		// Items placing each tile (content samples are fixed once loaded), and items placing another mod's tile that acts as
+		// this vanilla one (ActsAs: Magic Storage's combined stations count as a Hellforge, a Tinkerer's Workshop...). Do not
+		// modify the lists
 		public static Dictionary<int, List<int>> PlacersByTile()
 		{
 			if (placers != null) return placers;
 			Dictionary<int, List<int>> result = new();
+			void Add(int tile, int type)
+			{
+				if (!result.TryGetValue(tile, out List<int> list)) result[tile] = list = new List<int>();
+				if (!list.Contains(type)) list.Add(type);
+			}
 			foreach ((int type, Item sample) in ContentSamples.ItemsByType)
 			{
 				if (sample == null || sample.createTile < TileID.Dirt) continue;
-				if (!result.TryGetValue(sample.createTile, out List<int> list)) result[sample.createTile] = list = new List<int>();
-				list.Add(type);
+				Add(sample.createTile, type);
+				foreach (int tile in ActsAs(sample.createTile)) Add(tile, type);
 			}
 			return placers = result;
+		}
+
+		// The vanilla tiles another mod's tile also counts as for crafting (ModTile.AdjTiles), in a stable order
+		public static IEnumerable<int> ActsAs(int tile)
+		{
+			if (!IsModded(tile) || TileLoader.GetTile(tile)?.AdjTiles is not int[] adj) return Enumerable.Empty<int>();
+			return adj.Where(t => t >= TileID.Dirt && t < TileID.Count).Distinct().OrderBy(t => t);
+		}
+
+		// The floor of an item placing another mod's tile that acts as vanilla progression stations: the highest of their tiers
+		// (a combined station acting as an Ancient Manipulator is a post-Lunatic item, whatever its recipe or rarity say). 0:
+		// none. Load-time facts only
+		public static int ActingFloor(int item)
+		{
+			if (!PlacedTile(item, out int tile)) return 0;
+			int floor = 0;
+			foreach (int acted in ActsAs(tile))
+			{
+				if (Known.TryGetValue(acted, out StationInfo info) && info.Kind == StationKind.Progression && !info.World) floor = System.Math.Max(floor, info.Tier);
+			}
+			return floor;
 		}
 
 		public static List<int> Placers(int tile) => PlacersByTile().TryGetValue(tile, out List<int> list) ? list : new List<int>();
