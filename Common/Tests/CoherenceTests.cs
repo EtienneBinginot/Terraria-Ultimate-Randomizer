@@ -20,6 +20,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			TestRunner.Register("TierCoherence", TierCoherence);
 			TestRunner.Register("TierAudit", TierAudit);
+			TestRunner.Register("ItemTierDump", ItemTierDump);
 			TestRunner.Register("WorldChestTrueTiers", WorldChestTrueTiers);
 		}
 
@@ -171,6 +172,79 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			Audit($"final enemy plan: {banned.Count} of {total} planned drops are banned items before the re-pick" +
 				(banned.Count > 0 ? ": " + string.Join(", ", banned.GroupBy(t => t).OrderByDescending(g => g.Count()).Take(15).Select(g => $"{Name(g.Key)} x{g.Count()}")) : ""));
+		}
+
+		// ItemTiers.tsv (next to TierAudit.tsv): one row per vanilla item (excluded and banned ones flagged) with every tier the
+		// pool knows, the vanilla and the planned recipe tiers, the planned ingredients (their tier in brackets) and the mining
+		// data. Always passes; only reads the live caches and plans, and writes that file
+		private static void ItemTierDump()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (RecipeSystem.RecipeCount == 0) Check.Skip("recipes not captured yet");
+			RecipePlan plan = RecipePlanner.Get();
+			if (plan?.Availability == null) Check.Skip("no recipe plan");
+			int count = Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
+			// Vanilla recipes with their original ingredients and stations: the first tier each result is doable
+			int[] vanillaResults = new int[count];
+			(int type, int stack)[][] vanillaIngredients = new (int, int)[count][];
+			int[][] vanillaTiles = new int[count][];
+			int[][] vanillaGroups = new int[count][];
+			for (int i = 0; i < count; i++)
+			{
+				vanillaResults[i] = RecipeSystem.OriginalResult(i);
+				vanillaIngredients[i] = RecipeSystem.OriginalIngredients(i);
+				vanillaTiles[i] = RecipeSystem.OriginalTiles(i);
+				vanillaGroups[i] = RecipeSystem.OriginalGroups(i);
+			}
+			int[] vanillaResultTiers = Enumerable.Range(0, count).Select(i => RecipePlanner.ResultTier(i, vanillaResults[i])).ToArray();
+			int[] vanillaAvail = RecipePlanner.Availability(Findability.BaseTier, vanillaResults, vanillaResultTiers, vanillaIngredients, vanillaTiles, out _, null, vanillaGroups);
+			// First live planned recipe of each item
+			int[] firstRecipe = new int[ItemPool.Info.Length];
+			Array.Fill(firstRecipe, -1);
+			for (int i = 0; i < count; i++)
+			{
+				int result = plan.Results[i].type;
+				if (result <= 0 || result >= firstRecipe.Length || firstRecipe[result] >= 0) continue;
+				if ((plan.Twin != null && plan.Twin[i]) || (plan.LoopOff != null && plan.LoopOff[i])) continue;
+				firstRecipe[result] = i;
+			}
+			string Bracket(int item) => item > 0 && item < plan.Availability.Length ? Show(plan.Availability[item]) : "?";
+			Dictionary<int, string> oresByPick = new();
+			StringBuilder tsv = new();
+			tsv.AppendLine("id	internal name	name	category	rarity	value	rarity tier	tier	true tier	source tier	earliest source	from table	known tier	excluded	banned	protected	" +
+				"findability tier	vanilla recipe tier	planned recipe tier	planned recipe ingredients	key ingredient	pick power	ores it mines	pick to mine");
+			int written = 0;
+			for (int type = 1; type < Math.Min(ItemID.Count, ItemPool.Info.Length); type++)
+			{
+				ItemInfo info = ItemPool.Info[type];
+				ContentSamples.ItemsByType.TryGetValue(type, out Item sample);
+				string ingredients = "", key = "", ores = "";
+				int recipe = firstRecipe[type];
+				if (recipe >= 0)
+				{
+					ingredients = string.Join("; ", (plan.Ingredients[recipe] ?? vanillaIngredients[recipe]).Select(x => $"{Name(x.type)} x{x.stack} [{Bracket(x.type)}]"));
+					if (plan.PlannedKeys != null && plan.PlannedKeys[recipe] > 0) key = Name(plan.PlannedKeys[recipe]);
+				}
+				int pick = sample?.pick ?? 0;
+				if (pick > 0)
+				{
+					if (!oresByPick.TryGetValue(pick, out ores))
+					{
+						ores = string.Join(", ", RecipePlanner.OresFrom(pick).Where(ItemPool.IsValid).OrderBy(o => o).Select(Name));
+						oresByPick[pick] = ores;
+					}
+				}
+				tsv.AppendLine(string.Join("	", type, ItemID.Search.GetName(type), Name(type), info.Category, sample?.rare ?? 0, sample?.value ?? 0, info.RarityTier, info.Tier,
+					info.TrueTier, info.SourceTier, info.Source ?? "none", info.FromTable, ItemClassifier.HasKnownTier(type), info.Excluded, info.Banned, info.Protected,
+					Show(Findability.Tier(type)), type < vanillaAvail.Length ? Show(vanillaAvail[type]) : "", Bracket(type),
+					ingredients, key, pick, ores, RecipePlanner.PickToMine(type)));
+				written++;
+			}
+			string dir = Path.Combine(Main.SavePath, "UltimateRandomizer");
+			string path = Path.Combine(dir, "ItemTiers.tsv");
+			Directory.CreateDirectory(dir);
+			File.WriteAllText(path, tsv.ToString());
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ItemTierDump: {written} items written to {path}");
 		}
 
 		// TierMaterials.tsv (next to TierAudit.tsv): every vanilla item a replaced ingredient may become in this world
