@@ -188,6 +188,7 @@ namespace UltimateRandomizer.Common.Core
 		{
 			WildChanceOverride = null;
 			RepickDisabled = false;
+			LegacyGating = false;
 			Info = Array.Empty<ItemInfo>();
 			AllTiers = Array.Empty<int>();
 			buckets = null;
@@ -274,10 +275,16 @@ namespace UltimateRandomizer.Common.Core
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			if (!progression.TierGating) return Tiers.Max;
-			int limit = unlockedTier + progression.TierAllowance;
-			if (!hardMode) limit = Math.Min(limit, PreHardmodeCap);
+			int limit = unlockedTier + Allowance;
+			if (!hardMode && !LegacyGating) limit = Math.Min(limit, PreHardmodeCap);
 			return Tiers.Clamp(Math.Max(limit, minLimit));
 		}
+
+		// Tests only (PlanDiff, restored in finally): the planning rules of worlds made before the hardmode wall (allowance
+		// 2, no wall in GatingLimit and UnlockTier), to measure how much of a world's plan the wall changes
+		public static bool LegacyGating;
+
+		private static int Allowance => LegacyGating ? 2 : ProgressionConfig.Instance.TierAllowance;
 
 		// The highest tier given before hardmode (except jackpots and boss floors)
 		public const int PreHardmodeCap = (int)Tier.PostSkeletron;
@@ -291,8 +298,8 @@ namespace UltimateRandomizer.Common.Core
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			if (!progression.TierGating) return 0;
-			int unlock = Math.Max(0, tier - progression.TierAllowance);
-			return tier >= (int)Tier.Hardmode ? Math.Max((int)Tier.Hardmode, unlock) : unlock;
+			int unlock = Math.Max(0, tier - Allowance);
+			return tier >= (int)Tier.Hardmode && !LegacyGating ? Math.Max((int)Tier.Hardmode, unlock) : unlock;
 		}
 
 		public static int Roll(in RollRequest request) => Roll(request, out _);

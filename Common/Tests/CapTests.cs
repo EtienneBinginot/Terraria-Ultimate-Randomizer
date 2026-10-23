@@ -24,11 +24,142 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ChestCap", ChestCap);
 			TestRunner.Register("ChestTameKeepsOpened", ChestTameKeepsOpened);
 			TestRunner.Register("JackpotChests", JackpotChests);
+			TestRunner.Register("PlanDiff", PlanDiff);
 		}
 
 		private static string Name(int item) => Lang.GetItemNameValue(item);
 
 		private static void Log(string text) => ModContent.GetInstance<UltimateRandomizer>().Logger.Info(text);
+
+		// The deterministic plans of a world (recipes, findability, guaranteed sources, mob plans at the current unlocked tier)
+		private sealed class PlanPrint
+		{
+			public (int type, int stack)[][] Ingredients;
+			public int[][] Tiles;
+			public (int type, int stack)[] Results;
+			public int[] ResultTiers;
+			public int[] Findable;
+			public int[] Available;
+			public Dictionary<int, List<(int item, float chance)>> Guaranteed = new();
+			public Dictionary<int, SortedSet<int>> Hosts = new();
+			public Dictionary<int, int[]> MobPlans = new();
+		}
+
+		private static PlanPrint TakePrint()
+		{
+			WorldCaches.ResetAll();
+			PlanPrint print = new();
+			RecipePlan plan = RecipePlanner.Get();
+			int count = plan.Results.Length;
+			print.Ingredients = Enumerable.Range(0, count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
+			print.Tiles = Enumerable.Range(0, count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
+			print.Results = ((int, int)[])plan.Results.Clone();
+			print.ResultTiers = (int[])plan.ResultTiers.Clone();
+			print.Available = (int[])plan.Availability.Clone();
+			print.Findable = Enumerable.Range(0, ItemPool.Info.Length).Select(Findability.Tier).ToArray();
+			for (int npc = 1; npc < NPCLoader.NPCCount; npc++)
+			{
+				List<PlannedDrop> drops = GuaranteedSources.For(npc);
+				if (drops.Count == 0) continue;
+				print.Guaranteed[npc] = drops.Select(d => (d.Item, d.Chance)).OrderBy(d => d.Item).ThenBy(d => d.Chance).ToList();
+				foreach (PlannedDrop drop in drops)
+				{
+					if (!print.Hosts.TryGetValue(drop.Item, out SortedSet<int> hosts)) print.Hosts[drop.Item] = hosts = new SortedSet<int>();
+					hosts.Add(npc);
+				}
+			}
+			foreach (int npc in LootSnapshot.Npcs.Keys.OrderBy(k => k))
+			{
+				print.MobPlans[npc] = RandomNpcDropRule.Plan(npc, Main.expertMode, guaranteed: false).Select(d => d.Item).ToArray();
+			}
+			return print;
+		}
+
+		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));
+
+		// Measures how much of this world's plan the hardmode wall and the allowance 1 change: the same plans with the rules
+		// of older worlds (allowance 2, no wall) and with the current ones. Always passes, the numbers are in client.log
+		private static void PlanDiff()
+		{
+			PlanPrint legacy, current;
+			try
+			{
+				ItemPool.LegacyGating = true;
+				legacy = TakePrint();
+				ItemPool.LegacyGating = false;
+				current = TakePrint();
+			}
+			finally
+			{
+				// Rebuilt lazily with the real rules: the same plans the live recipes and drops were made from (RecipeSystem.Apply
+				// is not called, Main.recipe is never touched here)
+				ItemPool.LegacyGating = false;
+				WorldCaches.ResetAll();
+			}
+			List<string> examples = new();
+			void Example(string line)
+			{
+				if (examples.Count < 12) examples.Add(line);
+			}
+			int recipes = Math.Min(legacy.Results.Length, current.Results.Length);
+			int ingredients = 0, stations = 0, results = 0, resultTiers = 0;
+			for (int i = 0; i < recipes; i++)
+			{
+				bool ingredientChange = !legacy.Ingredients[i].SequenceEqual(current.Ingredients[i]);
+				if (ingredientChange)
+				{
+					ingredients++;
+					Example($"recipe of {Name(current.Results[i].type)}: {Ingredients(legacy.Ingredients[i])} -> {Ingredients(current.Ingredients[i])}");
+				}
+				if (!legacy.Tiles[i].SequenceEqual(current.Tiles[i])) stations++;
+				if (legacy.Results[i] != current.Results[i])
+				{
+					results++;
+					Example($"recipe {i} result: {Name(legacy.Results[i].type)} -> {Name(current.Results[i].type)}");
+				}
+				if (legacy.ResultTiers[i] != current.ResultTiers[i]) resultTiers++;
+			}
+			int findable = 0, available = 0;
+			for (int item = 1; item < Math.Min(legacy.Findable.Length, current.Findable.Length); item++)
+			{
+				if (legacy.Findable[item] != current.Findable[item])
+				{
+					findable++;
+					Example($"{Name(item)} findable at tier {legacy.Findable[item]} -> {current.Findable[item]}");
+				}
+				if (item < legacy.Available.Length && item < current.Available.Length && legacy.Available[item] != current.Available[item]) available++;
+			}
+			int guaranteedNpcs = 0;
+			foreach (int npc in legacy.Guaranteed.Keys.Union(current.Guaranteed.Keys))
+			{
+				legacy.Guaranteed.TryGetValue(npc, out var before);
+				current.Guaranteed.TryGetValue(npc, out var after);
+				if (!(before ?? new()).SequenceEqual(after ?? new())) guaranteedNpcs++;
+			}
+			int moved = 0;
+			foreach (int item in legacy.Hosts.Keys.Union(current.Hosts.Keys))
+			{
+				legacy.Hosts.TryGetValue(item, out SortedSet<int> before);
+				current.Hosts.TryGetValue(item, out SortedSet<int> after);
+				if ((before ?? new()).SetEquals(after ?? new())) continue;
+				moved++;
+				string Hosts(SortedSet<int> hosts) => hosts == null ? "none" : string.Join(", ", hosts.Select(Lang.GetNPCNameValue));
+				Example($"guaranteed {Name(item)}: {Hosts(before)} -> {Hosts(after)}");
+			}
+			int mobPlans = 0;
+			foreach ((int npc, int[] before) in legacy.MobPlans)
+			{
+				if (!current.MobPlans.TryGetValue(npc, out int[] after) || !before.SequenceEqual(after))
+				{
+					mobPlans++;
+					if (after != null) Example($"{Lang.GetNPCNameValue(npc)} drops: {string.Join(", ", before.Select(Name))} -> {string.Join(", ", after.Select(Name))}");
+				}
+			}
+			Log($"PlanDiff: recipes ingredients {ingredients}/{recipes}, stations {stations}, results {results}, result tiers {resultTiers}; " +
+				$"findability {findable} items (crafted availability {available}); guaranteed {guaranteedNpcs} npcs ({moved} items moved); " +
+				$"mob plans {mobPlans}/{legacy.MobPlans.Count} npcs (allowance {ProgressionConfig.Instance.TierAllowance} vs 2, unlocked tier {ProgressionSystem.UnlockedTier}, hardmode {Main.hardMode})");
+			foreach (string line in examples) Log("PlanDiff example: " + line);
+		}
 
 		// Before hardmode the progression limit stops at PostSkeletron whatever the unlocked tier, a source's floor (Wall of
 		// Flesh) still wins, and UnlockTier (hints) is its exact inverse

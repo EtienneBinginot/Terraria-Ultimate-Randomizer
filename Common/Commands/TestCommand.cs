@@ -21,7 +21,8 @@ namespace UltimateRandomizer.Common.Commands
 				caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.DebugOff"), Color.Yellow);
 				return;
 			}
-			var results = TestRunner.RunAll();
+			// /rtest Id1 Id2: only these tests
+			var results = TestRunner.RunAll(args);
 			int passed = results.FindAll(r => r.Outcome == TestOutcome.Passed).Count;
 			int failed = results.FindAll(r => r.Outcome == TestOutcome.Failed).Count;
 			caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Debug.TestSummary", passed, failed, results.Count - passed - failed), failed > 0 ? Color.OrangeRed : Color.LightGreen);

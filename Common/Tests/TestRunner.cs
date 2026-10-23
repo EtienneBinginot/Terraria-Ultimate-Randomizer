@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using Terraria;
 using Terraria.DataStructures;
@@ -110,7 +111,8 @@ namespace UltimateRandomizer.Common.Tests
 			CapTests.Register();
 		}
 
-		public static List<TestResult> RunAll()
+		// only: the ids of the tests to run (any case, e.g. /rtest PlanDiff), null or empty for all
+		public static List<TestResult> RunAll(ICollection<string> only = null)
 		{
 			EnsureRegistered();
 			List<TestResult> results = new();
@@ -122,6 +124,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			foreach ((string id, Action run) in tests)
 			{
+				if (only != null && only.Count > 0 && !only.Any(o => string.Equals(o, id, StringComparison.OrdinalIgnoreCase))) continue;
 				Stopwatch watch = Stopwatch.StartNew();
 				TestResult result = new() { Id = id, Outcome = TestOutcome.Passed };
 				// Rolls must not depend on the tester's equipment: no adaptive power unless a test forces one

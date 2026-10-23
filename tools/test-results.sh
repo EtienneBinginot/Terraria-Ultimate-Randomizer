@@ -9,6 +9,8 @@ echo "Mod version loaded: $(grep -o 'UltimateRandomizer (Ultimate Randomizer) v[
 start=$(grep -n "\[UltimateRandomizer\]: Test results:" "$LOG" | tail -1 | cut -d: -f1)
 [ -n "$start" ] || { echo "No test run in this log."; exit 1; }
 grep -n "\[UltimateRandomizer\]: \(Pacing\|Drops\|Jackpots\|First work bench\):" "$LOG" | tail -6
+# PlanDiff (legacy vs current planning rules): the summary and its examples of the last run
+grep -n "\[UltimateRandomizer\]: PlanDiff" "$LOG" | tail -13
 sed -n "${start}p" "$LOG"
 sed -n "$((start + 1)),\$p" "$LOG" | awk '/^  \[/{print; next} {exit}' | grep -v "^  \[Passed\]"
 echo "--- errors logged by the mod since the last load:"
