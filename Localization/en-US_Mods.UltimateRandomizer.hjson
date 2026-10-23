@@ -263,6 +263,7 @@ Tests: {
 	UncraftableNoSpecials: Shell recipes keep their item (an upgrade only its own), are never swapped and never switched off as copies
 	UncraftablePricedByIngredients: Live shell recipes count as randomized: what they make sells for its ingredients' value, not its vanilla price
 	RecipePickaxeMineable: No rebuilt pickaxe or drill recipe gets a new ingredient that needs at least that pick power to be mined
+	RecipeNotBeforeItsTier: No rebuilt or swapped recipe is doable before the tier of the item it gives (its own tier, or its true tier when later): no Chlorophyte Pickaxe in early hardmode
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
