@@ -1856,33 +1856,33 @@ Configs: {
 		}
 
 		IngredientMode: {
-			Label: "Ingrédients"
-			Tooltip: "Randomisés : chaque recette est reconstruite à partir de matériaux trouvables ou fabricables à son niveau, en gardant seulement la forme générale de la recette vanilla (nombre et types d'ingrédients, valeur), avec au moins un ingrédient de son propre niveau. Vanilla : les ingrédients sont conservés et chacun est placé sur des ennemis du niveau de la recette."
+			Label: Ingrédients
+			Tooltip: Randomisés : chaque recette est reconstruite à partir de matériaux trouvables ou fabricables à son niveau, en gardant seulement la forme générale de la recette vanilla (nombre et types d'ingrédients, valeur), avec au moins un ingrédient de son propre niveau. Vanilla : les ingrédients sont conservés et chacun est placé sur des ennemis du niveau de la recette.
 		}
 
 		IngredientWeights: {
-			Label: "Poids des ingrédients"
-			Tooltip: "Chance relative de chaque type d'objet parmi les ingrédients d'une recette reconstruite. 0 = jamais, sauf si la recette vanilla utilisait ce type (une recette faite d'armes reçoit souvent des armes)."
+			Label: Poids des ingrédients
+			Tooltip: Chance relative de chaque type d'objet parmi les ingrédients d'une recette reconstruite. 0 = jamais, sauf si la recette vanilla utilisait ce type (une recette faite d'armes reçoit souvent des armes).
 		}
 
 		IngredientCountSpread: {
-			Label: "Écart du nombre d'ingrédients"
-			Tooltip: "Chaque recette est reconstruite avec à peu près autant d'ingrédients que la recette vanilla : au plus ce nombre en plus ou en moins (le même nombre, un de plus ou un de moins sont les plus fréquents). 0 = toujours le nombre vanilla."
+			Label: Écart du nombre d'ingrédients
+			Tooltip: Chaque recette est reconstruite avec à peu près autant d'ingrédients que la recette vanilla : au plus ce nombre en plus ou en moins (le même nombre, un de plus ou un de moins sont les plus fréquents). 0 = toujours le nombre vanilla.
 		}
 
 		IngredientMax: {
-			Label: "Nombre maximal d'ingrédients par recette"
-			Tooltip: "Une recette reconstruite n'a jamais plus d'ingrédients que cela (les ingrédients qui ne peuvent pas être remplacés, comme les objets de boss, sont gardés quand même)."
+			Label: Nombre maximal d'ingrédients par recette
+			Tooltip: Une recette reconstruite n'a jamais plus d'ingrédients que cela (les ingrédients qui ne peuvent pas être remplacés, comme les objets de boss, sont gardés quand même).
 		}
 
 		RecipesForUncraftable: {
-			Label: "Recettes pour les objets non fabricables"
-			Tooltip: "Les objets qu'aucune recette ne fabrique (murs, blocs obtenus seulement en les cassant, meubles trouvés dans le monde, objets de style, teintures, nourriture, matériaux) reçoivent une recette aléatoire sur une station aléatoire. Elle n'est faisable qu'à partir du palier où l'objet serait trouvé, jamais avant. L'équipement, les munitions, les potions, les minerais, les stations, les invocations de boss et les sacs n'en reçoivent jamais."
+			Label: Recettes pour les objets non fabricables
+			Tooltip: Les objets qu'aucune recette ne fabrique (murs, blocs obtenus seulement en les cassant, meubles trouvés dans le monde, objets de style, teintures, nourriture, matériaux) reçoivent une recette aléatoire sur une station aléatoire. Elle n'est faisable qu'à partir du palier où l'objet serait trouvé, jamais avant. L'équipement, les munitions, les potions, les minerais, les stations, les invocations de boss et les sacs n'en reçoivent jamais.
 		}
 
 		IngredientStackCap: {
-			Label: "Quantité maximale d'un ingrédient"
-			Tooltip: "Les quantités sont choisies pour que les ingrédients valent à peu près autant que ceux de la recette vanilla, jusqu'à cette limite par ingrédient."
+			Label: Quantité maximale d'un ingrédient
+			Tooltip: Les quantités sont choisies pour que les ingrédients valent à peu près autant que ceux de la recette vanilla, jusqu'à cette limite par ingrédient.
 		}
 
 		RandomizeStations: {

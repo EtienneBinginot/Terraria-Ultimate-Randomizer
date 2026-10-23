@@ -1856,33 +1856,33 @@ Configs: {
 		}
 
 		IngredientMode: {
-			Label: "Ingredients"
-			Tooltip: "Randomized: every recipe is rebuilt from materials you can find or craft by its level, keeping only the rough shape of the vanilla recipe (number and kinds of ingredients, value), with at least one ingredient of its own level. Vanilla: ingredients are kept and each one is placed on enemies of the recipe's level."
+			Label: Ingredients
+			Tooltip: Randomized: every recipe is rebuilt from materials you can find or craft by its level, keeping only the rough shape of the vanilla recipe (number and kinds of ingredients, value), with at least one ingredient of its own level. Vanilla: ingredients are kept and each one is placed on enemies of the recipe's level.
 		}
 
 		IngredientWeights: {
-			Label: "Ingredient weights"
-			Tooltip: "Relative chance of each kind of item among the ingredients of a rebuilt recipe. 0 = never, unless the vanilla recipe used that kind (a recipe made of weapons often gets weapons again)."
+			Label: Ingredient weights
+			Tooltip: Relative chance of each kind of item among the ingredients of a rebuilt recipe. 0 = never, unless the vanilla recipe used that kind (a recipe made of weapons often gets weapons again).
 		}
 
 		IngredientCountSpread: {
-			Label: "Ingredient count spread"
-			Tooltip: "Every recipe is rebuilt with about as many ingredients as the vanilla one: this many more or fewer at most (the same count, one more or one less are the most frequent). 0 = always the vanilla count."
+			Label: Ingredient count spread
+			Tooltip: Every recipe is rebuilt with about as many ingredients as the vanilla one: this many more or fewer at most (the same count, one more or one less are the most frequent). 0 = always the vanilla count.
 		}
 
 		IngredientMax: {
-			Label: "Maximum ingredients per recipe"
-			Tooltip: "A rebuilt recipe never has more ingredients than this (ingredients that can't be replaced, like boss items, are kept anyway)."
+			Label: Maximum ingredients per recipe
+			Tooltip: A rebuilt recipe never has more ingredients than this (ingredients that can't be replaced, like boss items, are kept anyway).
 		}
 
 		RecipesForUncraftable: {
-			Label: "Recipes for uncraftable items"
-			Tooltip: "Items that no recipe makes (walls, blocks only obtained by breaking them, furniture found in the world, vanity, dyes, food, materials) get a random recipe at a random station. It can only be made from the tier at which the item would be found, never earlier. Gear, ammo, potions, ores, stations, boss summons and bags never get one."
+			Label: Recipes for uncraftable items
+			Tooltip: Items that no recipe makes (walls, blocks only obtained by breaking them, furniture found in the world, vanity, dyes, food, materials) get a random recipe at a random station. It can only be made from the tier at which the item would be found, never earlier. Gear, ammo, potions, ores, stations, boss summons and bags never get one.
 		}
 
 		IngredientStackCap: {
-			Label: "Maximum amount of an ingredient"
-			Tooltip: "The amounts are set so the ingredients are worth roughly what the vanilla ones were, up to this limit per ingredient."
+			Label: Maximum amount of an ingredient
+			Tooltip: The amounts are set so the ingredients are worth roughly what the vanilla ones were, up to this limit per ingredient.
 		}
 
 		RandomizeStations: {
