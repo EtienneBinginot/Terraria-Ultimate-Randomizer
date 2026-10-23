@@ -292,7 +292,7 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Crafted items that no recipe makes before hardmode wait for it (true tier), so do items whose every vanilla source
-		// is late (Portal Gun: the Moon Lord only), nothing is lowered
+		// is late (Portal Gun: the Moon Lord only); nothing is lowered, except by the material table and world chests
 		private static void RaisedTiers()
 		{
 			List<string> failures = new();
@@ -301,8 +301,9 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				ItemInfo info = ItemPool.Info[type];
 				if (info.Excluded) continue;
-				// The hand-reviewed materials (MaterialTiers) take the table's tier exactly, lower too
-				if (info.TrueTier < info.Tier && !info.FromTable) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {info.Tier}");
+				// The hand-reviewed materials (MaterialTiers) take the table's tier exactly, lower too; world-generated chests
+				// lower what they hold (Band of Regeneration: a gold chest item, found at 1)
+				if (info.TrueTier < info.Tier && !info.FromTable && !info.FromWorldChest) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {info.Tier}");
 				if (info.TrueTier > info.Tier) raised++;
 			}
 			foreach (int item in new[] { ItemID.PearlwoodSword, ItemID.PearlwoodWorkBench })

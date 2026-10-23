@@ -25,8 +25,8 @@ namespace UltimateRandomizer.Common.Features
 		// Recipes that received a key ingredient of tier U, and recipes whose result was re-picked (no slot, no material)
 		public bool[] KeyIngredient;
 		public bool[] ResultRepicked;
-		// Copies of an earlier recipe once planned (same result, ingredients, groups and conditions): they share its stations
-		// and are switched off when applied, so the crafting menu never shows one recipe on two stations
+		// Copies of an earlier recipe once planned (same result, ingredients, groups and conditions): switched off when applied
+		// and left out of Availability, so the crafting menu never shows one recipe on two stations
 		public bool[] Twin;
 	}
 
@@ -91,10 +91,13 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// The level of a recipe: its original result, and the level of its stations
+		// The level of a recipe: its original result, the station it makes (an Orichalcum Anvil has rarity 3, but the tile is a
+		// hardmode station made of hardmode bars) and the level of its stations
 		public static int RecipeTier(int i)
 		{
-			int tier = ItemPool.TierOf(RecipeSystem.OriginalResult(i));
+			int original = RecipeSystem.OriginalResult(i);
+			int tier = ItemPool.TierOf(original);
+			if (Stations.PlacedTile(original, out int made) && Stations.Info(made).Kind == StationKind.Progression) tier = Math.Max(tier, Stations.Info(made).Tier);
 			foreach (int tile in RecipeSystem.OriginalTiles(i))
 			{
 				Stations.StationInfo info = Stations.Info(tile);
@@ -115,8 +118,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// Availability fixed point: found items, then items crafted from available ingredients at available stations.
 		// recipeTiers[i] = tier from which recipe i can be made (ingredients and stations only); recipe i gives results[i]
-		// from resultTiers[i].
-		public static int[] Availability(Func<int, int> found, int[] results, int[] resultTiers, (int type, int stack)[][] ingredients, int[][] tiles, out int[] recipeTiers)
+		// from resultTiers[i]. skip: recipes switched off by the plan (RecipePlan.Twin), counted as absent
+		public static int[] Availability(Func<int, int> found, int[] results, int[] resultTiers, (int type, int stack)[][] ingredients, int[][] tiles, out int[] recipeTiers, bool[] skip = null)
 		{
 			int[] avail = new int[ItemPool.Info.Length];
 			for (int item = 1; item < avail.Length; item++) avail[item] = found(item);
@@ -145,7 +148,7 @@ namespace UltimateRandomizer.Common.Features
 				for (int i = 0; i < count; i++)
 				{
 					Recipe recipe = Main.recipe[i];
-					if (RecipeSystem.VanillaDisabled(i)) continue;
+					if (RecipeSystem.VanillaDisabled(i) || (skip != null && i < skip.Length && skip[i])) continue;
 					int tier = 0;
 					foreach ((int type, _) in ingredients[i])
 					{
@@ -221,16 +224,17 @@ namespace UltimateRandomizer.Common.Features
 			result.KeyIngredient = new bool[count];
 			result.ResultRepicked = new bool[count];
 			result.Twin = new bool[count];
-			// Planned as if every result waited for its U: the key ingredients make it so
-			int[] avail = Availability(Findability.Tier, results, result.ResultTiers, ingredients, tiles, out int[] recipeTiers);
+			// Planned as if every result waited for its U (the key ingredients make it so), except the vanilla sources: they are
+			// never locked
+			int[] avail = Availability(Findability.Tier, results, LockTiers(result), ingredients, tiles, out int[] recipeTiers);
 			if (cfg.RandomizeRecipes && cfg.IngredientMode == IngredientMode.Randomized) PlanIngredients(result, results, avail, recipeTiers);
 			if (cfg.RandomizeRecipes && cfg.RandomizeStations) PlanStations(result, results, avail, recipeTiers);
 			if (cfg.RandomizeRecipes) LockResults(result, results, ingredients, tiles);
 			if (cfg.RandomizeRecipes) ShareTwinStations(result, ingredients, tiles, avail);
 			(int, int)[][] planned = Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
-			// The live recipes give their result at once: no result tier any more
+			// The live recipes give their result at once: no result tier any more; the copies are switched off
 			result.Availability = Availability(Findability.Tier, results, new int[count], planned,
-				Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray(), out _);
+				Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray(), out _, result.Twin);
 			return result;
 		}
 
@@ -248,13 +252,13 @@ namespace UltimateRandomizer.Common.Features
 			int count = Count;
 			(int, int)[][] Planned() => Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
 			int[][] plannedTiles = Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray();
-			int[] avail = Availability(Findability.Tier, results, result.ResultTiers, Planned(), plannedTiles, out int[] doable);
+			int[] avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out int[] doable);
 			int repicked = 0;
 			for (int i = 0; i < count; i++)
 			{
 				if (NeedsLock(result, i, doable) && !HasKeySlot(i) && RepickResult(result, results, i, doable[i])) repicked++;
 			}
-			if (repicked > 0) avail = Availability(Findability.Tier, results, result.ResultTiers, Planned(), plannedTiles, out doable);
+			if (repicked > 0) avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out doable);
 			List<int>[,] buckets = FindableBuckets();
 			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
 			Dictionary<int, int> uses = new();
@@ -277,16 +281,42 @@ namespace UltimateRandomizer.Common.Features
 				if (HasKeySlot(i)) noMaterial.Add(u);
 				if (RepickResult(result, results, i, doable[i])) repicked++;
 			}
+			// Checked against the availability of the live recipes (results at once): a key chosen before a later re-pick or
+			// key changed what it relies on is chosen again (a material found exactly at U with that availability)
+			int rekeyed = 0;
+			for (int round = 0; round < 2; round++)
+			{
+				avail = Availability(Findability.Tier, results, new int[count], Planned(), plannedTiles, out doable);
+				int again = 0;
+				for (int i = 0; i < count; i++)
+				{
+					if (!NeedsLock(result, i, doable) || result.ResultRepicked[i]) continue;
+					if (!HasKeySlot(i) || PlaceKey(result, results, i, result.ResultTiers[i], buckets, weights, avail, uses, out _) <= 0) continue;
+					result.KeyIngredient[i] = true;
+					again++;
+				}
+				rekeyed += again;
+				if (again == 0) break;
+			}
 			string topKeys = string.Join(", ", uses.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(5).Select(p => $"{DetRandom.ItemName(p.Key)} x{p.Value}"));
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {keys} key ingredients ({late} from U+1), {repicked} results re-picked; " +
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {keys} key ingredients ({late} from U+1, {rekeyed} chosen again), {repicked} results re-picked; " +
 				$"tiers without a key material: {(noMaterial.Count == 0 ? "none" : string.Join(", ", noMaterial))}; most used keys: {topKeys}");
 		}
 
-		// Doable (with what it has now) before the U of its result. A recipe that still gives its vanilla result (protected
-		// results, kept stations, a roll that landed on itself) is that item's vanilla source: never locked further
+		// Doable (with what it has now) before the U of its result. A vanilla source (VanillaSource) is never locked
 		private static bool NeedsLock(RecipePlan result, int i, int[] doable) =>
-			Gated(i) && !RecipeSystem.VanillaDisabled(i) && result.ResultTiers[i] > 0 && doable[i] < result.ResultTiers[i]
-			&& result.Results[i].type != RecipeSystem.OriginalResult(i);
+			Gated(i) && !RecipeSystem.VanillaDisabled(i) && result.ResultTiers[i] > 0 && doable[i] < result.ResultTiers[i] && !VanillaSource(result, i);
+
+		// A recipe still giving its vanilla result with its vanilla ingredients and stations (or re-picked back to it: nothing
+		// else fits) is that item's vanilla source: it gives it as soon as it is doable. A roll that landed on its own result
+		// but whose ingredients or stations were replaced is locked like any other (a Luminite Bullet recipe made of early
+		// materials would give Luminite Bullets at hardmode's start)
+		public static bool VanillaSource(RecipePlan result, int i) => result.Results[i].type == RecipeSystem.OriginalResult(i)
+			&& (result.ResultRepicked[i] || (result.Ingredients[i] == null && result.Tiles[i] == null));
+
+		// The tier each recipe gives its result from while planning: U for the results a key will lock, at once for the vanilla
+		// sources. With U for a vanilla source, its result looked later than it is, and was chosen as a key of that tier
+		private static int[] LockTiers(RecipePlan result) => Enumerable.Range(0, Count).Select(i => VanillaSource(result, i) ? 0 : result.ResultTiers[i]).ToArray();
 
 		// One replaceable ingredient (a material one first: a Zenith keeps its swords) becomes a key material of tier u (else
 		// u + 1), weighted by commonness; each material is key of at most KeyUseCap recipes while others are left
@@ -397,8 +427,10 @@ namespace UltimateRandomizer.Common.Features
 
 		// Two vanilla recipes that end up with the same result and the same ingredients (vanilla alternatives that differed by
 		// their station only get the same rolls: their key is the result and the ingredients) would show as one recipe on two
-		// random stations. They share the stations of the one usable earliest (no later than any of them), and the others are
-		// copies (Twin), switched off when applied. Recipes whose stations stay vanilla keep them (vanilla alternatives)
+		// random stations. The one usable earliest (no later than any of them) stays, the others are copies (Twin), switched
+		// off when applied and left out of the availability. The copies keep their own planned stations: those of another
+		// recipe could be above their level or thematic (a Sandstone Brick copy on a Bone Welder), and a switched-off recipe
+		// needs none. Recipes whose stations stay vanilla keep them (vanilla alternatives)
 		private static void ShareTwinStations(RecipePlan result, (int, int)[][] ingredients, int[][] tiles, int[] avail)
 		{
 			Dictionary<int, List<int>> placers = Stations.PlacersByTile();
@@ -432,7 +464,6 @@ namespace UltimateRandomizer.Common.Features
 						// Vanilla stations (not randomized): vanilla alternatives, left as they are
 						if (!CraftingConfig.Instance.RandomizeStations) continue;
 						differed = true;
-						result.Tiles[i] = shared.OrderBy(t => t).SequenceEqual(tiles[i].OrderBy(t => t)) ? null : (int[])shared.Clone();
 					}
 					result.Twin[i] = true;
 					twins++;
@@ -440,7 +471,7 @@ namespace UltimateRandomizer.Common.Features
 				if (differed) groupsShared++;
 				if (examples.Count < 5 && members.Any(i => result.Twin[i])) examples.Add($"{DetRandom.ItemName(result.Results[chosen].type)} (recipes {string.Join("/", members)})");
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {twins} identical recipe copies switched off, {groupsShared} groups moved to one station set; " +
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {twins} identical recipe copies switched off, {groupsShared} groups on different stations; " +
 				$"e.g. {(examples.Count == 0 ? "none" : string.Join(", ", examples))}");
 		}
 

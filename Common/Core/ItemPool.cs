@@ -523,7 +523,8 @@ namespace UltimateRandomizer.Common.Core
 		// The tier the plans work with (rolls aim at it, findability, guaranteed sources, recipe availability)
 		public static int TierOf(int type) => IsValid(type) ? Info[type].Tier : 0;
 
-		// The tier from which the item may be given (>= TierOf, except the materials of MaterialTiers: exactly the table's):
+		// The tier from which the item may be given (>= TierOf, except the materials of MaterialTiers: exactly the table's, and
+		// what world-generated chests hold: their chest's tier, lower only):
 		// progression checks, jackpot gaps, what the codex shows
 		public static int TrueTierOf(int type) => IsValid(type) ? Info[type].TrueTier : 0;
 

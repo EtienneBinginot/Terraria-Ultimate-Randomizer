@@ -460,7 +460,7 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(checkedCount > 0, "no recipe");
 			int[] live = RecipePlanner.Availability(Findability.Tier, plan.Results.Select(r => r.type).ToArray(), new int[plan.Results.Length],
 				Enumerable.Range(0, Count).Select(i => Main.recipe[i].requiredItem.Select(item => (item.type, item.stack)).ToArray()).ToArray(),
-				Enumerable.Range(0, Count).Select(i => Main.recipe[i].requiredTile.ToArray()).ToArray(), out _);
+				Enumerable.Range(0, Count).Select(i => Main.recipe[i].requiredTile.ToArray()).ToArray(), out _, plan.Twin);
 			for (int t = 1; t < live.Length && failures.Count < 20; t++)
 			{
 				if (live[t] != plan.Availability[t]) failures.Add($"{Name(t)} available at {Show(live[t])} with the live recipes, {Show(plan.Availability[t])} in the plan");
@@ -576,7 +576,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (oreTier < 0) continue;
 				levels++;
 				HashSet<int> unmined = RecipePlanner.OresFrom(level.pick);
-				int[] avail = RecipePlanner.Availability(item => unmined.Contains(item) ? Findability.Never : Findability.Tier(item), results, new int[results.Length], ingredients, tiles, out _);
+				int[] avail = RecipePlanner.Availability(item => unmined.Contains(item) ? Findability.Never : Findability.Tier(item), results, new int[results.Length], ingredients, tiles, out _, plan.Twin);
 				int best = pickaxes.Where(p => RecipePlanner.PickPower(p) >= level.pick && p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Findability.Never).Min();
 				if (best > oreTier) failures.Add($"pick power {level.pick} ({string.Join("/", level.ores.Select(Name))}, tier {oreTier}): first pickaxe at {Show(best)}");
 			}
@@ -727,7 +727,8 @@ namespace UltimateRandomizer.Common.Tests
 				bool station = Stations.PlacedTile(original, out int made) && Stations.Info(made).Kind == StationKind.Progression;
 				if (!station && ItemPool.IsRandomizable(original)) continue;
 				checkedCount++;
-				int rt = RecipePlanner.RecipeTier(i);
+				// A key ingredient makes the recipe wait for its random result's tier on purpose (it no longer makes the station)
+				int rt = plan.KeyIngredient[i] ? Math.Max(RecipePlanner.RecipeTier(i), plan.ResultTiers[i]) : RecipePlanner.RecipeTier(i);
 				foreach (Item item in recipe.requiredItem)
 				{
 					if (!ItemPool.IsRandomizable(item.type)) continue;
@@ -771,7 +772,8 @@ namespace UltimateRandomizer.Common.Tests
 
 		// A randomized vanilla recipe can't be made before U, the unlocked tier of its result (a key ingredient, a station or
 		// its own ingredients make it wait), and a key ingredient makes it doable at U, not later (U + 1 only when U has no
-		// key material). A recipe giving its vanilla result (protected, kept, or re-picked back to it) is not checked
+		// key material). A vanilla source (its vanilla result from its vanilla ingredients and stations, or re-picked back to
+		// it) is not checked
 		private static void RecipeKeyIngredient()
 		{
 			RequireApplied();
@@ -780,7 +782,7 @@ namespace UltimateRandomizer.Common.Tests
 			int[] results = plan.Results.Select(r => r.type).ToArray();
 			(int type, int stack)[][] ingredients = Enumerable.Range(0, Count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
 			int[][] tiles = Enumerable.Range(0, Count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
-			RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doable);
+			RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doable, plan.Twin);
 			List<string> failures = new();
 			int gated = 0, keys = 0, repicked = 0, later = 0, never = 0;
 			for (int i = 0; i < Count; i++)
@@ -800,8 +802,9 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				if (doable[i] < u)
 				{
-					// A recipe still giving its vanilla result is that item's vanilla source: never locked
-					if (results[i] != RecipeSystem.OriginalResult(i))
+					// A recipe still giving its vanilla result from its vanilla ingredients and stations is that item's vanilla
+					// source: never locked
+					if (!RecipePlanner.VanillaSource(plan, i))
 					{
 						failures.Add($"{Name(RecipeSystem.OriginalResult(i))} -> {Name(results[i])}: doable at {doable[i]}, before its tier {u} ({Ingredients(ingredients[i])})");
 					}
