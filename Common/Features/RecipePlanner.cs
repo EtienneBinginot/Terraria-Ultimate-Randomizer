@@ -332,31 +332,67 @@ namespace UltimateRandomizer.Common.Features
 			if (cfg.RandomizeRecipes) LockResults(result, results, ingredients, tiles);
 			if (cfg.RandomizeRecipes) LockSpecials(result, results, ingredients, tiles);
 			if (cfg.RandomizeRecipes) ShareTwinStations(result, ingredients, tiles, avail);
-			// The live recipes give their result at once: no result tier any more; the copies are switched off. A shell doable
-			// before its tier once everything is planned (a re-pick made its key earlier), or never, is switched off again
+			// The live recipes give their result at once: no result tier any more; the copies are switched off
+			int[][] PlannedTiles() => Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray();
+			(int, int)[][] PlannedIngredients() => Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
 			int[] FinalAvailability()
 			{
-				(int, int)[][] planned = Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
-				result.Availability = Availability(Findability.Tier, results, new int[count], planned,
-					Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray(), out int[] doable, result.Twin, PlannedGroups(result));
+				result.Availability = Availability(Findability.Tier, results, new int[count], PlannedIngredients(), PlannedTiles(), out int[] doable, result.Twin, PlannedGroups(result));
 				return doable;
 			}
-			// Each round drops at least one shell; dropping one only delays the others (one of them may become never doable)
-			for (int round = 0; ; round++)
+			if (Enumerable.Range(0, count).Any(i => ShellActive(result, i)))
 			{
-				int[] doable = FinalAvailability();
-				List<int> early = Enumerable.Range(0, count).Where(i => ShellActive(result, i) && (doable[i] < result.ShellTiers[i] || doable[i] >= Never)).ToList();
-				if (early.Count == 0) break;
-				foreach (int i in early) DropShell(result, i);
-				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {early.Count} shell recipes doable before their tier (or never) switched off");
-				// Bounded: the availability is computed once more for what was dropped
-				if (round >= 4)
+				// Everything else was planned without the shells (keys, locks, re-picks): what that plan relies on, the shells
+				// left out, must stay as it is with them
+				int[] baseAvail = Availability(Findability.Tier, results, new int[count], PlannedIngredients(), PlannedTiles(), out int[] baseDoable, ShellMask(result.Twin), PlannedGroups(result));
+				// Each round drops at least one shell; dropping one only delays the others (one of them may become never doable)
+				for (int round = 0; ; round++)
 				{
-					FinalAvailability();
-					break;
+					int[] doable = FinalAvailability();
+					HashSet<int> usedEarly = UsedByEarlierRecipes(result, doable, baseDoable);
+					List<int> early = Enumerable.Range(0, count).Where(i => ShellActive(result, i) && ShellBreaksPlan(result, i, results, doable, baseAvail, usedEarly)).ToList();
+					if (early.Count == 0) break;
+					// Bounded: past a few rounds, every shell left is switched off (the plan without shells is valid)
+					if (round >= 6) early = Enumerable.Range(0, count).Where(i => ShellActive(result, i)).ToList();
+					foreach (int i in early) DropShell(result, i);
+					ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {early.Count} shell recipes doable before their tier, never, or making an item earlier than planned switched off");
+					if (round >= 6)
+					{
+						FinalAvailability();
+						break;
+					}
 				}
 			}
+			else FinalAvailability();
 			return result;
+		}
+
+		// Must this active shell be switched off? When it is doable before its tier (a re-pick made its key earlier), or never;
+		// when it gives its item earlier than the plan without shells has it (Black Lens made at U by a randomized recipe and
+		// chosen as a key of U: a shell from tier 0 unlocked every recipe it keys); or when it gives an item the plan never has
+		// earlier and a recipe using it (directly or by a group) became doable earlier than planned
+		private static bool ShellBreaksPlan(RecipePlan result, int i, int[] results, int[] doable, int[] baseAvail, HashSet<int> usedEarly)
+		{
+			if (doable[i] < result.ShellTiers[i] || doable[i] >= Never) return true;
+			int item = results[i];
+			if (item <= 0 || item >= baseAvail.Length || doable[i] >= baseAvail[item]) return false;
+			return baseAvail[item] < Never || usedEarly.Contains(item);
+		}
+
+		// The ingredients (and group members) of the recipes other than shells doable earlier than in the plan without shells
+		private static HashSet<int> UsedByEarlierRecipes(RecipePlan result, int[] doable, int[] baseDoable)
+		{
+			HashSet<int> items = new();
+			for (int j = 0; j < doable.Length; j++)
+			{
+				if (RecipeSystem.IsShell(j) || doable[j] >= baseDoable[j]) continue;
+				foreach ((int type, _) in result.Ingredients[j] ?? RecipeSystem.OriginalIngredients(j)) items.Add(type);
+				foreach (int g in GroupsOf(result, j))
+				{
+					if (RecipeGroup.recipeGroups.TryGetValue(g, out RecipeGroup group)) items.UnionWith(group.ValidItems);
+				}
+			}
+			return items;
 		}
 
 		// ---------------------------------------------------------------- Shells
@@ -1077,7 +1113,10 @@ namespace UltimateRandomizer.Common.Features
 				for (int i = 0; i < Count; i++)
 				{
 					if (!RecipeSystem.IsShell(i) || !ShellEligible(results[i], stationTiles, guaranteed)) continue;
-					result.ShellTiers[i] = targets[i] = ShellTier(results[i]);
+					// Never before another recipe makes the item: a randomized result that is never found may be the key of the
+					// recipes of its tier, and a shell from its own tier would unlock them all early
+					int made = real[results[i]];
+					result.ShellTiers[i] = targets[i] = made < Tiers.Count ? Math.Max(ShellTier(results[i]), made) : ShellTier(results[i]);
 					shellList.Add(i);
 				}
 				Dictionary<ItemCategory, (int eligible, int planned)> byCategory = new();

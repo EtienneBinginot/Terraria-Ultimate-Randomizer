@@ -1171,7 +1171,9 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Items no recipe makes get a shell recipe switched on, with ingredients, giving that item, doable from the item's tier
 		// (when it is found, and the unlocked tier of its true tier) and never before; switched-off shells stay off, and no
-		// shell ever shimmers back
+		// shell ever shimmers back. The shells change nothing the rest of the plan relies on: every other recipe is doable
+		// exactly when it is without them, and no item is had earlier than without them (a shell from tier 0 for a key
+		// material made at U by a randomized recipe unlocked every recipe it keys)
 		private static void UncraftableRecipesValid()
 		{
 			RequireApplied();
@@ -1212,6 +1214,19 @@ namespace UltimateRandomizer.Common.Tests
 				if (doable[i] >= Findability.Never) failures.Add($"{where}: never doable");
 				else if (doable[i] < tier) failures.Add($"{where}: doable at {doable[i]}, before its tier {tier}");
 				if (Terraria.GameContent.ShimmerTransforms.GetDecraftingRecipeIndex(item) == i || (ItemID.Sets.CraftingRecipeIndices[item]?.Contains(i) ?? false)) failures.Add($"{where}: shimmers back");
+			}
+			bool[] noShells = Enumerable.Range(0, Count).Select(i => RecipeSystem.IsShell(i) || (i < plan.Twin.Length && plan.Twin[i])).ToArray();
+			int[] withShells = RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out _, plan.Twin);
+			int[] without = RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doableWithout, noShells);
+			for (int i = 0; i < Count; i++)
+			{
+				if (RecipeSystem.IsShell(i) || noShells[i] || doable[i] == doableWithout[i]) continue;
+				failures.Add($"{Name(RecipeSystem.OriginalResult(i))} -> {Name(results[i])}: doable at {Show(doable[i])} with the shells, {Show(doableWithout[i])} without ({Ingredients(ingredients[i])})");
+			}
+			foreach (int i in active)
+			{
+				int item = results[i];
+				if (without[item] < Findability.Never && withShells[item] < without[item]) failures.Add($"{Name(item)}: had at {withShells[item]} with its shell, {without[item]} without");
 			}
 			if (eligible == 0) Check.Skip("no item may get a shell recipe");
 			Check.That(active.Count > 0, $"none of the {eligible} eligible shells is switched on");
