@@ -34,7 +34,8 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool RandomizeRecipes;
 
-		// Caps the value of randomized results (RecipeValueGuard); off: any result of the original's category and tier
+		// Weighs a randomized recipe's result against its new ingredients (RecipeValueGuard): ingredients raised when the result
+		// is worth too much more
 		[DefaultValue(false)]
 		public bool LimitRecipeValue;
 
@@ -51,17 +52,12 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool DisableDecraftOfRandomizedResults;
 
-		// Chance that a recipe gives an item of any category (loot weights) instead of the original's category
+		// Share of the randomized recipes that swap their result with another recipe of the same tier (by pairs: every item
+		// stays craftable), their ingredients rebuilt for the item they now give. Each recipe otherwise keeps its own result
 		[Range(0f, 100f)]
 		[Increment(1f)]
-		[DefaultValue(15f)]
-		public float RecipeSurpriseChance;
-
-		// The same for recipes making furniture, blocks and walls (most vanilla recipes): otherwise furniture gives furniture
-		[Range(0f, 100f)]
-		[Increment(1f)]
-		[DefaultValue(60f)]
-		public float FurnitureSurpriseChance;
+		[DefaultValue(10f)]
+		public float RecipeResultSwapChance;
 
 		[Header("Ingredients")]
 		[DefaultValue(IngredientMode.Randomized)]
@@ -69,6 +65,12 @@ namespace UltimateRandomizer.Common.Configs
 		public IngredientMode IngredientMode;
 
 		public IngredientWeights IngredientWeights = new();
+
+		// Chance that an ingredient slot takes a category drawn with the loot weights instead of the ingredient weights
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(10f)]
+		public float IngredientSurpriseChance;
 
 		// A rebuilt recipe has as many ingredients as the vanilla one, give or take up to this many (0 and 1 more often than 2)
 		[Range(0, 4)]
@@ -88,6 +90,12 @@ namespace UltimateRandomizer.Common.Configs
 		[Range(1, 999)]
 		[DefaultValue(30)]
 		public int IngredientStackCap;
+
+		// A material already used by n recipes is picked with weight w / (1 + k * n): 0 = no penalty
+		[Range(0f, 5f)]
+		[Increment(0.1f)]
+		[DefaultValue(0.5f)]
+		public float IngredientReusePenalty;
 
 		[Header("Stations")]
 		[DefaultValue(true)]

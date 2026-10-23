@@ -33,7 +33,7 @@ namespace UltimateRandomizer.Common.Core
 		};
 
 		// Life and mana upgrades: replaceable (the Mana Crystal's vanilla recipe is randomized) but never in a roll's buckets,
-		// never guaranteed on enemies; each one is the result of one random recipe (RecipePlanner.SpecialRecipe), and the
+		// never guaranteed on enemies; each one is the result of one random recipe of its own (RecipePlanner.SpecialRecipe), and the
 		// drops and bags that give them keep them (ItemPool.IsSpecial)
 		public static readonly int[] Upgrades = { ItemID.LifeCrystal, ItemID.ManaCrystal, ItemID.LifeFruit };
 

@@ -237,8 +237,8 @@ namespace UltimateRandomizer.Common.Tests
 		private static bool Flagged(int item) => ItemPool.IsBanned(item) || ItemPool.TrueTierOf(item) > ItemPool.TierOf(item);
 
 		// The same rolls with and without the re-pick: every difference is an item the re-pick had to replace, so every other
-		// roll (mob plans, chest slots, gated rolls) gives exactly what it gave before the re-pick existed. Recipe results are
-		// a permutation that never rolls (RecipePlanner.PermutedResults: banned items are kept out by its swaps)
+		// roll (mob plans, chest slots, gated rolls) gives exactly what it gave before the re-pick existed. Recipe results never
+		// roll (vanilla results and swaps, RecipePlanner.SwappedResults: banned items are never swapped)
 		private static void RepickOnlyChangesFlagged()
 		{
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only in Coherent mode");

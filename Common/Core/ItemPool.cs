@@ -33,7 +33,7 @@ namespace UltimateRandomizer.Common.Core
 		public bool Excluded;
 		public bool Protected;
 		// A life or mana upgrade (Protection.Upgrades): replaceable, Misc, but in no bucket (never rolled, never a new
-		// ingredient), kept where vanilla drops it; its source is one random recipe (RecipePlanner.SpecialRecipe)
+		// ingredient), kept where vanilla drops it; its source is one random recipe of its own (RecipePlanner.SpecialRecipe)
 		public bool Special;
 	}
 

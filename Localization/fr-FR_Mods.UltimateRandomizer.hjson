@@ -154,7 +154,6 @@ Tests: {
 	SurpriseZero: Avec 0 % de surprise, les objets remplacés gardent leur catégorie
 	SurpriseHundred: Avec 100 % de surprise, les catégories suivent les poids du loot
 	SurpriseGatedAndProtected: Les surprises respectent la progression et les objets protégés
-	RecipeSurpriseRate: La part de recettes qui changent de catégorie suit le réglage
 	WeightTablesSeparated: Les poids du loot favorisent l'équipement, ceux des ingrédients jamais
 	TierWindowVariety: Les tirages de début de partie donnent beaucoup d'objets différents
 	OreMappingBijective: Chaque minerai du monde existe encore, comme drop d'un seul autre minerai du monde ; les minerais absents restent eux-mêmes, et le choix d'une paire hardmode ne change aucun minerai d'un autre palier ; un pour un même quand les deux minerais d'une paire sont présents
@@ -219,20 +218,23 @@ Tests: {
 	StationTierRespected: Les recettes ne demandent jamais de station au-dessus de leur niveau, ni de station thématique
 	HandCraftKept: Les recettes à la main restent à la main
 	StationsVaried: Une bonne part des recettes a changé de station
-	AppliedResultsMatchPlan: Les recettes donnent les résultats prévus par le planificateur, et sa disponibilité correspond aux recettes en jeu
+	AppliedResultsMatchPlan: Les recettes donnent leur résultat vanilla ou celui de leur partenaire d'échange, comme prévu, et la disponibilité correspond aux recettes en jeu
 	StationPlanFromOriginals: Le choix des stations ne dépend que des recettes d'origine, pas de celles déjà randomisées
 	RealCrafting: Le menu d'artisanat propose une recette avec ses nouveaux ingrédients, et plus avec les anciens
 	PickaxePerMiningLevel: Chaque niveau de minage a une pioche au tier de ses minerais (fabriquée, trouvée ou garantie)
-	RecipeRandomizationShare: La plupart des recettes vanilla changent de résultat (85 %), ou de résultat ou d'ingrédients (95 %) ; les raisons sont journalisées
-	RecipeResultsConserved: Les recettes aléatoires s'échangent leurs résultats : chaque résultat vanilla est encore fabriqué par une recette, aucun par plus de recettes qu'en vanilla (Zénith, Épée en bois d'ombre)
-	RecipeRepicksKeepAvailability: Échanger les résultats des recettes faisables trop tôt ne rend jamais un objet impossible à obtenir
+	RecipeRandomizationShare: Presque toutes les recettes vanilla changent (95 %), peu échangent leur résultat (environ la chance d'échange) ; les raisons sont journalisées
+	RecipeEveryItemKept: Chaque objet fait par une recette vanilla reste fabricable, et rien de ce qu'on obtient en vanilla n'est perdu (Zénith)
+	RecipeNoCycles: Aucun objet n'est fabriqué à partir de lui-même par un nouvel ingrédient, directement ou via d'autres recettes
+	RecipeKeyed: Chaque recette reconstruite au-dessus du tier 0 a une clé et n'est pas faisable avant son tier
+	RecipeSwapsShare: Environ la chance d'échange des recettes échangent leur résultat, par paires du même tier, surtout de types différents
+	RecipeSwapCancelClean: Une paire d'échange annulée laisse les candidats exactement comme avant, et ses recettes redonnent leur propre résultat
+	ZenithWeapons: Le Zénith garde des armes parmi ses ingrédients
+	IngredientReuse: La pénalité de réutilisation répartit les matériaux sur plus de recettes
 	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement
-	FurnitureSurprise: Les recettes de meubles, de blocs et de murs donnent autre chose selon la chance de surprise des meubles
 	ProtectedRecipesDoable: Les recettes des stations de progression et des objets protégés sont faisables à leur niveau
-	RecipeAlwaysFinalResult: Les recettes donnent toujours leur résultat final, sans remplaçant avant son tier
 	RecipeKeyIngredient: Les recettes randomisées ne sont pas faisables avant le tier de leur résultat (ingrédient clé)
 	RecipeNoStationTwins: Une même recette (résultat et ingrédients) n'apparaît jamais sur deux stations différentes
-	UpgradeRecipes: Chaque amélioration de vie ou de mana est le résultat d'une recette aléatoire, faisable dès son tier, avec un ingrédient clé et des ingrédients valant au moins l'amélioration
+	UpgradeRecipes: Chaque amélioration de vie ou de mana a sa propre recette, faisable dès son tier, avec un ingrédient clé et des ingrédients valant au moins l'amélioration
 	HouseItemsObtainable: La porte, la plateforme et la torche sont des cibles d'indices, et leurs recettes changent mais restent fabricables dès le début (ingrédients de palier 0, station de base)
 	RecipesRebuilt: Au moins 90 % des recettes aux ingrédients remplaçables reçoivent de nouveaux ingrédients
 	RecipeIngredientCount: Une recette reconstruite a le nombre d'ingrédients vanilla, à l'écart réglé près, sans dépasser le maximum réglé
@@ -242,7 +244,7 @@ Tests: {
 	RecipeExamples: Journalise 10 recettes reconstruites (dont le Zénith et l'armure de chlorophyte), réellement changées
 	UncraftableRecipesValid: Les objets qu'aucune recette ne fabrique reçoivent une recette active, faisable à partir de leur palier et jamais avant, qui ne se décompose jamais au miroitement ; journalise des exemples
 	UncraftableRecipesOff: Réglage désactivé (planificateur appelé avec des paramètres explicites) : aucune recette coquille n'est planifiée et les autres recettes sont planifiées à l'identique
-	UncraftableNoSpecials: Les recettes coquilles ne donnent jamais d'amélioration de vie ou de mana, gardent leur objet et ne sont jamais désactivées comme copies
+	UncraftableNoSpecials: Les recettes coquilles gardent leur objet (une amélioration seulement la sienne), ne sont jamais échangées ni désactivées comme copies
 	UncraftablePricedByIngredients: Les recettes coquilles actives comptent comme randomisées : ce qu'elles fabriquent se vend au prix de ses ingrédients, pas à son prix d'origine
 	RecipePickaxeMineable: Aucune recette reconstruite de pioche ou de foreuse ne reçoit un nouvel ingrédient dont le minage exige une puissance de pioche au moins égale à la sienne
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
@@ -1431,7 +1433,7 @@ Configs: {
 
 		DropCategoryWeights: {
 			Label: Poids du loot
-			Tooltip: Chance relative de chaque type d'objet pour tout ce qui donne des objets aléatoires (drops bonus, surprises). 0 = jamais. Les ingrédients des recettes ont leurs propres poids.
+			Tooltip: Chance relative de chaque type d'objet pour tout ce qui donne des objets aléatoires (drops bonus, surprises). 0 = jamais. Les ingrédients des recettes ont leurs propres poids, sauf leurs ingrédients surprise.
 		}
 
 		RandomizeBossBags: {
@@ -1822,13 +1824,13 @@ Configs: {
 		}
 
 		RandomizeRecipes: {
-			Label: Randomiser les résultats des recettes
-			Tooltip: Chaque recette donne un objet de même catégorie et de même tier que l'original. Les recettes redeviennent normales quand tu quittes le monde.
+			Label: Randomiser les recettes
+			Tooltip: Reconstruit les recettes selon la graine : chacune garde son objet (quelques-unes l'échangent, voir plus bas) mais reçoit de nouveaux ingrédients et de nouvelles stations, faisables à son niveau. Les recettes redeviennent normales quand tu quittes le monde.
 		}
 
 		LimitRecipeValue: {
 			Label: Limiter la valeur des résultats
-			Tooltip: Désactivé : une recette randomisée peut donner n'importe quel objet de la catégorie et du tier de l'original, quel que soit son prix. Activé : le résultat vaut au plus « Garde-fou de valeur » fois ses ingrédients.
+			Tooltip: Activé : quand l'objet d'une recette randomisée vaut plus de « Garde-fou de valeur » fois ses nouveaux ingrédients, ceux-ci sont relevés à la valeur des ingrédients vanilla. Désactivé : les nouveaux ingrédients ne suivent que de loin la valeur vanilla.
 		}
 
 		RecipeValueGuard: {
@@ -1846,14 +1848,9 @@ Configs: {
 			Tooltip: Empêche de dupliquer des objets en craftant un résultat aléatoire puis en le décraftant dans le Shimmer.
 		}
 
-		RecipeSurpriseChance: {
-			Label: Chance de surprise des recettes (%)
-			Tooltip: Chance qu'une recette donne un objet de n'importe quelle catégorie (poids du loot) au lieu d'un objet du même type que le résultat d'origine.
-		}
-
-		FurnitureSurpriseChance: {
-			Label: Chance de surprise des meubles (%)
-			Tooltip: Comme la chance de surprise des recettes, pour les recettes de meubles, de blocs ou de murs (la plupart des recettes vanilla) : la chance qu'elles donnent un objet de n'importe quelle catégorie (poids du loot) au lieu d'encore un meuble.
+		RecipeResultSwapChance: {
+			Label: "Chance d'échange de résultat (%)"
+			Tooltip: "Part des recettes randomisées qui échangent leur résultat avec une autre recette du même palier, par paires (chaque objet reste fabricable, souvent par une recette inattendue). Une recette échangée reçoit des ingrédients dignes de l'objet qu'elle donne (son niveau, sa valeur), surtout des types qu'utilisait sa propre recette, avec une touche de ceux de l'objet."
 		}
 
 		IngredientMode: {
@@ -1864,6 +1861,11 @@ Configs: {
 		IngredientWeights: {
 			Label: Poids des ingrédients
 			Tooltip: Chance relative de chaque type d'objet parmi les ingrédients d'une recette reconstruite. 0 = jamais, sauf si la recette vanilla utilisait ce type (une recette faite d'armes reçoit souvent des armes).
+		}
+
+		IngredientSurpriseChance: {
+			Label: "Chance d'ingrédient surprise (%)"
+			Tooltip: "Chance qu'un ingrédient d'une recette reconstruite soit de n'importe quel type (tiré avec les poids du loot : armes, accessoires, potions...) au lieu des poids d'ingrédients. Son niveau reste celui de l'emplacement ; sa valeur doit seulement tenir dans le plafond de valeur de la recette."
 		}
 
 		IngredientCountSpread: {
@@ -1884,6 +1886,11 @@ Configs: {
 		IngredientStackCap: {
 			Label: Quantité maximale d'un ingrédient
 			Tooltip: Les quantités sont choisies pour que les ingrédients valent à peu près autant que ceux de la recette vanilla, jusqu'à cette limite par ingrédient.
+		}
+
+		IngredientReusePenalty: {
+			Label: "Pénalité de réutilisation"
+			Tooltip: "Fait apparaître les mêmes matériaux dans moins de recettes : un matériau déjà utilisé par n recettes est tiré avec son poids divisé par (1 + cette valeur x n), les matériaux courants tolérant plus d'usages. 0 = aucune pénalité."
 		}
 
 		RandomizeStations: {
