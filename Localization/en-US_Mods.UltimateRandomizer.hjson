@@ -1849,8 +1849,8 @@ Configs: {
 		}
 
 		RecipeResultSwapChance: {
-			Label: "Recipe result swap chance (%)"
-			Tooltip: "Share of the randomized recipes that swap their result with another recipe of the same tier, by pairs (every item stays craftable, often by an unexpected recipe). A swapped recipe gets ingredients worthy of the item it now gives (its level, its value), mostly of the kinds its own recipe used, with a touch of the item's."
+			Label: Recipe result swap chance (%)
+			Tooltip: Share of the randomized recipes that swap their result with another recipe of the same tier, by pairs (every item stays craftable, often by an unexpected recipe). A swapped recipe gets ingredients worthy of the item it now gives (its level, its value), mostly of the kinds its own recipe used, with a touch of the item's.
 		}
 
 		IngredientMode: {
@@ -1864,8 +1864,8 @@ Configs: {
 		}
 
 		IngredientSurpriseChance: {
-			Label: "Ingredient surprise chance (%)"
-			Tooltip: "Chance that an ingredient of a rebuilt recipe is of any kind (drawn with the loot weights: weapons, accessories, potions...) instead of the ingredient weights. Its level stays the slot's; its value only has to fit within the recipe's value cap."
+			Label: Ingredient surprise chance (%)
+			Tooltip: Chance that an ingredient of a rebuilt recipe is of any kind (drawn with the loot weights: weapons, accessories, potions...) instead of the ingredient weights. Its level stays the slot's; its value only has to fit within the recipe's value cap.
 		}
 
 		IngredientCountSpread: {
@@ -1889,8 +1889,8 @@ Configs: {
 		}
 
 		IngredientReusePenalty: {
-			Label: "Ingredient reuse penalty"
-			Tooltip: "Makes the same materials appear in fewer recipes: a material already used by n recipes is picked with its weight divided by (1 + this value x n), common materials tolerating more uses. 0 = no penalty."
+			Label: Ingredient reuse penalty
+			Tooltip: Makes the same materials appear in fewer recipes: a material already used by n recipes is picked with its weight divided by (1 + this value x n), common materials tolerating more uses. 0 = no penalty.
 		}
 
 		RandomizeStations: {
