@@ -44,13 +44,8 @@ namespace UltimateRandomizer.Common.Tests
 				long original = (long)StackRules.ValueOf(RecipeSystem.OriginalResult(i)) * RecipeSystem.OriginalStack(i);
 				long max = (long)(Math.Max(ingredients, original) * cfg.RecipeValueGuard) + Item.silver;
 				long value = (long)StackRules.ValueOf(result.type) * result.stack;
-				if (value <= max) continue;
-				// The fallback gives the cheapest item of the original's category and tier when none is cheap enough
-				List<int> types = recipe.requiredItem.Select(ingredient => ingredient.type).ToList();
-				int count = recipe.requiredItem.Sum(ingredient => ingredient.stack);
-				List<(int type, int stack, long value)> candidates = RecipeSystem.FallbackCandidates(i, types, count, ItemPool.TierOf(result.type));
-				bool cheapest = candidates.Count > 0 && candidates.All(c => c.value > max) && value <= candidates.Min(c => c.value);
-				if (!cheapest) failures.Add($"{Lang.GetItemNameValue(result.type)} x{result.stack} worth {value} > {max}");
+				// A result too valuable for its recipe is swapped with another one, or the recipe keeps its vanilla result
+				if (value > max) failures.Add($"{Lang.GetItemNameValue(result.type)} x{result.stack} worth {value} > {max}");
 			}
 			Check.All(failures, "Unsafe recipes");
 		}

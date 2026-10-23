@@ -17,7 +17,6 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("SurpriseZero", SurpriseZero);
 			TestRunner.Register("SurpriseHundred", SurpriseHundred);
 			TestRunner.Register("SurpriseGatedAndProtected", SurpriseGatedAndProtected);
-			TestRunner.Register("RecipeSurpriseRate", RecipeSurpriseRate);
 			TestRunner.Register("WeightTablesSeparated", WeightTablesSeparated);
 			TestRunner.Register("TierWindowVariety", TierWindowVariety);
 			TestRunner.Register("OreMappingBijective", OreMappingBijective);
@@ -104,28 +103,6 @@ namespace UltimateRandomizer.Common.Tests
 				if (ItemPool.TierOf(item) > allowed) failures.Add($"{Lang.GetItemNameValue(item)} tier {ItemPool.TierOf(item)} > {allowed}");
 			}
 			Check.All(failures, "Surprise rolls ignore progression or protection");
-		}
-
-		// The share of recipes that change category stays close to the setting (furniture, blocks and walls have their own)
-		private static void RecipeSurpriseRate()
-		{
-			RequireCoherent();
-			if (!RecipeSystem.Applied) Check.Skip("recipes are not randomized");
-			float chance = CraftingConfig.Instance.RecipeSurpriseChance;
-			int randomized = 0;
-			int changedCategory = 0;
-			for (int r = 0; r < RecipeSystem.RecipeCount && r < Recipe.numRecipes; r++)
-			{
-				int original = RecipeSystem.OriginalResult(r);
-				int result = Main.recipe[r].createItem.type;
-				if (result == original || !ItemPool.IsValid(result) || !ItemPool.IsValid(original) || RecipeSystem.IsFurnitureLike(original)) continue;
-				randomized++;
-				if (ItemPool.Info[result].Category != ItemPool.Info[original].Category) changedCategory++;
-			}
-			Check.That(randomized >= 100, $"only {randomized} randomized recipes");
-			double rate = changedCategory * 100.0 / randomized;
-			Check.That(rate <= chance + 10, $"{rate:0.#}% of the recipes changed category, setting {chance}%");
-			if (chance >= 10) Check.That(rate >= chance / 3, $"only {rate:0.#}% of the recipes changed category, setting {chance}%");
 		}
 
 		private static void WeightTablesSeparated()

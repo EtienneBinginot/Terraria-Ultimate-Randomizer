@@ -28,7 +28,7 @@ namespace UltimateRandomizer.Common.Features
 		private static bool applied;
 
 		// Shell recipes: one per item no recipe made when this mod added its recipes (walls, blocks, furniture found in the
-		// world...), with no ingredient and no station, switched off as set up (so the item classification, the guaranteed
+		// world..., and the life and mana upgrades), with no ingredient and no station, switched off as set up (so the item classification, the guaranteed
 		// sources and the decraft sets never see them). RecipePlanner gives the eligible ones ingredients and a station in each
 		// world; Apply switches on those it planned. Kept by reference until PostSetupRecipes maps them to their index
 		private static readonly HashSet<Recipe> shellRecipes = new();
@@ -112,7 +112,8 @@ namespace UltimateRandomizer.Common.Features
 				if (ItemClassifier.IsBanned(item)) continue;
 				ItemCategory category = ItemClassifier.Classify(type, item);
 				if (category == ItemCategory.Misc && materials.Contains(type)) category = ItemCategory.Material;
-				if (Array.IndexOf(ShellRegistered, category) < 0) continue;
+				// The life and mana upgrades get theirs whatever their category: it is their recipe (RecipePlanner.SpecialRecipe)
+				if (Array.IndexOf(ShellRegistered, category) < 0 && !Protection.IsUpgrade(type)) continue;
 				Recipe recipe = Recipe.Create(type, ShellStack(item));
 				// Never shimmered back into its (random) ingredients
 				recipe.DisableDecraft();
@@ -275,9 +276,16 @@ namespace UltimateRandomizer.Common.Features
 				// A copy of another recipe (same result, ingredients and stations) would show twice: switched off. A shell is on
 				// only when this world planned it
 				SetDisabled(recipe, shell[i] ? !RecipePlanner.ShellActive(plan, i) : originalDisabled[i] || plan.Twin[i]);
+				// Shimmer decrafting ignores Recipe.Disabled (it reads CraftingRecipeIndices): a recipe switched off leaves them
+				if (plan.Twin[i]) changed[i] = true;
 				// Decrafting gives the current ingredients back: not when they are worth clearly more than before (protected
-				// results too, their ingredients may be replaced)
+				// results too, their ingredients may be replaced), nor when the result is had before the recipe's tier, found or made
+				// by another recipe (it would shimmer into that tier's key early)
 				if (plan.Ingredients[i] != null && plan.IngredientValues[i] > ingredientValues[i] * 5 / 4) changed[i] = true;
+				int recipeTier = Math.Max(plan.IngredientTiers[i], plan.KeyIngredient[i] ? plan.ResultTiers[i] : 0);
+				int made = plan.Results[i].type;
+				int had = Math.Min(Findability.Tier(made), made > 0 && made < plan.Availability.Length ? plan.Availability[made] : Findability.Never);
+				if (plan.Ingredients[i] != null && recipeTier > 0 && had < recipeTier) changed[i] = true;
 				int original = originalTypes[i];
 				if (!Touchable(i))
 				{
@@ -329,116 +337,11 @@ namespace UltimateRandomizer.Common.Features
 			return false;
 		}
 
-		// The result of a randomized recipe. lucky: ignores the progression lock (what the recipe gives once unlocked)
-		// Furniture, blocks and walls have their own surprise chance
-		public static bool IsFurnitureLike(int item) => ItemPool.IsValid(item) && ItemPool.Info[item].Category is ItemCategory.Furniture or ItemCategory.Block;
-
-		public static float SurpriseChanceOf(int original)
-		{
-			CraftingConfig cfg = CraftingConfig.Instance;
-			return IsFurnitureLike(original) ? cfg.FurnitureSurpriseChance : cfg.RecipeSurpriseChance;
-		}
-
-		// limitValue: null = the LimitRecipeValue setting; surpriseChance: null = the setting of the original's category
-		public static (int type, int stack) RollResult(int i, IList<int> ingredientTypes, int ingredientCount, bool lucky, long ingredientValue = -1, bool? limitValue = null, float? surpriseChance = null)
-		{
-			if (ingredientValue < 0) ingredientValue = ingredientValues[i];
-			CraftingConfig cfg = CraftingConfig.Instance;
-			int original = originalTypes[i];
-			int originalStack = originalStacks[i];
-			long maxValue = limitValue ?? cfg.LimitRecipeValue ? MaxResultValue(i, ingredientValue, cfg.RecipeValueGuard) : long.MaxValue;
-			bool surprise = ItemPool.IsSurprise(original, surpriseChance ?? SurpriseChanceOf(original), DetRandom.Get(RollKey.Recipe, recipeKeys[i], RollKey.Surprise));
-			for (int attempt = 0; attempt < 8; attempt++)
-			{
-				RollRequest request = new()
-				{
-					Keys = new[] { RollKey.Recipe, recipeKeys[i], attempt },
-					SourceTier = ItemPool.Info[original].Tier,
-					OriginalItem = original,
-					Policy = surprise ? CategoryPolicy.Weighted : CategoryPolicy.SameAsOriginal,
-					TierJitterDown = 0,
-					TierJitterUp = 0,
-					AllowJackpot = false,
-					IgnoreGating = lucky
-				};
-				int replacement = ItemPool.Roll(request);
-				// A recipe must never give back one of its own ingredients (1 Wood -> 4 Wood would be infinite)
-				if (ingredientTypes.Contains(replacement) || InOriginalGroup(i, replacement)) continue;
-				int stack = ResultStack(i, replacement, ingredientCount);
-				if ((long)StackRules.ValueOf(replacement) * stack <= maxValue) return (replacement, stack);
-			}
-			// The guaranteed shuffle keeps its permutation
-			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) return (original, originalStack);
-			return ValueFallback(i, ingredientTypes, ingredientCount, maxValue, FallbackTier(i, lucky));
-		}
-
 		// Value guard: crafting must not turn cheap ingredients into a fortune (1 silver of tolerance)
 		public static long MaxResultValue(int i, long ingredientValue, float guard)
 		{
 			long originalValue = (long)Math.Max(StackRules.ValueOf(originalTypes[i]), 0) * originalStacks[i];
 			return (long)(Math.Max(ingredientValue, originalValue) * guard) + Item.silver;
-		}
-
-		public static int ResultStack(int i, int replacement, int ingredientCount)
-		{
-			int stack = StackRules.Scaled(originalTypes[i], originalStacks[i], replacement);
-			if (StackRules.ValueOf(replacement) <= 0) stack = Math.Min(stack, Math.Max(1, ingredientCount));
-			return stack;
-		}
-
-		// The tier of the fallback: the original's, or the highest one progression allows for a stand-in
-		public static int FallbackTier(int i, bool lucky)
-		{
-			ProgressionConfig progression = ProgressionConfig.Instance;
-			int tier = ItemPool.TierOf(originalTypes[i]);
-			if (!lucky && progression.TierGating && GeneralConfig.Instance.RandomizerMode == RandomizerMode.Coherent)
-			{
-				tier = Math.Min(tier, ItemPool.GatingLimit(0));
-			}
-			return tier;
-		}
-
-		// Items of the original's category at a tier (or the closest tier below) that the recipe may give: not one of its
-		// ingredients, not accepted by its groups, not the original
-		public static List<(int type, int stack, long value)> FallbackCandidates(int i, IList<int> ingredientTypes, int ingredientCount, int tier)
-		{
-			int original = originalTypes[i];
-			List<(int, int, long)> candidates = new();
-			if (!ItemPool.IsValid(original)) return candidates;
-			ItemCategory category = ItemPool.Info[original].Category;
-			for (int t = Tiers.Clamp(tier); t >= 0 && candidates.Count == 0; t--)
-			{
-				foreach (int item in ItemPool.Bucket(category, t))
-				{
-					if (item == original || ingredientTypes.Contains(item) || InOriginalGroup(i, item)) continue;
-					int stack = ResultStack(i, item, ingredientCount);
-					candidates.Add((item, stack, (long)StackRules.ValueOf(item) * stack));
-				}
-			}
-			return candidates;
-		}
-
-		// When the 8 rolls failed (ingredients, or too valuable): a deterministic item of the original's category and tier
-		// worth at most maxValue, else the cheapest of them; the original only when there is none
-		public static (int type, int stack) ValueFallback(int i, IList<int> ingredientTypes, int ingredientCount, long maxValue, int tier)
-		{
-			List<(int type, int stack, long value)> candidates = FallbackCandidates(i, ingredientTypes, ingredientCount, tier);
-			if (candidates.Count == 0) return (originalTypes[i], originalStacks[i]);
-			List<(int type, int stack, long value)> affordable = candidates.Where(c => c.value <= maxValue).ToList();
-			if (affordable.Count > 0)
-			{
-				(int type, int stack, _) = affordable[DetRandom.Get(RollKey.Recipe, recipeKeys[i], RollKey.Fallback).Next(affordable.Count)];
-				// A banned item is replaced by another allowed candidate, with its own rng: the other choices stay the same
-				if (!ItemPool.IsBanned(type) || ItemPool.RepickDisabled) return (type, stack);
-				List<(int type, int stack, long value)> allowed = affordable.Where(c => !ItemPool.IsBanned(c.type)).ToList();
-				if (allowed.Count > 0)
-				{
-					(type, stack, _) = allowed[DetRandom.Get(RollKey.Recipe, recipeKeys[i], RollKey.Fallback, RollKey.Repick).Next(allowed.Count)];
-					return (type, stack);
-				}
-			}
-			(int cheapest, int cheapestStack, _) = candidates.OrderBy(c => ItemPool.IsBanned(c.type) && !ItemPool.RepickDisabled).ThenBy(c => c.value).ThenBy(c => c.type).First();
-			return (cheapest, cheapestStack);
 		}
 
 		// Shimmer decrafting uses CraftingRecipeIndices[item] and the recipe's result stack: it must only point to
@@ -465,7 +368,7 @@ namespace UltimateRandomizer.Common.Features
 					if (type < decraft.Length) decraft[type] = Array.Empty<int>();
 				}
 			}
-			// The life and mana upgrades, made by a random cheap recipe, never shimmer back into anything, whatever the setting
+			// The life and mana upgrades, made by a random recipe, never shimmer back into anything, whatever the setting
 			foreach (int type in Protection.Upgrades)
 			{
 				if (ItemPool.IsSpecial(type) && type < decraft.Length) decraft[type] = Array.Empty<int>();

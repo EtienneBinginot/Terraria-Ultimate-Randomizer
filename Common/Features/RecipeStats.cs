@@ -8,7 +8,8 @@ using UltimateRandomizer.Common.Core;
 namespace UltimateRandomizer.Common.Features
 {
 	// How much of the vanilla recipes the plan changes, and why the others keep their result (test RecipeRandomizationShare,
-	// /rdebug recipes). Read from the plan (results once unlocked), the same on every machine.
+	// /rdebug recipes): most recipes keep their item with new ingredients, a few swap it (RecipeResultSwapChance). Read from
+	// the plan, the same on every machine.
 	public class RecipeShare
 	{
 		// Vanilla recipes (not disabled, not added by another mod)
@@ -36,15 +37,16 @@ namespace UltimateRandomizer.Common.Features
 	{
 		public const string Protected = "protected result";
 		public const string Mining = "mining";
-		public const string Cap = "value cap";
-		public const string Redrawn = "original drawn again";
+		public const string House = "house item";
+		public const string Unswappable = "no swap allowed";
+		public const string NotSwapped = "not swapped";
 
 		public static RecipeShare Compute()
 		{
 			RecipeShare share = new();
 			RecipePlan plan = RecipePlanner.Get();
-			CraftingConfig cfg = CraftingConfig.Instance;
 			int count = Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
+			HashSet<int> stationTiles = Stations.RequiredTiles();
 			for (int i = 0; i < count; i++)
 			{
 				// A shell is a new recipe, not a vanilla one (its item no recipe made)
@@ -63,20 +65,13 @@ namespace UltimateRandomizer.Common.Features
 				string reason;
 				if (!ItemPool.IsRandomizable(original)) reason = Protected;
 				else if (RecipeSystem.KeptForMining(i)) reason = Mining;
-				else if (cfg.LimitRecipeValue && Uncapped(i) != original) reason = Cap;
-				else reason = Redrawn;
+				else if (RecipeSystem.HouseRecipe(i)) reason = House;
+				else if (!RecipePlanner.Swappable(i, stationTiles)) reason = Unswappable;
+				else reason = NotSwapped;
 				if (!share.Kept.TryGetValue(reason, out List<int> list)) share.Kept[reason] = list = new List<int>();
 				list.Add(i);
 			}
 			return share;
-		}
-
-		// What the recipe would give without the value cap (as RecipePlanner.ResultFor rolls it, from the original recipe)
-		private static int Uncapped(int i)
-		{
-			(int type, int stack)[] ingredients = RecipeSystem.OriginalIngredients(i);
-			return RecipeSystem.RollResult(i, ingredients.Select(x => x.type).ToList(), ingredients.Sum(x => x.stack), lucky: true,
-				RecipeSystem.OriginalIngredientValue(i), limitValue: false).type;
 		}
 	}
 }
