@@ -321,18 +321,20 @@ Codex: {
 	UnknownDrop: Butin inconnu : continue la chasse !
 	Locked: Verrouillé
 	LockedDrops: Butin encore verrouillé : {0}
+
 	LockedBy: {
 		PreBoss: Débloqué dès le début
-		PostEyeOfCthulhu: "Débloqué : vaincre l'Œil de Cthulhu"
-		PostEvilBoss: "Débloqué : vaincre le boss du mal"
-		PostSkeletron: "Débloqué : vaincre Skeletron"
-		Hardmode: "Débloqué : vaincre le Mur de chair"
-		PostMechBoss: "Débloqué : vaincre un boss mécanique"
-		PostPlantera: "Débloqué : vaincre Plantera"
-		PostGolem: "Débloqué : vaincre Golem"
-		PostCultist: "Débloqué : vaincre le Cultiste lunaire"
-		PostMoonLord: "Débloqué : vaincre le Seigneur de la Lune"
+		PostEyeOfCthulhu: Débloqué : vaincre l'Œil de Cthulhu
+		PostEvilBoss: Débloqué : vaincre le boss du mal
+		PostSkeletron: Débloqué : vaincre Skeletron
+		Hardmode: Débloqué : vaincre le Mur de chair
+		PostMechBoss: Débloqué : vaincre un boss mécanique
+		PostPlantera: Débloqué : vaincre Plantera
+		PostGolem: Débloqué : vaincre Golem
+		PostCultist: Débloqué : vaincre le Cultiste lunaire
+		PostMoonLord: Débloqué : vaincre le Seigneur de la Lune
 	}
+
 	FilterCategory: Catégorie : {0}
 	FilterTier: Palier : {0}
 	ItemsCount: "{0} / {1} objets"

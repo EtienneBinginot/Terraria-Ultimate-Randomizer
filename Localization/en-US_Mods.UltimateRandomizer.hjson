@@ -321,18 +321,20 @@ Codex: {
 	UnknownDrop: Undiscovered drop: keep hunting!
 	Locked: Locked
 	LockedDrops: Drops still locked: {0}
+
 	LockedBy: {
 		PreBoss: Unlocked from the start
-		PostEyeOfCthulhu: "Unlocked: defeat the Eye of Cthulhu"
-		PostEvilBoss: "Unlocked: defeat the evil boss"
-		PostSkeletron: "Unlocked: defeat Skeletron"
-		Hardmode: "Unlocked: defeat the Wall of Flesh"
-		PostMechBoss: "Unlocked: defeat a mechanical boss"
-		PostPlantera: "Unlocked: defeat Plantera"
-		PostGolem: "Unlocked: defeat Golem"
-		PostCultist: "Unlocked: defeat the Lunatic Cultist"
-		PostMoonLord: "Unlocked: defeat the Moon Lord"
+		PostEyeOfCthulhu: Unlocked: defeat the Eye of Cthulhu
+		PostEvilBoss: Unlocked: defeat the evil boss
+		PostSkeletron: Unlocked: defeat Skeletron
+		Hardmode: Unlocked: defeat the Wall of Flesh
+		PostMechBoss: Unlocked: defeat a mechanical boss
+		PostPlantera: Unlocked: defeat Plantera
+		PostGolem: Unlocked: defeat Golem
+		PostCultist: Unlocked: defeat the Lunatic Cultist
+		PostMoonLord: Unlocked: defeat the Moon Lord
 	}
+
 	FilterCategory: Category: {0}
 	FilterTier: Tier: {0}
 	ItemsCount: "{0} / {1} items"
