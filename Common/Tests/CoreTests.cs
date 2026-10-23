@@ -69,7 +69,7 @@ namespace UltimateRandomizer.Common.Tests
 			for (int i = 0; i < count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (recipe == null || recipe.Disabled || recipe.Mod != null && recipe.Mod.Name != "ModLoader") continue;
+				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i) || recipe.Mod != null && recipe.Mod.Name != "ModLoader") continue;
 				int result = Features.RecipeSystem.OriginalResult(i);
 				// The same recipes as the lowering: the live recipe's conditions stay, its ingredients are randomized (the originals)
 				if (!ItemClassifier.SetsTier(recipe, Features.RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToList())) continue;

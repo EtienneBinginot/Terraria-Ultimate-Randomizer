@@ -221,7 +221,7 @@ namespace UltimateRandomizer.Common.Core
 			for (int i = 0; i < Recipe.numRecipes; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (recipe == null || recipe.Disabled || recipe.createItem == null || recipe.createItem.type <= 0) continue;
+				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i) || recipe.createItem == null || recipe.createItem.type <= 0) continue;
 				int result = recipe.createItem.type;
 				if (!IsVanillaRecipe(recipe))
 				{
@@ -348,7 +348,7 @@ namespace UltimateRandomizer.Common.Core
 			for (int i = 0; i < Recipe.numRecipes; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (recipe == null || recipe.Disabled || recipe.createItem == null || recipe.createItem.type <= 0) continue;
+				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i) || recipe.createItem == null || recipe.createItem.type <= 0) continue;
 				int result = recipe.createItem.type;
 				if (!IsVanillaRecipe(recipe))
 				{
@@ -630,8 +630,9 @@ namespace UltimateRandomizer.Common.Core
 			return true;
 		}
 
-		// A recipe of vanilla Terraria (tModLoader's own count as vanilla, as in RecipeSystem), enabled, with a result
-		public static bool IsVanillaRecipe(Recipe recipe) => recipe != null && !recipe.Disabled && (recipe.Mod == null || recipe.Mod.Name == "ModLoader")
+		// A recipe of vanilla Terraria (tModLoader's own count as vanilla, as in RecipeSystem), enabled, with a result. Enabled as
+		// set up, not live: twin copies are switched off while the plan is applied
+		public static bool IsVanillaRecipe(Recipe recipe) => recipe != null && !Features.RecipeSystem.VanillaDisabled(recipe.RecipeIndex) && (recipe.Mod == null || recipe.Mod.Name == "ModLoader")
 			&& recipe.createItem != null && recipe.createItem.type > 0;
 
 		// The items an ingredient of a recipe accepts: every item of its recipe group, else itself
