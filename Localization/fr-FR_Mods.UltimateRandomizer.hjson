@@ -123,6 +123,7 @@ Tests: {
 	ItemTierDump: Écrit ItemTiers.tsv, une ligne par objet vanilla avec ses paliers, sa trouvabilité, les paliers de recette vanilla et planifiés, les ingrédients planifiés et les données de minage (lecture seule)
 	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
 	ShopDump: Écrit Shops.tsv, chaque article des boutiques vanilla à chaque palier débloqué avec son remplaçant, son prix, ses conditions et des alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu) (lecture seule)
+	WorldExport: Écrit dans Export/ les fichiers .tsv des objets, recettes, butins, sacs, boutiques, coffres, sources du monde et trouvabilité, plus un README, pour un audit de cohérence hors jeu (lecture seule)
 	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques
 	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde
 	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant

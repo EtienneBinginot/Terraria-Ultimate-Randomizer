@@ -112,6 +112,7 @@ namespace UltimateRandomizer.Common.Tests
 			CapTests.Register();
 			CoherenceTests.Register();
 			ShopTests.Register();
+			ExportTests.Register();
 		}
 
 		// only: the ids of the tests to run (any case, e.g. /rtest PlanDiff), null or empty for all
