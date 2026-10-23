@@ -277,8 +277,14 @@ namespace UltimateRandomizer.Common.Tests
 					failures.Add($"{Name(item)}: true tier {ItemPool.TrueTierOf(item)} ({ItemPool.Info[item].Source ?? "no source"}), {(int)tier} expected");
 				}
 			}
-			// Gathered and world-generated items keep their tier
-			foreach (int item in new[] { ItemID.Ruby, ItemID.Diamond, ItemID.FallenStar, ItemID.WaterCandle, ItemID.BlueDungeonChair })
+			// Gathered and world-generated items keep their tier, even when a crate, shop or boss also gives them (Gold Dust
+			// is no such item: only the hardmode Merchant sells it)
+			int[] kept =
+			{
+				ItemID.Ruby, ItemID.Diamond, ItemID.FallenStar, ItemID.WaterCandle, ItemID.BlueDungeonChair, ItemID.LifeCrystal, ItemID.Cloud, ItemID.RainCloud,
+				ItemID.Sunflower, ItemID.DaybloomSeeds, ItemID.MushroomGrassSeeds
+			};
+			foreach (int item in kept)
 			{
 				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.TrueTierOf(item) > ItemPool.TierOf(item))
 				{
