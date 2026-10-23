@@ -122,6 +122,10 @@ Tests: {
 	TierAudit: Lists the vanilla items whose tier looks doubtful (raised by their sources, a source much earlier, or no source at all) in TierAudit.tsv, and counts the banned items of the enemy plan (logged)
 	ItemTierDump: Writes ItemTiers.tsv, one row per vanilla item with its tiers, findability, vanilla and planned recipe tiers, planned ingredients and mining data (read-only)
 	WorldChestTrueTiers: Items of world-generated chests are found from their chest's tier (true tier lowered, never raised)
+	ShopDump: Writes Shops.tsv, every vanilla shop entry at each unlocked tier with its replacement, price, conditions and flags (too early, other category, shop-only item lost) (read-only)
+	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter
+	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world
+	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
 	LockedVanillaDropRemoved: A replaced original drop still locked by progression does not drop; an unlocked one drops as planned

@@ -26,42 +26,77 @@ namespace UltimateRandomizer.Common.Features
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
 			if (!cfg.RandomizeShops || !SeedSystem.WorldReady || !ItemPool.Ready) return;
-			int npcKey = DetRandom.NpcKey(npc.type);
-			int shopKey = DetRandom.StableHash(shopName ?? "");
-			HashSet<int> used = new();
+			// null = unused slot, air = reserved slot whose conditions are not met: both must stay as they are. Items bought
+			// with a special currency (defender medals) are left alone
+			int[] originals = new int[items.Length];
 			for (int i = 0; i < items.Length; i++)
 			{
 				Item original = items[i];
-				// null = unused slot, air = reserved slot whose conditions are not met: both must stay as they are
-				if (original == null || original.IsAir) continue;
-				// Items bought with a special currency (defender medals) are left alone
-				if (original.shopSpecialCurrency != -1 || !ItemPool.IsRandomizable(original.type)) continue;
+				if (original == null || original.IsAir || original.shopSpecialCurrency != -1) continue;
+				originals[i] = original.type;
+			}
+			ShopSlot[] plan = ShopPlanner.PlanShop(npc.type, shopName, originals, ProgressionSystem.UnlockedTier, Main.hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop);
+			for (int i = 0; i < items.Length; i++)
+			{
+				if (!plan[i].Replaced) continue;
+				Item item = new(plan[i].Replacement);
+				item.stack = 1;
+				item.shopCustomPrice = plan[i].Price;
+				items[i] = item;
+			}
+		}
+	}
 
-				int originalTier = ItemPool.Info[original.type].Tier;
-				int sourceTier = cfg.ShopsFollowProgression ? Math.Max(originalTier, ProgressionSystem.UnlockedTier - 1) : originalTier;
-				int replacement = original.type;
+	// One shop slot as planned: the original item, what replaces it (0 when left as it is) and its price
+	public readonly record struct ShopSlot(int Original, int Replacement, int Price)
+	{
+		public bool Replaced => Replacement > 0;
+	}
+
+	// Pure shop plan: only the world seed, the settings and the given progression (no local player state), so the shop dump
+	// and the tests see what a player would see at any progression
+	public static class ShopPlanner
+	{
+		// originalTypes in slot order (0: slot left alone). The duplicate check follows that order, as the shop fills its slots:
+		// the result for a slot depends on the items sold before it (only those whose conditions are met in game)
+		public static ShopSlot[] PlanShop(int npcType, string shopName, IList<int> originalTypes, int unlockedTier, bool hardMode, bool followProgression, bool noDuplicates)
+		{
+			int npcKey = DetRandom.NpcKey(npcType);
+			int shopKey = DetRandom.StableHash(shopName ?? "");
+			ShopSlot[] slots = new ShopSlot[originalTypes.Count];
+			HashSet<int> used = new();
+			for (int i = 0; i < originalTypes.Count; i++)
+			{
+				int original = originalTypes[i];
+				slots[i] = new ShopSlot(original, 0, 0);
+				if (original <= 0 || !ItemPool.IsRandomizable(original)) continue;
+
+				int originalTier = ItemPool.Info[original].Tier;
+				int sourceTier = followProgression ? Math.Max(originalTier, unlockedTier - 1) : originalTier;
+				int replacement = original;
 				for (int attempt = 0; attempt < 8; attempt++)
 				{
 					RollRequest request = new()
 					{
-						Keys = new[] { RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original.type), attempt },
+						Keys = new[] { RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), attempt },
 						SourceTier = Tiers.Clamp(sourceTier),
-						OriginalItem = original.type,
+						OriginalItem = original,
 						Policy = CategoryPolicy.SameAsOriginal,
 						TierJitterDown = 0,
-						TierJitterUp = 1,
-						AllowJackpot = false
+						TierJitterUp = TierJitterUp,
+						AllowJackpot = false,
+						GatingTier = unlockedTier,
+						GatingHardMode = hardMode
 					};
 					replacement = ItemPool.Roll(request);
-					if (!cfg.NoDuplicatesInShop || !used.Contains(replacement)) break;
+					if (!noDuplicates || !used.Contains(replacement)) break;
 				}
 				used.Add(replacement);
-
-				Item item = new(replacement);
-				item.stack = 1;
-				item.shopCustomPrice = PriceRules.Price(replacement, DetRandom.Get(RollKey.Price, npcKey, shopKey, DetRandom.ItemKey(replacement)));
-				items[i] = item;
+				slots[i] = new ShopSlot(original, replacement, PriceRules.Price(replacement, DetRandom.Get(RollKey.Price, npcKey, shopKey, DetRandom.ItemKey(replacement))));
 			}
+			return slots;
 		}
+
+		public const int TierJitterUp = 1;
 	}
 }
