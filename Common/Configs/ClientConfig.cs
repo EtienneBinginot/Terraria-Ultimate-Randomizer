@@ -19,5 +19,10 @@ namespace UltimateRandomizer.Common.Configs
 		[Header("Messages")]
 		[DefaultValue(true)]
 		public bool AdaptiveMessages;
+
+		// Permutation style: the bestiary and Recipe Browser show this world's drops (WorldDropsReport) instead of vanilla's
+		[Header("Display")]
+		[DefaultValue(true)]
+		public bool ShowWorldDrops;
 	}
 }

@@ -598,10 +598,11 @@ namespace UltimateRandomizer.Common.Features
 		public ItemDropAttemptResult TryDroppingItem(DropAttemptInfo info, ItemDropRuleResolveAction resolveAction) =>
 			Silenced ? new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode } : resolveAction(inner, info);
 
-		// The bestiary is built before any world exists: the original rule reports its drops
+		// The bestiary is built before any world exists: the original rule reports its drops. In a world showing its own
+		// drops (WorldDropsReport, client option), a silenced rule reports nothing: our rule reports its plan instead
 		public void ReportDroprates(List<DropRateInfo> drops, DropRateInfoChainFeed ratesInfo)
 		{
-			if (Silenced) return;
+			if (Silenced && WorldDropsReport.Showing) return;
 			int before = drops.Count;
 			inner.ReportDroprates(drops, ratesInfo.With(1f));
 			if (Tracked == null) return;

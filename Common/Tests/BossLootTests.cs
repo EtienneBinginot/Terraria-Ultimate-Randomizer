@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.GameContent.Bestiary;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -19,11 +20,65 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BossPermutationConserves", BossPermutationConserves);
 			TestRunner.Register("BossBagMatchesBoss", BossBagMatchesBoss);
 			TestRunner.Register("BossPermutationTiers", BossPermutationTiers);
+			TestRunner.Register("WorldDropsReported", WorldDropsReported);
 			TestRunner.Register("BossRuntime", BossRuntime);
 			TestRunner.Register("PermutationConservation", PermutationConservation);
 			TestRunner.Register("PermutedConditions", PermutedConditions);
 			TestRunner.Register("EaterOfWorldsParts", EaterOfWorldsParts);
 			TestRunner.Register("BossGroupsMerge", BossGroupsMerge);
+		}
+
+		// With the permutation, what the bestiary and Recipe Browser read shows the world's drops (WorldDropsReport): an
+		// enemy's rule reports its plan, its silenced vanilla rules report nothing, and its bestiary entry lists exactly the
+		// report (the old elements removed), without the silenced items. Shown for the test when the option is off, then
+		// restored
+		private static void WorldDropsReported()
+		{
+			if (Main.dedServ) Check.Skip("no bestiary on a server");
+			if (!LootConfig.Instance.RandomizeMobDrops || LootConfig.Instance.DropTableStyle != DropTableStyle.Permutation) Check.Skip("the enemy drop style is not Permutation");
+			// Protected in ItemDropBestiaryInfoElement
+			System.Reflection.FieldInfo rateField = typeof(ItemDropBestiaryInfoElement).GetField("_droprateInfo", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+			Check.That(rateField != null, "ItemDropBestiaryInfoElement._droprateInfo not found");
+			bool was = WorldDropsReport.Showing;
+			List<string> failures = new();
+			int checkedIds = 0;
+			try
+			{
+				if (!was) WorldDropsReport.Rebuild(true);
+				int[] samples = { NPCID.BlueSlime, NPCID.Zombie, NPCID.DemonEye, NPCID.Skeleton, NPCID.EyeofCthulhu, NPCID.QueenBee, NPCID.WallofFlesh };
+				foreach (int netId in samples.Concat(ContentSamples.NpcsByNetId.Keys.OrderBy(k => k)).Distinct())
+				{
+					if (checkedIds >= 12) break;
+					if (!WorldDropsReport.Shows(netId)) continue;
+					string name = $"{NpcName(netId)} ({netId})";
+					List<IItemDropRule> registered = Main.ItemDropsDB.GetRulesForNPCID(netId, false);
+					List<PermutableRule> silenced = registered.SelectMany(r => BossPermutation.Wrappers(r)).Where(w => DropPermutation.Silences(w.Items)).ToList();
+					HashSet<int> expected = WorldDropsReport.NpcPlan(netId).Select(d => d.Item).ToHashSet();
+					if (expected.Count == 0) continue;
+					checkedIds++;
+					foreach (PermutableRule wrapper in silenced)
+					{
+						if (LootSnapshot.Capture(new List<IItemDropRule> { wrapper }).Count > 0) failures.Add($"{name}: a silenced vanilla rule still reports its drops");
+					}
+					HashSet<int> ours = LootSnapshot.Capture(registered.OfType<RandomNpcDropRule>().Cast<IItemDropRule>().ToList()).Select(d => d.itemId).ToHashSet();
+					foreach (int item in expected.Where(i => !ours.Contains(i)).Take(3)) failures.Add($"{name}: {ItemName(item)} planned but not reported");
+					List<DropRateInfo> report = LootSnapshot.Capture(registered);
+					HashSet<int> reported = report.Select(d => d.itemId).ToHashSet();
+					BestiaryEntry entry = Main.BestiaryDB.FindEntryByNPCID(netId);
+					if (entry == null) continue;
+					List<int> shown = entry.Info.OfType<ItemDropBestiaryInfoElement>().Select(e => ((DropRateInfo)rateField.GetValue(e)).itemId).ToList();
+					if (shown.Count != report.Count) failures.Add($"{name}: the bestiary shows {shown.Count} drops for {report.Count} reported");
+					foreach (int item in expected.Where(i => !shown.Contains(i)).Take(3)) failures.Add($"{name}: {ItemName(item)} planned but not in the bestiary");
+					foreach (int item in silenced.SelectMany(w => w.Items).Distinct().Where(i => !reported.Contains(i) && shown.Contains(i)).Take(3)) failures.Add($"{name}: silenced {ItemName(item)} still in the bestiary");
+				}
+			}
+			finally
+			{
+				if (!was) WorldDropsReport.Rebuild(false);
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"World drops reported: {checkedIds} net IDs checked");
+			if (checkedIds == 0) Check.Skip("no enemy follows the permutation");
+			Check.All(failures, "World drops reported");
 		}
 
 		private static string Key((int netId, int index) k) => k.index >= BossPermutation.BagIndexOffset ? $"{NpcName(k.netId)} bag entry {k.index - BossPermutation.BagIndexOffset}" : $"{NpcName(k.netId)} entry {k.index}";

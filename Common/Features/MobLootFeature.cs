@@ -641,9 +641,11 @@ namespace UltimateRandomizer.Common.Features
 			return original.Count > 0 || LootConfig.Instance.EnemiesWithoutDropsCanDrop;
 		}
 
-		// The bestiary is built before any world exists: the original drops are reported by their own rules
+		// The bestiary is built before any world exists: the original drops are reported by their own rules. In a world
+		// showing its own drops (WorldDropsReport), the plan's entries this rule rolls (the silenced rules report nothing)
 		public void ReportDroprates(List<DropRateInfo> drops, DropRateInfoChainFeed ratesInfo)
 		{
+			if (WorldDropsReport.Shows(netId)) WorldDropsReport.Report(WorldDropsReport.NpcPlan(netId), drops, ratesInfo);
 			Chains.ReportDroprates(ChainedRules, 1f, drops, ratesInfo);
 		}
 	}

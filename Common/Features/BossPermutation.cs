@@ -625,9 +625,11 @@ namespace UltimateRandomizer.Common.Features
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
 		}
 
-		// Recipe browsers and other readers: the vanilla rules report the original contents
+		// Recipe browsers and other readers: the vanilla rules report the original contents, or in a world showing its own
+		// drops (WorldDropsReport), this rule the bag's plan (the silenced rules report nothing)
 		public void ReportDroprates(List<DropRateInfo> drops, DropRateInfoChainFeed ratesInfo)
 		{
+			if (WorldDropsReport.ShowsBag(bagType)) WorldDropsReport.Report(WorldDropsReport.BagPlanned(bagType), drops, ratesInfo);
 		}
 	}
 }
