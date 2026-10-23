@@ -127,6 +127,8 @@ Tests: {
 	DropPermutationConserves: The drop permutation loses and duplicates nothing: every permuted vanilla drop is still dropped by some enemy
 	DropPermutationMoves: Permuted drops stay within their tier group and most of them move to another enemy
 	DropPermutationAccess: Expert-only, master-only and special-seed drops only move to places with the same restrictions
+	DropPermutationRuntime: Each enemy's drop rules really follow the permutation: silenced vanilla drops are rolled somewhere, nothing drops twice, variants keep their own drops, enemies without drops get one
+	DropPermutationStable: Removing one drop entry from the permutation only changes the content of very few other entries
 	CodexShowsLocked: Codex interface: locked drops are greyed with the boss that unlocks them, with no chance
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
@@ -1378,12 +1380,12 @@ Configs: {
 
 		DropTableStyle: {
 			Label: "Enemy drop style"
-			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. Every enemy also gets one random extra drop (chance below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses keep the vanilla-like extras in the permutation style."
+			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets one random extra drop (chance below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses keep the vanilla-like extras in the permutation style."
 		}
 
 		PermutationExtraChance: {
 			Label: "Extra drop chance (permutation, %)"
-			Tooltip: "Permutation style only: chance of the one random extra drop every enemy gets on top of its shuffled original drops. Loot abundance does not change it."
+			Tooltip: "Permutation style only: about the chance of the one random extra drop every enemy gets on top of its shuffled original drops; more while some of the enemy's drops are still locked by progression. Loot abundance does not change it."
 		}
 
 		EnemiesWithoutDropsCanDrop: {

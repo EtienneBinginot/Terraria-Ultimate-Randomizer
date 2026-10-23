@@ -20,7 +20,7 @@ namespace UltimateRandomizer.Common.Features
 				case EntitySource_Loot loot when loot.Context != DropHelper.ExtraDropContext && loot.Entity is NPC npc:
 					if (!cfg.RandomizeMobDrops || !IsDeathLoot(npc, item.type)) return;
 					// Permutation: the rules still dropping on their own (per-player drops, kept items) stay as they are
-					if (DropPermutation.Active(npc.type)) return;
+					if (DropPermutation.Active(npc.netID)) return;
 					int owner = BossParts.Owner(npc.type);
 					bool isBoss = NpcTiers.IsBoss(owner);
 					System.Random dropRng = new(Main.rand.Next());

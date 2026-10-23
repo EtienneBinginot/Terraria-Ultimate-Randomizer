@@ -16,7 +16,8 @@ namespace UltimateRandomizer.Common.Features
 		// Runs once per enemy (and per variant) at load, before any world exists. The original rules keep running: their
 		// items are swapped when they spawn (LootSubstitutionItem). The rules of ordinary enemies are wrapped
 		// (PermutableRule), silent in the permutation style where RandomNpcDropRule rolls the permuted entries instead
-		// (except per-player drops, left as they are). We add a rule for extra random drops
+		// (only the vanilla rule types whose report is complete: DropPermutation.Wrappable; the others are left as they
+		// are). Per net ID: variants have rules of their own. We add a rule for extra random drops
 		public override void ModifyNPCLoot(NPC npc, NPCLoot npcLoot)
 		{
 			List<IItemDropRule> rules = npcLoot.Get(false).Where(r => r != null).Distinct().ToList();
@@ -27,13 +28,13 @@ namespace UltimateRandomizer.Common.Features
 			{
 				IItemDropRule rule = rules[r];
 				List<DropRateInfo> part = LootSnapshot.Capture(new List<IItemDropRule> { rule });
-				bool wrap = wrappable && part.Count > 0 && !DropPermutation.ContainsPerPlayer(rule);
+				bool wrap = wrappable && part.Count > 0 && DropPermutation.Wrappable(rule);
 				drops.AddRange(part);
 				ruleOf.AddRange(Enumerable.Repeat(wrap ? r : -1, part.Count));
 				if (!wrap) continue;
 				// Registered once per net ID: never mutate the rule itself, shared with other net IDs
 				while (npcLoot.Get(false).Contains(rule)) npcLoot.Remove(rule);
-				npcLoot.Add(new PermutableRule(rule, npc.type, part.Select(d => d.itemId)));
+				npcLoot.Add(new PermutableRule(rule, npc.netID, r, part.Select(d => d.itemId)));
 			}
 			LootSnapshot.Npcs[npc.netID] = drops;
 			LootSnapshot.NpcRules[npc.netID] = ruleOf.ToArray();
@@ -160,7 +161,7 @@ namespace UltimateRandomizer.Common.Features
 			if (!SeedSystem.WorldReady || !ItemPool.Ready || npc == null) return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			// Permutation: the original entries replace the silent vanilla rules, so statue and NPC-spawned enemies drop them
 			// as vanilla would (NotFromStatue conditions included); only the extra, guaranteed and bonus drops are withheld
-			bool permuted = DropPermutation.Active(npc.type);
+			bool permuted = DropPermutation.Active(netId);
 			if (permuted) DropRolledOriginals(info, npc);
 			if (npc.SpawnedFromStatue || MobLootSystem.IsSpawnedByNpc(npc) || !ExtraDropsAllowedNow(info))
 			{
@@ -383,17 +384,17 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// The original drops of an enemy and their final replacements (LootSubstitutionItem swaps them as they spawn). In the
-		// permutation style (style: the configured one when null), the entries of the type's permuted table instead
+		// permutation style (style: the configured one when null), the entries of the net ID's permuted table instead
 		public static List<PlannedDrop> OriginalDrops(int netId, int type, DropTableStyle? style = null)
 		{
 			List<PlannedDrop> drops = new();
 			int minLimit = MinLimit(type);
-			if (DropPermutation.InStyle(type, style))
+			if (DropPermutation.InStyle(netId, style))
 			{
-				foreach (DropPermutation.Placed placed in DropPermutation.For(type))
+				foreach (DropPermutation.Placed placed in DropPermutation.For(netId))
 				{
 					DropRateInfo entry = placed.Entry;
-					// Entries vanilla still rolls (per-player drops) are not replaced: they drop as they are
+					// Entries vanilla still rolls (rules left running) are not replaced: they drop as they are
 					int lockGap = placed.Rolled && !DropHelper.KeepOriginal(entry.itemId) ? DropHelper.LockGap(entry.itemId, minLimit) : 0;
 					drops.Add(new PlannedDrop { Item = entry.itemId, StackMin = entry.stackMin, StackMax = entry.stackMax, Chance = entry.dropRate, Conditions = entry.conditions,
 						Original = entry.itemId, LockGap = lockGap, Rolled = placed.Rolled });
@@ -491,9 +492,9 @@ namespace UltimateRandomizer.Common.Features
 			int sourceTier = NpcTiers.EffectiveTier(type);
 			int minLimit = MinLimit(type);
 			bool critter = NPCID.Sets.CountsAsCritter[type];
-			// Permutation: one random extra slot with a fixed chance, no small frequent drops. The enemies it leaves out
-			// (bosses) keep the vanilla-like extras
-			bool permutation = DropPermutation.InStyle(type);
+			// Permutation: one random extra slot (PermutationExtraChance, plus the chances of the locked entries:
+			// Redistribute), no small frequent drops. The enemies it leaves out (bosses, critters) keep the vanilla-like extras
+			bool permutation = DropPermutation.InStyle(netId);
 			float permutationChance = Math.Min(1f, Math.Max(0f, cfg.PermutationExtraChance / 100f));
 			DropTableStyle style = cfg.DropTableStyle == DropTableStyle.Permutation ? DropTableStyle.VanillaLike : cfg.DropTableStyle;
 			int slots = permutation ? (permutationChance > 0f ? 1 : 0)

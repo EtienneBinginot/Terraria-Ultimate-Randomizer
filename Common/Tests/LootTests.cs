@@ -45,6 +45,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("DropPermutationConserves", DropPermutationConserves);
 			TestRunner.Register("DropPermutationMoves", DropPermutationMoves);
 			TestRunner.Register("DropPermutationAccess", DropPermutationAccess);
+			TestRunner.Register("DropPermutationRuntime", DropPermutationRuntime);
+			TestRunner.Register("DropPermutationStable", DropPermutationStable);
 		}
 
 		// Seeds of the permutation tests: the world's and two fixed ones (DropPermutation.Build is pure in the seed)
@@ -53,10 +55,15 @@ namespace UltimateRandomizer.Common.Tests
 		private static DropPermutation.WorldPlan PermutationPlan(int seed)
 		{
 			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
+			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
 			DropPermutation.WorldPlan plan = DropPermutation.Build(seed);
 			if (plan.Places.Count < 30) Check.Skip($"only {plan.Places.Count} permutable drop entries");
 			return plan;
 		}
+
+		// The length of a table: its snapshot's, one more for a synthetic entry
+		private static int TableLength(DropPermutation.WorldPlan plan, int unit) =>
+			LootSnapshot.ForNpc(unit).Count + (plan.Places.Any(p => p.Synthetic && p.Owner == unit) ? 1 : 0);
 
 		private static string ContentKey(DropRateInfo entry) => $"{entry.itemId}:{entry.stackMin}-{entry.stackMax}@{entry.dropRate:0.000000}";
 
@@ -76,20 +83,20 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (List<int> group in plan.Groups)
 				{
 					List<string> before = group.Select(i => ContentKey(plan.Places[i].Entry)).OrderBy(k => k, StringComparer.Ordinal).ToList();
-					List<string> after = group.Select(i => ContentKey(plan.ByType[plan.Places[i].Owner][plan.Places[i].Index].Entry)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+					List<string> after = group.Select(i => ContentKey(plan.ByUnit[plan.Places[i].Owner][plan.Places[i].Index].Entry)).OrderBy(k => k, StringComparer.Ordinal).ToList();
 					if (!before.SequenceEqual(after) && failures.Count < 10) failures.Add($"seed {seed}: a group of {group.Count} places (tier {plan.Places[group[0]].Tier}, '{plan.Places[group[0]].Access}') changed its contents");
 				}
 				if (plan.Groups.Sum(g => g.Count) != plan.Places.Count) failures.Add($"seed {seed}: {plan.Groups.Sum(g => g.Count)} places in groups, {plan.Places.Count} places");
 				HashSet<(int, int)> given = new();
 				foreach (DropPermutation.Place place in plan.Places)
 				{
-					DropPermutation.Placed placed = plan.ByType[place.Owner][place.Index];
+					DropPermutation.Placed placed = plan.ByUnit[place.Owner][place.Index];
 					if (!placed.Permuted || !placed.Rolled) failures.Add($"seed {seed}: {NpcName(place.Owner)} entry {place.Index} not permuted");
-					if (!given.Add((placed.FromType, placed.FromIndex))) failures.Add($"seed {seed}: the content of {NpcName(placed.FromType)} entry {placed.FromIndex} given twice");
+					if (!given.Add((placed.FromNetId, placed.FromIndex))) failures.Add($"seed {seed}: the content of {NpcName(placed.FromNetId)} entry {placed.FromIndex} given twice");
 				}
-				foreach ((int type, DropPermutation.Placed[] table) in plan.ByType)
+				foreach ((int unit, DropPermutation.Placed[] table) in plan.ByUnit)
 				{
-					if (table.Length != DropPermutation.SourceOf(type).entries.Count) failures.Add($"seed {seed}: {NpcName(type)} has {table.Length} entries, {DropPermutation.SourceOf(type).entries.Count} originally");
+					if (table.Length != TableLength(plan, unit)) failures.Add($"seed {seed}: {NpcName(unit)} has {table.Length} entries, {TableLength(plan, unit)} expected");
 				}
 			}
 			// The live plan, through what the kills and the codex read
@@ -97,11 +104,11 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				DropPermutation.WorldPlan current = DropPermutation.Current;
 				HashSet<int> planned = new();
-				foreach (int type in DropPermutation.PermutableTypes())
+				foreach (int unit in DropPermutation.Units())
 				{
-					List<PlannedDrop> drops = RandomNpcDropRule.OriginalDrops(type, type, DropTableStyle.Permutation);
+					List<PlannedDrop> drops = RandomNpcDropRule.OriginalDrops(unit, unit, DropTableStyle.Permutation);
 					planned.UnionWith(drops.Select(d => d.Item));
-					if (drops.Count != DropPermutation.SourceOf(type).entries.Count) failures.Add($"{NpcName(type)}: {drops.Count} planned original entries, {DropPermutation.SourceOf(type).entries.Count} originally");
+					if (drops.Count != TableLength(current, unit)) failures.Add($"{NpcName(unit)}: {drops.Count} planned original entries, {TableLength(current, unit)} expected");
 				}
 				for (int p = 0; p < current.Places.Count; p++)
 				{
@@ -119,6 +126,102 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation: {places} places in {groups} groups");
 			Check.All(failures, "Drop permutation");
+		}
+
+		// What the kills really do, per net ID (variants such as Pinky have rules of their own): every registered wrapper
+		// belongs to its net ID; an entry is rolled by our rule exactly when its wrapped rule is silenced (nothing both rolled
+		// and left running); every item of a silenced rule is in the net ID's own table, or, permuted away, in some table;
+		// the items that did not move are the net ID's own; every eligible enemy without vanilla drops rolls something
+		private static void DropPermutationRuntime()
+		{
+			DropPermutation.WorldPlan plan = PermutationPlan(SeedSystem.WorldSeed);
+			HashSet<int> everywhere = plan.ByUnit.Values.SelectMany(t => t).Where(p => p.Rolled).Select(p => p.Entry.itemId).ToHashSet();
+			List<string> failures = new();
+			int netIds = 0, ownTables = 0, silencedEntries = 0, withoutDrops = 0;
+			void Fail(string message)
+			{
+				if (failures.Count < 25) failures.Add(message);
+			}
+			foreach (int netId in ContentSamples.NpcsByNetId.Keys.OrderBy(k => k))
+			{
+				if (!DropPermutation.IsPermutable(netId)) continue;
+				netIds++;
+				int unit = DropPermutation.UnitOf(netId);
+				if (unit == netId && ContentSamples.NpcsByNetId[netId].type != netId) ownTables++;
+				if (!plan.ByUnit.TryGetValue(unit, out DropPermutation.Placed[] table))
+				{
+					Fail($"{NpcName(netId)} ({netId}): no table");
+					continue;
+				}
+				List<DropRateInfo> entries = LootSnapshot.ForNpc(netId);
+				int[] rules = LootSnapshot.RulesOf(netId);
+				if (table.Length != TableLength(plan, unit) || table.Length < entries.Count) Fail($"{NpcName(netId)} ({netId}): a table of {table.Length} entries for {entries.Count} vanilla entries");
+				Dictionary<int, PermutableRule> wrappers = new();
+				foreach (PermutableRule wrapper in Main.ItemDropsDB.GetRulesForNPCID(netId, false).OfType<PermutableRule>())
+				{
+					if (wrapper.NetId != netId) Fail($"{NpcName(netId)} ({netId}): a wrapper of net ID {wrapper.NetId}");
+					wrappers[wrapper.RuleIndex] = wrapper;
+				}
+				for (int i = 0; i < entries.Count; i++)
+				{
+					int item = entries[i].itemId;
+					int r = i < rules.Length ? rules[i] : -1;
+					if (r >= 0 && !wrappers.ContainsKey(r)) Fail($"{NpcName(netId)} ({netId}): the rule of {Lang.GetItemNameValue(item)} is not wrapped");
+					bool silenced = r >= 0 && wrappers.TryGetValue(r, out PermutableRule rule) && DropPermutation.Silences(rule.Items);
+					bool rolled = i < table.Length && table[i].Rolled;
+					if (rolled && !silenced) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} rolled by us and by its own rule");
+					if (silenced && !rolled) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} silenced, its place not rolled");
+					if (i < table.Length && !table[i].Permuted && table[i].Entry.itemId != item) Fail($"{NpcName(netId)} ({netId}): entry {i} is {Lang.GetItemNameValue(table[i].Entry.itemId)}, {Lang.GetItemNameValue(item)} originally");
+					if (!silenced) continue;
+					silencedEntries++;
+					bool here = i < table.Length && !table[i].Permuted && table[i].Entry.itemId == item;
+					if (!here && !everywhere.Contains(item)) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} silenced and rolled nowhere");
+				}
+				if (entries.Count == 0)
+				{
+					withoutDrops++;
+					if (!table.Any(p => p.Rolled && p.Entry.itemId > ItemID.None)) Fail($"{NpcName(netId)} ({netId}): no vanilla drop and no rolled entry");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation runtime: {netIds} net IDs, {ownTables} variants with their own table, {silencedEntries} silenced entries, {withoutDrops} enemies without vanilla drops");
+			Check.All(failures, "Drop permutation runtime");
+			if (silencedEntries == 0) Check.Skip("no silenced drop entry to check");
+		}
+
+		// The assignment is stable: removing one place from a group (a setting keeps one more item, say) changes the content of
+		// very few other places (the one before it in the group's cycle), not the whole group
+		private static void DropPermutationStable()
+		{
+			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
+			List<DropPermutation.Place> places = DropPermutation.CollectPlaces(SeedSystem.WorldSeed);
+			if (places.Count < 30) Check.Skip($"only {places.Count} permutable drop entries");
+			List<string> failures = new();
+			int removals = 0, changedTotal = 0;
+			foreach (int seed in PermutationSeeds())
+			{
+				int[] full = DropPermutation.Permute(places, seed, out List<List<int>> groups);
+				Random rng = new(seed);
+				foreach (List<int> group in groups.Where(g => g.Count >= DropPermutation.MinGroupSize * 3).Take(8))
+				{
+					int removed = group[rng.Next(group.Count)];
+					List<DropPermutation.Place> fewer = places.Where((_, i) => i != removed).ToList();
+					int[] after = DropPermutation.Permute(fewer, seed, out _);
+					int changed = 0;
+					for (int i = 0; i < places.Count; i++)
+					{
+						if (i == removed) continue;
+						int j = i < removed ? i : i - 1;
+						DropPermutation.Place was = places[full[i]], now = fewer[after[j]];
+						if (was.Owner != now.Owner || was.Index != now.Index) changed++;
+					}
+					removals++;
+					changedTotal += changed;
+					if (changed > Math.Max(2, group.Count / 20)) failures.Add($"seed {seed}: removing one place of a group of {group.Count} changed {changed} other assignments");
+				}
+			}
+			if (removals == 0) Check.Skip("no group large enough");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation stability: {removals} removals, {changedTotal} assignments changed in all");
+			Check.All(failures, "Drop permutation stability");
 		}
 
 		// Contents only move within their tier group (the origin's tier is one of the group's tiers, always the base tier of
@@ -163,7 +266,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Restricted contents (expert or master only, special seeds, never...) only go to places with the same restrictive
-		// conditions; ordinary conditions (hardmode, biome...) don't make a class of their own
+		// conditions; ordinary conditions (hardmode, biome...) don't make a class of their own. Findability counts the
+		// progression conditions of a place (hardmode, mechanical bosses, Plantera)
 		private static void DropPermutationAccess()
 		{
 			List<string> failures = new();
@@ -172,6 +276,13 @@ namespace UltimateRandomizer.Common.Tests
 			if (Access(new Conditions.IsHardmode(), new Conditions.NotFromStatue()) != "") failures.Add("hardmode + not from a statue is restricted");
 			if (Access(new Conditions.NotExpert(), new Conditions.IsMasterMode()) != "IsMasterMode+NotExpert") failures.Add($"not expert + master is '{Access(new Conditions.NotExpert(), new Conditions.IsMasterMode())}'");
 			if (Access() != "") failures.Add("no condition is restricted");
+			int Found(int sourceTier, params IItemDropRuleCondition[] conditions) => Findability.ConditionTier(conditions.ToList(), sourceTier);
+			if (Found(0, new Conditions.IsHardmode()) != (int)Tier.Hardmode) failures.Add("a hardmode-only drop of a pre-boss enemy is not counted from hardmode");
+			if (Found(0, new Conditions.DownedPlantera()) != (int)Tier.PostPlantera) failures.Add("a post-Plantera drop is not counted from Plantera");
+			if (Found(0, new Conditions.BeatAnyMechBoss()) != (int)Tier.PostMechBoss) failures.Add("a post-mechanical boss drop is not counted from the mechanical bosses");
+			if (Found((int)Tier.PostGolem, new Conditions.IsHardmode()) != (int)Tier.PostGolem) failures.Add("a condition lowered a source's tier");
+			if (Found((int)Tier.Hardmode, new Conditions.IsPreHardmode()) != Findability.Never) failures.Add("a pre-hardmode drop of a hardmode enemy is counted");
+			if (Found(2, new Conditions.NotFromStatue()) != 2) failures.Add("an ordinary condition changed the tier");
 			int restricted = 0;
 			foreach (int seed in PermutationSeeds())
 			{
