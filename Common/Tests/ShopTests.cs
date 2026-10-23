@@ -22,6 +22,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ShopsNotTooEarly", ShopsNotTooEarly);
 			TestRunner.Register("ShopOnlyItemsKept", ShopOnlyItemsKept);
 			TestRunner.Register("ShopNoDuplicates", ShopNoDuplicates);
+			TestRunner.Register("ShopPermutationConserves", ShopPermutationConserves);
 		}
 
 		private sealed class VanillaShop
@@ -29,6 +30,8 @@ namespace UltimateRandomizer.Common.Tests
 			public AbstractNPCShop Shop;
 			public List<Item> Items = new();
 			public List<Condition[]> Conditions = new();
+			// Index of each item's entry in NPCShop.Entries (-1: not an NPCShop, the Traveling Merchant)
+			public List<int> Indices = new();
 			// Slot order, 0 for what the shop leaves alone (special currency): the planner's input
 			public int[] Originals;
 		}
@@ -42,11 +45,26 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (shop == null || shop.NpcType <= 0 || shop.NpcType >= NPCID.Count) continue;
 				VanillaShop entry = new() { Shop = shop };
-				foreach (AbstractNPCShop.Entry e in shop.ActiveEntries)
+				if (shop is NPCShop npcShop)
 				{
-					if (e?.Item == null || e.Item.IsAir) continue;
-					entry.Items.Add(e.Item);
-					entry.Conditions.Add(e.Conditions?.ToArray() ?? Array.Empty<Condition>());
+					for (int i = 0; i < npcShop.Entries.Count; i++)
+					{
+						NPCShop.Entry e = npcShop.Entries[i];
+						if (e == null || e.Disabled || e.Item == null || e.Item.IsAir) continue;
+						entry.Items.Add(e.Item);
+						entry.Conditions.Add(e.Conditions?.ToArray() ?? Array.Empty<Condition>());
+						entry.Indices.Add(i);
+					}
+				}
+				else
+				{
+					foreach (AbstractNPCShop.Entry e in shop.ActiveEntries)
+					{
+						if (e?.Item == null || e.Item.IsAir) continue;
+						entry.Items.Add(e.Item);
+						entry.Conditions.Add(e.Conditions?.ToArray() ?? Array.Empty<Condition>());
+						entry.Indices.Add(-1);
+					}
 				}
 				if (entry.Items.Count == 0) continue;
 				entry.Originals = entry.Items.Select(i => i.shopSpecialCurrency != -1 ? 0 : i.type).ToArray();
@@ -68,10 +86,37 @@ namespace UltimateRandomizer.Common.Tests
 			return Obtainability.ShopItems.Where(i => ItemPool.IsValid(i) && !other.Contains(i)).ToHashSet();
 		}
 
-		// What the shops still sell in this world, simulated at every tier: unchanged items and replacements
+		private static bool Permuted => EconomyConfig.Instance.RandomizeShops && EconomyConfig.Instance.ShopStyle == ShopStyle.Permutation;
+
+		// The permutation of this world (the cached one, or built for the seed when the cache is not ready)
+		private static ShopPermutation.WorldPlan PermutationPlan()
+		{
+			if (!SeedSystem.WorldReady) Check.Skip("no world");
+			return ShopPermutation.Current ?? ShopPermutation.Build(SeedSystem.WorldSeed);
+		}
+
+		// The place of a shop item (-1: the entry is not permuted)
+		private static int PlaceOf(ShopPermutation.WorldPlan plan, VanillaShop shop, int i) =>
+			shop.Indices[i] >= 0 && plan.ByShop.TryGetValue(shop.Shop.FullName, out Dictionary<int, int> places) && places.TryGetValue(shop.Indices[i], out int p) ? p : -1;
+
+		// What the shops still sell in this world: in the permutation style the entries left alone and what each place sells;
+		// otherwise simulated at every tier, unchanged items and replacements
 		private static HashSet<int> SoldSomewhere(List<VanillaShop> shops)
 		{
 			HashSet<int> sold = new();
+			if (Permuted)
+			{
+				ShopPermutation.WorldPlan plan = PermutationPlan();
+				sold.UnionWith(plan.Sold);
+				foreach (VanillaShop shop in shops)
+				{
+					for (int i = 0; i < shop.Items.Count; i++)
+					{
+						if (PlaceOf(plan, shop, i) < 0) sold.Add(shop.Items[i].type);
+					}
+				}
+				return sold;
+			}
 			bool randomized = EconomyConfig.Instance.RandomizeShops;
 			foreach (VanillaShop shop in shops)
 			{
@@ -112,6 +157,11 @@ namespace UltimateRandomizer.Common.Tests
 			HashSet<int> shopOnly = VanillaShopOnly();
 			HashSet<int> sold = SoldSomewhere(shops);
 			RecipePlan recipes = RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null;
+			if (Permuted)
+			{
+				PermutationDump(shops, shopOnly, sold, recipes);
+				return;
+			}
 			StringBuilder tsv = new();
 			tsv.AppendLine("npc	npc name	shop	unlocked tier	slot	original	original name	original category	original tier	conditions	" +
 				"replacement	replacement name	replacement category	replacement tier	replacement true tier	price	vanilla price	price ratio	early	other category	shop-only	kept by");
@@ -158,6 +208,65 @@ namespace UltimateRandomizer.Common.Tests
 			logger.Info($"ShopDump: {shops.Count} vanilla shops, {shops.Sum(s => s.Items.Count)} entries, {rows} rows written to {path} (shops randomized: {cfg.RandomizeShops}, "
 				+ $"follow progression: {cfg.ShopsFollowProgression}, no duplicates: {cfg.NoDuplicatesInShop})");
 			logger.Info($"ShopDump: early {early}, other category {otherCategory}, duplicates {duplicates} (all entries at once: in game only those whose conditions are met)");
+			logger.Info($"ShopDump: {shopOnly.Count} vanilla shop-only items, {lost.Count} lost in this world: {string.Join(", ", lost.Select(Name))}");
+		}
+
+		// ShopPermutation.tsv: one row per vanilla shop entry of this world's permutation. A place shows its tier, access class
+		// and group, the content it received (and where that content comes from), the surprise that replaced it, and the price
+		private static void PermutationDump(List<VanillaShop> shops, HashSet<int> shopOnly, HashSet<int> sold, RecipePlan recipes)
+		{
+			ShopPermutation.WorldPlan plan = PermutationPlan();
+			int[] groupOf = new int[plan.Places.Count];
+			for (int g = 0; g < plan.Groups.Count; g++)
+			{
+				foreach (int p in plan.Groups[g]) groupOf[p] = g;
+			}
+			StringBuilder tsv = new();
+			tsv.AppendLine("npc	npc name	shop	entry	conditions	original	original name	original tier	place tier	access	group	" +
+				"content	content name	content tier	content from	surprise	sold	sold name	sold category	sold tier	price	vanilla price	shop-only	kept by");
+			int rows = 0, home = 0;
+			foreach (VanillaShop shop in shops)
+			{
+				int npc = shop.Shop.NpcType;
+				for (int i = 0; i < shop.Items.Count; i++)
+				{
+					Item original = shop.Items[i];
+					int type = original.type;
+					int p = PlaceOf(plan, shop, i);
+					string conditions = string.Join(" & ", shop.Conditions[i].Select(c => c.Description?.Value ?? c.ToString()));
+					bool only = shopOnly.Contains(type);
+					string kept = only ? (KeptBy(type, sold, recipes) is { Length: > 0 } k ? k : "LOST") : "";
+					if (p < 0)
+					{
+						tsv.AppendLine(string.Join("	", NPCID.Search.GetName(npc), Lang.GetNPCNameValue(npc), shop.Shop.FullName, shop.Indices[i], conditions,
+							Internal(type), Name(type), ItemPool.TierOf(type), "", "", "", "(not permuted)", "", "", "", "", Internal(type), Name(type), "", "",
+							original.GetStoreValue(), original.GetStoreValue(), only ? "shop-only" : "", kept));
+					}
+					else
+					{
+						DropPermutation.Place place = plan.Places[p];
+						int from = plan.ContentOf[p];
+						int content = plan.Places[from].Entry.itemId;
+						int final = plan.Sold[p];
+						if (from == p) home++;
+						ItemInfo info = ItemPool.Info[final];
+						tsv.AppendLine(string.Join("	", NPCID.Search.GetName(npc), Lang.GetNPCNameValue(npc), shop.Shop.FullName, shop.Indices[i], conditions,
+							Internal(type), Name(type), ItemPool.TierOf(type), place.Tier, place.Access, groupOf[p],
+							Internal(content), Name(content), ItemPool.TierOf(content), plan.Shops[from] + "#" + plan.Places[from].Index,
+							plan.Surprised[p] ? "surprise" : "", Internal(final), Name(final), info.Category, info.Tier,
+							ShopPermutation.PriceOf(npc, shop.Shop.FullName, final), original.GetStoreValue(), only ? "shop-only" : "", kept));
+					}
+					rows++;
+				}
+			}
+			List<int> lost = shopOnly.Where(i => KeptBy(i, sold, recipes).Length == 0).OrderBy(i => i).ToList();
+			string dir = Path.Combine(Main.SavePath, "UltimateRandomizer");
+			string path = Path.Combine(dir, "ShopPermutation.tsv");
+			Directory.CreateDirectory(dir);
+			File.WriteAllText(path, tsv.ToString());
+			log4net.ILog logger = ModContent.GetInstance<UltimateRandomizer>().Logger;
+			logger.Info($"ShopDump: permutation, {plan.Places.Count} places in {plan.Groups.Count} groups, {plan.Surprised.Count(s => s)} surprises "
+				+ $"({plan.SurpriseCandidate.Count(c => c)} candidates, chance {EconomyConfig.Instance.ShopSurpriseChance}%), {home} contents left home, {rows} rows written to {path}");
 			logger.Info($"ShopDump: {shopOnly.Count} vanilla shop-only items, {lost.Count} lost in this world: {string.Join(", ", lost.Select(Name))}");
 		}
 
@@ -241,6 +350,58 @@ namespace UltimateRandomizer.Common.Tests
 				}
 			}
 			Check.All(failures, "Duplicates in a shop");
+		}
+
+		// The permutation of this world's seed, without surprises then with every candidate surprised: each group sells the
+		// same multiset of items as in vanilla, no content stays at its place in a group of several, surprises only replace
+		// candidates, and every item of a place (the shop-only ones included) is still sold unsurprised somewhere
+		private static void ShopPermutationConserves()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (!SeedSystem.WorldReady) Check.Skip("no world");
+			int seed = SeedSystem.WorldSeed;
+			ShopPermutation.WorldPlan plain = ShopPermutation.Build(seed, 0f);
+			if (plain.Places.Count == 0) Check.Skip("no permutable shop entry");
+			List<string> failures = new();
+			string Where(ShopPermutation.WorldPlan plan, int p) => $"{plan.Shops[p]}#{plan.Places[p].Index}";
+			int[] seen = new int[plain.Places.Count];
+			foreach (List<int> group in plain.Groups)
+			{
+				HashSet<int> members = group.ToHashSet();
+				List<int> before = group.Select(p => plain.Places[p].Entry.itemId).OrderBy(i => i).ToList();
+				List<int> after = group.Select(p => plain.Sold[p]).OrderBy(i => i).ToList();
+				if (!before.SequenceEqual(after)) failures.Add($"group of {Where(plain, group[0])}: items not conserved");
+				foreach (int p in group)
+				{
+					int from = plain.ContentOf[p];
+					seen[from]++;
+					if (!members.Contains(from)) failures.Add($"{Where(plain, p)}: content from another group ({Where(plain, from)})");
+					if (group.Count > 1 && from == p) failures.Add($"{Where(plain, p)}: content left at its place");
+				}
+			}
+			for (int p = 0; p < seen.Length; p++)
+			{
+				if (seen[p] != 1) failures.Add($"{Where(plain, p)}: content placed {seen[p]} times");
+			}
+			if (plain.Surprised.Any(s => s)) failures.Add("surprises with a zero chance");
+
+			ShopPermutation.WorldPlan wild = ShopPermutation.Build(seed, 1f);
+			HashSet<int> kept = new();
+			for (int p = 0; p < wild.Places.Count; p++)
+			{
+				int content = wild.Places[wild.ContentOf[p]].Entry.itemId;
+				if (wild.Surprised[p] && !wild.SurpriseCandidate[p]) failures.Add($"{Where(wild, p)}: surprise on a keeper or material");
+				if (!wild.Surprised[p] && wild.Sold[p] != content) failures.Add($"{Where(wild, p)}: sells {Name(wild.Sold[p])} instead of {Name(content)} without a surprise");
+				if (!wild.Surprised[p]) kept.Add(wild.Sold[p]);
+			}
+			HashSet<int> shopOnly = VanillaShopOnly();
+			foreach (int item in wild.Places.Select(p => p.Entry.itemId).Distinct().OrderBy(i => i))
+			{
+				if (!kept.Contains(item)) failures.Add($"{Name(item)}{(shopOnly.Contains(item) ? " (shop-only)" : "")}: no unsurprised copy left");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ShopPermutationConserves: {plain.Places.Count} places, {plain.Groups.Count} groups, "
+				+ $"{wild.Surprised.Count(s => s)} surprises with every candidate drawn, {shopOnly.Count(i => wild.Places.Any(p => p.Entry.itemId == i))} shop-only items permuted");
+			Check.All(failures, "Shop permutation");
 		}
 	}
 }

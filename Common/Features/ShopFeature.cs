@@ -20,12 +20,17 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// Runs on the local client each time a shop is opened. The original item is part of the key,
-		// so each replacement keeps the original's unlock conditions (moon phase, progression...)
+		// Runs on the local client each time a shop is opened. Permutation style: ShopPermutation. Random style: the original
+		// item is part of the key, so each replacement keeps the original's unlock conditions (moon phase, progression...)
 		public override void ModifyActiveShop(NPC npc, string shopName, Item[] items)
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
 			if (!cfg.RandomizeShops || !SeedSystem.WorldReady || !ItemPool.Ready) return;
+			if (cfg.ShopStyle == ShopStyle.Permutation)
+			{
+				ShopPermutation.Apply(npc, shopName, items);
+				return;
+			}
 			// null = unused slot, air = reserved slot whose conditions are not met: both must stay as they are. Items bought
 			// with a special currency (defender medals) are left alone
 			int[] originals = new int[items.Length];

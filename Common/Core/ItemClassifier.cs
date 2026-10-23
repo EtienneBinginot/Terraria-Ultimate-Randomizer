@@ -557,6 +557,21 @@ namespace UltimateRandomizer.Common.Core
 			Condition.DontStarveWorld, Condition.NoTrapsWorld, Condition.ZenithWorld
 		};
 
+		private static Dictionary<Condition, int> shopConditionTiers;
+
+		// The tier a shop condition waits for (ShopPermutation); 0 for the others (moon phase, biome, time...)
+		public static int ShopConditionTier(Condition condition)
+		{
+			shopConditionTiers ??= ShopConditionTiers();
+			return condition != null && shopConditionTiers.TryGetValue(condition, out int tier) ? tier : 0;
+		}
+
+		// When a town NPC moves in, in vanilla (0: from the start, or unknown)
+		public static int VanillaArrivalTier(int npcType) => TownNpcTiers.TryGetValue(npcType, out Tier tier) ? (int)tier : 0;
+
+		// A shop condition of a special seed (true or false in a whole world)
+		public static bool IsSeedCondition(Condition condition) => SeedConditions.Contains(condition);
+
 		// The tier each known shop condition waits for (the others: none)
 		private static Dictionary<Condition, int> ShopConditionTiers()
 		{

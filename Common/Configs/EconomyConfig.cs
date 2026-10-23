@@ -51,6 +51,15 @@ namespace UltimateRandomizer.Common.Configs
 		}
 	}
 
+	public enum ShopStyle
+	{
+		// The vanilla shop entries are shuffled between the merchants of the same tier (ShopPermutation): every item still
+		// sold somewhere, with the receiving entry's conditions; a few of them become random items (ShopSurpriseChance)
+		Permutation,
+		// Each shop item is replaced by a random item of the same category (ShopPlanner)
+		Random
+	}
+
 	public class EconomyConfig : RandomizerConfig
 	{
 		public static EconomyConfig Instance => ModContent.GetInstance<EconomyConfig>();
@@ -58,6 +67,17 @@ namespace UltimateRandomizer.Common.Configs
 		[Header("Shops")]
 		[DefaultValue(true)]
 		public bool RandomizeShops;
+
+		[DefaultValue(ShopStyle.Permutation)]
+		[DrawTicks]
+		public ShopStyle ShopStyle;
+
+		// Permutation style: share (%) of the shuffled entries (not materials, ores or bars) sold as a random item of the same
+		// category instead; never the keeper copy every item keeps (ShopPermutation.SurpriseCandidates)
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(10f)]
+		public float ShopSurpriseChance;
 
 		// At least 1: below 0.2, buying then selling back would make infinite money
 		[Range(1f, 10f)]
