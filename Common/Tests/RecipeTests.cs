@@ -43,6 +43,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CraftedValueFromIngredients", CraftedValueFromIngredients);
 			TestRunner.Register("FurnitureSurprise", FurnitureSurprise);
 			TestRunner.Register("ProtectedRecipesDoable", ProtectedRecipesDoable);
+			TestRunner.Register("RecipeAlwaysFinalResult", RecipeAlwaysFinalResult);
+			TestRunner.Register("RecipeKeyIngredient", RecipeKeyIngredient);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -60,7 +62,8 @@ namespace UltimateRandomizer.Common.Tests
 			if (CraftingConfig.Instance.IngredientMode != IngredientMode.Randomized) Check.Skip("ingredients are vanilla");
 		}
 
-		// A replaced ingredient is always found (not crafted) by the recipe's level
+		// A replaced ingredient is always found (not crafted) by the recipe's level; a key ingredient by the U of its result
+		// (U + 1 when U has no key material)
 		private static void IngredientReplacementsFindable()
 		{
 			RequireRandomIngredients();
@@ -71,6 +74,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (plan.Ingredients[i] == null) continue;
 				int rt = RecipePlanner.RecipeTier(i);
+				if (plan.KeyIngredient[i]) rt = Math.Max(rt, Math.Min(plan.ResultTiers[i] + 1, Tiers.Max));
 				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
 				foreach ((int type, _) in plan.Ingredients[i])
 				{
@@ -97,7 +101,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (!RecipeSystem.Touchable(i)) continue;
 				touchable++;
 				Recipe recipe = Main.recipe[i];
-				int rt = RecipePlanner.RecipeTier(i);
+				int rt = Math.Max(RecipePlanner.RecipeTier(i), plan.ResultTiers[i]);
 				bool ok = recipe.requiredItem.All(item => item.type < plan.Availability.Length && (plan.Availability[item.type] <= rt || GroupAvailable(recipe, item.type, plan, rt)))
 					&& recipe.requiredTile.All(tile => StationTier(tile, placers, plan.Availability) <= rt);
 				if (ok) doable++;
@@ -179,7 +183,8 @@ namespace UltimateRandomizer.Common.Tests
 					foreach (int tile in recipe.requiredTile) tier = Math.Max(tier, StationTier(tile, placers, naive));
 					if (tier == Findability.Never) continue;
 					int result = plan.Results[i].type;
-					int at = Math.Max(tier, plan.ResultTiers[i]);
+					// Recipes give their result as soon as they are doable
+					int at = tier;
 					if (result > 0 && result < naive.Length && at < naive[result])
 					{
 						naive[result] = at;
@@ -428,14 +433,11 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(withTiles == 0 || changed >= withTiles / 5, $"only {changed} of {withTiles} recipes changed station");
 		}
 
-		// The live recipes give what the plan was built around (once their tier is unlocked), and the plan's availability
-		// is the one of the live recipes
+		// The live recipes give what the plan was built around, and the plan's availability is the one of the live recipes
 		private static void AppliedResultsMatchPlan()
 		{
 			RequireApplied();
 			RecipePlan plan = RecipePlanner.Get();
-			ProgressionConfig progression = ProgressionConfig.Instance;
-			int limit = ItemPool.GatingLimit(0);
 			List<string> failures = new();
 			int checkedCount = 0;
 			for (int i = 0; i < Count; i++)
@@ -443,27 +445,19 @@ namespace UltimateRandomizer.Common.Tests
 				Item result = Main.recipe[i].createItem;
 				// Ingredients and stations were planned around the result rolled from the original recipe
 				(int type, int stack) rolled = RecipePlanner.ResultFor(i, RecipeSystem.OriginalIngredients(i), lucky: true);
-				if (rolled != plan.Results[i]) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: planned around {Name(rolled.type)} x{rolled.stack}, gives {Name(plan.Results[i].type)} x{plan.Results[i].stack}");
+				if (rolled != plan.Results[i] && !plan.ResultRepicked[i]) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: planned around {Name(rolled.type)} x{rolled.stack}, gives {Name(plan.Results[i].type)} x{plan.Results[i].stack}");
 				if (plan.Results[i].type != RecipeSystem.OriginalResult(i) && Main.recipe[i].requiredItem.Any(item => item.type == plan.Results[i].type))
 				{
 					failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {Name(plan.Results[i].type)} is both an ingredient and the result");
 				}
-				if (ProgressionSystem.UnlockedTier >= plan.ResultTiers[i])
+				checkedCount++;
+				if (result.type != plan.Results[i].type || result.stack != plan.Results[i].stack)
 				{
-					checkedCount++;
-					if (result.type != plan.Results[i].type || result.stack != plan.Results[i].stack)
-					{
-						failures.Add($"{Name(RecipeSystem.OriginalResult(i))} gives {Name(result.type)} x{result.stack}, planned {Name(plan.Results[i].type)} x{plan.Results[i].stack}");
-					}
-				}
-				// A stand-in: never above what progression allows (or the original's own tier)
-				else if (ItemPool.TierOf(result.type) > Math.Max(limit, ItemPool.TierOf(RecipeSystem.OriginalResult(i))))
-				{
-					failures.Add($"{Name(RecipeSystem.OriginalResult(i))} gives {Name(result.type)} (tier {ItemPool.TierOf(result.type)}) before tier {plan.ResultTiers[i]}");
+					failures.Add($"{Name(RecipeSystem.OriginalResult(i))} gives {Name(result.type)} x{result.stack}, planned {Name(plan.Results[i].type)} x{plan.Results[i].stack}");
 				}
 			}
-			Check.That(checkedCount > 0, "no recipe gives its planned result yet");
-			int[] live = RecipePlanner.Availability(Findability.Tier, plan.Results.Select(r => r.type).ToArray(), plan.ResultTiers,
+			Check.That(checkedCount > 0, "no recipe");
+			int[] live = RecipePlanner.Availability(Findability.Tier, plan.Results.Select(r => r.type).ToArray(), new int[plan.Results.Length],
 				Enumerable.Range(0, Count).Select(i => Main.recipe[i].requiredItem.Select(item => (item.type, item.stack)).ToArray()).ToArray(),
 				Enumerable.Range(0, Count).Select(i => Main.recipe[i].requiredTile.ToArray()).ToArray(), out _);
 			for (int t = 1; t < live.Length && failures.Count < 20; t++)
@@ -581,7 +575,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (oreTier < 0) continue;
 				levels++;
 				HashSet<int> unmined = RecipePlanner.OresFrom(level.pick);
-				int[] avail = RecipePlanner.Availability(item => unmined.Contains(item) ? Findability.Never : Findability.Tier(item), results, plan.ResultTiers, ingredients, tiles, out _);
+				int[] avail = RecipePlanner.Availability(item => unmined.Contains(item) ? Findability.Never : Findability.Tier(item), results, new int[results.Length], ingredients, tiles, out _);
 				int best = pickaxes.Where(p => RecipePlanner.PickPower(p) >= level.pick && p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Findability.Never).Min();
 				if (best > oreTier) failures.Add($"pick power {level.pick} ({string.Join("/", level.ores.Select(Name))}, tier {oreTier}): first pickaxe at {Show(best)}");
 			}
@@ -750,6 +744,78 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(checkedCount > 0, "no protected recipe");
 			Check.All(failures, "Protected recipes not doable at their level");
 		}
+
+		// Every live recipe gives its planned result whatever the progression (no stand-in before its tier), the untouched ones
+		// their vanilla result
+		private static void RecipeAlwaysFinalResult()
+		{
+			RequireApplied();
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			int ahead = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				(int type, int stack) expected = RecipeSystem.Touchable(i) ? plan.Results[i] : (RecipeSystem.OriginalResult(i), RecipeSystem.OriginalStack(i));
+				Item live = Main.recipe[i].createItem;
+				if (live.type != expected.type || live.stack != expected.stack)
+				{
+					failures.Add($"{Name(RecipeSystem.OriginalResult(i))} gives {Name(live.type)} x{live.stack}, planned {Name(expected.type)} x{expected.stack}");
+				}
+				if (RecipeSystem.AppliedResult(plan, i) != plan.Results[i]) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: AppliedResult is not the planned result");
+				if (plan.ResultTiers[i] > ProgressionSystem.UnlockedTier) ahead++;
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeAlwaysFinalResult: {ahead} recipes give a result of a tier not unlocked yet (locked by their ingredients)");
+			Check.All(failures, "Recipes not giving their final result");
+		}
+
+		// A randomized vanilla recipe can't be made before U, the unlocked tier of its result (a key ingredient, a station or
+		// its own ingredients make it wait), and a key ingredient makes it doable at U, not later (U + 1 only when U has no
+		// key material). A result re-picked back to the original is vanilla and not checked
+		private static void RecipeKeyIngredient()
+		{
+			RequireApplied();
+			if (!ProgressionConfig.Instance.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only with tier gating in Coherent mode");
+			RecipePlan plan = RecipePlanner.Get();
+			int[] results = plan.Results.Select(r => r.type).ToArray();
+			(int type, int stack)[][] ingredients = Enumerable.Range(0, Count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
+			int[][] tiles = Enumerable.Range(0, Count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
+			RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doable);
+			List<string> failures = new();
+			int gated = 0, keys = 0, repicked = 0, later = 0, never = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				if (!RecipeSystem.Touchable(i) || Main.recipe[i].Disabled) continue;
+				int u = plan.ResultTiers[i];
+				int expectedU = Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(results[i])));
+				if (u != expectedU) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: result tier {u}, {expectedU} expected for {Name(results[i])}");
+				if (plan.KeyIngredient[i]) keys++;
+				if (plan.ResultRepicked[i]) repicked++;
+				if (u == 0) continue;
+				gated++;
+				if (doable[i] >= Findability.Never)
+				{
+					never++;
+					continue;
+				}
+				if (doable[i] < u)
+				{
+					if (!(plan.ResultRepicked[i] && results[i] == RecipeSystem.OriginalResult(i)))
+					{
+						failures.Add($"{Name(RecipeSystem.OriginalResult(i))} -> {Name(results[i])}: doable at {doable[i]}, before its tier {u} ({Ingredients(ingredients[i])})");
+					}
+				}
+				else if (doable[i] > u)
+				{
+					later++;
+					if (plan.KeyIngredient[i] && doable[i] > u + 1) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} -> {Name(results[i])}: a key ingredient but doable at {doable[i]}, tier {u}");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeKeyIngredient: {gated} gated recipes, {keys} key ingredients, {repicked} results re-picked, " +
+				$"{later} doable after their tier (their own ingredients or stations), {never} never doable");
+			Check.All(failures, "Recipes doable before their result's tier");
+		}
+
+		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));
 
 		private static Item NetRoundTrip(Item item)
 		{

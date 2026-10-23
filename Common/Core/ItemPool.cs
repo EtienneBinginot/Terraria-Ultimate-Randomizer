@@ -26,6 +26,8 @@ namespace UltimateRandomizer.Common.Core
 		public bool SourceRaised;
 		// Never given at random (storage mod items, inactive vanilla guides, tModLoader's own items: ItemClassifier.IsBanned): re-picked
 		public bool Banned;
+		// Its true tier (or ban) comes from the hand-reviewed MaterialTiers table
+		public bool FromTable;
 		public bool Excluded;
 		public bool Protected;
 	}
@@ -122,6 +124,24 @@ namespace UltimateRandomizer.Common.Core
 			int[] sourceTiers = new int[count];
 			string[] sourceNames = new string[count];
 			int bySources = ItemClassifier.RaiseBySources(trueTiers, overrides, sourceTiers, sourceNames, out string sourceExamples);
+			// Last, the hand-reviewed materials (MaterialTiers): their true tier is exactly the table's, whatever the recipes and
+			// sources computed (lower too); null bans them. The config overrides still win. Tier and the buckets never change
+			bool[] fromTable = new bool[count];
+			bool[] tableBanned = new bool[count];
+			int tableChanged = 0;
+			foreach ((int type, (int? tier, _)) in MaterialTiers.Table)
+			{
+				if (type <= 0 || type >= count || overrides.ContainsKey(type)) continue;
+				fromTable[type] = true;
+				if (tier == null)
+				{
+					tableBanned[type] = true;
+					continue;
+				}
+				int set = Tiers.Clamp(tier.Value);
+				if (set != Math.Max(tiers[type], trueTiers[type])) tableChanged++;
+				trueTiers[type] = set;
+			}
 			int banned = 0;
 			for (int type = 1; type < count; type++)
 			{
@@ -135,10 +155,13 @@ namespace UltimateRandomizer.Common.Core
 				int tier = tiers[type];
 				bool isProtected = protectedItems.Contains(type);
 				// Banned items stay in their bucket (the buckets never change): rolls re-pick them
-				bool isBanned = ItemClassifier.IsBanned(item);
+				bool isBanned = ItemClassifier.IsBanned(item) || tableBanned[type];
 				if (isBanned) banned++;
-				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = Math.Max(tier, trueTiers[type]), Banned = isBanned, Protected = isProtected,
-					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = trueTiers[type] > Math.Max(tier, beforeSources[type]) };
+				// A material of the table keeps the table's tier even below its bucket's tier
+				int trueTier = fromTable[type] ? trueTiers[type] : Math.Max(tier, trueTiers[type]);
+				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = trueTier, Banned = isBanned, Protected = isProtected,
+					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fromTable[type] && trueTiers[type] > Math.Max(tier, beforeSources[type]),
+					FromTable = fromTable[type] };
 				if (!isProtected) lists[(int)category, tier].Add(type);
 			}
 
@@ -161,7 +184,8 @@ namespace UltimateRandomizer.Common.Core
 			log4net.ILog logger = ModContent.GetInstance<UltimateRandomizer>().Logger;
 			logger.Info($"Classified {count} items in {watch.ElapsedMilliseconds} ms ({protectedItems.Count} protected, {banned} banned), "
 				+ $"tiers from recipes: {lowered} lowered ({loweredExamples}), {raised} raised ({raisedExamples}); "
-				+ $"tiers from sources: {bySources} raised ({sourceExamples}).");
+				+ $"tiers from sources: {bySources} raised ({sourceExamples}); material table: {fromTable.Count(f => f)} listed, {tableChanged} true tiers changed, "
+				+ $"{tableBanned.Count(b => b)} banned.");
 			LogSuspicious(logger);
 		}
 
@@ -494,8 +518,12 @@ namespace UltimateRandomizer.Common.Core
 		// The tier the plans work with (rolls aim at it, findability, guaranteed sources, recipe availability)
 		public static int TierOf(int type) => IsValid(type) ? Info[type].Tier : 0;
 
-		// The tier from which the item may be given (>= TierOf): progression checks, jackpot gaps, what the codex shows
+		// The tier from which the item may be given (>= TierOf, except the materials of MaterialTiers: exactly the table's):
+		// progression checks, jackpot gaps, what the codex shows
 		public static int TrueTierOf(int type) => IsValid(type) ? Info[type].TrueTier : 0;
+
+		// How often a material comes back as a random recipe ingredient (MaterialTiers; unlisted items: uncommon)
+		public static Commonness CommonnessOf(int type) => MaterialTiers.Table.TryGetValue(type, out var entry) ? entry.Commonness : Commonness.Uncommon;
 
 		// The wild tier tail: with chance (%), limit + k where P(k) is proportional to decay^-k, up to maxTier (the
 		// weights are renormalized over the tiers allowed, so each step stays `decay` times rarer). Else the limit.

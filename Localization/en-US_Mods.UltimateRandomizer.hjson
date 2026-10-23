@@ -224,6 +224,8 @@ Tests: {
 	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks
 	FurnitureSurprise: Furniture, block and wall recipes give something else with the furniture surprise chance
 	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
+	RecipeAlwaysFinalResult: Recipes always give their final result, with no stand-in before its tier
+	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer

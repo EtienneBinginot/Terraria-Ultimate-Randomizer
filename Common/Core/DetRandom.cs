@@ -45,6 +45,8 @@ namespace UltimateRandomizer.Common.Core
 		// Chests of an ongoing world brought under their cap (ChestSystem.TameChests)
 		public const int Tame = 36;
 		public const int JackpotChest = 37;
+		// Key ingredient of a recipe's tier, and the re-pick of a result that can't have one (RecipePlanner.LockResults)
+		public const int KeyIngredient = 38;
 		public const int Fallback = 0xFA11;
 	}
 
