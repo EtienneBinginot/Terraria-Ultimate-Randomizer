@@ -91,6 +91,13 @@ namespace UltimateRandomizer.Common.Features
 					replacement = ItemPool.Roll(request);
 					if (!noDuplicates || !used.Contains(replacement)) break;
 				}
+				// The progression limits leave few items of a category (late potions): the re-rolls all came back to an item
+				// already sold. Another unused item of its category, no later than it, from its tier down
+				if (noDuplicates && used.Contains(replacement))
+				{
+					int other = Unused(replacement, used, DetRandom.Get(RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), RollKey.Fallback));
+					if (other > 0) replacement = other;
+				}
 				used.Add(replacement);
 				slots[i] = new ShopSlot(original, replacement, PriceRules.Price(replacement, DetRandom.Get(RollKey.Price, npcKey, shopKey, DetRandom.ItemKey(replacement))));
 			}
@@ -98,5 +105,27 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		public const int TierJitterUp = 1;
+
+		// An item of the same category as taken, not in used, whose true tier is no later than taken's (never a hard gate
+		// unless taken is one), from taken's tier down, each bucket read from a random start; 0 when there is none
+		private static int Unused(int taken, HashSet<int> used, Random rng)
+		{
+			if (!ItemPool.IsValid(taken)) return 0;
+			ItemCategory category = ItemPool.Info[taken].Category;
+			int ceiling = ItemPool.TrueTierOf(taken);
+			int hardCeiling = ItemPool.IsHardGate(taken) ? ceiling : -1;
+			for (int t = ItemPool.TierOf(taken); t >= 0; t--)
+			{
+				int[] bucket = ItemPool.Bucket(category, t);
+				if (bucket.Length == 0) continue;
+				int start = rng.Next(bucket.Length);
+				for (int k = 0; k < bucket.Length; k++)
+				{
+					int item = bucket[(start + k) % bucket.Length];
+					if (!used.Contains(item) && ItemPool.Allowed(item, ceiling, hardCeiling)) return item;
+				}
+			}
+			return 0;
+		}
 	}
 }

@@ -59,7 +59,8 @@ namespace UltimateRandomizer.Common.Tests
 					List<PlannedDrop> plan = RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true);
 					List<int> expected = plan.Where(d => d.Item > ItemID.None && (d.Rolled || d.Extra || d.Guaranteed)).Select(d => d.Item).ToList();
 					if (expected.Count == 0) continue;
-					BestiaryEntry entry = Main.BestiaryDB.FindEntryByNPCID(netId);
+					// A net ID without a page of its own (the Hornet's size variants) is shown on none
+					BestiaryEntry entry = WorldDropsReport.EntryOf(netId);
 					if (entry == null) continue;
 					checkedIds++;
 					List<int> shown = entry.Info.OfType<ItemDropBestiaryInfoElement>().Select(e => ((DropRateInfo)rateField.GetValue(e)).itemId).ToList();
