@@ -77,6 +77,9 @@ namespace UltimateRandomizer.Common.Core
 		// An explicit ceiling (null: none), gated or not: nothing above it, by Tier or TrueTier, jackpots included (the
 		// hardmode wall of fishing and shimmer, chest caps)
 		public int? MaxTier;
+		// The ceiling of the hard gates (null: MaxTier), for a roll that ignores progression: a Lihzahrd chest (cap 7) gives no
+		// Beetle Husk before Golem
+		public int? HardMaxTier;
 		// The progression the gating limit reads (null: the live one, ProgressionSystem.UnlockedTier and Main.hardMode): plans
 		// simulated at another progression (the shop dump and tests)
 		public int? GatingTier;
@@ -471,8 +474,10 @@ namespace UltimateRandomizer.Common.Core
 			// The highest true tier this roll may give (re-picked above it): its limit when gated, else the explicit ceiling only;
 			// the same without the allowance for the hard gates
 			int ceiling = request.IgnoreGating ? maxTier : categoryLimit;
+			int hardLimit = HardLimit(request);
 			int hardCeiling = request.IgnoreGating ? maxTier : Math.Min(maxTier, hasOriginal && category == Info[request.OriginalItem].Category
-				? Math.Max(HardLimit(request.MinLimit), Info[request.OriginalItem].Tier) : HardLimit(request.MinLimit));
+				? Math.Max(hardLimit, Info[request.OriginalItem].Tier) : hardLimit);
+			if (request.HardMaxTier.HasValue) hardCeiling = Math.Min(hardCeiling, Tiers.Clamp(request.HardMaxTier.Value));
 			// Bags and summons stay at the limit: a wild boss bag would hand out its whole tier (Hallowed Bars before hardmode...)
 			if (request.Wild && request.WildRng != null && limit < Tiers.Max && category is not (ItemCategory.Bag or ItemCategory.BossSummon))
 			{
@@ -547,8 +552,11 @@ namespace UltimateRandomizer.Common.Core
 		public static bool Allowed(int type, int ceiling, int hardCeiling = Tiers.Max) =>
 			!IsBanned(type) && TrueTierOf(type) <= ceiling && (TrueTierOf(type) <= hardCeiling || !IsHardGate(type));
 
-		// The progression limit of the hard gates: the unlocked tier itself (or the source's floor)
-		private static int HardLimit(int minLimit) => GatingLimit(ProgressionSystem.UnlockedTier, Main.hardMode, minLimit, 0);
+		// The progression limit of the hard gates: the unlocked tier itself (or the source's floor), from the same progression
+		// as the roll's limit (GatingTier: a simulated one)
+		private static int HardLimit(in RollRequest request) => request.GatingTier.HasValue
+			? GatingLimit(request.GatingTier.Value, request.GatingHardMode, request.MinLimit, 0)
+			: GatingLimit(ProgressionSystem.UnlockedTier, Main.hardMode, request.MinLimit, 0);
 
 		public static bool IsBanned(int type) => IsValid(type) && Info[type].Banned;
 

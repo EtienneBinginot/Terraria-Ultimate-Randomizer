@@ -65,30 +65,78 @@ namespace UltimateRandomizer.Common.Features
 
 		public static long EffectiveValue(int type)
 		{
+			long value = Effective(type, out _);
+			return value == Cycle ? ValueFloor(type) : value;
+		}
+
+		private const long InProgress = -2;
+		// An item whose value is being computed: a recipe needing it is left out (a Gray Brick made back from its walls is
+		// not worth 4 walls valued at their floor, 4 copper)
+		private const long Cycle = long.MaxValue;
+		// The depth of each item being computed, and the current depth
+		private static int[] progressDepth;
+		private static int depth;
+
+		// low: the smallest depth of the items in progress this value depended on (int.MaxValue: none). A value that depended
+		// on an item further up the chain is not cached (it left out a recipe only that chain loops through)
+		private static long Effective(int type, out int low)
+		{
+			low = int.MaxValue;
 			if (type <= 0) return 1;
 			if (effectiveValues == null || effectiveValues.Length < ItemLoader.ItemCount)
 			{
 				effectiveValues = new long[ItemLoader.ItemCount];
 				Array.Fill(effectiveValues, -1);
+				progressDepth = new int[ItemLoader.ItemCount];
+				depth = 0;
 				madeBy = null;
 			}
 			if (type >= effectiveValues.Length) return Math.Max(StackRules.ValueOf(type), 1);
 			if (effectiveValues[type] >= 0) return Math.Max(effectiveValues[type], 1);
-			if (effectiveValues[type] == InProgress) return ValueFloor(type);
+			if (effectiveValues[type] == InProgress)
+			{
+				low = progressDepth[type];
+				return Cycle;
+			}
 			int value = StackRules.ValueOf(type);
 			if (value > 0 || originalTypes == null) return effectiveValues[type] = Math.Max(value, 1);
+			int own = depth++;
+			progressDepth[type] = own;
 			effectiveValues[type] = InProgress;
-			long best = long.MaxValue;
-			foreach (int i in MadeBy(type))
+			long best = Cycle;
+			try
 			{
-				// A recipe looping back through the item counts its floor there
-				long cost = originalIngredients[i].Sum(p => EffectiveValue(p.type) * p.stack);
-				best = Math.Min(best, cost / Math.Max(1, originalStacks[i]));
+				foreach (int i in MadeBy(type))
+				{
+					long cost = 0;
+					bool loops = false;
+					foreach ((int ingredient, int stack) in originalIngredients[i])
+					{
+						long each = Effective(ingredient, out int l);
+						low = Math.Min(low, l);
+						if (each == Cycle)
+						{
+							loops = true;
+							break;
+						}
+						cost += each * stack;
+					}
+					if (!loops) best = Math.Min(best, cost / Math.Max(1, originalStacks[i]));
+				}
 			}
-			return effectiveValues[type] = best == long.MaxValue ? ValueFloor(type) : Math.Max(best, 1);
+			finally
+			{
+				depth--;
+			}
+			if (low < own)
+			{
+				// Depends on an item further up: computed again once that one is known
+				effectiveValues[type] = -1;
+				return best == Cycle ? Cycle : Math.Max(best, 1);
+			}
+			low = int.MaxValue;
+			return effectiveValues[type] = best == Cycle ? ValueFloor(type) : Math.Max(best, 1);
 		}
-
-		private const long InProgress = -2;
 
 		// The enabled vanilla recipes (not shells, not other mods') making each item
 		private static Dictionary<int, List<int>> madeBy;

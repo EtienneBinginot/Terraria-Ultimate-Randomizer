@@ -457,10 +457,16 @@ namespace UltimateRandomizer.Common.Tests
 				int previousMax = -1;
 				foreach (List<int> group in plan.BossGroups)
 				{
-					List<int> tiers = group.Select(BossPermutation.TierOf).ToList();
+					List<int> tiers = group.Select(BossPermutation.GroupTierOf).ToList();
 					if (tiers.Min() <= previousMax) Fail($"seed {seed}: the groups overlap at tier {tiers.Min()}");
 					previousMax = tiers.Max();
 					if (group.Count < BossPermutation.MinGroupBosses && plan.BossGroups.Count > 1) Fail($"seed {seed}: a group of {group.Count} boss ({string.Join(", ", group.Select(NpcName))})");
+				}
+				// Queen Bee and Deerclops are grouped with Skeletron (never Skeletron and the Wall of Flesh alone)
+				int skeletron = plan.GroupOfUnit.Keys.FirstOrDefault(u => BossParts.Owner(u) == NPCID.SkeletronHead);
+				foreach (int unit in plan.GroupOfUnit.Keys.Where(u => BossParts.Owner(u) is NPCID.QueenBee or NPCID.Deerclops))
+				{
+					if (skeletron != 0 && plan.GroupOfUnit[unit] != plan.GroupOfUnit[skeletron]) Fail($"seed {seed}: {NpcName(unit)} is not in Skeletron's group");
 				}
 				// With enough bosses from the Lunatic Cultist on, the Moon Lord's contents never land on an earlier boss
 				List<int> late = plan.GroupOfUnit.Keys.Where(u => BossPermutation.TierOf(u) >= (int)Tier.PostCultist).ToList();
@@ -479,7 +485,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			if (logged != null)
 			{
-				string groups = string.Join(" | ", logged.BossGroups.Select(g => string.Join(", ", g.Select(u => $"{NpcName(u)} {BossPermutation.TierOf(u)}"))));
+				string groups = string.Join(" | ", logged.BossGroups.Select(g => string.Join(", ", g.Select(u => $"{NpcName(u)} {BossPermutation.GroupTierOf(u)}"))));
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Boss groups: {groups}");
 			}
 			Check.All(failures, "Boss permutation groups");

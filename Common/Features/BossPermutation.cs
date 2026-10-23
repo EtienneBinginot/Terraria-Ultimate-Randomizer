@@ -132,6 +132,15 @@ namespace UltimateRandomizer.Common.Features
 		public static int TierOf(int unit) =>
 			NpcTiers.BaseTier(BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? sample.type : unit));
 
+		// The tier a table is grouped by: its boss tier, except Queen Bee and Deerclops, grouped with Skeletron (3) although
+		// their tier is the evil bosses' (NpcTiers: 2). Otherwise Skeletron and the Wall of Flesh made a group of two (the
+		// Dark Mage and the Flying Dutchman are no NPC.boss), and their loot only swapped with each other
+		public static int GroupTierOf(int unit)
+		{
+			int owner = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? sample.type : unit);
+			return owner is NPCID.QueenBee or NPCID.Deerclops ? Math.Max(TierOf(unit), (int)Core.Tier.PostSkeletron) : TierOf(unit);
+		}
+
 		// Every boss table of the world, in a stable order
 		public static List<int> Units()
 		{
@@ -351,7 +360,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			Collected c = Collect();
 			List<DropPermutation.Place> places = c.Places;
-			List<List<int>> bossGroups = BossGroups(places.Select(p => (p.Owner, p.Tier)));
+			List<List<int>> bossGroups = BossGroups(places.Select(p => (p.Owner, GroupTierOf(p.Owner))));
 			Dictionary<int, int> groupOfUnit = new();
 			for (int g = 0; g < bossGroups.Count; g++)
 			{
