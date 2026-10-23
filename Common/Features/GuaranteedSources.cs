@@ -1025,7 +1025,9 @@ namespace UltimateRandomizer.Common.Features
 				if (item > 0 && item < result.Length) result[item] = Math.Min(result[item], Math.Max(0, tier));
 			}
 			LootConfig loot = LootConfig.Instance;
-			int Gated(int item) => ItemPool.UnlockTier(ItemPool.TierOf(item));
+			// Drops and bag contents are locked by the item's true tier (DropHelper.LockGap), herbs by the same progression
+			// checks. Mined ores keep their tier: mining is not gated, and the mining levels use it (RecipePlanner.MiningTier)
+			int Gated(int item) => ItemPool.UnlockTier(ItemPool.TrueTierOf(item));
 
 			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, tier);
 			if (loot.RandomizeHerbs)

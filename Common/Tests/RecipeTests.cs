@@ -866,7 +866,7 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Each life or mana upgrade is the result of exactly one live recipe (its vanilla recipe, kept or re-picked back, aside),
 		// chosen by the plan; with tier gating, that recipe is doable from the upgrade's tier (a key ingredient), not before,
-		// and at most one tier later
+		// and at most one tier later. It always has a key ingredient, and its ingredients are worth at least the upgrade
 		private static void UpgradeRecipes()
 		{
 			RequireApplied();
@@ -899,30 +899,50 @@ namespace UltimateRandomizer.Common.Tests
 				string where = $"{Name(item)} in the recipe of {host} ({Ingredients(ingredients[chosen])})";
 				if (doable[chosen] >= Findability.Never) failures.Add($"{where}: never doable");
 				else if (gated && (doable[chosen] < u || doable[chosen] > Math.Min(u + 1, Tiers.Max))) failures.Add($"{where}: doable at {doable[chosen]}, tier {u}");
+				if (!plan.KeyIngredient[chosen]) failures.Add($"{where}: no key ingredient");
+				// As the crafting menu reads it
+				long value = Main.recipe[chosen].requiredItem.Sum(x => (long)Math.Max(StackRules.ValueOf(x.type), 1) * x.stack);
+				if (value < StackRules.ValueOf(item)) failures.Add($"{where}: ingredients worth {value}, the upgrade {StackRules.ValueOf(item)}");
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"UpgradeRecipes: {where}, doable at {doable[chosen]}, key ingredient {plan.KeyIngredient[chosen]}");
 			}
 			Check.All(failures, "Upgrade recipes");
 		}
 
-		// The door, platform and torch: a hint target each, and found in the world or still made by their vanilla recipe
+		// The door, platform and torch: a hint target each, and their recipes keep their result but never stay vanilla when
+		// ingredients are randomized (a replaceable ingredient changes), with ingredients found at tier 0 and basic stations only
 		private static void HouseItemsObtainable()
 		{
 			RequireApplied();
+			CraftingConfig cfg = CraftingConfig.Instance;
 			List<string> failures = new();
 			foreach (int item in RecipeSystem.HouseItems)
 			{
 				if (!ItemPool.IsRandomizable(item)) continue;
 				if (Codex.HintFacts.RawTarget(item) == null) failures.Add($"{Name(item)} is no hint target");
-				if (!RecipeSystem.KeptForHouse(item))
+				if (!cfg.RandomizeRecipes) continue;
+				foreach (int i in Enumerable.Range(0, Count).Where(i => RecipeSystem.HouseRecipe(i) && RecipeSystem.OriginalResult(i) == item && !RecipeSystem.VanillaDisabled(i)))
 				{
-					if (Findability.BaseTier(item) >= Findability.Never) failures.Add($"{Name(item)}: recipe randomized but found nowhere");
-					continue;
+					Recipe recipe = Main.recipe[i];
+					(int type, int stack)[] live = recipe.requiredItem.Select(x => (x.type, x.stack)).ToArray();
+					string where = $"{Name(item)} ({Ingredients(live)})";
+					if (recipe.createItem.type != item) failures.Add($"{where}: gives {Name(recipe.createItem.type)}");
+					if (cfg.IngredientMode == IngredientMode.Randomized && RecipeSystem.OriginalIngredients(i).Any(x => RecipePlanner.IngredientReplaceable(recipe, x.type))
+						&& live.SequenceEqual(RecipeSystem.OriginalIngredients(i)))
+					{
+						failures.Add($"{where}: vanilla ingredients");
+					}
+					foreach ((int type, _) in live)
+					{
+						// A group ingredient (any Wood) only needs one of its items
+						bool found = Findability.Tier(type) == 0 || recipe.acceptedGroups.Any(id => RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group) && group.ContainsItem(type)
+							&& group.ValidItems.Any(v => Findability.Tier(v) == 0));
+						if (!found) failures.Add($"{where}: {Name(type)} found at tier {Findability.Tier(type)}");
+					}
+					foreach (int tile in recipe.requiredTile)
+					{
+						if (Stations.Info(tile).Kind != StationKind.Basic) failures.Add($"{where}: needs {TileID.Search.GetName(tile)}, no basic station");
+					}
 				}
-				// Its vanilla recipe, live: same result, ingredients and stations
-				bool vanilla = Enumerable.Range(0, Count).Any(i => RecipeSystem.OriginalResult(i) == item && !Main.recipe[i].Disabled && Main.recipe[i].createItem.type == item
-					&& Main.recipe[i].requiredItem.Select(x => (x.type, x.stack)).SequenceEqual(RecipeSystem.OriginalIngredients(i))
-					&& Main.recipe[i].requiredTile.SequenceEqual(RecipeSystem.OriginalTiles(i)));
-				if (!vanilla) failures.Add($"{Name(item)}: found nowhere and its vanilla recipe changed");
 			}
 			Check.All(failures, "House items");
 		}

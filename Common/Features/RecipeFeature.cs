@@ -93,14 +93,11 @@ namespace UltimateRandomizer.Common.Features
 			GuaranteedSources.ExtraRequirements.Add(RecipePlanner.MiningRequirements);
 			SeedSystem.OnSeedChanged += Refresh;
 			ProgressionSystem.OnTierChanged += Refresh;
-			WorldCaches.Reset += ForgetHouse;
 		}
 
 		public override void Unload()
 		{
 			Restore();
-			WorldCaches.Reset -= ForgetHouse;
-			keptHouse = null;
 			GuaranteedSources.ExtraRequirements.Clear();
 			CraftedValueItem.ClearCache();
 			originalTypes = null;
@@ -145,29 +142,22 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// Recipes whose result, ingredients and station may change: vanilla recipes of randomizable items, except the mining chain
-		// and the house items nothing else gives
-		public static bool Touchable(int i) => !modded[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression) && !KeptForHouse(originalTypes[i]);
+		// Recipes whose result, ingredients and station may change: vanilla recipes of randomizable items, except the mining chain.
+		// A house recipe (HouseRecipe) is touchable but keeps its result (RecipePlanner)
+		public static bool Touchable(int i) => !modded[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
 
-		// What a house needs besides the table and the chair (basic stations, guaranteed in the world): hint targets, and their
-		// vanilla recipe stays as it is while nothing else in the world gives them (Findability, before guaranteed sources)
+		// What a house needs besides the table and the chair (basic stations, guaranteed in the world): hint targets. Their
+		// recipes keep their result but get random ingredients found at tier 0 and a basic station (RecipePlanner), so a
+		// house can always be built at once
 		public static readonly int[] HouseItems = { ItemID.WoodenDoor, ItemID.WoodPlatform, ItemID.Torch };
 
-		private static HashSet<int> keptHouse;
-
-		private static void ForgetHouse() => keptHouse = null;
-
-		public static bool KeptForHouse(int item)
-		{
-			if (Array.IndexOf(HouseItems, item) < 0 || !ItemPool.Ready) return false;
-			keptHouse ??= HouseItems.Where(h => ItemPool.IsRandomizable(h) && Findability.BaseTier(h) >= Findability.Never).ToHashSet();
-			return keptHouse.Contains(item);
-		}
+		public static bool HouseRecipe(int i) => originalTypes != null && i >= 0 && i < originalTypes.Length && !modded[i]
+			&& Array.IndexOf(HouseItems, originalTypes[i]) >= 0 && ItemPool.IsRandomizable(originalTypes[i]);
 
 		// Recipes whose ingredients may change: protected results (boss summons, progression stations...) keep their result
 		// and stations, but an ingredient that can't be found in time is replaced like in any recipe (protected ingredients
 		// stay); modded recipes and excluded results stay as they are
-		public static bool IngredientsTouchable(int i) => !modded[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded && !KeptForHouse(originalTypes[i]);
+		public static bool IngredientsTouchable(int i) => !modded[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded;
 
 		public static bool IsModded(int i) => modded != null && i >= 0 && i < modded.Length && modded[i];
 
@@ -379,6 +369,11 @@ namespace UltimateRandomizer.Common.Features
 				{
 					if (type < decraft.Length) decraft[type] = Array.Empty<int>();
 				}
+			}
+			// The life and mana upgrades, made by a random cheap recipe, never shimmer back into anything, whatever the setting
+			foreach (int type in Protection.Upgrades)
+			{
+				if (ItemPool.IsSpecial(type) && type < decraft.Length) decraft[type] = Array.Empty<int>();
 			}
 		}
 

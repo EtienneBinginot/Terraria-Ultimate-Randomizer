@@ -231,8 +231,8 @@ Tests: {
 	RecipeAlwaysFinalResult: Les recettes donnent toujours leur résultat final, sans remplaçant avant son tier
 	RecipeKeyIngredient: Les recettes randomisées ne sont pas faisables avant le tier de leur résultat (ingrédient clé)
 	RecipeNoStationTwins: Une même recette (résultat et ingrédients) n'apparaît jamais sur deux stations différentes
-	UpgradeRecipes: Chaque amélioration de vie ou de mana est le résultat d'une recette aléatoire, faisable dès son tier
-	HouseItemsObtainable: La porte, la plateforme et la torche sont des cibles d'indices et restent obtenables (trouvées dans le monde ou par leur recette vanilla)
+	UpgradeRecipes: Chaque amélioration de vie ou de mana est le résultat d'une recette aléatoire, faisable dès son tier, avec un ingrédient clé et des ingrédients valant au moins l'amélioration
+	HouseItemsObtainable: La porte, la plateforme et la torche sont des cibles d'indices, et leurs recettes changent mais restent fabricables dès le début (ingrédients de palier 0, station de base)
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares

@@ -231,8 +231,8 @@ Tests: {
 	RecipeAlwaysFinalResult: Recipes always give their final result, with no stand-in before its tier
 	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
 	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
-	UpgradeRecipes: Each life or mana upgrade is the result of one random recipe, doable from its tier
-	HouseItemsObtainable: Door, platform and torch are hint targets and stay obtainable (found in the world or by their vanilla recipe)
+	UpgradeRecipes: Each life or mana upgrade is the result of one random recipe, doable from its tier, with a key ingredient and ingredients worth at least the upgrade
+	HouseItemsObtainable: Door, platform and torch are hint targets, and their recipes change but are craftable at once (tier 0 ingredients, basic station)
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
