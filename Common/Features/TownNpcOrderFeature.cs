@@ -62,54 +62,49 @@ namespace UltimateRandomizer.Common.Features
 		// Town NPC types in condition order, and who arrives with each condition (for the debug tools and tests)
 		public static int[] ConditionOwners => MoveInNpcs.Select(p => p.type).ToArray();
 
-		// Tier from which each condition of MoveInNpcs is usually met (money and items early, then the bosses)
-		private static readonly int[] ConditionTiers = { 0, 0, 0, 1, 0, 3, 0, 0, 0, 0, 2, 5, 4, 6 };
+		// Tier from which each condition of MoveInNpcs is usually met (money and items early, then the bosses). The town NPC
+		// counts and the bestiary follow vanilla pacing: 8 town NPCs around the first boss, 14 once the dungeon is open
+		// (Clothier, Mechanic...), 10% of the bestiary after a few biomes and the evil one
+		private static readonly int[] ConditionTiers = { 0, 0, 0, 1, 0, 3, 0, 1, 3, 2, 2, 5, 4, 6 };
 
 		// Tier at which a town NPC moves in, with this world's arrival order (-1: not one of the shuffled NPCs)
-		public static int ArrivalTier(int npcType)
+		public static int ArrivalTier(int npcType) => ArrivalTier(npcType, SeedSystem.WorldSeed);
+
+		// The same for an explicit seed (plans built for a seed: ShopPermutation.Build)
+		public static int ArrivalTier(int npcType, int seed)
 		{
-			int index;
-			if (ExtrasConfig.Instance.RandomizeTownNpcOrder)
-			{
-				EnsureArrivals();
-				index = Array.IndexOf(arrivals, npcType);
-			}
-			else
-			{
-				index = Array.FindIndex(MoveInNpcs, p => p.type == npcType);
-			}
+			int index = ExtrasConfig.Instance.RandomizeTownNpcOrder ? Array.IndexOf(ArrivalsFor(seed), npcType) : Array.FindIndex(MoveInNpcs, p => p.type == npcType);
 			return index >= 0 && index < ConditionTiers.Length ? ConditionTiers[index] : -1;
 		}
 
-		public static int[] Arrivals()
-		{
-			EnsureArrivals();
-			return (int[])arrivals.Clone();
-		}
+		public static int[] Arrivals() => (int[])ArrivalsFor(SeedSystem.WorldSeed).Clone();
 
-		private static void EnsureArrivals()
+		// The arrival order of a seed (the same shuffle as DetRandom.Get(RollKey.TownNpc, count) for the world seed). A new
+		// array per seed, never changed once cached
+		private static int[] ArrivalsFor(int seed)
 		{
-			if (arrivals == null || arrivalsSeed != SeedSystem.WorldSeed)
+			int[] current = arrivals;
+			if (current != null && arrivalsSeed == seed) return current;
+			current = MoveInNpcs.Select(p => p.type).ToArray();
+			Random rng = new(DetRandom.Hash(seed, RollKey.TownNpc, current.Length));
+			for (int i = current.Length - 1; i > 0; i--)
 			{
-				arrivals = MoveInNpcs.Select(p => p.type).ToArray();
-				Random rng = DetRandom.Get(RollKey.TownNpc, arrivals.Length);
-				for (int i = arrivals.Length - 1; i > 0; i--)
-				{
-					int j = rng.Next(i + 1);
-					(arrivals[i], arrivals[j]) = (arrivals[j], arrivals[i]);
-				}
-				arrivalsSeed = SeedSystem.WorldSeed;
+				int j = rng.Next(i + 1);
+				(current[i], current[j]) = (current[j], current[i]);
 			}
+			arrivalsSeed = seed;
+			arrivals = current;
+			return current;
 		}
 
 		private static void ApplyShuffledConditions()
 		{
 			// Who arrives with which condition: a permutation fixed for the world
-			EnsureArrivals();
+			int[] order = ArrivalsFor(SeedSystem.WorldSeed);
 			int firstReady = 0;
 			for (int i = 0; i < MoveInNpcs.Length; i++)
 			{
-				int arriving = arrivals[i];
+				int arriving = order[i];
 				bool ready = MoveInNpcs[i].condition() && !NPC.AnyNPCs(arriving);
 				Main.townNPCCanSpawn[arriving] = ready;
 				if (ready && firstReady == 0) firstReady = arriving;

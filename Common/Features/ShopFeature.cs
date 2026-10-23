@@ -20,8 +20,9 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// Runs on the local client each time a shop is opened. The original item is part of the key,
-		// so each replacement keeps the original's unlock conditions (moon phase, progression...)
+		// Runs on the local client each time a shop is opened. The original item is part of the key, so each replacement keeps
+		// the original's unlock conditions (moon phase, progression...); the slots chosen for this world's shop-only items
+		// (ShopPermutation) sell them instead of a roll
 		public override void ModifyActiveShop(NPC npc, string shopName, Item[] items)
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
@@ -35,7 +36,10 @@ namespace UltimateRandomizer.Common.Features
 				if (original == null || original.IsAir || original.shopSpecialCurrency != -1) continue;
 				originals[i] = original.type;
 			}
-			ShopSlot[] plan = ShopPlanner.PlanShop(npc.type, shopName, originals, ProgressionSystem.UnlockedTier, Main.hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop);
+			ShopPermutation.WorldPlan permutation = ShopPermutation.Current;
+			int[] guaranteed = ShopPermutation.SlotItems(permutation, shopName, items);
+			ShopSlot[] plan = ShopPlanner.PlanShop(npc.type, shopName, originals, ProgressionSystem.UnlockedTier, Main.hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop,
+				guaranteed, ShopPermutation.ItemsOf(permutation, shopName));
 			for (int i = 0; i < items.Length; i++)
 			{
 				if (!plan[i].Replaced) continue;
@@ -47,8 +51,9 @@ namespace UltimateRandomizer.Common.Features
 		}
 	}
 
-	// One shop slot as planned: the original item, what replaces it (0 when left as it is) and its price
-	public readonly record struct ShopSlot(int Original, int Replacement, int Price)
+	// One shop slot as planned: the original item, what replaces it (0 when left as it is), its price, and whether it is a
+	// shop-only item placed there (ShopPermutation) rather than a roll
+	public readonly record struct ShopSlot(int Original, int Replacement, int Price, bool Guaranteed = false)
 	{
 		public bool Replaced => Replacement > 0;
 	}
@@ -58,18 +63,30 @@ namespace UltimateRandomizer.Common.Features
 	public static class ShopPlanner
 	{
 		// originalTypes in slot order (0: slot left alone). The duplicate check follows that order, as the shop fills its slots:
-		// the result for a slot depends on the items sold before it (only those whose conditions are met in game)
-		public static ShopSlot[] PlanShop(int npcType, string shopName, IList<int> originalTypes, int unlockedTier, bool hardMode, bool followProgression, bool noDuplicates)
+		// the result for a slot depends on the items sold before it (only those whose conditions are met in game).
+		// guaranteed (per slot, 0: a roll): the shop-only item a slot sells instead of a roll; shopOnly: every shop-only item of
+		// the shop, which no roll gives with noDuplicates (whether or not its slot is sold right now)
+		public static ShopSlot[] PlanShop(int npcType, string shopName, IList<int> originalTypes, int unlockedTier, bool hardMode, bool followProgression, bool noDuplicates,
+			IList<int> guaranteed = null, IEnumerable<int> shopOnly = null)
 		{
 			int npcKey = DetRandom.NpcKey(npcType);
 			int shopKey = DetRandom.StableHash(shopName ?? "");
 			ShopSlot[] slots = new ShopSlot[originalTypes.Count];
 			HashSet<int> used = new();
+			if (noDuplicates && shopOnly != null) used.UnionWith(shopOnly);
+			int Price(int item) => PriceRules.Price(item, DetRandom.Get(RollKey.Price, npcKey, shopKey, DetRandom.ItemKey(item)));
 			for (int i = 0; i < originalTypes.Count; i++)
 			{
 				int original = originalTypes[i];
 				slots[i] = new ShopSlot(original, 0, 0);
 				if (original <= 0 || !ItemPool.IsRandomizable(original)) continue;
+				int fixedItem = guaranteed != null && i < guaranteed.Count ? guaranteed[i] : 0;
+				if (fixedItem > 0)
+				{
+					used.Add(fixedItem);
+					slots[i] = new ShopSlot(original, fixedItem, Price(fixedItem), true);
+					continue;
+				}
 
 				int originalTier = ItemPool.Info[original].Tier;
 				int sourceTier = followProgression ? Math.Max(originalTier, unlockedTier - 1) : originalTier;
@@ -99,7 +116,7 @@ namespace UltimateRandomizer.Common.Features
 					if (other > 0) replacement = other;
 				}
 				used.Add(replacement);
-				slots[i] = new ShopSlot(original, replacement, PriceRules.Price(replacement, DetRandom.Get(RollKey.Price, npcKey, shopKey, DetRandom.ItemKey(replacement))));
+				slots[i] = new ShopSlot(original, replacement, Price(replacement));
 			}
 			return slots;
 		}

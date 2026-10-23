@@ -747,8 +747,8 @@ namespace UltimateRandomizer.Common.Core
 		{
 			int[] map = new int[Info.Length];
 			for (int i = 0; i < map.Length; i++) map[i] = i;
-			// TODO(shops): Collect() counts every vanilla shop item as obtainable, but randomized shops (ShopFeature.PlanShop) may
-			// no longer sell it; the permutation only stays complete if shops use Shuffled too (Roll does in Shuffle mode)
+			// Collect() counts every vanilla shop item as obtainable. Randomized shops (ShopPlanner.PlanShop) still sell every item
+			// that nothing else gives in the world (ShopPermutation); the others are found or crafted
 			HashSet<int> obtainable = Obtainability.Collect();
 			for (int c = 0; c < ItemCategories.Count; c++)
 			{

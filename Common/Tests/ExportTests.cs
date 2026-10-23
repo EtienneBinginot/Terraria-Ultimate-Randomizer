@@ -305,21 +305,21 @@ namespace UltimateRandomizer.Common.Tests
 			return (DropHeader, rows);
 		}
 
-		// ---- shops.tsv (no shop permutation exists in this version: no guaranteed slots)
+		// ---- shops.tsv (slot kind: roll, shop-only item guaranteed there, or unchanged)
 		private static (string, List<string>) Shops()
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
 			var shops = ShopTests.VanillaShops();
 			var shopOnly = ShopTests.VanillaShopOnly();
-			var sold = ShopTests.SoldSomewhere(shops);
-			RecipePlan recipes = RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null;
+			var permutation = ShopTests.ShopOnlyPlan();
+			RecipePlan recipes = ShopTests.Recipes;
 			List<string> rows = new();
 			foreach (var shop in shops)
 			{
 				int npc = shop.Shop.NpcType;
 				for (int tier = 0; tier < Tiers.Count; tier++)
 				{
-					ShopSlot[] slots = ShopTests.Plan(shop, tier, cfg.NoDuplicatesInShop);
+					ShopSlot[] slots = ShopTests.Plan(permutation, shop, tier, cfg.NoDuplicatesInShop);
 					for (int i = 0; i < slots.Length; i++)
 					{
 						Item original = shop.Items[i];
@@ -330,12 +330,13 @@ namespace UltimateRandomizer.Common.Tests
 						bool only = shopOnly.Contains(original.type);
 						rows.Add(Row(NpcInternal(npc), NpcName(npc), shop.Shop.FullName, tier, i, Internal(original.type), Name(original.type), info?.Category, info?.Tier,
 							string.Join(" & ", shop.Conditions[i].Select(c => c.Description?.Value ?? c.ToString())),
+							!replaced ? "unchanged" : slots[i].Guaranteed ? "shop-only item" : "roll",
 							replaced ? Internal(replacement) : "(unchanged)", Name(replacement), rinfo?.Category, rinfo?.Tier, rinfo?.TrueTier,
-							replaced ? slots[i].Price : original.GetStoreValue(), original.GetStoreValue(), only, only ? ShopTests.KeptBy(original.type, sold, recipes) : ""));
+							replaced ? slots[i].Price : original.GetStoreValue(), original.GetStoreValue(), only, only ? ShopTests.KeptBy(original.type, permutation, recipes) : ""));
 					}
 				}
 			}
-			return ("npc\tnpc name\tshop\tunlocked tier\tslot\toriginal\toriginal name\toriginal category\toriginal tier\tconditions\treplacement\treplacement name\t" +
+			return ("npc\tnpc name\tshop\tunlocked tier\tslot\toriginal\toriginal name\toriginal category\toriginal tier\tconditions\tslot kind\treplacement\treplacement name\t" +
 				"replacement category\treplacement tier\treplacement true tier\tprice\tvanilla price\tshop-only\tkept by", rows);
 		}
 
@@ -403,13 +404,14 @@ namespace UltimateRandomizer.Common.Tests
 				}
 			}
 			var shops = ShopTests.VanillaShops();
+			var permutation = ShopTests.ShopOnlyPlan();
 			Dictionary<int, int> shopTier = new();
 			bool randomized = EconomyConfig.Instance.RandomizeShops;
 			foreach (var shop in shops)
 			{
 				for (int tier = 0; tier < Tiers.Count; tier++)
 				{
-					ShopSlot[] slots = ShopTests.Plan(shop, tier, EconomyConfig.Instance.NoDuplicatesInShop);
+					ShopSlot[] slots = ShopTests.Plan(permutation, shop, tier, EconomyConfig.Instance.NoDuplicatesInShop);
 					for (int i = 0; i < slots.Length; i++)
 					{
 						int item = randomized && slots[i].Replaced ? slots[i].Replacement : shop.Items[i].type;
@@ -470,7 +472,7 @@ namespace UltimateRandomizer.Common.Tests
 			"recipes.tsv: one row per recipe index. vanilla/planned ingredients 'internal xN [tier of item, availability tier, value]'. flags: randomized (live recipe differs from vanilla), rebuilt (ingredients rebuilt by the planner), swapped + partner (result swap), shell (recipe of an item no recipe makes), upgrade shell, protected (not touchable), house, mining chain, switched off (twin or loopoff), repaired, value short. planned doable tier = max availability of planned ingredients and stations (off = switched off). ingredient tier T = tier the ingredients were rebuilt for (-1 none).\n" +
 			"drops.tsv: for each NPC with a plan (lucky final plan, no progression lock), normal and expert. kind: permuted (content moved from origin npc/index), kept, replaced (original item swapped), surprise, extra (random extra drop), guaranteed (GuaranteedSources). lock gap = tiers progression would lock it (0 in the lucky plan). jackpot gap = runtime only (0).\n" +
 			"bags.tsv: same columns for every bag/crate plan (BagPlan.Plan, lucky).\n" +
-			"shops.tsv: every vanilla shop entry at simulated unlocked tiers 0..9 with its replacement and price. No shop permutation exists in this version (no guaranteed slots).\n" +
+			"shops.tsv: every vanilla shop entry at simulated unlocked tiers 0..9 with its replacement (slot kind: roll, guaranteed shop-only item, or unchanged) and price.\n" +
 			"chests.tsv: only the tier caps and a note: no chest planner API exists (contents are rolled per position).\n" +
 			"worldsources.tsv: best effort: herb replacement tables, guaranteed pot items per tier, ore map. Tree shake, Extractinator, Angler, fishing use runtime randomness and are not exported.\n" +
 			"findability.tsv: per item, the tier, findability tier (with and without guarantees), enemy drop and bag sources (count and first 10), first shop tier, planned recipes, herb/ore flags, guaranteed hosts and recipe availability tier.\n";
