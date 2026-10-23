@@ -1708,7 +1708,7 @@ namespace UltimateRandomizer.Common.Tests
 				string name = Name(original) + (plan.SwapPartner[i] >= 0 ? " -> " + Name(plan.Results[i].type) : "");
 				foreach ((int type, int stack) in plan.Ingredients[i])
 				{
-					int cap = RecipePlanner.StackCap(i, type);
+					int cap = RecipePlanner.StackCap(plan, i, type);
 					if (stack > cap) failures.Add($"{name}: {stack} {Name(type)}, at most {cap}");
 				}
 				long before = RecipeSystem.OriginalIngredientValue(plan.SwapPartner[i] >= 0 ? plan.SwapPartner[i] : i);
@@ -1758,7 +1758,8 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				if (RecipeSystem.Touchable(i) || !RecipeSystem.IngredientsTouchable(i) || plan.Ingredients[i] == null || ItemPool.IsSpecial(item)) continue;
 				if (Stations.PlacedTile(item, out int tile) && Stations.Info(tile).Kind is StationKind.Basic or StationKind.Progression) continue;
-				int u = Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(item)));
+				// A hard gate's unlock tier has no allowance (UnlockTierOf), as the planner's
+				int u = Tiers.Clamp(ItemPool.UnlockTierOf(item));
 				checkedCount++;
 				if (plan.ResultTiers[i] != u) failures.Add($"{where}: result tier {plan.ResultTiers[i]}, {u} expected");
 				if (doable[i] < u) failures.Add($"{where}, before its tier {u}");
@@ -1776,6 +1777,8 @@ namespace UltimateRandomizer.Common.Tests
 			RecipePlan plan = RecipePlanner.Get();
 			List<string> failures = new();
 			List<string> examples = new();
+			// Keys (planned, or placed by LockResults) may take an unfit material when their tier has nothing else: logged apart
+			List<string> keys = new();
 			int tested = 0;
 			for (int i = 0; i < Count; i++)
 			{
@@ -1788,11 +1791,14 @@ namespace UltimateRandomizer.Common.Tests
 				foreach ((int type, _) in plan.Ingredients[i])
 				{
 					if (!RecipePlanner.IngredientReplaceable(type) || RecipePlanner.PickaxeAllowed(type, item)) continue;
-					failures.Add($"{where}: {Name(type)} needs pick {RecipePlanner.MineRequirement(type)}");
+					string bad = $"{where}: {Name(type)} needs pick {RecipePlanner.MineRequirement(type)}";
+					if (type == plan.PlannedKeys[i] || plan.LockKeys != null && type == plan.LockKeys[i]) keys.Add(bad);
+					else failures.Add(bad);
 				}
 			}
 			if (tested == 0) Check.Skip("no rebuilt pickaxe recipe");
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"PickaxeIngredientsBelowLevel: {tested} pickaxe recipes; {string.Join("; ", examples)}");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"PickaxeIngredientsBelowLevel: {tested} pickaxe recipes; {plan.UnfitKeys} unfit keys in the plan, {keys.Count} of them in pickaxes"
+				+ $"{(keys.Count == 0 ? "" : ": " + string.Join("; ", keys.Take(10)))}; {string.Join("; ", examples)}");
 			Check.All(failures, "Pickaxes made of what they can't mine");
 		}
 

@@ -386,7 +386,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Magic Storage items");
 		}
 
-		// Chest slots (world creation and taming) never go above the chest's cap, nor reach hardmode in a pre-hardmode chest
+		// Chest slots (world creation and taming) never go above the chest's cap, nor reach hardmode in a pre-hardmode chest; a
+		// hard gate never above the chest's own tier (no Beetle Husk in a Lihzahrd chest before Golem)
 		private static void ChestCap()
 		{
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only in Coherent mode (shuffle and chaos keep no tier)");
@@ -407,6 +408,7 @@ namespace UltimateRandomizer.Common.Tests
 					{
 						int item = ChestSystem.RollChestSlot(200 + k, 400 + chestTier, k % 40, chestTier, originals[k], tame);
 						if (ItemPool.TrueTierOf(item) > cap) failures.Add($"{Name(item)} (true tier {ItemPool.TrueTierOf(item)}) in a chest of tier {chestTier}, cap {cap}");
+						if (ItemPool.IsHardGate(item) && ItemPool.TrueTierOf(item) > chestTier) failures.Add($"hard gate {Name(item)} (true tier {ItemPool.TrueTierOf(item)}) in a chest of tier {chestTier}");
 						if (ItemPool.IsBanned(item)) failures.Add($"{Name(item)} is banned");
 					}
 				}

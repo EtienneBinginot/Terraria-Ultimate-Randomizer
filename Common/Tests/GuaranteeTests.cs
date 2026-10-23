@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
@@ -45,30 +46,53 @@ namespace UltimateRandomizer.Common.Tests
 		// Carried by the progression bosses of its tier (GuaranteedSources.BossHosts), not by natural enemies
 		private static bool OnBoss(int item) => GuaranteedSources.TryPlacement(item, out GuaranteedSources.Placement place) && place.Boss;
 
+		// The latest tier a host of a guaranteed item may have: its own, or the tier it was shifted up to (a hard gate without
+		// hosts of its tier)
+		private static int MaxHostTier(GuaranteedSources.Placement place, int tier) => place.Shifted ? Math.Max(tier, place.Tier) : tier;
+
+		private static int MaxHostTier(int item, int tier) => GuaranteedSources.TryPlacement(item, out GuaranteedSources.Placement place) ? MaxHostTier(place, tier) : tier;
+
 		// No guaranteed item comes before its tier: placed at its own tier (never on lower hosts, the guaranteed drop has no
-		// progression lock), each host met from the tier before at the earliest (a biome of a tier also holds the enemies of
-		// the tier before), a boss host of its own tier, and found (Findability) at its tier at the earliest. The Ancient
-		// Manipulator and the Celestial Sigil, when guaranteed, come from the Lunatic Cultist's tier on: until 1.5.0 they fell
-		// on post-Plantera enemies and the Moon Lord could be summoned right after Plantera. Also over other seeds
+		// progression lock), each host met from that tier at the earliest (until 1.5.1 a biome of a tier also held the enemies
+		// of the tier before, and a 200 pickaxe dropped before the mechanical bosses), a boss host of its own tier, and the
+		// guaranteed hosts give it (GuaranteedSources.FoundTier, not Findability.Tier: random drops with the tier allowance
+		// may come earlier) at its tier at the earliest. Only an ordinary item without any host of its tier may go lower
+		// (Shifted, logged); a hard gate never. The Ancient Manipulator and the Celestial Sigil, when guaranteed, come from the
+		// Lunatic Cultist's tier on: until 1.5.0 they fell on post-Plantera enemies and the Moon Lord could be summoned right
+		// after Plantera. Also over other seeds
 		private static void GuaranteesNotBelowTier()
 		{
 			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
 			if (requirements.Count == 0) Check.Skip("nothing is guaranteed");
 			List<string> failures = new();
+			int shiftedDown = 0;
 			foreach (GuaranteedSources.Requirement requirement in requirements)
 			{
 				string name = Name(requirement.Item);
 				int tier = Tiers.Clamp(requirement.Tier);
-				int found = Findability.Tier(requirement.Item);
-				if (found < tier) failures.Add($"{name} (tier {tier}): found at tier {found}");
+				bool gate = ItemPool.IsHardGate(requirement.Item);
+				GuaranteedSources.TryPlacement(requirement.Item, out GuaranteedSources.Placement place);
 				int placed = GuaranteedSources.PlacedTier(requirement.Item);
-				if (placed >= 0 && placed < tier) failures.Add($"{name} (tier {tier}): placed at tier {placed}");
+				bool lower = placed >= 0 && placed < tier;
+				if (lower && (!place.Shifted || gate)) failures.Add($"{name} (tier {tier}{(gate ? ", hard gate" : "")}): placed at tier {placed}");
+				if (lower && place.Shifted && !gate)
+				{
+					shiftedDown++;
+					continue;
+				}
+				int found = GuaranteedSources.FoundTier(requirement);
+				if (found < tier) failures.Add($"{name} (tier {tier}): its guaranteed hosts give it at tier {found}");
 				bool boss = OnBoss(requirement.Item);
 				foreach (int host in GuaranteedSources.HostsOf(requirement.Item))
 				{
 					int hostTier = GuaranteedSources.HostTier(host);
-					if (hostTier < tier - (boss ? 0 : 1)) failures.Add($"{name} (tier {tier}): on {Lang.GetNPCNameValue(host)} (tier {hostTier})");
+					if (hostTier < tier) failures.Add($"{name} (tier {tier}): on {Lang.GetNPCNameValue(host)} (tier {hostTier})");
 					if (boss && !NpcTiers.IsBoss(host)) failures.Add($"{name}: {Lang.GetNPCNameValue(host)} is not a boss");
+				}
+				// A hard gate is never found before its true tier, whatever gives it
+				if (gate && ProgressionConfig.Instance.TierGating && Findability.Tier(requirement.Item) < ItemPool.TrueTierOf(requirement.Item))
+				{
+					failures.Add($"{name} (hard gate): found at tier {Findability.Tier(requirement.Item)}, true tier {ItemPool.TrueTierOf(requirement.Item)}");
 				}
 			}
 			// Named: tier 8 at least (the Cultist's), found by then
@@ -87,13 +111,15 @@ namespace UltimateRandomizer.Common.Tests
 				GuaranteedSources.PlanWith(seed, map, out _, out Dictionary<int, GuaranteedSources.Placement> places);
 				foreach (GuaranteedSources.Requirement requirement in requirements)
 				{
-					if (places.TryGetValue(requirement.Item, out GuaranteedSources.Placement place) && place.Tier < Tiers.Clamp(requirement.Tier))
+					if (places.TryGetValue(requirement.Item, out GuaranteedSources.Placement place) && place.Tier < Tiers.Clamp(requirement.Tier)
+						&& (!place.Shifted || ItemPool.IsHardGate(requirement.Item)))
 					{
 						failures.Add($"seed {seed}: {Name(requirement.Item)} placed at tier {place.Tier} < {requirement.Tier}");
 					}
 				}
 			}
 			int onBosses = requirements.Count(r => OnBoss(r.Item));
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed below their tier (no host of their tier): {shiftedDown} item(s)");
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed on bosses: {onBosses} item(s): "
 				+ string.Join(", ", requirements.Where(r => OnBoss(r.Item)).Select(r => $"{Name(r.Item)} on {string.Join("/", GuaranteedSources.HostsOf(r.Item).Select(Lang.GetNPCNameValue))}")));
 			Check.All(failures, "Guaranteed items before their tier");
@@ -216,9 +242,9 @@ namespace UltimateRandomizer.Common.Tests
 				bool Good(int host)
 				{
 					// A progression boss of the item's tier gives it at every kill
-					if (onBoss) return NpcTiers.IsBoss(host) && GuaranteedSources.HostTier(host) == Tiers.Clamp(tier)
+					if (onBoss) return NpcTiers.IsBoss(host) && GuaranteedSources.HostTier(host) == Tiers.Clamp(MaxHostTier(item, tier))
 						&& RandomNpcDropRule.Plan(host, Main.expertMode).Any(d => d.Guaranteed && d.Item == item && d.Chance >= 1f - 1e-6f);
-					if (GuaranteedSources.HostTier(host) > tier || GuaranteedSources.IsEventEnemy(host) || ContentSamples.NpcsByNetId[host].rarity > 0) return false;
+					if (GuaranteedSources.HostTier(host) > MaxHostTier(item, tier) || GuaranteedSources.IsEventEnemy(host) || ContentSamples.NpcsByNetId[host].rarity > 0) return false;
 					return RandomNpcDropRule.Plan(host, Main.expertMode).Any(d => d.Guaranteed && d.Item == item && d.Chance >= 0.01f - 1e-6f);
 				}
 				List<int> bad = hosts.Where(h => !Good(h)).ToList();
@@ -535,7 +561,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (hosts.Count == 0) failures.Add($"{Name(requirement.Item)}: no enemy");
 				foreach (int host in hosts)
 				{
-					if (GuaranteedSources.HostTier(host) > requirement.Tier) failures.Add($"{Name(requirement.Item)} on {ContentSamples.NpcsByNetId[host].TypeName}, tier {GuaranteedSources.HostTier(host)} > {requirement.Tier}");
+					if (GuaranteedSources.HostTier(host) > MaxHostTier(requirement.Item, requirement.Tier)) failures.Add($"{Name(requirement.Item)} on {ContentSamples.NpcsByNetId[host].TypeName}, tier {GuaranteedSources.HostTier(host)} > {requirement.Tier}");
 					if (!EnemySwapPool.IsSwappable(host) && !OnBoss(requirement.Item)) failures.Add($"{ContentSamples.NpcsByNetId[host].TypeName} is not a natural enemy");
 					if (!RandomNpcDropRule.Plan(host, Main.expertMode).Any(d => d.Guaranteed && d.Item == requirement.Item)) failures.Add($"{Name(requirement.Item)} missing from the drops of {ContentSamples.NpcsByNetId[host].TypeName}");
 				}
@@ -746,7 +772,7 @@ namespace UltimateRandomizer.Common.Tests
 					// Host tiers and shares follow the spawn map: read with this seed's
 					using (BiomeSlots.WithMap(map))
 					{
-						if (hosts.Any(h => GuaranteedSources.HostTier(h) > requirement.Tier)) failures.Add($"seed {seed}: {Name(requirement.Item)} on a later enemy");
+						if (hosts.Any(h => GuaranteedSources.HostTier(h) > MaxHostTier(place, requirement.Tier))) failures.Add($"seed {seed}: {Name(requirement.Item)} on a later enemy");
 						if (place.Biome >= 0 && hosts.Any(h => BiomeSlots.PlannedShare(place.Biome, h, place.Tier) <= 0)) failures.Add($"seed {seed}: {Name(requirement.Item)} on an enemy outside {BiomeSlots.BiomeName(place.Biome)}");
 						if (requirement.Critical && !place.Fallback)
 						{
