@@ -34,6 +34,11 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool RandomizeRecipes;
 
+		// Other mods' recipes are randomized like vanilla ones (results, ingredients, stations, swaps), each keeping a key
+		// ingredient of its result's tier (RecipeSystem.LeftAlone). Off: they stay as their mod made them
+		[DefaultValue(true)]
+		public bool RandomizeModdedRecipes;
+
 		// Weighs a randomized recipe's result against its new ingredients (RecipeValueGuard): ingredients raised when the result
 		// is worth too much more
 		[DefaultValue(false)]

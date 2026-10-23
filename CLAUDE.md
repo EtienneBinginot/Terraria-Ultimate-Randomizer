@@ -73,7 +73,15 @@ Everything is deterministic per world seed, follows progression tiers, and stays
   stats are rolled on the server in `OnSpawn` and sent with `SendExtraAI`/`ReceiveExtraAI`.
 - `Main.player[255]` exists and is never in a graveyard; vanilla daylight-despawn checks read global time/event state.
 - `ModConfig` `[DefaultValue]` is applied by tML, not by `new`: compare defaults by reading the attribute.
-- Recipes: modded recipes (`Recipe.Mod` not null) are left alone; `RecipeGroup` ingredients are kept.
+- Recipes: other mods' recipes (`Recipe.Mod` not null and not ModLoader; our shells aside) are randomized like vanilla ones
+  unless `CraftingConfig.RandomizeModdedRecipes` is off (`RecipeSystem.LeftAlone`; `IsModded` is for stats/logs only). A
+  modded recipe sets the tier of a modded result only (`ItemClassifier.IsTierRecipe`, load time, whatever the setting);
+  `RecipeGroup` ingredients are kept.
+- Other mods' content (generic, best effort): NPC tiers are estimated from stats (`NpcTiers.ModdedTier`: bosses vs the
+  vanilla boss fights, enemies vs the vanilla enemies of each spawn stage); their drops and boss bags are permuted with
+  everyone's (only vanilla rule types are wrapped); a modded station is Progression (>= 10 recipes: protected, assignable
+  from its tier) or Thematic, at its placer's true tier (`Stations.ModdedInfo`). Storage mods' items are loot; utility
+  mods (ModLoader, RecipeBrowser), `Creative*` and internal items (`ItemClassifier.IsInternal`) are banned.
 
 ## Conventions
 - Match the surrounding style: tabs, braces on new lines, short comments explaining *why*, no XML doc spam.

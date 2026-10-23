@@ -193,8 +193,8 @@ namespace UltimateRandomizer.Common.Codex
 			{
 				Stations.StationInfo info = Stations.Info(tile);
 				if (info.Kind != StationKind.Progression || info.World) continue;
-				// The vanilla item of the station that is obtained first (Mythril or Orichalcum Anvil...)
-				int best = Stations.Placers(tile).Where(p => p < ItemID.Count).OrderBy(p => Availability(plan, p)).ThenBy(p => p).FirstOrDefault();
+				// The item of the station that is obtained first (Mythril or Orichalcum Anvil...), vanilla first
+				int best = Stations.Placers(tile).OrderBy(p => p < ItemID.Count ? 0 : 1).ThenBy(p => Availability(plan, p)).ThenBy(p => p).FirstOrDefault();
 				if (best > 0) Add(best, info.Tier, HintTargetKind.Station);
 			}
 			// Boss and event summons (not the life crystals and mirrors sorted with them), needed before their boss

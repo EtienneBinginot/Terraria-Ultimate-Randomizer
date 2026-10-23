@@ -10,7 +10,8 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// DropTableStyle.Permutation for the bosses of the boss table (NpcTiers) and their treasure bags. The rolled entries of the
+	// DropTableStyle.Permutation for the bosses of the boss table (NpcTiers), other mods' bosses (at their estimated tier,
+	// NpcTiers.ModdedTier) and their treasure bags. The rolled entries of the
 	// bosses' tables are places, as for the enemies (DropPermutation), but their contents only move between bosses of the
 	// same boss group (their base tier; a tier with a single boss joins the one below, or the one above for the lowest) and the
 	// same access class, on a random cycle. A boss bag carries the contents of its boss's not-expert places, each with its
@@ -69,11 +70,13 @@ namespace UltimateRandomizer.Common.Features
 			unitOfBag = null;
 		}
 
-		// Its loot is wrapped at load: a boss of the boss table, or one of its parts (Eater of Worlds segments), not a minion
+		// Its loot is wrapped at load: a boss of the boss table, or one of its parts (Eater of Worlds segments), not a minion; or
+		// another mod's boss (NPC.boss or counted as one), grouped by its estimated tier (NpcTiers.ModdedTier). Only the vanilla
+		// rule types are wrapped: a modded boss's own rule classes keep running as they are
 		public static bool WrapsLoot(int type)
 		{
-			// Vanilla bosses only: a modded boss's rules are left alone
-			if (type <= 0 || type >= NPCID.Count || BossParts.IsMinion(type)) return false;
+			if (type <= 0 || BossParts.IsMinion(type)) return false;
+			if (type >= NPCID.Count) return NpcTiers.IsBoss(type);
 			int owner = BossParts.Owner(type);
 			return NpcTiers.HasBossTier(owner) && NpcTiers.IsBoss(owner);
 		}

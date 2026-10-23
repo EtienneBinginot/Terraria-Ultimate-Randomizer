@@ -112,6 +112,7 @@ namespace UltimateRandomizer.Common.Tests
 			CapTests.Register();
 			CoherenceTests.Register();
 			ShopTests.Register();
+			ModTests.Register();
 			ExportTests.Register();
 		}
 

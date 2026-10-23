@@ -261,7 +261,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (Findability.Tier(item) > tier) failures.Add($"{Name(item)} found at tier {Findability.Tier(item)} > {tier}");
 				if (item < plan.Availability.Length && plan.Availability[item] > tier) failures.Add($"{Name(item)} available at tier {plan.Availability[item]} > {tier}");
 			}
-			// Every station a live recipe needs can be placed (modded stations keep their own sources)
+			// Every station a live recipe needs can be placed (other mods' ones too: Stations.ModdedInfo)
 			HashSet<int> tiles = new();
 			for (int i = 0; i < Recipe.numRecipes; i++)
 			{
@@ -269,8 +269,9 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			foreach (int tile in tiles.OrderBy(t => t))
 			{
-				if (Stations.Info(tile).Kind == StationKind.Unknown) continue;
-				if (RecipePlanner.StationTier(tile, plan.Availability) >= Findability.Never) failures.Add($"{TileID.Search.GetName(tile)} can never be placed");
+				// Unknown tiles, and tiles of the world that no item places (another mod's altar...)
+				if (Stations.Info(tile).Kind == StationKind.Unknown || Stations.Info(tile).World) continue;
+				if (RecipePlanner.StationTier(tile, plan.Availability) >= Findability.Never) failures.Add($"{Stations.Name(tile)} can never be placed");
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Guaranteed: {stations} progression or themed stations, {summons} boss summons");
 			Check.All(failures, "Stations and summons without a frequent source");

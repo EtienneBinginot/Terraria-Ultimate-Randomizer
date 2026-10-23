@@ -65,7 +65,7 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// The net IDs whose bestiary drops are rebuilt: those with wrapped rules (whatever the style, so a restore covers
-		// every entry a rebuild changed). Other entries (modded NPCs...) keep what Merge gave them at load
+		// every entry a rebuild changed), vanilla or modded. Other entries (town NPCs, critters...) keep what Merge gave them at load
 		private static HashSet<int> rebuilt;
 
 		private static HashSet<int> RebuiltIds() => rebuilt ??= ContentSamples.NpcsByNetId.Keys

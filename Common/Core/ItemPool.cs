@@ -24,7 +24,8 @@ namespace UltimateRandomizer.Common.Core
 		public int SourceTier;
 		public string Source;
 		public bool SourceRaised;
-		// Never given at random (storage mod items, inactive vanilla guides, tModLoader's own items: ItemClassifier.IsBanned): re-picked
+		// Never given at random (utility mods' and creative or internal modded items, inactive vanilla guides: ItemClassifier.IsBanned and
+		// IsInternal): re-picked
 		public bool Banned;
 		// Its true tier (or ban) comes from the hand-reviewed MaterialTiers table
 		public bool FromTable;
@@ -106,6 +107,7 @@ namespace UltimateRandomizer.Common.Core
 		public static void Build()
 		{
 			Stopwatch watch = Stopwatch.StartNew();
+			Stations.Reset();
 			int count = ItemLoader.ItemCount;
 			DetRandom.BuildItemKeys(count);
 
@@ -201,13 +203,19 @@ namespace UltimateRandomizer.Common.Core
 			for (int type = 1; type < count; type++)
 			{
 				if (fixedTier[type]) continue;
-				floors[type] = ItemClassifier.MiningFloor(type, trueTiers);
+				floors[type] = Math.Max(ItemClassifier.MiningFloor(type, trueTiers), Stations.ActingFloor(type));
 				trueTiers[type] = Math.Max(trueTiers[type], floors[type]);
 			}
 			HashSet<int> lootSources = LootSources();
 			int settled = ItemClassifier.SettleByRecipes(trueTiers, fixedTier, floors, lootSources, fromChest, corrected, out string settleExamples);
 			bool[] hardGates = ItemClassifier.HardGates(trueTiers, lootSources, fromChest);
+			// An item acting as progression stations (Stations.ActingFloor) is gated like them: no allowance, never rolled early
+			for (int type = 1; type < count; type++)
+			{
+				if (!fixedTier[type] && Stations.ActingFloor(type) > 0) hardGates[type] = true;
+			}
 			int banned = 0;
+			HashSet<int> sourced = Sourced();
 			for (int type = 1; type < count; type++)
 			{
 				hash = DetRandom.Hash(hash, DetRandom.ItemKey(type));
@@ -221,7 +229,7 @@ namespace UltimateRandomizer.Common.Core
 				ItemCategory category = special ? ItemCategory.Misc : ItemClassifier.Classify(type, item);
 				int tier = tiers[type];
 				// Banned items stay in their bucket (the buckets never change): rolls re-pick them
-				bool isBanned = ItemClassifier.IsBanned(item) || tableBanned[type];
+				bool isBanned = ItemClassifier.IsBanned(item) || tableBanned[type] || ItemClassifier.IsInternal(item, sourced);
 				if (isBanned) banned++;
 				// Final (a material of the table, a world chest item or a corrected one keeps its tier even below its bucket's tier)
 				int trueTier = trueTiers[type];
@@ -258,8 +266,20 @@ namespace UltimateRandomizer.Common.Core
 			LogSuspicious(logger);
 		}
 
+		// Items something drops, a bag holds, a shop sells or an enabled recipe makes, as set up (load time: the recipes are not
+		// randomized yet, the shells are still off). ItemClassifier.IsInternal
+		public static HashSet<int> Sourced()
+		{
+			HashSet<int> sources = LootSources();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				if (Main.recipe[i]?.createItem != null && !Main.recipe[i].Disabled) sources.Add(Main.recipe[i].createItem.type);
+			}
+			return sources;
+		}
+
 		// Items something drops, a bag holds or a shop sells in the base game (captured at load, before recipes are set up)
-		private static HashSet<int> LootSources()
+		public static HashSet<int> LootSources()
 		{
 			HashSet<int> set = new(Obtainability.ShopItems);
 			foreach (List<Terraria.GameContent.ItemDropRules.DropRateInfo> drops in LootSnapshot.Npcs.Values) set.UnionWith(drops.Select(d => d.itemId));
@@ -272,11 +292,7 @@ namespace UltimateRandomizer.Common.Core
 		// internal or creative items of a mod. Logged only, to ban them by name later if they show up in game
 		private static void LogSuspicious(log4net.ILog logger)
 		{
-			HashSet<int> sources = LootSources();
-			for (int i = 0; i < Recipe.numRecipes; i++)
-			{
-				if (Main.recipe[i]?.createItem != null && !Main.recipe[i].Disabled) sources.Add(Main.recipe[i].createItem.type);
-			}
+			HashSet<int> sources = Sourced();
 			List<string> suspicious = new();
 			for (int type = 1; type < Info.Length; type++)
 			{
@@ -301,6 +317,7 @@ namespace UltimateRandomizer.Common.Core
 			categoryHasItems = null;
 			shuffleMap = null;
 			progressionStations = null;
+			Stations.Reset();
 			OreMap.Reset();
 		}
 

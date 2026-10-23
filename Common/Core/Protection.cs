@@ -101,14 +101,16 @@ namespace UltimateRandomizer.Common.Core
 			}
 			{
 				// Any item placing a tile that some recipe requires (work bench, anvils, furnaces...). Unprotected stations,
-				// progression ones included, get guaranteed drops (GuaranteedSources); modded and unknown stations keep their
-				// own sources: nothing would guarantee them
+				// progression ones included, get guaranteed drops (GuaranteedSources); unknown vanilla stations keep their own
+				// sources: nothing would guarantee them. Other mods' stations: a progression-like one (many recipes need it,
+				// Stations.ModdedInfo) keeps its own sources, a themed one is guaranteed like the vanilla themed stations
 				HashSet<int> stationTiles = Stations.RequiredTiles();
 				foreach ((int type, Item item) in ContentSamples.ItemsByType)
 				{
 					if (item.createTile < 0 || !stationTiles.Contains(item.createTile)) continue;
-					StationKind kind = Stations.Info(item.createTile).Kind;
-					bool keep = kind == StationKind.Unknown || cfg.StationProtection switch
+					Stations.StationInfo info = Stations.Info(item.createTile);
+					StationKind kind = info.Kind;
+					bool keep = kind == StationKind.Unknown || info.Modded && kind == StationKind.Progression || cfg.StationProtection switch
 					{
 						StationProtection.AllStations => true,
 						StationProtection.ProgressionOnly => kind != StationKind.Basic,

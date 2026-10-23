@@ -437,7 +437,7 @@ namespace UltimateRandomizer.Common.Tests
 					changed = true;
 				}
 			}
-			List<string> failures = recipesOf.Keys.Where(t => !Reachable(t)).Select(t => TileID.Search.GetName(t)).ToList();
+			List<string> failures = recipesOf.Keys.Where(t => !Reachable(t)).Select(Stations.Name).ToList();
 			Check.All(failures, "Stations needing themselves (directly or not)");
 		}
 
@@ -453,8 +453,8 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int tile in plan.Tiles[i])
 				{
 					Stations.StationInfo info = Stations.Info(tile);
-					if (info.Kind is StationKind.Thematic or StationKind.Unknown && !RecipeSystem.OriginalTiles(i).Contains(tile)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} got {TileID.Search.GetName(tile)}");
-					if (info.Kind == StationKind.Progression && info.Tier > RecipePlanner.RecipeTier(i)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} needs {TileID.Search.GetName(tile)} (tier {info.Tier})");
+					if (info.Kind is StationKind.Thematic or StationKind.Unknown && !RecipeSystem.OriginalTiles(i).Contains(tile)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} got {Stations.Name(tile)}");
+					if (info.Kind == StationKind.Progression && info.Tier > RecipePlanner.RecipeTier(i)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} needs {Stations.Name(tile)} (tier {info.Tier})");
 				}
 			}
 			Check.All(failures, "Stations above the recipe's level");
@@ -780,7 +780,7 @@ namespace UltimateRandomizer.Common.Tests
 			for (int i = 0; i < Count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (recipe.Disabled || RecipeSystem.IsModded(i)) continue;
+				if (recipe.Disabled || RecipeSystem.LeftAlone(i)) continue;
 				bool failed = plan.Ingredients[i] == null && !RecipeSystem.IsShell(i) && RecipePlanner.Rebuildable(i);
 				if (plan.Ingredients[i] == null && !failed) continue;
 				checkedCount++;
@@ -1084,7 +1084,7 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int tile in recipe.requiredTile)
 				{
 					int at = StationTier(tile, placers, plan.Availability);
-					if (at > rt) failures.Add($"{Name(original)}: needs {TileID.Search.GetName(tile)} at {Show(at)} > {rt}");
+					if (at > rt) failures.Add($"{Name(original)}: needs {Stations.Name(tile)} at {Show(at)} > {rt}");
 				}
 			}
 			Check.That(checkedCount > 0, "no protected recipe");
@@ -1167,7 +1167,7 @@ namespace UltimateRandomizer.Common.Tests
 					if (!recipe.Disabled) failures.Add($"{Name(recipe.createItem.type)}: switched off (recipe {i}) but still enabled");
 					if (examples.Count < 5 && !plan.LoopOff[i]) examples.Add($"{Name(recipe.createItem.type)} ({Ingredients(recipe.requiredItem.Select(item => (item.type, item.stack)).ToArray())})");
 				}
-				if (recipe.Disabled || RecipeSystem.IsModded(i)) continue;
+				if (recipe.Disabled || RecipeSystem.LeftAlone(i)) continue;
 				string key = Key(recipe);
 				if (!seen.TryGetValue(key, out int other))
 				{
@@ -1226,7 +1226,7 @@ namespace UltimateRandomizer.Common.Tests
 				// As the crafting menu reads it
 				long value = Main.recipe[chosen].requiredItem.Sum(x => RecipeSystem.EffectiveValue(x.type) * x.stack);
 				if (value < StackRules.ValueOf(item)) failures.Add($"{where}: ingredients worth {value}, the upgrade {StackRules.ValueOf(item)}");
-				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"UpgradeRecipes: {where} at {string.Join(", ", tiles[chosen].Select(t => TileID.Search.GetName(t)))}, doable at {doable[chosen]}");
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"UpgradeRecipes: {where} at {string.Join(", ", tiles[chosen].Select(Stations.Name))}, doable at {doable[chosen]}");
 			}
 			Check.All(failures, "Upgrade recipes");
 		}
@@ -1263,7 +1263,7 @@ namespace UltimateRandomizer.Common.Tests
 					}
 					foreach (int tile in recipe.requiredTile)
 					{
-						if (Stations.Info(tile).Kind != StationKind.Basic) failures.Add($"{where}: needs {TileID.Search.GetName(tile)}, no basic station");
+						if (Stations.Info(tile).Kind != StationKind.Basic) failures.Add($"{where}: needs {Stations.Name(tile)}, no basic station");
 					}
 				}
 			}
@@ -1458,7 +1458,7 @@ namespace UltimateRandomizer.Common.Tests
 				string groups = string.Join(", ", RecipePlanner.GroupsOf(plan, i).Select(id => RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup g) ? g.GetText() : id.ToString()));
 				mod.Logger.Info($"Recipes: example {Name(RecipeSystem.OriginalResult(i))} -> {Name(plan.Results[i].type)} x{plan.Results[i].stack} (tier {plan.IngredientTiers[i]}): " +
 					$"vanilla {Ingredients(RecipeSystem.OriginalIngredients(i))} => {Ingredients(Main.recipe[i].requiredItem.Select(x => (x.type, x.stack)).ToArray())}" +
-					(groups.Length > 0 ? $" (groups: {groups})" : "") + $" at {string.Join(", ", Main.recipe[i].requiredTile.Select(t => TileID.Search.GetName(t)))}");
+					(groups.Length > 0 ? $" (groups: {groups})" : "") + $" at {string.Join(", ", Main.recipe[i].requiredTile.Select(Stations.Name))}");
 			}
 			Check.All(failures, "Example recipes");
 		}
@@ -1533,7 +1533,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				int i = active[k * active.Count / 8];
 				mod.Logger.Info($"Uncraftable: example {Name(RecipeSystem.OriginalResult(i))} x{Main.recipe[i].createItem.stack} (tier {plan.ShellTiers[i]}, doable at {Show(doable[i])}): " +
-					$"{Ingredients(ingredients[i])} at {string.Join(", ", Main.recipe[i].requiredTile.Select(t => TileID.Search.GetName(t)))}");
+					$"{Ingredients(ingredients[i])} at {string.Join(", ", Main.recipe[i].requiredTile.Select(Stations.Name))}");
 			}
 			Check.All(failures, "Shell recipes");
 		}
@@ -1756,7 +1756,7 @@ namespace UltimateRandomizer.Common.Tests
 			int checkedCount = 0;
 			for (int i = 0; i < Count; i++)
 			{
-				if (Main.recipe[i].Disabled || RecipeSystem.IsShell(i) || RecipeSystem.IsModded(i)) continue;
+				if (Main.recipe[i].Disabled || RecipeSystem.IsShell(i) || RecipeSystem.LeftAlone(i)) continue;
 				int item = results[i];
 				string where = $"{Name(item)} ({Ingredients(ingredients[i])}): doable at {Show(doable[i])}";
 				if (item is ItemID.NightKey or ItemID.LightKey)

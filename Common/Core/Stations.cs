@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
 using Terraria;
 using Terraria.ID;
+using Terraria.ModLoader;
 
 namespace UltimateRandomizer.Common.Core
 {
@@ -10,9 +12,10 @@ namespace UltimateRandomizer.Common.Core
 		Basic,
 		// Needed to progress (Hellforge, hardmode anvils and forges...): guaranteed on enemies of their tier unless protected
 		Progression,
-		// Themed furniture stations (Glass Kiln, Bone Welder...): never given to other recipes; guaranteed unless protected
+		// Themed furniture stations (Glass Kiln, Bone Welder...): never given to other recipes; guaranteed unless protected.
+		// Also the stations of other mods that few recipes need
 		Thematic,
-		// Modded or unknown stations: protected
+		// Vanilla stations this catalog does not know: protected
 		Unknown
 	}
 
@@ -29,6 +32,8 @@ namespace UltimateRandomizer.Common.Core
 			public bool Critical;
 			// Stands in the world and has no item (Demon Altar): never guaranteed, rolled or given to other recipes
 			public bool World;
+			// Another mod's tile (ModdedInfo)
+			public bool Modded;
 		}
 
 		private static readonly Dictionary<int, StationInfo> Known = new()
@@ -75,8 +80,74 @@ namespace UltimateRandomizer.Common.Core
 			[TileID.Tables2] = new StationInfo { Kind = StationKind.Thematic }
 		};
 
-		public static StationInfo Info(int tile) =>
-			Known.TryGetValue(tile, out StationInfo info) ? info : new StationInfo { Kind = StationKind.Unknown, Tier = Tiers.Max };
+		public static StationInfo Info(int tile)
+		{
+			if (Known.TryGetValue(tile, out StationInfo info)) return info;
+			return IsModded(tile) ? ModdedInfo(tile) : new StationInfo { Kind = StationKind.Unknown, Tier = Tiers.Max };
+		}
+
+		public static bool IsModded(int tile) => tile >= TileID.Count;
+
+		// A modded station required by at least this many recipes is a progression one (a mod's anvil or forge), any other a
+		// themed one
+		public const int ModdedProgressionRecipes = 10;
+
+		private static readonly Dictionary<int, StationInfo> moddedInfo = new();
+		private static Dictionary<int, int> recipeCounts;
+
+		// Another mod's station (best effort: nothing says what a modded tile is for): a progression station when many recipes
+		// need it, else a themed one; its tier is its placing items' earliest true tier, known once the item pool is built
+		// (Tiers.Max before: the tiers from recipes read a modded station by its placers, ItemClassifier.StationTier). A
+		// progression one is protected and may be given to recipes of its tier or above (RecipePlanner.Assignable); a themed
+		// one is guaranteed like the vanilla themed stations when unprotected (Protection, GuaranteedSources.StationItem).
+		// Load-time facts only (original recipes, content samples, item tiers): the same on every machine
+		private static StationInfo ModdedInfo(int tile)
+		{
+			if (moddedInfo.TryGetValue(tile, out StationInfo known)) return known;
+			List<int> placers = Placers(tile);
+			StationInfo info = new()
+			{
+				Kind = RecipesRequiring(tile) >= ModdedProgressionRecipes ? StationKind.Progression : StationKind.Thematic,
+				Tier = Tiers.Max,
+				World = placers.Count == 0,
+				Modded = true
+			};
+			if (!ItemPool.Ready) return info;
+			List<int> tiers = placers.Where(ItemPool.IsValid).Select(ItemPool.TrueTierOf).ToList();
+			if (tiers.Count > 0) info.Tier = Tiers.Clamp(tiers.Min());
+			return moddedInfo[tile] = info;
+		}
+
+		// How many enabled recipes originally require a tile
+		private static int RecipesRequiring(int tile)
+		{
+			if (recipeCounts == null)
+			{
+				Dictionary<int, int> counts = new();
+				int stored = Features.RecipeSystem.RecipeCount;
+				for (int i = 0; i < Recipe.numRecipes; i++)
+				{
+					if (Features.RecipeSystem.VanillaDisabled(i)) continue;
+					IEnumerable<int> required = i < stored ? Features.RecipeSystem.OriginalTiles(i) : Main.recipe[i].requiredTile;
+					foreach (int t in required.Distinct())
+					{
+						if (t >= 0) counts[t] = counts.GetValueOrDefault(t) + 1;
+					}
+				}
+				recipeCounts = counts;
+			}
+			return recipeCounts.GetValueOrDefault(tile);
+		}
+
+		// Cleared when the item pool is (re)built: the modded stations' tiers follow it
+		public static void Reset()
+		{
+			moddedInfo.Clear();
+			recipeCounts = null;
+		}
+
+		// A stable name for a tile (sorting keys): vanilla by its TileID name, modded by its full name
+		public static string Name(int tile) => !IsModded(tile) ? TileID.Search.GetName(tile) : TileLoader.GetTile(tile)?.FullName ?? tile.ToString();
 
 		// Every tile some recipe originally requires (the live recipes may already be randomized: reading them would make
 		// the result depend on the previous randomization, and differ on a client that just joined)
@@ -106,18 +177,46 @@ namespace UltimateRandomizer.Common.Core
 
 		private static Dictionary<int, List<int>> placers;
 
-		// Items placing each tile (content samples are fixed once loaded). Do not modify the lists
+		// Items placing each tile (content samples are fixed once loaded), and items placing another mod's tile that acts as
+		// this vanilla one (ActsAs: Magic Storage's combined stations count as a Hellforge, a Tinkerer's Workshop...). Do not
+		// modify the lists
 		public static Dictionary<int, List<int>> PlacersByTile()
 		{
 			if (placers != null) return placers;
 			Dictionary<int, List<int>> result = new();
+			void Add(int tile, int type)
+			{
+				if (!result.TryGetValue(tile, out List<int> list)) result[tile] = list = new List<int>();
+				if (!list.Contains(type)) list.Add(type);
+			}
 			foreach ((int type, Item sample) in ContentSamples.ItemsByType)
 			{
 				if (sample == null || sample.createTile < TileID.Dirt) continue;
-				if (!result.TryGetValue(sample.createTile, out List<int> list)) result[sample.createTile] = list = new List<int>();
-				list.Add(type);
+				Add(sample.createTile, type);
+				foreach (int tile in ActsAs(sample.createTile)) Add(tile, type);
 			}
 			return placers = result;
+		}
+
+		// The vanilla tiles another mod's tile also counts as for crafting (ModTile.AdjTiles), in a stable order
+		public static IEnumerable<int> ActsAs(int tile)
+		{
+			if (!IsModded(tile) || TileLoader.GetTile(tile)?.AdjTiles is not int[] adj) return Enumerable.Empty<int>();
+			return adj.Where(t => t >= TileID.Dirt && t < TileID.Count).Distinct().OrderBy(t => t);
+		}
+
+		// The floor of an item placing another mod's tile that acts as vanilla progression stations: the highest of their tiers
+		// (a combined station acting as an Ancient Manipulator is a post-Lunatic item, whatever its recipe or rarity say). 0:
+		// none. Load-time facts only
+		public static int ActingFloor(int item)
+		{
+			if (!PlacedTile(item, out int tile)) return 0;
+			int floor = 0;
+			foreach (int acted in ActsAs(tile))
+			{
+				if (Known.TryGetValue(acted, out StationInfo info) && info.Kind == StationKind.Progression && !info.World) floor = System.Math.Max(floor, info.Tier);
+			}
+			return floor;
 		}
 
 		public static List<int> Placers(int tile) => PlacersByTile().TryGetValue(tile, out List<int> list) ? list : new List<int>();

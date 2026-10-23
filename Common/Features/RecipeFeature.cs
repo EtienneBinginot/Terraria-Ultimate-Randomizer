@@ -22,6 +22,9 @@ namespace UltimateRandomizer.Common.Features
 		private static int[] recipeKeys;
 		private static long[] ingredientValues;
 		private static bool[] modded;
+		// Another mod's recipe: its mod's name, and whether one of its conditions comes from a mod (ForeignCondition)
+		private static string[] modNames;
+		private static bool[] moddedCondition;
 		private static int[][] originalDecraft;
 		private static bool[] originalDisabled;
 		private static bool[] shell;
@@ -138,7 +141,8 @@ namespace UltimateRandomizer.Common.Features
 			return effectiveValues[type] = best == Cycle ? ValueFloor(type) : Math.Max(best, 1);
 		}
 
-		// The enabled vanilla recipes (not shells, not other mods') making each item
+		// The enabled vanilla recipes (not shells, not other mods' ones of vanilla items: shortcuts) making each item; other
+		// mods' recipes count for their own items (a storage upgrade is worth its bars)
 		private static Dictionary<int, List<int>> madeBy;
 
 		private static List<int> MadeBy(int type)
@@ -148,7 +152,7 @@ namespace UltimateRandomizer.Common.Features
 				madeBy = new Dictionary<int, List<int>>();
 				for (int i = 0; i < originalTypes.Length; i++)
 				{
-					if (shell[i] || modded[i] || originalDisabled[i]) continue;
+					if (shell[i] || modded[i] && originalTypes[i] < ItemID.Count || originalDisabled[i]) continue;
 					if (!madeBy.TryGetValue(originalTypes[i], out List<int> list)) madeBy[originalTypes[i]] = list = new List<int>();
 					list.Add(i);
 				}
@@ -211,12 +215,16 @@ namespace UltimateRandomizer.Common.Features
 				if (Main.recipe[i]?.createItem != null) made.Add(Main.recipe[i].createItem.type);
 			}
 			HashSet<int> materials = UsedAsIngredient();
+			// Another mod's internal items get no shell (ItemClassifier.IsInternal: what drops or a bag holds has a source; the shops
+			// are only read after the recipes, so a shop-only item without research gets no shell either, which is harmless)
+			HashSet<int> sourced = ItemPool.LootSources();
+			sourced.UnionWith(made);
 			Dictionary<ItemCategory, int> counts = new();
 			for (int type = 1; type < ItemLoader.ItemCount; type++)
 			{
 				if (made.Contains(type) || !ContentSamples.ItemsByType.TryGetValue(type, out Item item) || item.IsAir || item.type != type) continue;
 				if (ItemID.Sets.Deprecated[type] || ItemID.Sets.ItemsThatShouldNotBeInInventory[type] || ItemID.Sets.IsAPickup[type] || ItemID.Sets.CommonCoin[type] || item.questItem) continue;
-				if (ItemClassifier.IsBanned(item)) continue;
+				if (ItemClassifier.IsBanned(item) || ItemClassifier.IsInternal(item, sourced)) continue;
 				ItemCategory category = ItemClassifier.Classify(type, item);
 				if (category == ItemCategory.Misc && materials.Contains(type)) category = ItemCategory.Material;
 				// The life and mana upgrades get theirs whatever their category: it is their recipe (RecipePlanner.SpecialRecipe)
@@ -245,6 +253,8 @@ namespace UltimateRandomizer.Common.Features
 			recipeKeys = new int[count];
 			ingredientValues = new long[count];
 			modded = new bool[count];
+			modNames = new string[count];
+			moddedCondition = new bool[count];
 			originalDisabled = new bool[count];
 			shell = new bool[count];
 			if (SetDisabledMethod == null) Mod.Logger.Warn("Recipe.Disabled has no setter: identical recipe copies stay enabled.");
@@ -259,6 +269,8 @@ namespace UltimateRandomizer.Common.Features
 				originalTiles[i] = recipe.requiredTile.ToArray();
 				originalGroups[i] = recipe.acceptedGroups.ToArray();
 				modded[i] = recipe.Mod != null && recipe.Mod.Name != "ModLoader";
+				modNames[i] = modded[i] ? recipe.Mod.Name : null;
+				moddedCondition[i] = modded[i] && recipe.Conditions.Any(ForeignCondition);
 				// Keyed on names, not on the recipe index, so the mapping survives mod updates
 				int key = DetRandom.StableHash(DetRandom.ItemName(recipe.createItem.type));
 				foreach (Item ingredient in recipe.requiredItem)
@@ -299,6 +311,8 @@ namespace UltimateRandomizer.Common.Features
 			recipeKeys = null;
 			ingredientValues = null;
 			modded = null;
+			modNames = null;
+			moddedCondition = null;
 			originalDecraft = null;
 			originalDisabled = null;
 			shell = null;
@@ -338,32 +352,53 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// Recipes whose result, ingredients and station may change: vanilla recipes of randomizable items, except the mining chain.
-		// A house recipe (HouseRecipe) is touchable but keeps its result (RecipePlanner)
-		public static bool Touchable(int i) => !modded[i] && !shell[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+		// Recipes whose result, ingredients and station may change: vanilla recipes (and other mods' ones unless LeftAlone) of
+		// randomizable items, except the mining chain. A house recipe (HouseRecipe) is touchable but keeps its result (RecipePlanner)
+		public static bool Touchable(int i) => !LeftAlone(i) && !shell[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
 
 		// What a house needs besides the table and the chair (basic stations, guaranteed in the world): hint targets. Their
 		// recipes keep their result but get random ingredients found at tier 0 and a basic station (RecipePlanner), so a
 		// house can always be built at once
 		public static readonly int[] HouseItems = { ItemID.WoodenDoor, ItemID.WoodPlatform, ItemID.Torch };
 
-		public static bool HouseRecipe(int i) => originalTypes != null && i >= 0 && i < originalTypes.Length && !modded[i] && !shell[i]
+		public static bool HouseRecipe(int i) => originalTypes != null && i >= 0 && i < originalTypes.Length && !LeftAlone(i) && !shell[i]
 			&& Array.IndexOf(HouseItems, originalTypes[i]) >= 0 && ItemPool.IsRandomizable(originalTypes[i]);
 
 		// Recipes whose ingredients may change: protected results (boss summons, progression stations...) keep their result
 		// and stations, but an ingredient that can't be found in time is replaced like in any recipe (protected ingredients
-		// stay); modded recipes and excluded results stay as they are
-		public static bool IngredientsTouchable(int i) => !modded[i] && !shell[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded;
+		// stay); modded recipes left alone (LeftAlone) and excluded results stay as they are
+		public static bool IngredientsTouchable(int i) => !LeftAlone(i) && !shell[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded;
 
+		// A recipe of a mod (this one's shells too; tModLoader's own count as vanilla): the stats and logs tell them apart
 		public static bool IsModded(int i) => modded != null && i >= 0 && i < modded.Length && modded[i];
 
+		// Another mod's recipe that stays exactly as its mod made it (RandomizeModdedRecipes off; never a shell). On, other mods'
+		// recipes are planned like the vanilla ones everywhere (results, swaps, ingredients, groups, stations, twins, house
+		// rules): their items' tiers come from these recipes too (ItemClassifier.IsTierRecipe), so each keeps a key of its
+		// result's tier. Accepted limitation: a mod's own recipe callbacks (OnCraft, consume hooks) still run for its recipe,
+		// whatever it makes now. Always left alone: a recipe with a condition of its mod (Magic Storage's Cooked Marshmallow
+		// needs a campfire nearby: the condition would be put on another result, or lost with its ingredients), and the
+		// recipes of excluded mods (GeneralConfig.ExcludedMods)
+		public static bool LeftAlone(int i) => IsModded(i) && !shell[i]
+			&& (!CraftingConfig.Instance.RandomizeModdedRecipes || moddedCondition[i] || ExcludedMod(modNames[i]));
+
+		private static bool ExcludedMod(string mod) => mod != null && GeneralConfig.Instance.ExcludedMods.Any(m => m != null && m.Trim() == mod);
+
+		// A recipe condition defined by another mod: its type or its predicate's code lives outside tModLoader (the vanilla
+		// ones, Condition.NearWater..., are tModLoader's)
+		private static bool ForeignCondition(Condition condition)
+		{
+			Assembly own = typeof(Recipe).Assembly;
+			return condition != null && (condition.GetType().Assembly != own || condition.Predicate?.Method.Module.Assembly is Assembly code && code != own);
+		}
+
 		// A recipe kept only because the mining chain is protected
-		public static bool KeptForMining(int i) => !modded[i] && !shell[i] && ItemPool.IsRandomizable(originalTypes[i]) && KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+		public static bool KeptForMining(int i) => !LeftAlone(i) && !shell[i] && ItemPool.IsRandomizable(originalTypes[i]) && KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
 
 		// The live recipe differs from the vanilla one (result or ingredients): what it makes sells for its ingredients
 		public static bool IsRandomized(int i)
 		{
-			if (!applied || originalTypes == null || i < 0 || i >= originalTypes.Length || i >= Recipe.numRecipes || (modded[i] && !shell[i])) return false;
+			if (!applied || originalTypes == null || i < 0 || i >= originalTypes.Length || i >= Recipe.numRecipes || LeftAlone(i)) return false;
 			Recipe recipe = Main.recipe[i];
 			// A shell switched on is a random recipe of its own
 			if (shell[i]) return !recipe.Disabled;
