@@ -202,7 +202,7 @@ namespace UltimateRandomizer.Common.Core
 				}
 			}
 			int count = Enumerable.Range(1, tiers.Length - 1).Count(t => tiers[t] < before[t]);
-			examples = string.Join(", ", new[] { ItemID.YellowHorseshoeBalloon, ItemID.BundleofBalloons, ItemID.FrostsparkBoots }.Where(t => t < tiers.Length)
+			examples = string.Join(", ", new int[] { ItemID.YellowHorseshoeBalloon, ItemID.BundleofBalloons, ItemID.FrostsparkBoots }.Where(t => t < tiers.Length)
 				.Select(t => $"{Lang.GetItemNameValue(t)} {before[t]} > {tiers[t]}"));
 			return count;
 		}
@@ -531,6 +531,68 @@ namespace UltimateRandomizer.Common.Core
 			ItemID.FossilOre, ItemID.AmberMosquito, ItemID.ApprenticeBait, ItemID.GreenMoss, ItemID.BrownMoss, ItemID.RedMoss, ItemID.BlueMoss,
 			ItemID.PurpleMoss, ItemID.LavaMoss, ItemID.KryptonMoss, ItemID.XenonMoss, ItemID.ArgonMoss, ItemID.VioletMoss
 		};
+
+		// The chests world generation fills, and the tier from which each is opened (read in WorldGen.AddBuriedChest, the
+		// AddGenPasses lambdas, GetNextJungleChestItem, Pyramid, IslandHouse, GrowLivingTreePassageRoom, MahoganyTreeBiome
+		// and MakeDungeon): the main item of each kind of chest
+		private static readonly (string kind, int tier, int[] items)[] WorldChests =
+		{
+			// Surface wooden chests and living trees
+			("surface chest", 0, new int[] { ItemID.Spear, ItemID.Blowpipe, ItemID.WoodenBoomerang, ItemID.Aglet, ItemID.ClimbingClaws, ItemID.Umbrella,
+				ItemID.CordageGuide, ItemID.WandofSparking, ItemID.Radar, ItemID.PortableStool, ItemID.CreativeWings, ItemID.LivingWoodWand, ItemID.LeafWand,
+				ItemID.BabyBirdStaff, ItemID.SunflowerMinecart, ItemID.LadybugMinecart }),
+			// Water chests (oceans, flooded caves)
+			("water chest", 0, new int[] { ItemID.Trident, ItemID.BreathingReed, ItemID.Flipper, ItemID.WaterWalkingBoots, ItemID.FloatingTube, ItemID.SharkBait, ItemID.SandcastleBucket }),
+			// Underground gold chests (and the Lava Charm of the deep caverns)
+			("gold chest", 1, new int[] { ItemID.BandofRegeneration, ItemID.MagicMirror, ItemID.CloudinaBottle, ItemID.HermesBoots, ItemID.Mace, ItemID.ShoeSpikes,
+				ItemID.FlareGun, ItemID.Extractinator, ItemID.LavaCharm, ItemID.MagicDagger, ItemID.EncumberingStone }),
+			("ice chest", 1, new int[] { ItemID.IceBoomerang, ItemID.IceBlade, ItemID.IceSkates, ItemID.SnowballCannon, ItemID.BlizzardinaBottle, ItemID.FlurryBoots,
+				ItemID.Fish, ItemID.IceMirror, ItemID.IceMachine }),
+			("ivy chest", 1, new int[] { ItemID.FeralClaws, ItemID.AnkletoftheWind, ItemID.StaffofRegrowth, ItemID.Seaweed, ItemID.Boomstick, ItemID.FiberglassFishingPole,
+				ItemID.FlowerBoots, ItemID.BeeMinecart, ItemID.LivingMahoganyWand, ItemID.LivingMahoganyLeafWand }),
+			("sandstone chest", 1, new int[] { ItemID.DesertMinecart }),
+			("mushroom chest", 1, new int[] { ItemID.ShroomMinecart, ItemID.MushroomHat, ItemID.MushroomVest, ItemID.MushroomPants }),
+			("pyramid chest", 1, new int[] { ItemID.PharaohsMask, ItemID.PharaohsRobe, ItemID.SandstorminaBottle, ItemID.FlyingCarpet }),
+			("sky island chest", 1, new int[] { ItemID.Starfury, ItemID.LuckyHorseshoe, ItemID.ShinyRedBalloon, ItemID.CelestialMagnet, ItemID.SkyMill, ItemID.HighPitch }),
+			// Shadow Key (dungeon, after Skeletron)
+			("shadow chest", 3, new int[] { ItemID.DarkLance, ItemID.Sunfury, ItemID.FlowerofFire, ItemID.Flamelash, ItemID.HellwingBow, ItemID.TreasureMagnet,
+				ItemID.HellMinecart, ItemID.OrnateShadowKey }),
+			// Golden Keys (dungeon, after Skeletron)
+			("locked dungeon chest", 3, new int[] { ItemID.Muramasa, ItemID.CobaltShield, ItemID.AquaScepter, ItemID.BlueMoon, ItemID.Handgun, ItemID.MagicMissile,
+				ItemID.Valor, ItemID.ShadowKey, ItemID.BoneWelder }),
+			// Biome keys: the chests open after Plantera
+			("biome dungeon chest", 6, new int[] { ItemID.PiranhaGun, ItemID.ScourgeoftheCorruptor, ItemID.VampireKnives, ItemID.RainbowGun, ItemID.StaffoftheFrostHydra,
+				ItemID.StormTigerStaff })
+		};
+
+		// World-generated chests are a source too: they lower the true tier of what they hold (Trident: rarity 2, a water chest
+		// item), never Tier nor the buckets, like MaterialTiers. Config overrides and the reviewed materials keep theirs.
+		// lowered[t]: lowered here (its true tier may then be below Tier). Returns how many, and examples
+		public static int LowerByWorldChests(int[] trueTiers, int[] tiers, bool[] fromTable, Dictionary<int, Tier> overrides, bool[] lowered, int[] sourceTiers, string[] sources, out string examples)
+		{
+			List<string> shown = new();
+			int count = 0;
+			foreach ((string kind, int tier, int[] items) in WorldChests)
+			{
+				foreach (int type in items)
+				{
+					if (type <= 0 || type >= trueTiers.Length || fromTable[type] || overrides.ContainsKey(type) || lowered[type]) continue;
+					if (sourceTiers[type] < 0 || tier < sourceTiers[type])
+					{
+						sourceTiers[type] = tier;
+						sources[type] = kind;
+					}
+					int now = System.Math.Max(tiers[type], trueTiers[type]);
+					if (tier >= now) continue;
+					trueTiers[type] = tier;
+					lowered[type] = true;
+					count++;
+					if (shown.Count < 8 || type == ItemID.Trident) shown.Add($"{Lang.GetItemNameValue(type)} {now} > {tier} ({kind})");
+				}
+			}
+			examples = string.Join(", ", shown);
+			return count;
+		}
 
 		// Name parts of dungeon and Lihzahrd items that are no furniture placed by world generation
 		private static readonly string[] NotWorldFurniture = { "Brick", "Banner", "MusicBox", "Crate", "Desert", "Fake_", "Altar", "Furnace", "PowerCell", "Key" };

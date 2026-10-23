@@ -20,7 +20,7 @@ namespace UltimateRandomizer.Common.Features
 		public override void SetDefaults(NPC npc)
 		{
 			// Also called at load for the bestiary and content samples: they must keep the original stats
-			if (!SeedSystem.WorldReady) return;
+			if (!SeedSystem.WorldReady || NpcTiers.Sampling) return;
 			if (npc.townNPC || npc.friendly || NPCID.Sets.CountsAsCritter[npc.type] || NPCID.Sets.ProjectileNPC[npc.type]) return;
 			// Boss parts (worm segments, hands, cannons...) share the boss's multipliers
 			int owner = BossParts.Owner(npc.type);

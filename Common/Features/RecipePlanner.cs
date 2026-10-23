@@ -25,6 +25,9 @@ namespace UltimateRandomizer.Common.Features
 		// Recipes that received a key ingredient of tier U, and recipes whose result was re-picked (no slot, no material)
 		public bool[] KeyIngredient;
 		public bool[] ResultRepicked;
+		// Copies of an earlier recipe once planned (same result, ingredients, groups and conditions): they share its stations
+		// and are switched off when applied, so the crafting menu never shows one recipe on two stations
+		public bool[] Twin;
 	}
 
 	// Plans the ingredients and stations of the recipes from the seed and the settings only (the same on every machine,
@@ -142,7 +145,7 @@ namespace UltimateRandomizer.Common.Features
 				for (int i = 0; i < count; i++)
 				{
 					Recipe recipe = Main.recipe[i];
-					if (recipe.Disabled) continue;
+					if (RecipeSystem.VanillaDisabled(i)) continue;
 					int tier = 0;
 					foreach ((int type, _) in ingredients[i])
 					{
@@ -217,11 +220,13 @@ namespace UltimateRandomizer.Common.Features
 			result.ResultTiers = ResultTiers(results);
 			result.KeyIngredient = new bool[count];
 			result.ResultRepicked = new bool[count];
+			result.Twin = new bool[count];
 			// Planned as if every result waited for its U: the key ingredients make it so
 			int[] avail = Availability(Findability.Tier, results, result.ResultTiers, ingredients, tiles, out int[] recipeTiers);
 			if (cfg.RandomizeRecipes && cfg.IngredientMode == IngredientMode.Randomized) PlanIngredients(result, results, avail, recipeTiers);
 			if (cfg.RandomizeRecipes && cfg.RandomizeStations) PlanStations(result, results, avail, recipeTiers);
 			if (cfg.RandomizeRecipes) LockResults(result, results, ingredients, tiles);
+			if (cfg.RandomizeRecipes) ShareTwinStations(result, ingredients, tiles, avail);
 			(int, int)[][] planned = Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
 			// The live recipes give their result at once: no result tier any more
 			result.Availability = Availability(Findability.Tier, results, new int[count], planned,
@@ -277,9 +282,11 @@ namespace UltimateRandomizer.Common.Features
 				$"tiers without a key material: {(noMaterial.Count == 0 ? "none" : string.Join(", ", noMaterial))}; most used keys: {topKeys}");
 		}
 
-		// Doable (with what it has now) before the U of its result
+		// Doable (with what it has now) before the U of its result. A recipe that still gives its vanilla result (protected
+		// results, kept stations, a roll that landed on itself) is that item's vanilla source: never locked further
 		private static bool NeedsLock(RecipePlan result, int i, int[] doable) =>
-			Gated(i) && !Main.recipe[i].Disabled && result.ResultTiers[i] > 0 && doable[i] < result.ResultTiers[i];
+			Gated(i) && !RecipeSystem.VanillaDisabled(i) && result.ResultTiers[i] > 0 && doable[i] < result.ResultTiers[i]
+			&& result.Results[i].type != RecipeSystem.OriginalResult(i);
 
 		// One replaceable ingredient (a material one first: a Zenith keeps its swords) becomes a key material of tier u (else
 		// u + 1), weighted by commonness; each material is key of at most KeyUseCap recipes while others are left
@@ -309,13 +316,24 @@ namespace UltimateRandomizer.Common.Features
 					}
 				}
 				if (options.Count == 0) continue;
-				// Anti-abuse: spread the keys while other materials of the tier are left
-				int min = options.Min(o => uses.GetValueOrDefault(o.item));
-				List<(int item, float weight)> fresh = options.Where(o => uses.GetValueOrDefault(o.item) < Math.Max(KeyUseCap, min + 1)).ToList();
+				// Real materials first (stackable materials, bars, blocks): a bucket, a sponge or a tool only when the tier has none
+				List<(int item, float weight)> materials = options.Where(o => KeyMaterial(o.item)).ToList();
+				if (materials.Count > 0) options = materials;
+				// Anti-abuse: spread the keys while other materials of the tier are left; a common material may serve more recipes
+				List<(int item, float weight)> fresh = options.Where(o => uses.GetValueOrDefault(o.item) < KeyUseCap(o.item)).ToList();
+				if (fresh.Count == 0)
+				{
+					float least = options.Min(o => uses.GetValueOrDefault(o.item) / (float)KeyUseCap(o.item));
+					fresh = options.Where(o => uses.GetValueOrDefault(o.item) / (float)KeyUseCap(o.item) <= least + 1e-4f).ToList();
+				}
+				// Common keys far more often than rare ones (on top of the category weight)
+				fresh = fresh.Select(o => (o.item, o.weight / CommonnessWeight(o.item) * KeyCommonnessWeight(o.item))).ToList();
 				int key = WeightedPick(fresh, rng);
 				if (key <= 0) continue;
-				(int g, int n) = current[slot];
-				current[slot] = (key, ReplacementStack((long)Math.Max(StackRules.ValueOf(g), 1) * n, key));
+				// The key keeps the recipe's value: it is worth what the original ingredients were, less the other slots now
+				// (the slot may already hold a replacement held by the stack cap or rounded up: its value does not compound)
+				long others = current.Where((p, k) => k != slot).Sum(p => (long)Math.Max(StackRules.ValueOf(p.type), 1) * p.stack);
+				current[slot] = (key, ReplacementStack(Math.Max(1, RecipeSystem.OriginalIngredientValue(i) - others), key));
 				result.Ingredients[i] = current;
 				result.IngredientValues[i] = current.Sum(p => (long)Math.Max(StackRules.ValueOf(p.type), 1) * p.stack);
 				uses[key] = uses.GetValueOrDefault(key) + 1;
@@ -325,8 +343,24 @@ namespace UltimateRandomizer.Common.Features
 			return 0;
 		}
 
-		// A key material serves at most this many recipes while another one of its tier is less used
-		private const int KeyUseCap = 6;
+		// A key material serves at most this many recipes while another one of its tier is less used (common ones more)
+		private static int KeyUseCap(int item) => ItemPool.CommonnessOf(item) switch
+		{
+			Commonness.Common => 18,
+			Commonness.Rare => 3,
+			_ => 6
+		};
+
+		// Commonness weights of a key: a tier's common materials lock most recipes, rare ones (Broken Hero Sword) seldom
+		private static float KeyCommonnessWeight(int item) => ItemPool.CommonnessOf(item) switch
+		{
+			Commonness.Common => 10f,
+			Commonness.Rare => 0.1f,
+			_ => 1f
+		};
+
+		// A real crafting material: a stackable material, bar or block (not a bucket, a sponge or a tool used in a recipe)
+		private static bool KeyMaterial(int item) => ItemPool.IsValid(item) && MaterialLike(ItemPool.Info[item].Category) && StackRules.MaxStackOf(item) > 1;
 
 		// The result becomes one the recipe may give at the tier it is doable (isolated re-pick: same category, from its tier
 		// down); the original result when none fits
@@ -357,6 +391,57 @@ namespace UltimateRandomizer.Common.Features
 			result.ResultTiers[i] = ResultTier(i, chosen);
 			result.ResultRepicked[i] = true;
 			return true;
+		}
+
+		// ---------------------------------------------------------------- Twins
+
+		// Two vanilla recipes that end up with the same result and the same ingredients (vanilla alternatives that differed by
+		// their station only get the same rolls: their key is the result and the ingredients) would show as one recipe on two
+		// random stations. They share the stations of the one usable earliest (no later than any of them), and the others are
+		// copies (Twin), switched off when applied. Recipes whose stations stay vanilla keep them (vanilla alternatives)
+		private static void ShareTwinStations(RecipePlan result, (int, int)[][] ingredients, int[][] tiles, int[] avail)
+		{
+			Dictionary<int, List<int>> placers = Stations.PlacersByTile();
+			int[] Tiles(int i) => result.Tiles[i] ?? tiles[i];
+			int StationAvail(int i) => Tiles(i).Select(tile => TileAvailability(tile, placers, avail)).DefaultIfEmpty(0).Max();
+			string Key(int i)
+			{
+				Recipe recipe = Main.recipe[i];
+				string items = string.Join(",", (result.Ingredients[i] ?? ingredients[i]).Select(p => $"{p.Item1}x{p.Item2}").OrderBy(s => s, StringComparer.Ordinal));
+				string groups = string.Join(",", recipe.acceptedGroups.OrderBy(g => g));
+				string conditions = string.Join(",", recipe.Conditions.Select(c => c.Description.Key));
+				return $"{result.Results[i].type}x{result.Results[i].stack}|{items}|{groups}|{conditions}";
+			}
+			int groupsShared = 0, twins = 0;
+			List<string> examples = new();
+			IEnumerable<List<int>> groupsFound = Enumerable.Range(0, Count).Where(i => !RecipeSystem.IsModded(i) && !RecipeSystem.VanillaDisabled(i))
+				.GroupBy(Key).Select(g => g.ToList()).Where(g => g.Count > 1);
+			foreach (List<int> members in groupsFound)
+			{
+				// Kept stations win (a protected recipe's are its own); several different kept ones stay vanilla alternatives
+				List<int> fixedOnes = members.Where(i => !RecipeSystem.Touchable(i)).ToList();
+				if (fixedOnes.Select(i => string.Join(",", tiles[i].OrderBy(t => t))).Distinct().Count() > 1) continue;
+				int chosen = fixedOnes.Count > 0 ? fixedOnes[0] : members.OrderBy(StationAvail).ThenBy(i => i).First();
+				int[] shared = Tiles(chosen);
+				bool differed = false;
+				foreach (int i in members)
+				{
+					if (i == chosen) continue;
+					if (!Tiles(i).OrderBy(t => t).SequenceEqual(shared.OrderBy(t => t)))
+					{
+						// Vanilla stations (not randomized): vanilla alternatives, left as they are
+						if (!CraftingConfig.Instance.RandomizeStations) continue;
+						differed = true;
+						result.Tiles[i] = shared.OrderBy(t => t).SequenceEqual(tiles[i].OrderBy(t => t)) ? null : (int[])shared.Clone();
+					}
+					result.Twin[i] = true;
+					twins++;
+				}
+				if (differed) groupsShared++;
+				if (examples.Count < 5 && members.Any(i => result.Twin[i])) examples.Add($"{DetRandom.ItemName(result.Results[chosen].type)} (recipes {string.Join("/", members)})");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {twins} identical recipe copies switched off, {groupsShared} groups moved to one station set; " +
+				$"e.g. {(examples.Count == 0 ? "none" : string.Join(", ", examples))}");
 		}
 
 		// ---------------------------------------------------------------- Stations

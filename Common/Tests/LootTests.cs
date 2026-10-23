@@ -464,8 +464,12 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			foreach (int npc in new[] { NPCID.Bunny, NPCID.Mouse, NPCID.Butterfly })
 			{
-				List<PlannedDrop> plan = RandomNpcDropRule.Plan(npc, Main.expertMode, abundance: 3f);
+				// The final plan: the plan of now gives the chances of its locked entries to the unlocked ones (Redistribute), so
+				// the frequent drop may be locked or raised there; the critter still drops at least as often
+				List<PlannedDrop> plan = RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, abundance: 3f);
 				if (!plan.Any(d => d.Extra && Math.Abs(d.Chance - first) < 0.001f)) failures.Add($"{NpcName(npc)}: no frequent drop at {first * 100:0} % ({plan.Count(d => d.Extra)} random drops)");
+				List<PlannedDrop> now = RandomNpcDropRule.Plan(npc, Main.expertMode, abundance: 3f);
+				if (now.Any(d => d.Extra) && now.Where(d => d.Extra).Max(d => d.Chance) < first - 0.001f) failures.Add($"{NpcName(npc)}: no drop at {first * 100:0} % or more now");
 			}
 			Check.All(failures, "Critters without their frequent drop");
 		}

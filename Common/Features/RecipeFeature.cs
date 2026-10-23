@@ -22,7 +22,16 @@ namespace UltimateRandomizer.Common.Features
 		private static long[] ingredientValues;
 		private static bool[] modded;
 		private static int[][] originalDecraft;
+		private static bool[] originalDisabled;
 		private static bool applied;
+
+		// Recipe.Disabled has no public setter (DisableRecipe only works while recipes are set up, for good): twin copies are
+		// switched off and back through it
+		private static readonly MethodInfo SetDisabledMethod = typeof(Recipe).GetProperty("Disabled")?.GetSetMethod(true);
+
+		// Disabled before this mod changed anything (the planner reads this, never the live flag: twins are switched off live)
+		public static bool VanillaDisabled(int i) =>
+			originalDisabled != null && i >= 0 && i < originalDisabled.Length ? originalDisabled[i] : i >= 0 && i < Recipe.numRecipes && Main.recipe[i].Disabled;
 
 		public static int OriginalResult(int recipeIndex) => originalTypes != null && recipeIndex < originalTypes.Length ? originalTypes[recipeIndex] : 0;
 
@@ -52,9 +61,12 @@ namespace UltimateRandomizer.Common.Features
 			recipeKeys = new int[count];
 			ingredientValues = new long[count];
 			modded = new bool[count];
+			originalDisabled = new bool[count];
+			if (SetDisabledMethod == null) Mod.Logger.Warn("Recipe.Disabled has no setter: identical recipe copies stay enabled.");
 			for (int i = 0; i < count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
+				originalDisabled[i] = recipe.Disabled;
 				originalTypes[i] = recipe.createItem.type;
 				originalStacks[i] = recipe.createItem.stack;
 				originalIngredients[i] = recipe.requiredItem.Select(ingredient => (ingredient.type, ingredient.stack)).ToArray();
@@ -96,6 +108,7 @@ namespace UltimateRandomizer.Common.Features
 			ingredientValues = null;
 			modded = null;
 			originalDecraft = null;
+			originalDisabled = null;
 		}
 
 		private static void Refresh()
@@ -163,6 +176,8 @@ namespace UltimateRandomizer.Common.Features
 				Recipe recipe = Main.recipe[i];
 				SetIngredients(recipe, plan.Ingredients[i] ?? originalIngredients[i]);
 				SetTiles(recipe, plan.Tiles[i] ?? originalTiles[i]);
+				// A copy of another recipe (same result, ingredients and stations) would show twice: switched off
+				SetDisabled(recipe, originalDisabled[i] || plan.Twin[i]);
 				// Decrafting gives the current ingredients back: not when they are worth clearly more than before (protected
 				// results too, their ingredients may be replaced)
 				if (plan.Ingredients[i] != null && plan.IngredientValues[i] > ingredientValues[i] * 5 / 4) changed[i] = true;
@@ -357,6 +372,7 @@ namespace UltimateRandomizer.Common.Features
 				SetResult(recipe.createItem, originalTypes[i], originalStacks[i]);
 				SetIngredients(recipe, originalIngredients[i]);
 				SetTiles(recipe, originalTiles[i]);
+				SetDisabled(recipe, originalDisabled[i]);
 			}
 			RestoreDecraft();
 			applied = false;
@@ -384,6 +400,11 @@ namespace UltimateRandomizer.Common.Features
 			if (same) return;
 			recipe.requiredItem.Clear();
 			foreach ((int type, int stack) in ingredients) recipe.requiredItem.Add(new Item(type, stack));
+		}
+
+		private static void SetDisabled(Recipe recipe, bool disabled)
+		{
+			if (recipe.Disabled != disabled) SetDisabledMethod?.Invoke(recipe, new object[] { disabled });
 		}
 
 		private static void SetTiles(Recipe recipe, int[] tiles)

@@ -20,6 +20,23 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			TestRunner.Register("TierCoherence", TierCoherence);
 			TestRunner.Register("TierAudit", TierAudit);
+			TestRunner.Register("WorldChestTrueTiers", WorldChestTrueTiers);
+		}
+
+		// World-generated chests lower the true tier of what they hold to the tier the chest is opened (Trident: a water chest,
+		// tier 0), never their Tier; a config override keeps its own
+		private static void WorldChestTrueTiers()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			HashSet<int> overridden = ProgressionConfig.Instance.TierOverrides.Where(o => o?.Item != null && !o.Item.IsUnloaded).Select(o => o.Item.Type).ToHashSet();
+			List<string> failures = new();
+			foreach ((int item, int tier) in new[] { (ItemID.Trident, 0), (ItemID.Spear, 0), (ItemID.HermesBoots, 1), (ItemID.Starfury, 1), (ItemID.Muramasa, 3), (ItemID.Flamelash, 3), (ItemID.PiranhaGun, 6) })
+			{
+				if (overridden.Contains(item) || !ItemPool.IsValid(item) || ItemPool.Info[item].Excluded) continue;
+				if (ItemPool.TrueTierOf(item) > tier) failures.Add($"{Name(item)}: true tier {ItemPool.TrueTierOf(item)}, its chest opens at {tier}");
+				if (ItemPool.Info[item].Tier != ItemPool.AllTiers[item]) failures.Add($"{Name(item)}: Tier changed");
+			}
+			Check.All(failures, "World chest items above their chest's tier");
 		}
 
 		private const int Never = Findability.Never;
@@ -75,7 +92,7 @@ namespace UltimateRandomizer.Common.Tests
 		// <SavePath>/UltimateRandomizer/TierAudit.tsv; counts and examples in client.log ("TierAudit:" lines). Reasons:
 		// raised (a source raised its true tier), earlier (a source is 2 tiers or more before its true tier), nosource (no
 		// drop, bag, shop, recipe nor gathering, not in KnownTiers: its rarity alone, for materials, blocks, ammo, potions,
-		// food and misc). Always passes; only writes that file
+		// food and misc), chest (a world-generated chest lowered its true tier). Always passes; only writes that file
 		private static readonly ItemCategory[] NoSourceCategories =
 		{
 			ItemCategory.Material, ItemCategory.OreBar, ItemCategory.Block, ItemCategory.Ammo, ItemCategory.Potion, ItemCategory.Misc, ItemCategory.Food
@@ -87,7 +104,7 @@ namespace UltimateRandomizer.Common.Tests
 			void Audit(string text) => ModContent.GetInstance<UltimateRandomizer>().Logger.Info("TierAudit: " + text);
 			StringBuilder tsv = new();
 			tsv.AppendLine("id\tinternal name\tname\tcategory\trarity tier\ttier\ttrue tier\tsource tier\tearliest source\treason");
-			Dictionary<string, List<int>> byReason = new() { ["raised"] = new(), ["earlier"] = new(), ["nosource"] = new() };
+			Dictionary<string, List<int>> byReason = new() { ["raised"] = new(), ["earlier"] = new(), ["nosource"] = new(), ["chest"] = new() };
 			int audited = 0, reviewed = 0;
 			for (int type = 1; type < Math.Min(ItemID.Count, ItemPool.Info.Length); type++)
 			{
@@ -102,6 +119,7 @@ namespace UltimateRandomizer.Common.Tests
 				audited++;
 				List<string> reasons = new();
 				if (info.SourceRaised) reasons.Add("raised");
+				if (info.FromWorldChest) reasons.Add("chest");
 				if (info.SourceTier >= 0 && info.SourceTier <= info.TrueTier - 2) reasons.Add("earlier");
 				if (info.SourceTier < 0 && !ItemClassifier.HasKnownTier(type) && Array.IndexOf(NoSourceCategories, info.Category) >= 0) reasons.Add("nosource");
 				if (reasons.Count == 0) continue;
