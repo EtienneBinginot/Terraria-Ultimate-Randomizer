@@ -28,9 +28,11 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BossGroupsMerge", BossGroupsMerge);
 		}
 
-		// With the permutation, what the bestiary and Recipe Browser read shows the world's drops (WorldDropsReport): an
-		// enemy's rule reports its plan, its silenced vanilla rules report nothing, and its bestiary entry lists exactly the
-		// report (the old elements removed), without the silenced items. Shown for the test when the option is off, then
+		// With the permutation, what the bestiary and Recipe Browser read shows the world's drops (WorldDropsReport). The
+		// bestiary entry is compared with an expectation computed apart from the report: the final plan of the enemy (lucky)
+		// filtered to the entries our rules roll, each shown at least as many times as planned; and a vanilla drop of the
+		// enemy that moved away (not kept, not in its plan) is not shown. Its silenced vanilla rules report nothing, and the
+		// entry lists exactly the live report (the old elements removed). Shown for the test when the option is off, then
 		// restored
 		private static void WorldDropsReported()
 		{
@@ -39,9 +41,11 @@ namespace UltimateRandomizer.Common.Tests
 			// Protected in ItemDropBestiaryInfoElement
 			System.Reflection.FieldInfo rateField = typeof(ItemDropBestiaryInfoElement).GetField("_droprateInfo", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
 			Check.That(rateField != null, "ItemDropBestiaryInfoElement._droprateInfo not found");
+			// A rebuild spread over frames is finished first: the entries are read now
+			WorldDropsReport.Complete();
 			bool was = WorldDropsReport.Showing;
 			List<string> failures = new();
-			int checkedIds = 0;
+			int checkedIds = 0, movedAway = 0;
 			try
 			{
 				if (!was) WorldDropsReport.Rebuild(true);
@@ -51,32 +55,39 @@ namespace UltimateRandomizer.Common.Tests
 					if (checkedIds >= 12) break;
 					if (!WorldDropsReport.Shows(netId)) continue;
 					string name = $"{NpcName(netId)} ({netId})";
-					List<IItemDropRule> registered = Main.ItemDropsDB.GetRulesForNPCID(netId, false);
-					List<PermutableRule> silenced = registered.SelectMany(r => BossPermutation.Wrappers(r)).Where(w => DropPermutation.Silences(w.Items)).ToList();
-					HashSet<int> expected = WorldDropsReport.NpcPlan(netId).Select(d => d.Item).ToHashSet();
+					// Independent of WorldDropsReport: the plan, filtered here
+					List<PlannedDrop> plan = RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true);
+					List<int> expected = plan.Where(d => d.Item > ItemID.None && (d.Rolled || d.Extra || d.Guaranteed)).Select(d => d.Item).ToList();
 					if (expected.Count == 0) continue;
+					BestiaryEntry entry = Main.BestiaryDB.FindEntryByNPCID(netId);
+					if (entry == null) continue;
 					checkedIds++;
-					foreach (PermutableRule wrapper in silenced)
+					List<int> shown = entry.Info.OfType<ItemDropBestiaryInfoElement>().Select(e => ((DropRateInfo)rateField.GetValue(e)).itemId).ToList();
+					foreach (IGrouping<int, int> item in expected.GroupBy(i => i).Where(g => shown.Count(s => s == g.Key) < g.Count()).Take(3))
+					{
+						failures.Add($"{name}: {ItemName(item.Key)} planned {item.Count()} time(s), shown {shown.Count(s => s == item.Key)} in the bestiary");
+					}
+					// Vanilla drops of this enemy that went elsewhere (not kept, nowhere in its plan, entries left to their
+					// rule included): not on its page
+					HashSet<int> planned = plan.Select(d => d.Item).ToHashSet();
+					List<int> gone = LootSnapshot.ForNpc(netId).Select(d => d.itemId).Where(i => i > ItemID.None && !DropHelper.KeepOriginal(i) && !planned.Contains(i)).Distinct().ToList();
+					movedAway += gone.Count;
+					foreach (int item in gone.Where(shown.Contains).Take(3)) failures.Add($"{name}: {ItemName(item)} moved away but still in the bestiary");
+					// The silenced wrappers report nothing, the entry is the live report
+					List<IItemDropRule> registered = Main.ItemDropsDB.GetRulesForNPCID(netId, false);
+					foreach (PermutableRule wrapper in registered.SelectMany(r => BossPermutation.Wrappers(r)).Where(w => DropPermutation.Silences(w.Items)))
 					{
 						if (LootSnapshot.Capture(new List<IItemDropRule> { wrapper }).Count > 0) failures.Add($"{name}: a silenced vanilla rule still reports its drops");
 					}
-					HashSet<int> ours = LootSnapshot.Capture(registered.OfType<RandomNpcDropRule>().Cast<IItemDropRule>().ToList()).Select(d => d.itemId).ToHashSet();
-					foreach (int item in expected.Where(i => !ours.Contains(i)).Take(3)) failures.Add($"{name}: {ItemName(item)} planned but not reported");
-					List<DropRateInfo> report = LootSnapshot.Capture(registered);
-					HashSet<int> reported = report.Select(d => d.itemId).ToHashSet();
-					BestiaryEntry entry = Main.BestiaryDB.FindEntryByNPCID(netId);
-					if (entry == null) continue;
-					List<int> shown = entry.Info.OfType<ItemDropBestiaryInfoElement>().Select(e => ((DropRateInfo)rateField.GetValue(e)).itemId).ToList();
-					if (shown.Count != report.Count) failures.Add($"{name}: the bestiary shows {shown.Count} drops for {report.Count} reported");
-					foreach (int item in expected.Where(i => !shown.Contains(i)).Take(3)) failures.Add($"{name}: {ItemName(item)} planned but not in the bestiary");
-					foreach (int item in silenced.SelectMany(w => w.Items).Distinct().Where(i => !reported.Contains(i) && shown.Contains(i)).Take(3)) failures.Add($"{name}: silenced {ItemName(item)} still in the bestiary");
+					int reported = LootSnapshot.Capture(registered).Count;
+					if (shown.Count != reported) failures.Add($"{name}: the bestiary shows {shown.Count} drops for {reported} reported");
 				}
 			}
 			finally
 			{
 				if (!was) WorldDropsReport.Rebuild(false);
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"World drops reported: {checkedIds} net IDs checked");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"World drops reported: {checkedIds} net IDs checked, {movedAway} moved-away vanilla drops checked");
 			if (checkedIds == 0) Check.Skip("no enemy follows the permutation");
 			Check.All(failures, "World drops reported");
 		}
@@ -250,6 +261,14 @@ namespace UltimateRandomizer.Common.Tests
 			int head = NPCID.EaterofWorldsHead;
 			List<PlannedDrop> expected = RandomNpcDropRule.OriginalDrops(head, BossParts.Owner(head));
 			if (expected.Count == 0) Check.Skip("the Eater of Worlds has no drop");
+			// Independent of the cached plan and of UnitOf: the head's table of a fresh plan of this world
+			Check.That(BossPermutation.Build(SeedSystem.WorldSeed).ByUnit.TryGetValue(head, out DropPermutation.Placed[] fresh), "the head has no table of its own in a fresh plan");
+			Check.Equal(fresh.Length, expected.Count, "head drop count against a fresh plan");
+			for (int i = 0; i < fresh.Length; i++)
+			{
+				Check.That(fresh[i].Entry.itemId == expected[i].Item && fresh[i].Entry.dropRate == expected[i].Chance && fresh[i].Rolled == expected[i].Rolled,
+					$"head entry {i}: {ItemName(expected[i].Item)}, a fresh plan has {ItemName(fresh[i].Entry.itemId)}");
+			}
 			foreach (int part in new[] { NPCID.EaterofWorldsBody, NPCID.EaterofWorldsTail })
 			{
 				Check.Equal(head, BossParts.Owner(part), $"owner of {NpcName(part)}");

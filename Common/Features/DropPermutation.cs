@@ -225,7 +225,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// Can this net ID's drops be permuted (whatever the style)? Settings play no part, so that a config change does not
 		// move the places of the world: ordinary enemies with drops, or without drops but with a coin value (the synthetic
-		// place). Not critters, harmless or projectile NPCs, town NPCs, bosses, their parts and minions
+		// place). Vanilla NPCs only (modded enemies keep their own rules, no synthetic place). Not critters, harmless or
+		// projectile NPCs, town NPCs, bosses, their parts and minions
 		public static bool IsPermutable(int netId)
 		{
 			if (eligible.TryGetValue(netId, out bool known)) return known;
@@ -233,7 +234,7 @@ namespace UltimateRandomizer.Common.Features
 			if (ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample))
 			{
 				int type = sample.type;
-				result = type > 0 && !sample.boss && !BossParts.IsPart(type) && !BossParts.IsMinion(type) && !NpcTiers.IsBoss(type)
+				result = type > 0 && type < NPCID.Count && !sample.boss && !BossParts.IsPart(type) && !BossParts.IsMinion(type) && !NpcTiers.IsBoss(type)
 					&& !sample.townNPC && !NPCID.Sets.ActsLikeTownNPC[type] && !NPCID.Sets.IsTownPet[type] && type != NPCID.TorchGod
 					&& !NPCID.Sets.CountsAsCritter[type] && !NPCID.Sets.ProjectileNPC[type] && sample.lifeMax > 5 && !sample.friendly
 					&& (LootSnapshot.ForNpc(netId).Count > 0 || sample.value > 0);
