@@ -120,6 +120,7 @@ Tests: {
 	PlanDiff: Mesure à quel point le mur du mode difficile change le plan de ce monde (recettes, trouvabilité, butins garantis) par rapport aux anciennes règles (dans le journal) ; le butin final des ennemis et des sacs ne doit pas changer
 	TierCoherence: Mesure, pour la refonte des recettes, les matériaux de chaque palier, les stations de progression, les recettes sans ingrédient du palier de leur résultat, les paliers relevés et la traîne des coffres jackpot (dans le journal)
 	TierAudit: Liste dans TierAudit.tsv les objets vanilla dont le palier semble douteux (relevé par leurs sources, une source bien plus précoce, ou aucune source), et compte les objets bannis du plan des monstres (dans le journal)
+	ItemTierDump: Écrit ItemTiers.tsv, une ligne par objet vanilla avec ses paliers, sa trouvabilité, les paliers de recette vanilla et planifiés, les ingrédients planifiés et les données de minage (lecture seule)
 	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
