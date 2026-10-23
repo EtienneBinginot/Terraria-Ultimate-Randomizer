@@ -195,7 +195,7 @@ Tests: {
 	WorldSummonsProtected: Les invocations trouvées dans le monde restent protégées, celles qu'on fabrique sont randomisées
 	UpgradesOutOfPools: Les améliorations de vie et de mana ne sont jamais tirées au sort, garanties ni utilisées comme ingrédients, et les drops les gardent
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
-	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
+	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier, ou par les boss de progression de son tier
 	GuaranteedBiomeHosts: Chaque objet garanti est porté par au moins 3 ennemis d'un même biome, avec la même chance sur chacun
 	GuaranteedSeveralSeeds: Chaque objet garanti obtient les ennemis d'un biome avec d'autres graines
 	GuaranteedBiomesSpread: Les objets garantis d'un tier sont répartis sur plusieurs biomes
@@ -223,6 +223,7 @@ Tests: {
 	HardmodeOresOfWorld: Les minerais des paires hardmode comptent toujours comme trouvables et ne deviennent jamais de nouveaux ingrédients
 	AltarDecisionKeepsCaches: Le choix d'un minerai hardmode par un autel ne change ni les sources garanties ni la trouvabilité
 	PotOnlyUnfound: Les pots ne donnent que des objets garantis que personne n'a encore trouvés
+	GuaranteesNotBelowTier: Aucun objet garanti n'arrive avant son tier (Manipulateur antique et Sceau céleste pas avant le Cultiste lunatique)
 	IngredientReplacementsFindable: Les nouveaux ingrédients s'obtiennent (trouvés ou fabriqués) au palier pour lequel leur recette a été reconstruite
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
 	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
