@@ -97,6 +97,13 @@ namespace UltimateRandomizer.Common.Features
 		public bool Single;
 		// Kill time only: a jackpot, this many tiers above the progression limit (JackpotItem)
 		public int JackpotGap;
+		// Tiers by which progression still locks this entry of the final plan (DropHelper.LockGap, 0: it drops): a locked
+		// entry does not drop (its chance goes to the others: RandomNpcDropRule.Redistribute), except on a lucky kill
+		public int LockGap;
+		// The original item of a replaced original drop (0: an extra or guaranteed drop)
+		public int Original;
+
+		public bool Locked => LockGap > 0;
 	}
 
 	// Categories of the frequent small drop of every enemy
@@ -135,7 +142,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 			// Weak swarm enemies (and critters: never) get a share of the jackpot chances (luck and madness)
 			float worth = JackpotWorth(npc);
-			IEnumerable<PlannedDrop> drops = ExtraDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky(worth), wildRng: new Random(info.rng.Next()), wildMultiplier: worth)
+			IEnumerable<PlannedDrop> drops = KillDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky(worth), new Random(info.rng.Next()), worth)
 				.Concat(GuaranteedSources.For(npc.type));
 			// Stronger enemies (type and individual) drop more often. Guaranteed drops (stations...) leave adaptive power
 			// out, so that how fast they are found does not depend on the player's equipment
@@ -297,35 +304,111 @@ namespace UltimateRandomizer.Common.Features
 			return true;
 		}
 
+		// The progression lock of an enemy's drops never goes below this tier (a boss always gives the items of its own level)
+		public static int MinLimit(int type) => NpcTiers.IsBoss(type) ? NpcTiers.BaseTier(type) : 0;
+
 		// Everything an enemy can drop in this world: the replaced original drops, then the extra ones and the guaranteed ones.
-		// lucky: ignores the progression lock (what the enemy gives once everything is unlocked)
+		// Every entry comes from the final plan (everything unlocked: the same items from the first day to the Moon Lord).
+		// lucky: that final plan as it is (hints, findability). Otherwise what drops now: the entries progression still locks
+		// are left out (includeLocked: kept, flagged, for the codex) and their chances go to the others (Redistribute)
 		// abundance: LootConfig.LootAbundance when null (tests pass an explicit value)
-		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true, float? abundance = null)
+		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true, float? abundance = null, bool includeLocked = false)
+		{
+			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
+			List<PlannedDrop> drops = OriginalDrops(netId, type);
+			drops.AddRange(ExtraDrops(netId, type, expert, abundance));
+			if (guaranteed) drops.AddRange(GuaranteedSources.For(type));
+			if (lucky)
+			{
+				for (int i = 0; i < drops.Count; i++)
+				{
+					PlannedDrop drop = drops[i];
+					drop.LockGap = 0;
+					drops[i] = drop;
+				}
+				return drops;
+			}
+			Redistribute(drops);
+			return includeLocked ? drops : drops.Where(d => !d.Locked).ToList();
+		}
+
+		// The original drops of an enemy and their final replacements (LootSubstitutionItem swaps them as they spawn)
+		public static List<PlannedDrop> OriginalDrops(int netId, int type)
 		{
 			List<PlannedDrop> drops = new();
-			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
-			bool isBoss = NpcTiers.IsBoss(type);
+			int minLimit = MinLimit(type);
 			foreach (DropRateInfo entry in LootSnapshot.ForNpc(netId))
 			{
 				int item = entry.itemId;
 				int min = entry.stackMin;
 				int max = entry.stackMax;
+				int lockGap = 0;
 				if (LootConfig.Instance.RandomizeMobDrops)
 				{
-					item = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(type), entry.itemId, NpcTiers.EffectiveTier(type), isBoss ? NpcTiers.BaseTier(type) : 0, lucky);
+					item = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(type), entry.itemId, NpcTiers.EffectiveTier(type), minLimit, true);
 					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);
+					if (!DropHelper.KeepOriginal(entry.itemId)) lockGap = DropHelper.LockGap(item, minLimit);
 				}
-				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions });
+				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions, Original = entry.itemId, LockGap = lockGap });
 			}
-			drops.AddRange(ExtraDrops(netId, type, expert, lucky, abundance));
-			if (guaranteed) drops.AddRange(GuaranteedSources.For(type));
 			return drops;
 		}
 
-		// wildRng: at kill time only, the madness tail (WildDropChance) may replace an item by one above the limit; the
-		// chance stays the one of the planned item, so the setting really is a share of the drops. wildMultiplier: scales
+		// The chances of the locked entries (original drops included) go to the unlocked extra entries of the same enemy, in
+		// proportion: each is multiplied by (unlocked + locked) / unlocked, capped at 1, so that an enemy drops about as much
+		// before its drops unlock. Guaranteed drops neither give nor receive; original drops cannot receive (vanilla rules
+		// roll them). Locked entries keep their own chance (the codex, lucky kills). Pure: reads only the entries
+		public static void Redistribute(List<PlannedDrop> drops)
+		{
+			float locked = 0f, receiving = 0f;
+			foreach (PlannedDrop drop in drops)
+			{
+				if (drop.Guaranteed) continue;
+				if (drop.Locked) locked += Math.Clamp(drop.Chance, 0f, 1f);
+				else if (drop.Extra) receiving += Math.Clamp(drop.Chance, 0f, 1f);
+			}
+			if (locked <= 0f || receiving <= 0f) return;
+			float factor = (receiving + locked) / receiving;
+			for (int i = 0; i < drops.Count; i++)
+			{
+				PlannedDrop drop = drops[i];
+				if (drop.Guaranteed || drop.Locked || !drop.Extra) continue;
+				drop.Chance = Math.Min(1f, drop.Chance * factor);
+				drops[i] = drop;
+			}
+		}
+
+		// The extra drops one kill rolls: the unlocked entries of the final plan, with the chances of the locked ones
+		// (Redistribute) and the madness tail (rng, worth). On a lucky kill, a locked entry may drop too: kept as rarely as a
+		// lucky roll that far above the limit (ItemPool.LuckyKeepChance, runtime rng), a jackpot when useful. Server side
+		public static List<PlannedDrop> KillDrops(int netId, int type, bool expert, bool lucky, Random rng, float worth)
+		{
+			List<PlannedDrop> plan = OriginalDrops(netId, type);
+			plan.AddRange(ExtraDrops(netId, type, expert, null, rng, worth));
+			Redistribute(plan);
+			List<PlannedDrop> drops = new();
+			foreach (PlannedDrop drop in plan)
+			{
+				if (!drop.Extra) continue;
+				if (!drop.Locked)
+				{
+					drops.Add(drop);
+					continue;
+				}
+				if (!lucky || rng == null || drop.LockGap > 1 && rng.NextDouble() >= ItemPool.LuckyKeepChance(drop.LockGap)) continue;
+				PlannedDrop kept = drop;
+				kept.JackpotGap = ItemPool.IsJackpotWorthy(drop.Item) ? drop.LockGap : 0;
+				kept.LockGap = 0;
+				drops.Add(kept);
+			}
+			return drops;
+		}
+
+		// The final plan of the random extra drops (everything unlocked), each entry flagged with its progression lock.
+		// wildRng: at kill time only, the madness tail (WildDropChance) may replace an unlocked item by one above the limit;
+		// the chance stays the one of the planned item, so the setting really is a share of the drops. wildMultiplier: scales
 		// that chance (JackpotWorth), 0 = no madness
-		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, bool lucky, float? abundance = null, Random wildRng = null, float wildMultiplier = 1f)
+		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, float? abundance = null, Random wildRng = null, float wildMultiplier = 1f)
 		{
 			if (wildMultiplier <= 0f) wildRng = null;
 			List<PlannedDrop> drops = new();
@@ -343,6 +426,7 @@ namespace UltimateRandomizer.Common.Features
 
 			int npcKey = DetRandom.NpcKey(type);
 			int sourceTier = NpcTiers.EffectiveTier(type);
+			int minLimit = MinLimit(type);
 			bool critter = NPCID.Sets.CountsAsCritter[type];
 			int slots = isBoss
 				? SlotCount(npcKey, true, critter, cfg.BossDropSlotsMin, cfg.BossDropSlotsMax, cfg.DropTableStyle, slotFactor)
@@ -359,8 +443,8 @@ namespace UltimateRandomizer.Common.Features
 					TierJitterDown = 1,
 					TierJitterUp = 1,
 					AllowJackpot = true,
-					IgnoreGating = lucky,
-					MinLimit = isBoss ? NpcTiers.BaseTier(type) : 0
+					IgnoreGating = true,
+					MinLimit = minLimit
 				};
 				int item = ItemPool.Roll(request, out int tier);
 				float chance;
@@ -374,10 +458,10 @@ namespace UltimateRandomizer.Common.Features
 					int denominator = isBoss && slot == 0 ? 1 : DropRates.Denominator(item, tier, sourceTier, isBoss, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item, 7));
 					chance = Math.Min(1f, cfg.DropRateMultiplier * slotFactor / denominator);
 				}
-				item = Wild(request, item, wildRng, wildMultiplier);
-				int gap = wildRng != null ? ItemPool.LastJackpotGap : 0;
+				int lockGap = DropHelper.LockGap(item, minLimit);
+				item = Wild(request, item, lockGap, wildRng, wildMultiplier, out int gap);
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
-				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap });
+				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap, LockGap = lockGap });
 			}
 
 			// Small frequent drops (material, potion, ammo...), so that most kills give something. Abundance scales the
@@ -394,12 +478,13 @@ namespace UltimateRandomizer.Common.Features
 					Policy = CategoryPolicy.Weighted,
 					Weights = CommonDropWeights.Instance,
 					TierJitterDown = 1,
-					IgnoreGating = lucky
+					IgnoreGating = true
 				};
-				int item = Wild(common, ItemPool.Roll(common), wildRng, wildMultiplier);
-				int gap = wildRng != null ? ItemPool.LastJackpotGap : 0;
+				int planned = ItemPool.Roll(common);
+				int lockGap = DropHelper.LockGap(planned, 0);
+				int item = Wild(common, planned, lockGap, wildRng, wildMultiplier, out int gap);
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000 + c, item));
-				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = Math.Min(1f, commonTotal), Extra = true, JackpotGap = gap });
+				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = Math.Min(1f, commonTotal), Extra = true, JackpotGap = gap, LockGap = lockGap });
 			}
 			return drops;
 		}
@@ -430,13 +515,20 @@ namespace UltimateRandomizer.Common.Features
 			return expected;
 		}
 
-		private static int Wild(RollRequest request, int planned, Random wildRng, float multiplier)
+		// The madness tail of an unlocked planned item: the same roll gated, with the runtime rng; only a jackpot replaces the
+		// planned item (without a wild roll, the gated item would be a stand-in). Locked items get none
+		private static int Wild(RollRequest request, int planned, int lockGap, Random wildRng, float multiplier, out int jackpotGap)
 		{
-			if (wildRng == null || multiplier <= 0f) return planned;
+			jackpotGap = 0;
+			if (wildRng == null || multiplier <= 0f || lockGap > 0) return planned;
+			request.IgnoreGating = false;
 			request.Wild = true;
 			request.WildRng = wildRng;
 			request.WildChanceMultiplier = multiplier;
-			return ItemPool.Roll(request);
+			int wild = ItemPool.Roll(request);
+			if (ItemPool.LastJackpotGap <= 0) return planned;
+			jackpotGap = ItemPool.LastJackpotGap;
+			return wild;
 		}
 
 		public static bool CanHaveExtraDrops(int type, bool isBoss, List<DropRateInfo> original)

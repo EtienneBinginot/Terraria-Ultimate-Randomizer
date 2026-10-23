@@ -26,6 +26,77 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CodexTextsResolved", CodexTextsResolved);
 			TestRunner.Register("CodexShowsChances", CodexShowsChances);
 			TestRunner.Register("CodexShowsConditions", CodexShowsConditions);
+			TestRunner.Register("CodexShowsLocked", CodexShowsLocked);
+		}
+
+		// A drop of the final plan that progression still locks has no chance and is not a drop to find: the enemy page shows
+		// it greyed under "Unlocked: defeat X" (the boss of its unlock tier, a real text); found anyway (a lucky kill), it is
+		// greyed with "Locked" and that text on hover. The chances shown are those of the drops now, locked chances included
+		private static void CodexShowsLocked()
+		{
+			CodexUIState state = StateOrSkip();
+			if (!SeedSystem.WorldReady || !ItemPool.Ready) Check.Skip("no world");
+			int npc = 0;
+			Dictionary<int, int> locked = null;
+			foreach (int id in LootSnapshot.Npcs.Keys.Where(k => k > 0 && ContentSamples.NpcsByNetId.ContainsKey(k)).OrderBy(k => k))
+			{
+				Dictionary<int, int> l = CodexStats.LockedDrops(id);
+				if (l.Count == 0) continue;
+				npc = id;
+				locked = l;
+				break;
+			}
+			if (npc == 0) Check.Skip("no enemy with a locked drop at this progression");
+			(int item, int tier) = locked.OrderBy(l => l.Key).First();
+			string unlock = CodexStats.UnlockText(tier);
+			List<string> failures = new();
+			if (!Language.Exists(CodexText.Prefix + "LockedBy." + (Tier)tier)) failures.Add($"no text for tier {(Tier)tier}");
+			if (tier <= ProgressionSystem.UnlockedTier) failures.Add($"{Lang.GetItemNameValue(item)} locked until tier {tier}, already unlocked ({ProgressionSystem.UnlockedTier})");
+			if (CodexStats.PlannedChances(npc).ContainsKey(item)) failures.Add($"{Lang.GetItemNameValue(item)} is locked and has a chance");
+			List<PlannedDrop> now = RandomNpcDropRule.Plan(npc, Main.expertMode);
+			foreach ((int planned, float chance) in CodexStats.PlannedChances(npc))
+			{
+				float expected = CodexStats.CombinedChance(now, planned);
+				if (Math.Abs(chance - expected) > 1e-4f && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(planned)}: {chance:0.0000} shown, {expected:0.0000} planned now");
+			}
+			string key = CodexNames.Npc(npc);
+			CodexData savedData = CodexSystem.Data;
+			var saved = state.SaveNavigation();
+			try
+			{
+				CodexData fresh = new() { Seed = SeedSystem.WorldSeed, HasSeed = true };
+				fresh.Apply(CodexEntry.Kill(key, 3));
+				CodexSystem.Data = fresh;
+				state.ClearFilters();
+				state.Navigate(CodexPage.NpcPage(npc));
+				state.BuildNow();
+				List<UIElement> page = WalkAll(state.Content).ToList();
+				if (!page.OfType<CodexLabel>().Any(l => l.Text == unlock)) failures.Add($"enemy page: no \"{unlock}\" line");
+				if (!page.OfType<CodexItemIcon>().Any(i => i.Dimmed && i.Type == 0 && i.HoverText == unlock)) failures.Add("enemy page: no greyed unknown drop");
+				if (page.OfType<CodexItemIcon>().Any(i => i.Type == item)) failures.Add($"enemy page: the locked {Lang.GetItemNameValue(item)} is shown before it is found");
+
+				// New data: the codex indexes are rebuilt
+				CodexData withDrop = new() { Seed = SeedSystem.WorldSeed, HasSeed = true };
+				withDrop.Apply(CodexEntry.Kill(key, 3));
+				withDrop.Apply(CodexEntry.Drop(key, CodexNames.Item(item), 1));
+				CodexSystem.Data = withDrop;
+				state.Navigate(CodexPage.NpcPage(npc));
+				state.BuildNow();
+				CodexCaptioned cell = WalkAll(state.Content).OfType<CodexCaptioned>().FirstOrDefault(c => c.Inner is CodexItemIcon icon && icon.Type == item);
+				if (cell == null) failures.Add($"enemy page: the found {Lang.GetItemNameValue(item)} is not shown");
+				else
+				{
+					if (cell.Caption.Text != CodexText.Get("Locked")) failures.Add($"enemy page: the found locked drop shows {cell.Caption.Text}");
+					if (cell.Caption.HoverText != unlock) failures.Add($"enemy page: the found locked drop hovers {cell.Caption.HoverText}");
+					if (!((CodexItemIcon)cell.Inner).Dimmed) failures.Add("enemy page: the found locked drop is not greyed");
+				}
+			}
+			finally
+			{
+				CodexSystem.Data = savedData;
+				state.RestoreNavigation(saved);
+			}
+			Check.All(failures, "Locked drops in the codex");
 		}
 
 		private static IEnumerable<UIElement> Walk(UIElement element)
@@ -252,7 +323,7 @@ namespace UltimateRandomizer.Common.Tests
 			float miss = 1f;
 			foreach (PlannedDrop drop in plan.Where(d => d.Item == planned)) miss *= 1f - Math.Clamp(drop.Chance, 0f, 1f);
 			string expected = CodexStats.Percent(1f - miss);
-			int outside = Enumerable.Range(1, ItemLoader.ItemCount - 1).First(t => !plan.Exists(d => d.Item == t) && ItemPool.IsValid(t));
+			int outside = Enumerable.Range(1, ItemLoader.ItemCount - 1).First(t => !plan.Exists(d => d.Item == t) && !CodexStats.LockedDrops(npc).ContainsKey(t) && ItemPool.IsValid(t));
 			string slime = CodexNames.Npc(npc);
 			CodexData savedData = CodexSystem.Data;
 			var saved = state.SaveNavigation();

@@ -369,23 +369,30 @@ namespace UltimateRandomizer.Common.Tests
 			}
 		}
 
+		// The type factor of a Zombie depends on the seed (a weak-rolled type makes x1.3 health and x1.3 damage both x1): the
+		// bonus formula is checked on a neutral type factor, and the live enemy with an individual strong enough to beat its type
 		private static void LootBonusApplied()
 		{
-			if (EnemiesConfig.Instance.LootBonusStrength <= 0) Check.Skip("no loot bonus");
+			EnemiesConfig cfg = EnemiesConfig.Instance;
+			if (cfg.LootBonusStrength <= 0) Check.Skip("no loot bonus");
+			float cap = Math.Max(1, cfg.LootBonusCap);
+			// Damage weighs more than health (defense is subtracted from it): x1.3 damage beats x1.3 health
+			Check.That(EnemyIndividualNPC.Strength(1, 1.3f) > EnemyIndividualNPC.Strength(1.3f, 1), "x1.3 damage is not stronger than x1.3 health");
+			float healthy = EnemyIndividualNPC.Bonus(EnemyIndividualNPC.Strength(1.3f, 1), cfg.LootBonusStrength, cfg.LootBonusCap);
+			float hitting = EnemyIndividualNPC.Bonus(EnemyIndividualNPC.Strength(1, 1.3f), cfg.LootBonusStrength, cfg.LootBonusCap);
+			Check.That(healthy > 1 || cap <= 1, $"x1.3 health gives no bonus on a neutral type (x{healthy:0.00})");
+			Check.That(hitting > healthy || healthy >= cap, $"x1.3 damage gives x{hitting:0.00}, x1.3 health x{healthy:0.00}");
+			Check.Equal(1f, EnemyIndividualNPC.Bonus(EnemyIndividualNPC.Strength(0.8f, 1), cfg.LootBonusStrength, cfg.LootBonusCap), "bonus of a weak enemy");
+
 			NPC npc = Sample(NPCID.Zombie);
-			npc.TryGetGlobalNPC(out EnemyIndividualNPC individual);
+			Check.That(npc.TryGetGlobalNPC(out EnemyIndividualNPC individual), "no individual stats");
 			float normal = EnemyIndividualNPC.LootBonus(npc);
-			individual.Life = 4;
+			EnemyMultipliers type = EnemyStatCache.Get(BossParts.Owner(npc.type), EnemyStatsNPC.IsBossLike(npc));
+			float typeStrength = Math.Max(0.01f, EnemyIndividualNPC.Strength(type.Life, type.Damage));
+			individual.Life = 4f / typeStrength;
 			individual.Damage = 2;
-			Check.That(EnemyIndividualNPC.LootBonus(npc) > normal, "a strong enemy gets no loot bonus");
-			// Damage weighs more than health: x1.3 damage beats x1.3 health
-			individual.Life = 1.3f;
-			individual.Damage = 1;
-			float healthy = EnemyIndividualNPC.LootBonus(npc);
-			individual.Life = 1;
-			individual.Damage = 1.3f;
-			float hitting = EnemyIndividualNPC.LootBonus(npc);
-			Check.That(hitting > healthy || healthy >= EnemiesConfig.Instance.LootBonusCap, $"x1.3 damage gives x{hitting:0.00}, x1.3 health x{healthy:0.00}");
+			float strong = EnemyIndividualNPC.LootBonus(npc);
+			Check.That(strong > normal || normal >= cap, $"a strong Zombie gets x{strong:0.00}, an ordinary one x{normal:0.00} (type strength {typeStrength:0.00})");
 		}
 
 		// Defense is subtracted from damage, so the mod's damage multipliers together (type x variation x giant x adaptive)

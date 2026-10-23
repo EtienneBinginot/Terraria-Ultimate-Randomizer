@@ -55,7 +55,7 @@ for lang in ("en-US","fr-FR"):
     # Codex texts: CodexText.Get/Live("Key") is "Codex.Key"; CodexText.Of("Group", value) is "Codex.Group." + an enum name
     for k in set(re.findall(r'CodexText\.(?:Get|Live)\("(\w[\w.]*)"(?!\s*\+)',code)):
         if "Codex."+k not in keys: missing.append("used key Codex."+k)
-    for group,enum in (("Source","CodexSource"),("Category","ItemCategory")):
+    for group,enum in (("Source","CodexSource"),("Category","ItemCategory"),("LockedBy","Tier")):
         for val in enum_values(enum):
             if f"Codex.{group}.{val}" not in keys: missing.append(f"Codex.{group}.{val} (enum {enum})")
     # Hint sentences (HintFacts): every variant of each family, the world sources, and the phrases built from names

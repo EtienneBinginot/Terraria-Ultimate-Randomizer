@@ -116,10 +116,13 @@ Tests: {
 	ChestCap: Le contenu d'un coffre ne dépasse jamais son plafond, ni le mode difficile dans un coffre d'avant celui-ci
 	ChestTameKeepsOpened: L'ajustement des coffres d'un monde en cours ne touche jamais un coffre ouvert ou un coffre jackpot
 	JackpotChests: Les coffres jackpot sont choisis de la même façon à chaque fois parmi les coffres éligibles et contiennent des objets utiles au-dessus de leur plafond
-	PlanDiff: Mesure à quel point le mur du mode difficile change le plan de ce monde (recettes, trouvabilité, butins garantis, butins des monstres) par rapport aux anciennes règles (dans le journal)
+	PlanDiff: Mesure à quel point le mur du mode difficile change le plan de ce monde (recettes, trouvabilité, butins garantis) par rapport aux anciennes règles (dans le journal) ; le butin final des ennemis et des sacs ne doit pas changer
 	TierCoherence: Mesure, pour la refonte des recettes, les matériaux de chaque palier, les stations de progression, les recettes sans ingrédient du palier de leur résultat, les paliers relevés et la traîne des coffres jackpot (dans le journal)
 	TierAudit: Liste dans TierAudit.tsv les objets vanilla dont le palier semble douteux (relevé par leurs sources, une source bien plus précoce, ou aucune source), et compte les objets bannis du plan des monstres (dans le journal)
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
+	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
+	LockedVanillaDropRemoved: Un butin d'origine remplacé encore verrouillé par la progression ne tombe pas ; un butin débloqué tombe comme prévu
+	CodexShowsLocked: Interface du codex : les butins verrouillés sont grisés avec le boss qui les débloque, sans chance
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés
@@ -314,6 +317,20 @@ Codex: {
 	NoDrops: Rien obtenu pour l'instant.
 	ToFind: Butin encore à trouver : {0}
 	UnknownDrop: Butin inconnu : continue la chasse !
+	Locked: Verrouillé
+	LockedDrops: Butin encore verrouillé : {0}
+	LockedBy: {
+		PreBoss: Débloqué dès le début
+		PostEyeOfCthulhu: "Débloqué : vaincre l'Œil de Cthulhu"
+		PostEvilBoss: "Débloqué : vaincre le boss du mal"
+		PostSkeletron: "Débloqué : vaincre Skeletron"
+		Hardmode: "Débloqué : vaincre le Mur de chair"
+		PostMechBoss: "Débloqué : vaincre un boss mécanique"
+		PostPlantera: "Débloqué : vaincre Plantera"
+		PostGolem: "Débloqué : vaincre Golem"
+		PostCultist: "Débloqué : vaincre le Cultiste lunaire"
+		PostMoonLord: "Débloqué : vaincre le Seigneur de la Lune"
+	}
 	FilterCategory: Catégorie : {0}
 	FilterTier: Palier : {0}
 	ItemsCount: "{0} / {1} objets"

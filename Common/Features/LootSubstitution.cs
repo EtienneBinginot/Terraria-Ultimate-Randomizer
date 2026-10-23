@@ -23,28 +23,43 @@ namespace UltimateRandomizer.Common.Features
 					bool isBoss = NpcTiers.IsBoss(owner);
 					System.Random dropRng = new(Main.rand.Next());
 					// Same anti-farm rules as the extra drops: weak swarms get a share of the jackpot chances, critters and
-					// NPCs spawned by another NPC none (their replaced drop stays the planned one)
+					// NPCs spawned by another NPC none (their replaced drop stays the planned one, or nothing while locked)
 					float worth = MobLootSystem.IsSpawnedByNpc(npc) ? 0f : RandomNpcDropRule.JackpotWorth(npc);
-					int replacement = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(owner), item.type,
-						NpcTiers.EffectiveTier(owner), isBoss ? NpcTiers.BaseTier(owner) : 0, DropHelper.RollLucky(worth), dropRng, worth > 0f ? dropRng : null, worth);
-					int gap = ItemPool.LastJackpotGap;
-					DropHelper.ChangeSpawnedItem(item, replacement, StackRules.Scaled(item.type, item.stack, replacement));
-					JackpotItem.Mark(item, gap);
+					int replacement = DropHelper.SpawnReplacement(RollKey.MobDrop, DetRandom.NpcKey(owner), item.type, NpcTiers.EffectiveTier(owner),
+						RandomNpcDropRule.MinLimit(owner), DropHelper.RollLucky(worth), dropRng, worth, out int gap);
+					if (replacement <= ItemID.None) Vanish(item);
+					else
+					{
+						DropHelper.ChangeSpawnedItem(item, replacement, StackRules.Scaled(item.type, item.stack, replacement));
+						JackpotItem.Mark(item, gap);
+					}
 					break;
 
 				case EntitySource_ItemOpen open when IsBag(open.ItemType) && BagEnabled(open.ItemType, cfg):
 					int bagReplacement = BagReplacement(open.ItemType, item.type, new System.Random(Main.rand.Next()));
-					DropHelper.ChangeSpawnedItem(item, bagReplacement, StackRules.Scaled(item.type, item.stack, bagReplacement));
+					if (bagReplacement <= ItemID.None) Vanish(item);
+					else DropHelper.ChangeSpawnedItem(item, bagReplacement, StackRules.Scaled(item.type, item.stack, bagReplacement));
 					break;
 			}
 		}
 
-		// The item replacing one of an opened bag's: the planned one, or a surprise (bagRng). Never a jackpot (no luck, no
-		// madness): a boss bag already holds its whole tier, and crates are opened by the dozen
+		// A locked drop does not drop: the item becomes air inside OnSpawn. Item.NewItem_Inner calls ItemLoader.OnSpawn just
+		// before it syncs the slot (message 21, or 90 for per-player drops): an inactive item is sent with netID 0, which
+		// clients read as "slot inactive", and ItemIO.SendModData skips air. The other OnSpawn hooks still run on it
+		// (their enumerator is built before ours), and CommonCode.ModifyItemDropFromNPC only reads its type
+		public static void Vanish(Item item)
+		{
+			item.TurnToAir();
+			item.active = false;
+		}
+
+		// The item replacing one of an opened bag's: the final one, nothing while progression locks it (a boss bag's floor
+		// is its own tier, so its own loot is never locked), or a surprise (bagRng). Never a jackpot (no luck, no madness):
+		// a boss bag already holds its whole tier, and crates are opened by the dozen
 		public static int BagReplacement(int bagType, int itemType, System.Random bagRng)
 		{
 			int bagTier = LootSnapshot.BagTier(bagType);
-			return DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), itemType, bagTier, ItemID.Sets.BossBag[bagType] ? bagTier : 0, false, bagRng);
+			return DropHelper.SpawnReplacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), itemType, bagTier, BagPlan.MinLimit(bagType), false, bagRng, 0f, out _);
 		}
 
 		// The loot source is also used for things that are not drop tables: banners, the Big Mimic's item bursts (it is

@@ -143,18 +143,33 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			{
 				string chanceHover = CodexText.Get("ChanceHover");
 				Dictionary<int, CodexNote> notes = drops.Select(d => d.item).Distinct().ToDictionary(i => i, i => CodexWhen.DropConditions(netId, i));
-				Grid(drops, d => new CodexCaptioned(new CodexItemIcon(d.item, d.count, Icon), CodexStats.DropChanceText(netId, d.item), CaptionedIcon, chanceHover, notes[d.item]),
+				Dictionary<int, int> lockedFound = CodexStats.LockedDrops(netId);
+				Grid(drops, d => new CodexCaptioned(new CodexItemIcon(d.item, d.count, Icon) { Dimmed = lockedFound.ContainsKey(d.item) },
+						CodexStats.DropChanceText(netId, d.item), CaptionedIcon, CodexStats.DropChanceHover(netId, d.item, chanceHover), notes[d.item]),
 					CaptionedIcon, CodexCaptioned.CellHeight(Icon, notes.Values.Any(n => !n.IsEmpty)));
 			}
 
 			// Only how many: the planned items stay secret until they drop
 			HashSet<int> found = drops.Select(d => d.item).ToHashSet();
-			int remaining = Cached("plan" + netId, () => new List<int> { RandomNpcDropRule.Plan(netId, Main.expertMode).Select(p => p.Item).Where(i => i > ItemID.None).Distinct().Count(i => !found.Contains(i)) })[0];
+			int remaining = CodexStats.PlannedChances(netId).Keys.Count(i => !found.Contains(i));
 			if (remaining > 0)
 			{
 				Section(CodexText.Get("ToFind", remaining));
 				string hover = CodexText.Get("UnknownDrop");
 				Grid(Enumerable.Range(0, Math.Min(remaining, 60)).ToList(), _ => new CodexItemIcon(0, 0, Icon) { HoverText = hover }, Icon, Icon);
+			}
+
+			// The drops of the final plan that progression still locks, greyed, by the boss that unlocks them
+			List<IGrouping<int, int>> locked = CodexStats.LockedDrops(netId).Where(l => !found.Contains(l.Key)).GroupBy(l => l.Value, l => l.Key).OrderBy(g => g.Key).ToList();
+			if (locked.Count > 0)
+			{
+				Section(CodexText.Get("LockedDrops", locked.Sum(g => g.Count())));
+				foreach (IGrouping<int, int> group in locked)
+				{
+					string unlock = CodexStats.UnlockText(group.Key);
+					Text(unlock, CodexDraw.Muted);
+					Grid(Enumerable.Range(0, Math.Min(group.Count(), 60)).ToList(), _ => new CodexItemIcon(0, 0, Icon) { HoverText = unlock, Dimmed = true }, Icon, Icon);
+				}
 			}
 		}
 
@@ -252,7 +267,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				string chanceHover = CodexText.Get("ChanceHover");
 				Dictionary<int, CodexNote> notes = droppedBy.Select(d => d.npc).Distinct().ToDictionary(n => n, n => CodexWhen.Drop(n, type));
 				Grid(droppedBy.OrderByDescending(d => d.count).ToList(), d => new CodexCaptioned(new CodexNpcPortrait(d.npc, 64, 64, false, d.count),
-					CodexStats.DropChanceText(d.npc, type), 64, chanceHover, notes[d.npc]), 64, CodexCaptioned.CellHeight(64, notes.Values.Any(n => !n.IsEmpty)));
+					CodexStats.DropChanceText(d.npc, type), 64, CodexStats.DropChanceHover(d.npc, type, chanceHover), notes[d.npc]), 64, CodexCaptioned.CellHeight(64, notes.Values.Any(n => !n.IsEmpty)));
 			}
 			List<(CodexSource kind, int from, int count)> sources = CodexSystem.SourcesOf(type);
 			if (sources.Count > 0)

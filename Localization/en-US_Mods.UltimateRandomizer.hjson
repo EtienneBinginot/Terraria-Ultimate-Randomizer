@@ -116,10 +116,13 @@ Tests: {
 	ChestCap: Chest content never goes above the chest's cap, nor reaches hardmode in a pre-hardmode chest
 	ChestTameKeepsOpened: Taming the chests of an ongoing world never touches an opened or jackpot chest
 	JackpotChests: Jackpot chests are chosen the same way every time among eligible chests and hold useful items above their cap
-	PlanDiff: Measures how much of this world's plan (recipes, findability, guaranteed drops, mob drops) the hardmode wall changes, compared with the older rules (logged)
+	PlanDiff: Measures how much of this world's plan (recipes, findability, guaranteed drops) the hardmode wall changes, compared with the older rules (logged); the final drops of enemies and bags must not change
 	TierCoherence: Measures, for the recipe redesign, the materials of each tier, the progression stations, the recipes lacking an ingredient of their result's tier, the raised tiers and the jackpot chest tail (logged)
 	TierAudit: Lists the vanilla items whose tier looks doubtful (raised by their sources, a source much earlier, or no source at all) in TierAudit.tsv, and counts the banned items of the enemy plan (logged)
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
+	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
+	LockedVanillaDropRemoved: A replaced original drop still locked by progression does not drop; an unlocked one drops as planned
+	CodexShowsLocked: Codex interface: locked drops are greyed with the boss that unlocks them, with no chance
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled
@@ -314,6 +317,20 @@ Codex: {
 	NoDrops: Nothing dropped yet.
 	ToFind: Drops still to find: {0}
 	UnknownDrop: Undiscovered drop: keep hunting!
+	Locked: Locked
+	LockedDrops: Drops still locked: {0}
+	LockedBy: {
+		PreBoss: Unlocked from the start
+		PostEyeOfCthulhu: "Unlocked: defeat the Eye of Cthulhu"
+		PostEvilBoss: "Unlocked: defeat the evil boss"
+		PostSkeletron: "Unlocked: defeat Skeletron"
+		Hardmode: "Unlocked: defeat the Wall of Flesh"
+		PostMechBoss: "Unlocked: defeat a mechanical boss"
+		PostPlantera: "Unlocked: defeat Plantera"
+		PostGolem: "Unlocked: defeat Golem"
+		PostCultist: "Unlocked: defeat the Lunatic Cultist"
+		PostMoonLord: "Unlocked: defeat the Moon Lord"
+	}
 	FilterCategory: Category: {0}
 	FilterTier: Tier: {0}
 	ItemsCount: "{0} / {1} items"

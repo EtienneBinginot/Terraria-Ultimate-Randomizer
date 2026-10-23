@@ -150,6 +150,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private readonly Item item;
 		public string HoverText;
 		public Color Tint = Color.White;
+		// Greyed: a drop progression still locks
+		public bool Dimmed;
 		// Drawn as a black shape: no colours, no name, no click to its page (hints)
 		public bool Silhouette;
 
@@ -180,7 +182,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			Rectangle r = d.ToRectangle();
 			Color back = Tint;
 			if (item != null && item.rare != ItemRarityID.White && !Silhouette) back = Color.Lerp(back, ItemRarity.GetColor(item.rare), 0.3f);
-			if (item == null) back = new Color(120, 120, 140);
+			if (Dimmed) back = new Color(70, 70, 80);
+			else if (item == null) back = new Color(120, 120, 140);
 			if (IsMouseHovering) back = Color.Lerp(back, Color.White, 0.5f);
 			spriteBatch.Draw(TextureAssets.InventoryBack.Value, r, back * (IsMouseHovering ? 1f : 0.85f));
 			if (item != null && !CodexBudget.ItemTexture(item.type))
@@ -190,7 +193,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			else if (item != null)
 			{
 				if (Silhouette) DrawSilhouette(spriteBatch, d);
-				else ItemSlot.DrawItemIcon(item, 31, spriteBatch, d.Center(), 1f, d.Width * 0.62f, Color.White);
+				else ItemSlot.DrawItemIcon(item, 31, spriteBatch, d.Center(), 1f, d.Width * 0.62f, Dimmed ? new Color(110, 110, 120) : Color.White);
 				if (count > 1)
 				{
 					float scale = d.Width < 40 ? 0.65f : 0.75f;

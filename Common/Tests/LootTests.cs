@@ -40,6 +40,121 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BagNeverJackpot", BagNeverJackpot);
 			TestRunner.Register("JackpotTail", JackpotTail);
 			TestRunner.Register("GuaranteeScalesWithPlayers", GuaranteeScalesWithPlayers);
+			TestRunner.Register("LockedDropsRedistributed", LockedDropsRedistributed);
+			TestRunner.Register("LockedVanillaDropRemoved", LockedVanillaDropRemoved);
+		}
+
+		// RandomNpcDropRule.Redistribute on explicit entries: the chances of the locked entries (original drops included) go
+		// to the unlocked extra entries in proportion, each capped at 1; unlocked original drops and guaranteed drops receive
+		// nothing, locked entries keep their own chance, and nothing moves without a locked entry or without a receiver
+		private static void LockedDropsRedistributed()
+		{
+			PlannedDrop Entry(float chance, bool extra, bool locked = false, bool guaranteed = false) =>
+				new() { Item = ItemID.Gel, StackMin = 1, StackMax = 1, Chance = chance, Extra = extra, LockGap = locked ? 2 : 0, Guaranteed = guaranteed };
+			List<PlannedDrop> drops = new()
+			{
+				Entry(0.1f, true), Entry(0.3f, true), Entry(0.9f, true),
+				Entry(0.2f, true, locked: true), Entry(0.2f, false, locked: true),
+				Entry(0.5f, false),
+				Entry(0.05f, true, guaranteed: true)
+			};
+			RandomNpcDropRule.Redistribute(drops);
+			float factor = (1.3f + 0.4f) / 1.3f;
+			float[] expected = { 0.1f * factor, 0.3f * factor, 1f, 0.2f, 0.2f, 0.5f, 0.05f };
+			List<string> failures = new();
+			for (int i = 0; i < expected.Length; i++)
+			{
+				if (Math.Abs(drops[i].Chance - expected[i]) > 1e-4f) failures.Add($"entry {i}: {drops[i].Chance:0.0000}, expected {expected[i]:0.0000}");
+			}
+			List<PlannedDrop> noLock = new() { Entry(0.25f, true), Entry(0.5f, false) };
+			RandomNpcDropRule.Redistribute(noLock);
+			if (noLock[0].Chance != 0.25f || noLock[1].Chance != 0.5f) failures.Add("chances moved without a locked entry");
+			List<PlannedDrop> noReceiver = new() { Entry(0.25f, true, locked: true), Entry(0.5f, false), Entry(0.4f, true, guaranteed: true) };
+			RandomNpcDropRule.Redistribute(noReceiver);
+			if (noReceiver[0].Chance != 0.25f || noReceiver[1].Chance != 0.5f || noReceiver[2].Chance != 0.4f) failures.Add("chances moved without a receiver");
+			Check.All(failures, "Redistribution");
+		}
+
+		// A replaced original drop that progression still locks does not drop: it becomes air in OnSpawn, before its slot is
+		// synced (no luck: RuntimeJackpotChance 0); an unlocked one drops as its final replacement (no surprise, no madness).
+		// Real Item.NewItem calls with the loot source of a detached dead enemy; the settings are restored, the items removed
+		private static void LockedVanillaDropRemoved()
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (drops spawn on the server)");
+			LootConfig cfg = LootConfig.Instance;
+			if (!cfg.RandomizeMobDrops || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("enemy drops are not randomized in Coherent mode");
+			int lockedNpc = 0, unlockedNpc = 0;
+			PlannedDrop locked = default, unlocked = default;
+			foreach (int netId in LootSnapshot.Npcs.Keys.Where(k => k > 0 && ContentSamples.NpcsByNetId.ContainsKey(k)).OrderBy(k => k))
+			{
+				if (NpcTiers.IsBoss(BossParts.Owner(netId))) continue;
+				foreach (PlannedDrop drop in RandomNpcDropRule.Plan(netId, Main.expertMode, guaranteed: false, includeLocked: true))
+				{
+					if (drop.Extra || drop.Original <= ItemID.None || DropHelper.KeepOriginal(drop.Original) || drop.Item == drop.Original) continue;
+					if (drop.Locked && lockedNpc == 0)
+					{
+						lockedNpc = netId;
+						locked = drop;
+					}
+					else if (!drop.Locked && unlockedNpc == 0)
+					{
+						unlockedNpc = netId;
+						unlocked = drop;
+					}
+				}
+				if (lockedNpc != 0 && unlockedNpc != 0) break;
+			}
+			if (lockedNpc == 0) Check.Skip("no original drop is locked at this progression");
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			float savedLuck = progression.RuntimeJackpotChance;
+			float savedSurprise = cfg.SurpriseChance;
+			List<int> slots = new();
+			List<string> failures = new();
+			int Spawn(int netId, int original)
+			{
+				NPC npc = new();
+				npc.SetDefaults(netId);
+				npc.Center = Main.LocalPlayer.Center;
+				npc.life = 0;
+				int slot = Item.NewItem(new Terraria.DataStructures.EntitySource_Loot(npc), npc.Hitbox, original, 1);
+				slots.Add(slot);
+				return slot;
+			}
+			try
+			{
+				progression.RuntimeJackpotChance = 0f;
+				cfg.SurpriseChance = 0f;
+				ItemPool.WildChanceOverride = 0f;
+				for (int i = 0; i < 10; i++)
+				{
+					int slot = Spawn(lockedNpc, locked.Original);
+					if (slot >= 0 && slot < Main.maxItems && Main.item[slot].active && !Main.item[slot].IsAir)
+					{
+						failures.Add($"{NpcName(lockedNpc)}: {Lang.GetItemNameValue(locked.Original)} dropped as {Lang.GetItemNameValue(Main.item[slot].type)} (planned {Lang.GetItemNameValue(locked.Item)}, locked by {locked.LockGap} tiers)");
+						break;
+					}
+				}
+				if (unlockedNpc != 0)
+				{
+					int slot = Spawn(unlockedNpc, unlocked.Original);
+					int type = slot >= 0 && slot < Main.maxItems && Main.item[slot].active ? Main.item[slot].type : 0;
+					if (type != unlocked.Item) failures.Add($"{NpcName(unlockedNpc)}: {Lang.GetItemNameValue(unlocked.Original)} dropped as {(type > 0 ? Lang.GetItemNameValue(type) : "nothing")}, planned {Lang.GetItemNameValue(unlocked.Item)}");
+				}
+			}
+			finally
+			{
+				progression.RuntimeJackpotChance = savedLuck;
+				cfg.SurpriseChance = savedSurprise;
+				ItemPool.WildChanceOverride = null;
+				ItemPool.ClearJackpot();
+				foreach (int slot in slots.Distinct())
+				{
+					if (slot < 0 || slot >= Main.maxItems) continue;
+					Main.item[slot].TurnToAir();
+					Main.item[slot].active = false;
+				}
+			}
+			Check.All(failures, "Locked original drops");
 		}
 
 		// Opened bags never give a jackpot, even with both jackpot chances at 100 %: their items go through the real
@@ -718,7 +833,7 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int type in enemies.Take(40))
 				{
 					int slots = RandomNpcDropRule.SlotCount(DetRandom.NpcKey(type), false, false, cfg.DropSlotsMin, cfg.DropSlotsMax, cfg.DropTableStyle, factor);
-					int planned = RandomNpcDropRule.ExtraDrops(type, type, Main.expertMode, false, 3f).Count - commons;
+					int planned = RandomNpcDropRule.ExtraDrops(type, type, Main.expertMode, 3f).Count - commons;
 					if (planned != slots) failures.Add($"{NpcName(type)}: {planned} random slots planned, {slots} expected");
 				}
 			}
@@ -740,7 +855,8 @@ namespace UltimateRandomizer.Common.Tests
 				string guaranteedAt1 = null;
 				for (int f = 0; f < factors.Length; f++)
 				{
-					List<PlannedDrop> plan = RandomNpcDropRule.Plan(npc, Main.expertMode, abundance: factors[f]);
+					// The final plan: what abundance scales (the chances of locked entries move with progression)
+					List<PlannedDrop> plan = RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, abundance: factors[f]);
 					foreach (PlannedDrop drop in plan)
 					{
 						if (drop.Chance > 1.0001f) failures.Add($"{NpcName(npc)} x{factors[f]}: {Lang.GetItemNameValue(drop.Item)} at {drop.Chance * 100:0} %");
@@ -822,7 +938,8 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (int bag in LootSnapshot.Items.Keys.Where(b => ItemID.Sets.BossBag[b]))
 			{
 				List<DropRateInfo> original = LootSnapshot.ForItem(bag);
-				List<PlannedDrop> plan = BagPlan.Plan(bag);
+				// Locked entries kept: one entry per original one
+				List<PlannedDrop> plan = BagPlan.Plan(bag, includeLocked: true);
 				for (int i = 0; i < original.Count && i < plan.Count; i++)
 				{
 					if (ItemID.Sets.CommonCoin[original[i].itemId] && plan[i].Item != original[i].itemId) failures.Add($"{Lang.GetItemNameValue(bag)} loses its coins");

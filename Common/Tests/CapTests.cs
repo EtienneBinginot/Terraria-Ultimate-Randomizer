@@ -43,6 +43,7 @@ namespace UltimateRandomizer.Common.Tests
 			public Dictionary<int, List<(int item, float chance)>> Guaranteed = new();
 			public Dictionary<int, SortedSet<int>> Hosts = new();
 			public Dictionary<int, int[]> MobPlans = new();
+			public Dictionary<int, int[]> BagPlans = new();
 		}
 
 		private static PlanPrint TakePrint()
@@ -68,32 +69,48 @@ namespace UltimateRandomizer.Common.Tests
 					hosts.Add(npc);
 				}
 			}
+			(print.MobPlans, print.BagPlans) = FinalLoot();
+			return print;
+		}
+
+		// The final drop plans (everything unlocked) of every enemy and bag: what drops once progression reaches it, the same
+		// items a world in progress must keep whatever the gating rules
+		private static (Dictionary<int, int[]> mobs, Dictionary<int, int[]> bags) FinalLoot()
+		{
+			Dictionary<int, int[]> mobs = new(), bags = new();
 			foreach (int npc in LootSnapshot.Npcs.Keys.OrderBy(k => k))
 			{
-				print.MobPlans[npc] = RandomNpcDropRule.Plan(npc, Main.expertMode, guaranteed: false).Select(d => d.Item).ToArray();
+				mobs[npc] = RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false).Select(d => d.Item).ToArray();
 			}
-			return print;
+			foreach (int bag in LootSnapshot.Items.Keys.OrderBy(k => k)) bags[bag] = BagPlan.Plan(bag, lucky: true).Select(d => d.Item).ToArray();
+			return (mobs, bags);
 		}
 
 		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));
 
 		// Measures how much of this world's plan the hardmode wall and the allowance 1 change: the same plans with the rules
-		// of older worlds (allowance 2, no wall) and with the current ones. Always passes, the numbers are in client.log
+		// of older worlds (allowance 2, no wall) and with the current ones; the numbers are in client.log. Fails only if the
+		// final drop plan of an enemy or a bag changes (a world in progress keeps the same loot): the only change allowed is
+		// a banned item re-picked (counted apart, against the plans without the re-pick)
 		private static void PlanDiff()
 		{
 			PlanPrint legacy, current;
+			(Dictionary<int, int[]> mobs, Dictionary<int, int[]> bags) raw;
 			try
 			{
 				ItemPool.LegacyGating = true;
 				legacy = TakePrint();
 				ItemPool.LegacyGating = false;
 				current = TakePrint();
+				ItemPool.RepickDisabled = true;
+				raw = FinalLoot();
 			}
 			finally
 			{
 				// Rebuilt lazily with the real rules: the same plans the live recipes and drops were made from (RecipeSystem.Apply
 				// is not called, Main.recipe is never touched here)
 				ItemPool.LegacyGating = false;
+				ItemPool.RepickDisabled = false;
 				WorldCaches.ResetAll();
 			}
 			List<string> examples = new();
@@ -146,19 +163,47 @@ namespace UltimateRandomizer.Common.Tests
 				string Hosts(SortedSet<int> hosts) => hosts == null ? "none" : string.Join(", ", hosts.Select(Lang.GetNPCNameValue));
 				Example($"guaranteed {Name(item)}: {Hosts(before)} -> {Hosts(after)}");
 			}
-			int mobPlans = 0;
-			foreach ((int npc, int[] before) in legacy.MobPlans)
+			List<string> failures = new();
+			int Changed(Dictionary<int, int[]> before, Dictionary<int, int[]> after, Func<int, string> name)
 			{
-				if (!current.MobPlans.TryGetValue(npc, out int[] after) || !before.SequenceEqual(after))
+				int changed = 0;
+				foreach ((int source, int[] items) in before)
 				{
-					mobPlans++;
-					if (after != null) Example($"{Lang.GetNPCNameValue(npc)} drops: {string.Join(", ", before.Select(Name))} -> {string.Join(", ", after.Select(Name))}");
+					if (after.TryGetValue(source, out int[] now) && items.SequenceEqual(now)) continue;
+					changed++;
+					if (failures.Count < 10) failures.Add($"{name(source)}: {string.Join(", ", items.Select(Name))} -> {(now == null ? "none" : string.Join(", ", now.Select(Name)))}");
+				}
+				return changed;
+			}
+			int mobPlans = Changed(legacy.MobPlans, current.MobPlans, Lang.GetNPCNameValue);
+			int bagPlans = Changed(legacy.BagPlans, current.BagPlans, Name);
+			// Against the plans without the re-pick: only banned items may differ
+			int banned = 0;
+			void Repicked(Dictionary<int, int[]> before, Dictionary<int, int[]> after, Func<int, string> name)
+			{
+				foreach ((int source, int[] items) in before)
+				{
+					if (!after.TryGetValue(source, out int[] now) || now.Length != items.Length)
+					{
+						if (failures.Count < 10) failures.Add($"{name(source)}: {items.Length} entries without the re-pick, {now?.Length ?? 0} with it");
+						continue;
+					}
+					for (int i = 0; i < items.Length; i++)
+					{
+						if (items[i] == now[i]) continue;
+						if (ItemPool.IsBanned(items[i])) banned++;
+						else if (failures.Count < 10) failures.Add($"{name(source)}: {Name(items[i])} re-picked into {Name(now[i])} without being banned");
+					}
 				}
 			}
+			Repicked(raw.mobs, current.MobPlans, Lang.GetNPCNameValue);
+			Repicked(raw.bags, current.BagPlans, Name);
 			Log($"PlanDiff: recipes ingredients {ingredients}/{recipes}, stations {stations}, results {results}, result tiers {resultTiers}; " +
 				$"findability {findable} items (crafted availability {available}); guaranteed {guaranteedNpcs} npcs ({moved} items moved); " +
-				$"mob plans {mobPlans}/{legacy.MobPlans.Count} npcs (allowance {ProgressionConfig.Instance.TierAllowance} vs 2, unlocked tier {ProgressionSystem.UnlockedTier}, hardmode {Main.hardMode})");
+				$"final mob plans changed {mobPlans}/{legacy.MobPlans.Count} npcs, final bag plans {bagPlans}/{legacy.BagPlans.Count}; banned items re-picked {banned} " +
+				$"(allowance {ProgressionConfig.Instance.TierAllowance} vs 2, unlocked tier {ProgressionSystem.UnlockedTier}, hardmode {Main.hardMode})");
 			foreach (string line in examples) Log("PlanDiff example: " + line);
+			Check.All(failures, "Final loot plans changed");
 		}
 
 		// Before hardmode the progression limit stops at PostSkeletron whatever the unlocked tier, a source's floor (Wall of
@@ -203,7 +248,7 @@ namespace UltimateRandomizer.Common.Tests
 				GuaranteedSources.Reset();
 				Findability.Reset();
 				List<int> items = new();
-				foreach (int npc in npcs) items.AddRange(RandomNpcDropRule.Plan(npc, Main.expertMode, guaranteed: false).Select(d => d.Item));
+				foreach (int npc in npcs) items.AddRange(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false).Select(d => d.Item));
 				for (int i = 0; i < RecipeSystem.RecipeCount && i < Recipe.numRecipes; i++)
 				{
 					(int type, int stack)[] ingredients = RecipeSystem.OriginalIngredients(i);

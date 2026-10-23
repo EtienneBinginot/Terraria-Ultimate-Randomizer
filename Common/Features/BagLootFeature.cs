@@ -22,23 +22,32 @@ namespace UltimateRandomizer.Common.Features
 
 	public static class BagPlan
 	{
-		// The content of a bag in this world
-		public static List<PlannedDrop> Plan(int bagType, bool lucky = false)
+		// A boss bag's floor is its own tier: its own loot is never locked
+		public static int MinLimit(int bagType) => ItemID.Sets.BossBag[bagType] ? LootSnapshot.BagTier(bagType) : 0;
+
+		// The content of a bag in this world, from its final plan (everything unlocked). lucky: that final plan as it is.
+		// Otherwise what the bag gives now: the entries progression still locks give nothing and are left out (includeLocked:
+		// kept, flagged). No redistribution: vanilla rules roll the bag
+		public static List<PlannedDrop> Plan(int bagType, bool lucky = false, bool includeLocked = false)
 		{
 			List<PlannedDrop> drops = new();
 			bool enabled = LootSubstitutionItem.BagEnabled(bagType, LootConfig.Instance);
 			int bagTier = LootSnapshot.BagTier(bagType);
+			int minLimit = MinLimit(bagType);
 			foreach (DropRateInfo entry in LootSnapshot.ForItem(bagType))
 			{
 				int item = entry.itemId;
 				int min = entry.stackMin;
 				int max = entry.stackMax;
+				int lockGap = 0;
 				if (enabled)
 				{
-					item = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), entry.itemId, bagTier, ItemID.Sets.BossBag[bagType] ? bagTier : 0, lucky);
+					item = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), entry.itemId, bagTier, minLimit, true);
 					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);
+					if (!lucky && !DropHelper.KeepOriginal(entry.itemId)) lockGap = DropHelper.LockGap(item, minLimit);
 				}
-				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions });
+				if (lockGap > 0 && !includeLocked) continue;
+				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions, Original = entry.itemId, LockGap = lockGap });
 			}
 			return drops;
 		}
