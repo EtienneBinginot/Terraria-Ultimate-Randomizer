@@ -25,6 +25,8 @@ namespace UltimateRandomizer.Common.Features
 		// Recipes that received a key ingredient of tier U, and recipes whose result was re-picked (no slot, no material)
 		public bool[] KeyIngredient;
 		public bool[] ResultRepicked;
+		// Recipes that took the result of a re-picked recipe in exchange (the results stay a permutation)
+		public bool[] ResultSwapped;
 		// Copies of an earlier recipe once planned (same result, ingredients, groups and conditions): switched off when applied
 		// and left out of Availability, so the crafting menu never shows one recipe on two stations
 		public bool[] Twin;
@@ -57,7 +59,9 @@ namespace UltimateRandomizer.Common.Features
 
 		private static RecipePlan plan;
 
-		// Results rolled from the original recipes, shared by the plan and the requirement providers
+		// Results permuted from the original recipes (PermutedResults), then with the upgrades: shared by the plan and the
+		// requirement providers
+		private static (int type, int stack)[] permutedResults;
 		private static (int type, int stack)[] originalResults;
 		// The recipe giving each life or mana upgrade (set with originalResults)
 		private static Dictionary<int, int> specialRecipes = new();
@@ -75,6 +79,7 @@ namespace UltimateRandomizer.Common.Features
 		public static void Reset()
 		{
 			plan = null;
+			permutedResults = null;
 			originalResults = null;
 			specialRecipes = new Dictionary<int, int>();
 		}
@@ -208,16 +213,228 @@ namespace UltimateRandomizer.Common.Features
 			return avail;
 		}
 
-		// Results once everything is unlocked, from the original recipes (the plan must not depend on progression)
-		private static (int type, int stack)[] UnlockedResults() => originalResults ??= UnlockedResults(OriginalIngredients());
+		// Results once everything is unlocked, from the original recipes (the plan must not depend on progression): the
+		// permutation, then the upgrades on their host recipes
+		private static (int type, int stack)[] UnlockedResults()
+		{
+			if (originalResults != null) return originalResults;
+			permutedResults = PermutedResults();
+			(int, int)[] results = ((int, int)[])permutedResults.Clone();
+			AssignSpecials(results, OriginalIngredients());
+			return originalResults = results;
+		}
 
-		private static (int type, int stack)[] UnlockedResults((int type, int stack)[][] ingredients)
+		// What the permutation gives a recipe, before the upgrades take their hosts and LockResults swaps re-picked results
+		public static (int type, int stack) PermutedResult(int i)
+		{
+			UnlockedResults();
+			return permutedResults[i];
+		}
+
+		// ---------------------------------------------------------------- Results
+
+		// The results of the randomized recipes are a permutation of their vanilla results: each item stays the result of as
+		// many of them as in vanilla (rolled one by one, cheap items piled up and others, like the Zenith, were made by none).
+		// Shuffled inside groups of one category and tier (as ItemPool.BuildShuffleMap: a group of fewer than 3 items joins
+		// the next tier; Chaos: one group); a surprise swaps the results of two surprised recipes of different categories and
+		// the same tier. A result that does not fit its recipe (one of its ingredients or groups, banned, above the value
+		// guard) is swapped with another recipe of its group; with no partner, the recipe keeps its vanilla result.
+		// The guaranteed shuffle gives ItemPool.Shuffled of the vanilla result (its own permutation of the items).
+		// limitValue, surpriseChance: null = the settings (tests and stats pass explicit values; the chance then applies to
+		// every recipe)
+		public static (int type, int stack)[] PermutedResults(bool? limitValue = null, float? surpriseChance = null)
 		{
 			int count = Count;
+			bool limit = limitValue ?? CraftingConfig.Instance.LimitRecipeValue;
+			int[] items = new int[count];
+			for (int i = 0; i < count; i++) items[i] = RecipeSystem.OriginalResult(i);
+			// Recipes switched off as set up keep their result (an item made only by one of them would be lost)
+			List<int> recipes = Enumerable.Range(0, count).Where(i => Randomized(i) && !RecipeSystem.VanillaDisabled(i))
+				.OrderBy(i => (uint)RecipeSystem.RecipeKey(i)).ThenBy(i => i).ToList();
+			bool Fits(int i, int item) => FitsResult(i, item, RecipeSystem.OriginalIngredients(i), null, RecipeSystem.OriginalIngredientValue(i), limit);
+			RandomizerMode mode = GeneralConfig.Instance.RandomizerMode;
+			if (mode == RandomizerMode.Shuffle)
+			{
+				foreach (int i in recipes)
+				{
+					int x = ItemPool.Shuffled(items[i]);
+					if (Fits(i, x)) items[i] = x;
+				}
+			}
+			else if (recipes.Count > 0)
+			{
+				List<List<int>> groups = ResultGroups(recipes, mode == RandomizerMode.Chaos);
+				int[] groupOf = new int[count];
+				for (int g = 0; g < groups.Count; g++)
+				{
+					List<int> group = groups[g];
+					foreach (int i in group) groupOf[i] = g;
+					int[] pool = group.Select(i => items[i]).ToArray();
+					// Keyed by the group's category and first tier: the same groups shuffle the same way on every machine
+					int first = RecipeSystem.OriginalResult(group[0]);
+					Random rng = mode == RandomizerMode.Chaos ? DetRandom.Get(RollKey.Recipe, RollKey.Shuffle, -1)
+						: DetRandom.Get(RollKey.Recipe, RollKey.Shuffle, (int)ItemPool.Info[first].Category, ItemPool.TierOf(first));
+					for (int k = pool.Length - 1; k > 0; k--)
+					{
+						int j = rng.Next(k + 1);
+						(pool[k], pool[j]) = (pool[j], pool[k]);
+					}
+					for (int k = 0; k < group.Count; k++) items[group[k]] = pool[k];
+				}
+				if (mode == RandomizerMode.Coherent) SwapSurprises(recipes, items, Fits, surpriseChance);
+				FixResults(recipes, groups, groupOf, items, Fits);
+			}
 			(int, int)[] results = new (int, int)[count];
-			for (int i = 0; i < count; i++) results[i] = ResultFor(i, ingredients[i], lucky: true);
-			AssignSpecials(results, ingredients);
+			for (int i = 0; i < count; i++)
+			{
+				int original = RecipeSystem.OriginalResult(i);
+				results[i] = items[i] == original ? (original, RecipeSystem.OriginalStack(i))
+					: (items[i], RecipeSystem.ResultStack(i, items[i], RecipeSystem.OriginalIngredients(i).Sum(x => x.stack)));
+			}
 			return results;
+		}
+
+		// May recipe i give this item, with these ingredients (and these groups besides its original ones)? Never one of its
+		// ingredients nor a member of its groups (1 Wood -> 4 Wood would be infinite); its vanilla result always otherwise;
+		// never a banned item; within the value guard when limited
+		private static bool FitsResult(int i, int item, (int type, int stack)[] ingredients, int[] groups, long ingredientValue, bool limit)
+		{
+			if (!ItemPool.IsValid(item)) return false;
+			if (ingredients.Any(x => x.type == item) || RecipeSystem.InOriginalGroup(i, item) || (groups != null && RecipeSystem.InGroups(groups, item))) return false;
+			if (item == RecipeSystem.OriginalResult(i)) return true;
+			if (ItemPool.IsBanned(item)) return false;
+			if (!limit) return true;
+			CraftingConfig cfg = CraftingConfig.Instance;
+			long value = (long)StackRules.ValueOf(item) * RecipeSystem.ResultStack(i, item, ingredients.Sum(x => x.stack));
+			return value <= RecipeSystem.MaxResultValue(i, ingredientValue, cfg.RecipeValueGuard);
+		}
+
+		// The shuffle groups of the recipes (in the order given): by category and tier of the vanilla result, a group of fewer
+		// than 3 distinct items joined with the next tier (the last one with the group before), so few items map to themselves
+		private static List<List<int>> ResultGroups(List<int> recipes, bool single)
+		{
+			if (single) return new List<List<int>> { new(recipes) };
+			List<int>[,] buckets = new List<int>[ItemCategories.Count, Tiers.Count];
+			foreach (int i in recipes)
+			{
+				int original = RecipeSystem.OriginalResult(i);
+				int c = (int)ItemPool.Info[original].Category, t = ItemPool.TierOf(original);
+				(buckets[c, t] ??= new List<int>()).Add(i);
+			}
+			List<List<int>> groups = new();
+			for (int c = 0; c < ItemCategories.Count; c++)
+			{
+				List<List<int>> own = new();
+				List<int> current = new();
+				for (int t = 0; t < Tiers.Count; t++)
+				{
+					if (buckets[c, t] != null) current.AddRange(buckets[c, t]);
+					if (current.Select(RecipeSystem.OriginalResult).Distinct().Count() >= 3)
+					{
+						own.Add(current);
+						current = new List<int>();
+					}
+				}
+				if (current.Count > 0)
+				{
+					if (own.Count > 0) own[^1].AddRange(current);
+					else own.Add(current);
+				}
+				groups.AddRange(own);
+			}
+			return groups;
+		}
+
+		// Surprises (Coherent mode, the recipe's chance on RollKey.Surprise): each surprised recipe swaps its result with
+		// another surprised recipe of the same tier whose result is of another category (that category drawn with the loot
+		// weights), both results fitting; a recipe takes part in one swap at most. Only surprised recipes swap: a chair given
+		// away never turns a sword recipe into a chair recipe
+		private static void SwapSurprises(List<int> recipes, int[] items, Func<int, int, bool> fits, float? chance)
+		{
+			Dictionary<int, Random> rngs = new();
+			Dictionary<int, List<int>> byTier = new();
+			foreach (int i in recipes)
+			{
+				int original = RecipeSystem.OriginalResult(i);
+				Random rng = DetRandom.Get(RollKey.Recipe, RecipeSystem.RecipeKey(i), RollKey.Surprise);
+				if (!ItemPool.IsSurprise(original, chance ?? RecipeSystem.SurpriseChanceOf(original), rng)) continue;
+				rngs[i] = rng;
+				int tier = ItemPool.TierOf(original);
+				if (!byTier.TryGetValue(tier, out List<int> list)) byTier[tier] = list = new List<int>();
+				list.Add(i);
+			}
+			WeightTable weights = LootConfig.Instance.DropCategoryWeights;
+			HashSet<int> swapped = new();
+			ItemCategory CategoryOf(int item) => ItemPool.Info[item].Category;
+			foreach (List<int> surprised in byTier.OrderBy(p => p.Key).Select(p => p.Value))
+			{
+				foreach (int i in surprised)
+				{
+					if (swapped.Contains(i)) continue;
+					ItemCategory own = CategoryOf(items[i]);
+					List<int> partners = surprised.Where(j => j != i && !swapped.Contains(j) && CategoryOf(items[j]) != own && fits(i, items[j]) && fits(j, items[i])).ToList();
+					if (partners.Count == 0) continue;
+					Random rng = rngs[i];
+					List<(int item, float weight)> categories = partners.Select(j => (int)CategoryOf(items[j])).Distinct().OrderBy(c => c)
+						.Select(c => (c, (float)weights.Get((ItemCategory)c))).ToList();
+					if (categories.Sum(c => c.weight) > 0)
+					{
+						int category = WeightedPick(categories, rng);
+						partners = partners.Where(j => (int)CategoryOf(items[j]) == category).ToList();
+					}
+					int partner = partners[rng.Next(partners.Count)];
+					(items[i], items[partner]) = (items[partner], items[i]);
+					swapped.Add(i);
+					swapped.Add(partner);
+				}
+			}
+		}
+
+		// Recipes whose result does not fit swap it with another recipe of their group (from a random start, RollKey.Fallback)
+		// where both fit. With none, the recipe keeps its vanilla result (pinned: never swapped again), taken from a recipe
+		// holding it, which gets the result that did not fit and is checked in turn. Always a permutation: every move is a
+		// swap, and a recipe holding the vanilla result exists (the recipes pinned hold only their own vanilla results)
+		private static void FixResults(List<int> recipes, List<List<int>> groups, int[] groupOf, int[] items, Func<int, int, bool> fits)
+		{
+			bool[] pinned = new bool[items.Length];
+			Queue<int> queue = new(recipes);
+			// Bounded: each recipe is queued again only when another one is pinned
+			for (int steps = 0; queue.Count > 0 && steps < recipes.Count * 3; steps++)
+			{
+				int i = queue.Dequeue();
+				int x = items[i];
+				if (pinned[i] || fits(i, x)) continue;
+				List<int> group = groups[groupOf[i]];
+				int start = DetRandom.Get(RollKey.Recipe, RecipeSystem.RecipeKey(i), RollKey.Fallback).Next(group.Count);
+				int partner = -1;
+				for (int k = 0; k < group.Count && partner < 0; k++)
+				{
+					int j = group[(start + k) % group.Count];
+					if (j != i && !pinned[j] && items[j] != x && fits(i, items[j]) && fits(j, x)) partner = j;
+				}
+				if (partner >= 0)
+				{
+					(items[i], items[partner]) = (items[partner], items[i]);
+					continue;
+				}
+				int original = RecipeSystem.OriginalResult(i);
+				int holder = -1;
+				foreach (int j in recipes)
+				{
+					if (j == i || pinned[j] || items[j] != original) continue;
+					if (fits(j, x))
+					{
+						holder = j;
+						break;
+					}
+					if (holder < 0) holder = j;
+				}
+				pinned[i] = true;
+				items[i] = original;
+				if (holder < 0) continue;
+				items[holder] = x;
+				queue.Enqueue(holder);
+			}
 		}
 
 		// ---------------------------------------------------------------- Upgrades
@@ -246,12 +463,21 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Each life or mana upgrade becomes the result of one randomized recipe (deterministic, RollKey.Special), preferably one
-		// of its tier or the one before; the key ingredient of LockResults then makes it doable from the upgrade's tier
+		// of its tier or the one before; the key ingredient of LockResults then makes it doable from the upgrade's tier.
+		// The host's own result is the only item the permutation loses: a host whose result another recipe also makes, or that
+		// has a source besides recipes, first
 		private static void AssignSpecials((int type, int stack)[] results, (int type, int stack)[][] ingredients)
 		{
 			specialRecipes = new Dictionary<int, int>();
 			if (!CraftingConfig.Instance.RandomizeRecipes || !ItemPool.Ready) return;
 			HashSet<int> stationTiles = Stations.RequiredTiles();
+			Dictionary<int, int> made = new();
+			for (int i = 0; i < results.Length; i++)
+			{
+				if (!RecipeSystem.IsShell(i) && !RecipeSystem.VanillaDisabled(i)) made[results[i].type] = made.GetValueOrDefault(results[i].type) + 1;
+			}
+			HashSet<int> elsewhere = Obtainability.Collect(withRecipes: false);
+			bool Spare(int i) => made.GetValueOrDefault(results[i].type) > 1 || elsewhere.Contains(results[i].type);
 			foreach (int item in Protection.Upgrades)
 			{
 				if (!ItemPool.IsSpecial(item)) continue;
@@ -259,24 +485,22 @@ namespace UltimateRandomizer.Common.Features
 				List<int> candidates = Enumerable.Range(0, results.Length).Where(i => SpecialCandidate(i, item, u, results, ingredients[i], stationTiles))
 					.OrderBy(i => (uint)RecipeSystem.RecipeKey(i)).ThenBy(i => i).ToList();
 				List<int> close = candidates.Where(i => RecipeTier(i) >= u - 1).ToList();
-				if (close.Count > 0) candidates = close;
+				foreach (List<int> preferred in new[] { close.Where(Spare).ToList(), candidates.Where(Spare).ToList(), close })
+				{
+					if (preferred.Count == 0) continue;
+					candidates = preferred;
+					break;
+				}
 				if (candidates.Count == 0)
 				{
 					ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"No recipe may give {DetRandom.ItemName(item)}: it keeps its vanilla sources only");
 					continue;
 				}
 				int chosen = candidates[DetRandom.Get(RollKey.Special, DetRandom.ItemKey(item)).Next(candidates.Count)];
+				made[results[chosen].type]--;
 				results[chosen] = (item, 1);
 				specialRecipes[item] = chosen;
 			}
-		}
-
-		// lucky: false rolls within the current progression (no longer used by Apply: recipes always give their planned result)
-		public static (int type, int stack) ResultFor(int i, (int type, int stack)[] ingredients, bool lucky)
-		{
-			if (!Randomized(i)) return (RecipeSystem.OriginalResult(i), RecipeSystem.OriginalStack(i));
-			long value = ingredients.Sum(x => (long)Math.Max(StackRules.ValueOf(x.type), 1) * x.stack);
-			return RecipeSystem.RollResult(i, ingredients.Select(x => x.type).ToList(), ingredients.Sum(x => x.stack), lucky, Math.Min(value, RecipeSystem.OriginalIngredientValue(i)));
 		}
 
 		private static int[] Types((int type, int stack)[] results) => results.Select(r => r.type).ToArray();
@@ -300,8 +524,8 @@ namespace UltimateRandomizer.Common.Features
 			CraftingConfig cfg = CraftingConfig.Instance;
 			(int, int)[][] ingredients = OriginalIngredients();
 			int[][] tiles = OriginalTiles();
-			// The results are rolled once, from the original recipe, and everything is planned around them: they are never
-			// one of the original ingredients (RollResult) nor a new one (PlanIngredients), and Apply gives exactly them
+			// The results are permuted once, from the original recipes, and everything is planned around them: they are never
+			// one of the original ingredients (PermutedResults) nor a new one (PlanIngredients), and Apply gives exactly them
 			RecipePlan result = new()
 			{
 				Ingredients = new (int, int)[count][],
@@ -313,6 +537,7 @@ namespace UltimateRandomizer.Common.Features
 			result.ResultTiers = ResultTiers(results);
 			result.KeyIngredient = new bool[count];
 			result.ResultRepicked = new bool[count];
+			result.ResultSwapped = new bool[count];
 			result.Twin = new bool[count];
 			result.Groups = new int[count][];
 			result.IngredientTiers = Enumerable.Repeat(-1, count).ToArray();
@@ -447,8 +672,8 @@ namespace UltimateRandomizer.Common.Features
 		// material found exactly at U (findability U, not available earlier by crafting): the recipe is then doable at U,
 		// not before, not after. A tier without such a material takes one found at U+1 (later rather than too early). A
 		// recipe without a replaceable slot (groups, protected ingredients, vanilla ingredients), or without any key
-		// material, has its result re-picked (isolated, RollKey.KeyIngredient) to one it may give at the tier it is doable.
-		// Re-picks first (they only make items available earlier), then the keys on the availability they leave
+		// material, has its result re-picked to one it may give at the tier it is doable, swapped with another recipe so the
+		// results stay a permutation (RepickResult). Re-picks first (they only make items available earlier), then the keys on the availability they leave
 		private static void LockResults(RecipePlan result, int[] results, (int, int)[][] ingredients, int[][] tiles)
 		{
 			int count = Count;
@@ -457,10 +682,14 @@ namespace UltimateRandomizer.Common.Features
 			// The shells are left out: the locks are the same with the setting on or off
 			bool[] noShells = ShellMask(null);
 			int[] avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out int[] doable, noShells, PlannedGroups(result));
-			int repicked = 0;
+			int repicked = 0, kept = 0;
+			// A recipe no partner was found for keeps its result (tried once)
+			bool[] stuck = new bool[count];
 			for (int i = 0; i < count; i++)
 			{
-				if (NeedsLock(result, i, doable) && !HasKeySlot(i) && !ItemPool.IsSpecial(results[i]) && RepickResult(result, results, i, doable[i])) repicked++;
+				if (!NeedsLock(result, i, doable) || HasKeySlot(i) || ItemPool.IsSpecial(results[i])) continue;
+				if (RepickResult(result, results, i, doable)) repicked++;
+				else stuck[i] = true;
 			}
 			if (repicked > 0) avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out doable, noShells, PlannedGroups(result));
 			List<int>[,] buckets = FindableBuckets();
@@ -485,8 +714,11 @@ namespace UltimateRandomizer.Common.Features
 				if (HasKeySlot(i)) noMaterial.Add(u);
 				// An upgrade stays the result of its recipe, even without a key (it is then doable a little early)
 				if (ItemPool.IsSpecial(results[i])) continue;
-				if (RepickResult(result, results, i, doable[i])) repicked++;
+				if (stuck[i]) continue;
+				if (RepickResult(result, results, i, doable)) repicked++;
+				else stuck[i] = true;
 			}
+			kept = stuck.Count(s => s);
 			// Checked against the availability of the live recipes (results at once): a key chosen before a later re-pick or
 			// key changed what it relies on is chosen again (a material found exactly at U with that availability)
 			int rekeyed = 0;
@@ -505,7 +737,7 @@ namespace UltimateRandomizer.Common.Features
 				if (again == 0) break;
 			}
 			string topKeys = string.Join(", ", uses.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(5).Select(p => $"{DetRandom.ItemName(p.Key)} x{p.Value}"));
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {keys} key ingredients ({late} from U+1, {rekeyed} chosen again), {repicked} results re-picked; " +
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {keys} key ingredients ({late} from U+1, {rekeyed} chosen again), {repicked} results re-picked (swapped), {kept} kept early (no swap partner); " +
 				$"tiers without a key material: {(noMaterial.Count == 0 ? "none" : string.Join(", ", noMaterial))}; most used keys: {topKeys}");
 		}
 
@@ -672,35 +904,65 @@ namespace UltimateRandomizer.Common.Features
 		// A real crafting material: a stackable material, bar or block (not a bucket, a sponge or a tool used in a recipe)
 		private static bool KeyMaterial(int item) => ItemPool.IsValid(item) && MaterialLike(ItemPool.Info[item].Category) && StackRules.MaxStackOf(item) > 1;
 
-		// The result becomes one the recipe may give at the tier it is doable (isolated re-pick: same category, from its tier
-		// down); the original result when none fits
-		private static bool RepickResult(RecipePlan result, int[] results, int i, int doable)
+		// The result becomes one the recipe may give at the tier it is doable, swapped with another randomized recipe so the
+		// results stay a permutation (RollKey.KeyIngredient: a random start). The partner is doable no earlier, its result fits
+		// here (same category first) and is no recipe's ingredient (moved to an earlier recipe, it could close a loop), and it
+		// takes this result (it fits there, and that recipe is doable late enough or gets a key). Else the recipe holding its
+		// vanilla result, the same way; else it keeps its result (doable a little early: no item is lost). False when kept
+		private static bool RepickResult(RecipePlan result, int[] results, int i, int[] doable)
 		{
-			if (doable >= Never) return false;
-			int ceiling = ItemPool.GatingLimit(doable, doable >= (int)Tier.Hardmode, 0);
-			(int type, int stack)[] ingredients = result.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i);
-			List<int> types = ingredients.Select(x => x.type).ToList();
+			if (doable[i] >= Never) return false;
+			int ceiling = ItemPool.GatingLimit(doable[i], doable[i] >= (int)Tier.Hardmode, 0);
 			CraftingConfig cfg = CraftingConfig.Instance;
-			long value = ingredients.Sum(p => (long)Math.Max(StackRules.ValueOf(p.type), 1) * p.stack);
-			int[] keys = { RollKey.Recipe, RecipeSystem.RecipeKey(i), RollKey.KeyIngredient };
-			int chosen = RecipeSystem.OriginalResult(i);
-			int stack = RecipeSystem.OriginalStack(i);
-			for (int attempt = 0; attempt < 4; attempt++)
+			(int type, int stack)[] Planned(int j) => result.Ingredients[j] ?? RecipeSystem.OriginalIngredients(j);
+			bool Fits(int j, int item)
 			{
-				int x = ItemPool.Repick(results[i], ItemPool.TierOf(results[i]), ceiling, keys, 16 + attempt);
-				if (!ItemPool.Allowed(x, ceiling) || types.Contains(x) || RecipeSystem.InGroups(GroupsOf(result, i), x) || RecipeSystem.InOriginalGroup(i, x)) continue;
-				int n = RecipeSystem.ResultStack(i, x, ingredients.Sum(p => p.stack));
-				// The value guard still holds
-				if (cfg.LimitRecipeValue && (long)StackRules.ValueOf(x) * n > RecipeSystem.MaxResultValue(i, value, cfg.RecipeValueGuard)) continue;
-				chosen = x;
-				stack = n;
-				break;
+				(int type, int stack)[] ingredients = Planned(j);
+				long value = ingredients.Sum(p => (long)Math.Max(StackRules.ValueOf(p.type), 1) * p.stack);
+				return FitsResult(j, item, ingredients, GroupsOf(result, j), value, cfg.LimitRecipeValue);
 			}
-			results[i] = chosen;
-			result.Results[i] = (chosen, stack);
-			result.ResultTiers[i] = ResultTier(i, chosen);
+			HashSet<int> used = new();
+			for (int j = 0; j < results.Length; j++)
+			{
+				foreach ((int type, _) in Planned(j)) used.Add(type);
+				foreach (int g in GroupsOf(result, j))
+				{
+					if (RecipeGroup.recipeGroups.TryGetValue(g, out RecipeGroup group)) used.UnionWith(group.ValidItems);
+				}
+			}
+			int x = results[i];
+			int original = RecipeSystem.OriginalResult(i);
+			ItemCategory category = ItemPool.IsValid(x) ? ItemPool.Info[x].Category : ItemCategory.Material;
+			int start = DetRandom.Get(RollKey.Recipe, RecipeSystem.RecipeKey(i), RollKey.KeyIngredient).Next(results.Length);
+			int same = -1, other = -1, home = -1;
+			for (int k = 0; k < results.Length && same < 0; k++)
+			{
+				int j = (start + k) % results.Length;
+				int y = results[j];
+				if (j == i || y == x || !Randomized(j) || RecipeSystem.VanillaDisabled(j) || result.ResultRepicked[j] || specialRecipes.ContainsValue(j) || ItemPool.IsSpecial(y)) continue;
+				if (used.Contains(y) || !Fits(i, y) || !Fits(j, x)) continue;
+				if (doable[j] < ResultTier(j, x) && Gated(j) && !HasKeySlot(j)) continue;
+				if (y == original && home < 0) home = j;
+				if (doable[j] < doable[i] || !ItemPool.Allowed(y, ceiling)) continue;
+				if (ItemPool.Info[y].Category == category) same = j;
+				else if (other < 0) other = j;
+			}
+			int partner = same >= 0 ? same : other >= 0 ? other : home;
+			if (partner < 0) return false;
+			int given = results[partner];
+			SetPlannedResult(result, results, partner, x);
+			SetPlannedResult(result, results, i, given);
 			result.ResultRepicked[i] = true;
+			result.ResultSwapped[partner] = true;
 			return true;
+		}
+
+		private static void SetPlannedResult(RecipePlan result, int[] results, int i, int item)
+		{
+			results[i] = item;
+			result.Results[i] = item == RecipeSystem.OriginalResult(i) ? (item, RecipeSystem.OriginalStack(i))
+				: (item, RecipeSystem.ResultStack(i, item, (result.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).Sum(p => p.stack)));
+			result.ResultTiers[i] = ResultTier(i, item);
 		}
 
 		// ---------------------------------------------------------------- Twins

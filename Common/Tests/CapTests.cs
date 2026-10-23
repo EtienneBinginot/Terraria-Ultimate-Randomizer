@@ -237,7 +237,8 @@ namespace UltimateRandomizer.Common.Tests
 		private static bool Flagged(int item) => ItemPool.IsBanned(item) || ItemPool.TrueTierOf(item) > ItemPool.TierOf(item);
 
 		// The same rolls with and without the re-pick: every difference is an item the re-pick had to replace, so every other
-		// roll (mob plans, recipe results, chest slots, gated rolls) gives exactly what it gave before the re-pick existed
+		// roll (mob plans, chest slots, gated rolls) gives exactly what it gave before the re-pick existed. Recipe results are
+		// a permutation that never rolls (RecipePlanner.PermutedResults: banned items are kept out by its swaps)
 		private static void RepickOnlyChangesFlagged()
 		{
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only in Coherent mode");
@@ -249,11 +250,6 @@ namespace UltimateRandomizer.Common.Tests
 				Findability.Reset();
 				List<int> items = new();
 				foreach (int npc in npcs) items.AddRange(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false).Select(d => d.Item));
-				for (int i = 0; i < RecipeSystem.RecipeCount && i < Recipe.numRecipes; i++)
-				{
-					(int type, int stack)[] ingredients = RecipeSystem.OriginalIngredients(i);
-					items.Add(RecipeSystem.RollResult(i, ingredients.Select(x => x.type).ToList(), ingredients.Sum(x => x.stack), lucky: true).type);
-				}
 				for (int k = 0; k < originals.Length; k++)
 				{
 					int original = originals[k];

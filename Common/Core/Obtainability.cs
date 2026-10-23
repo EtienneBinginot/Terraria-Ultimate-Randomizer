@@ -12,10 +12,11 @@ namespace UltimateRandomizer.Common.Core
 		// (ItemClassifier.RaiseBySources) read when each item is first sold
 		public static readonly List<(int npc, int item, Terraria.Condition[] conditions)> ShopEntries = new();
 
-		public static HashSet<int> Collect()
+		// withRecipes: false leaves out what only a recipe makes (the hosts of the upgrade recipes, RecipePlanner.AssignSpecials)
+		public static HashSet<int> Collect(bool withRecipes = true)
 		{
 			HashSet<int> set = new(ShopItems);
-			set.UnionWith(RecipeResults);
+			if (withRecipes) set.UnionWith(RecipeResults);
 			foreach (List<DropRateInfo> drops in LootSnapshot.Npcs.Values) AddDrops(set, drops);
 			foreach (List<DropRateInfo> drops in LootSnapshot.Items.Values) AddDrops(set, drops);
 			for (int type = 1; type < ItemPool.Info.Length; type++)
