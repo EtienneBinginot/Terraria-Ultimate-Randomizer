@@ -122,9 +122,12 @@ Tests: {
 	TierAudit: Lists the vanilla items whose tier looks doubtful (raised by their sources, a source much earlier, or no source at all) in TierAudit.tsv, and counts the banned items of the enemy plan (logged)
 	ItemTierDump: Writes ItemTiers.tsv, one row per vanilla item with its tiers, findability, vanilla and planned recipe tiers, planned ingredients and mining data (read-only)
 	WorldChestTrueTiers: Items of world-generated chests are found from their chest's tier (true tier lowered, never raised)
-	ShopDump: Writes Shops.tsv, every vanilla shop entry at each unlocked tier with its replacement, price, conditions and flags (too early, other category, shop-only item lost) (read-only)
-	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter
-	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world
+	ShopDump: Writes Shops.tsv, every vanilla shop entry at each unlocked tier with its replacement (a random roll), then the added slots selling this world's shop-only items, with price, conditions and flags (too early, other category, shop-only item lost), and ShopOnly.tsv, which merchant sells each shop-only item of this world and from which tier (read-only)
+	WorldExport: Writes items, recipes, drops, bags, shops, chests, worldsources and findability .tsv files plus a README into Export/ next to the other dumps, for an offline coherence audit (read-only)
+	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter, and no added slot appears before its item's unlock tier
+	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world: found or crafted at any tier, or sold in an added slot of a reliable merchant (late sales are only logged)
+	ShopOnlyPlacement: Every shop-only item of this world (sold by a random shop entry, and neither found nor crafted anywhere in this world, at any tier) has exactly one added slot at a reliable merchant (known arrival, not Santa, the Princess or a visitor), shown from its unlock tier, without exceeding a shop's free capacity while others have room, never rolled again in that shop, the same for the same seed (late merchants are logged)
+	ShopOnlySlots: Each shop with added slots, filled as the game fills it right now and given its added slots as in game, shows every unlocked shop-only item at its price, and only a rolled slot ever gives way when the shop is full
 	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
 	ModdedRecipesRandomized: With Magic Storage, its recipes are rebuilt with a key of their tier, and its storage upgrades' tiers follow their bars in order
 	ModdedItemsInPool: Magic Storage's items may be given at random; the items of utility mods (tModLoader, Recipe Browser) and creative items never are
@@ -159,7 +162,7 @@ Tests: {
 	CritterHabitat: Water, flying and ground critters stay in their habitat
 	SwapStatsCount: Natural spawns are counted, statue spawns are left alone
 	NpcTiersNormalStats: Enemy tiers come from normal-mode stats, whatever world was played before a reload
-	CodexRecordsLoot: The codex records the kill and every item dropped by a slime
+	CodexRecordsLoot: The codex records the kills and every item dropped by a common enemy with a sure drop (a slime when none)
 	CodexRecipesFromGuide: The Guide discovers the recipes using the item and those giving it
 	CodexSaveLoad: The codex is saved and loaded with the world without loss
 	CodexSyncRoundTrip: Codex discoveries survive the network format (delta and full sync)
@@ -1156,7 +1159,7 @@ Configs: {
 		}
 
 		Permutation: {
-			Label: "Permutation"
+			Label: Permutation
 			Tooltip: ""
 		}
 	}
@@ -1402,28 +1405,28 @@ Configs: {
 		}
 
 		RandomizeMobDrops: {
-			Label: "Randomize enemy and boss drops"
-			Tooltip: "Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions (or, in the permutation style, moved to another enemy of the same level). Progression items, coins and treasure bags are kept."
+			Label: Randomize enemy and boss drops
+			Tooltip: Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions (or, in the permutation style, moved to another enemy of the same level). Progression items, coins and treasure bags are kept.
 		}
 
 		DropTableStyle: {
-			Label: "Enemy drop style"
-			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. A few of them become surprises (see below). Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets a few random extra drops with vanilla-like rates (see below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses of the same level also shuffle their drops between them (treasure bags follow their boss), with the same few extra drops, the first one always dropped."
+			Label: Enemy drop style
+			Tooltip: Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. A few of them become surprises (see below). Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets a few random extra drops with vanilla-like rates (see below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses of the same level also shuffle their drops between them (treasure bags follow their boss), with the same few extra drops, the first one always dropped.
 		}
 
 		PermutationExtraSlots: {
-			Label: "Extra drops per enemy (permutation)"
-			Tooltip: "Permutation style only: number of random extra drops every enemy gets on top of its shuffled original drops, with vanilla-like rates (1/1 to 1/10 for potions and ammo, 1/15 to 1/150 for equipment...) multiplied by the drop rate multiplier, and higher while some of the enemy's drops are still locked by progression. Loot abundance does not change them. 0 = none."
+			Label: Extra drops per enemy (permutation)
+			Tooltip: Permutation style only: number of random extra drops every enemy gets on top of its shuffled original drops, with vanilla-like rates (1/1 to 1/10 for potions and ammo, 1/15 to 1/150 for equipment...) multiplied by the drop rate multiplier, and higher while some of the enemy's drops are still locked by progression. Loot abundance does not change them. 0 = none.
 		}
 
 		PermutationExtraWeights: {
-			Label: "Extra drop weights (permutation)"
-			Tooltip: "Permutation style only: relative chance of each kind of item for the random extra drops. 0 = never. By default no materials, ores or bars: the shuffled original drops already give plenty."
+			Label: Extra drop weights (permutation)
+			Tooltip: Permutation style only: relative chance of each kind of item for the random extra drops. 0 = never. By default no materials, ores or bars: the shuffled original drops already give plenty.
 		}
 
 		PermutationSurpriseChance: {
-			Label: "Surprise drops (permutation, %)"
-			Tooltip: "Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays."
+			Label: Surprise drops (permutation, %)
+			Tooltip: Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays.
 		}
 
 		EnemiesWithoutDropsCanDrop: {
@@ -1854,7 +1857,7 @@ Configs: {
 
 		RandomizeShops: {
 			Label: Randomize shops
-			Tooltip: Each shop item is replaced by an item of the same category. It keeps the original item's unlock conditions.
+			Tooltip: Each shop item is replaced by an item of the same category. It keeps the original item's unlock conditions. The items that nothing else gives in this world (not found nor craftable) are still sold, possibly by another merchant.
 		}
 
 		PriceMultiplierMin: {
@@ -2366,7 +2369,7 @@ Configs: {
 		Headers: {
 			Debug: Debug tools
 			Messages: Messages
-			Display: "Display"
+			Display: Display
 		}
 
 		DebugTools: {
@@ -2380,8 +2383,8 @@ Configs: {
 		}
 
 		ShowWorldDrops: {
-			Label: "Show this world's drops"
-			Tooltip: "With the Permutation enemy drop style: the bestiary and Recipe Browser show what enemies, bosses and treasure bags drop in this world (shuffled drops, extra and guaranteed drops) instead of the vanilla drops. Off: they show the vanilla drops."
+			Label: Show this world's drops
+			Tooltip: With the Permutation enemy drop style: the bestiary and Recipe Browser show what enemies, bosses and treasure bags drop in this world (shuffled drops, extra and guaranteed drops) instead of the vanilla drops. Off: they show the vanilla drops.
 		}
 	}
 

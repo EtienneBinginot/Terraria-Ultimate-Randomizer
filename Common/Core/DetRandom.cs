@@ -57,6 +57,8 @@ namespace UltimateRandomizer.Common.Core
 		public const int DropSurprise = 42;
 		// The permutation of the bosses' original drops and bag contents (BossPermutation), keyed by place
 		public const int BossPermutation = 43;
+		// Where each shop-only item is sold (ShopPermutation), keyed by place and item
+		public const int ShopPermutation = 44;
 		public const int Fallback = 0xFA11;
 	}
 

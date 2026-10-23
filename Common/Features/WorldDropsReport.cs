@@ -181,11 +181,19 @@ namespace UltimateRandomizer.Common.Features
 			if (current.Failures++ == 0) current.FirstFailure = what;
 		}
 
+		// The bestiary page of a net ID, null when it has none: FindEntryByNPCID gives an unregistered net ID (the Hornet's size
+		// variants -65 to -56...) a shared, emptied trash entry
+		public static BestiaryEntry EntryOf(int netId)
+		{
+			BestiaryEntry entry = Main.BestiaryDB.FindEntryByNPCID(netId);
+			return entry == null || entry == Main.BestiaryDB.FindEntryByNPCID(int.MinValue) ? null : entry;
+		}
+
 		// As BestiaryDatabase.ExtractDropsForNPC (private, called by Merge for every net ID at load), for our NPCs only:
 		// Merge only appends, the old elements are removed first (the new ones are built before)
 		private static void ReplaceBestiaryDrops(int netId, List<DropRateInfo> drops)
 		{
-			BestiaryEntry entry = Main.BestiaryDB.FindEntryByNPCID(netId);
+			BestiaryEntry entry = EntryOf(netId);
 			if (entry == null) return;
 			List<IBestiaryInfoElement> elements = drops.Select(info => (IBestiaryInfoElement)new ItemDropBestiaryInfoElement(info)).ToList();
 			entry.Info.RemoveAll(i => i != null && i.GetType() == typeof(ItemDropBestiaryInfoElement));

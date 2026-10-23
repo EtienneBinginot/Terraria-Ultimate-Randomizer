@@ -383,7 +383,8 @@ namespace UltimateRandomizer.Common.Codex
 			planDrops = drops;
 		}
 
-		// Town NPCs selling an item in their original shop (protected items keep their shop when shops are randomized)
+		// Town NPCs selling an item in their original shop (protected items keep their shop when shops are randomized; a shop-only
+		// item is sold by the merchant ShopPermutation chose)
 		private static int ShopKeeper(int item)
 		{
 			if (shopKeepers == null)
@@ -398,7 +399,7 @@ namespace UltimateRandomizer.Common.Codex
 					}
 				}
 			}
-			if (EconomyConfig.Instance.RandomizeShops && ItemPool.IsRandomizable(item)) return 0;
+			if (EconomyConfig.Instance.RandomizeShops && ItemPool.IsRandomizable(item)) return ShopPermutation.Seller(item, out int seller, out _) ? seller : 0;
 			return shopKeepers.TryGetValue(item, out int npc) ? npc : 0;
 		}
 
@@ -534,7 +535,12 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			if (bagContents.TryGetValue(item, out List<(int bag, int tier, float chance)> holders))
 			{
-				foreach ((int bag, int tier, float chance) in holders) options.Add(new HintFact { Item = item, Kind = HintKind.Bag, Bag = bag, Tier = tier, Band = Band(tier), Chance = chance });
+				// Like a boss: a bag that seldom gives it (one in eight) is only better than a chest or a pot, never ahead of a
+				// guaranteed enemy of a later tier
+				foreach ((int bag, int tier, float chance) in holders)
+				{
+					(chance >= MinBossChance - 1e-6f ? options : weak).Add(new HintFact { Item = item, Kind = HintKind.Bag, Bag = bag, Tier = tier, Band = Band(tier), Chance = chance });
+				}
 			}
 			// Only the stations really hidden in chests of this world (saved, and sent with the world data)
 			if (ChestSystem.StationInChests(item))
@@ -548,9 +554,11 @@ namespace UltimateRandomizer.Common.Codex
 			int keeper = ShopKeeper(item);
 			if (keeper > 0)
 			{
-				// When the keeper moves in (town NPC arrival order of this world), else the item's own tier
+				// A shop-only item: from its place's tier (arrival and conditions). Else when the keeper moves in (town NPC arrival
+				// order of this world), else the item's own tier
 				int arrival = TownNpcOrderSystem.ArrivalTier(keeper);
-				int tier = arrival >= 0 ? Math.Max(arrival, Gated(item)) : ItemPool.TierOf(item);
+				int tier = ShopPermutation.Seller(item, out _, out int placeTier) ? Math.Max(placeTier, Gated(item))
+					: arrival >= 0 ? Math.Max(arrival, Gated(item)) : ItemPool.TierOf(item);
 				options.Add(new HintFact { Item = item, Kind = HintKind.Shop, Npc = keeper, Tier = tier, Band = Band(tier) });
 			}
 			foreach ((int worldItem, string key, int npc) in WorldSources)

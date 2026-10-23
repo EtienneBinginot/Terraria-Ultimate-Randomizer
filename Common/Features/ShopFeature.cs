@@ -20,8 +20,9 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// Runs on the local client each time a shop is opened. The original item is part of the key,
-		// so each replacement keeps the original's unlock conditions (moon phase, progression...)
+		// Runs on the local client each time a shop is opened. The original item is part of the key, so each replacement keeps
+		// the original's unlock conditions (moon phase, progression...); this world's shop-only items of the shop
+		// (ShopPermutation) come in added slots after them, once progression unlocks them
 		public override void ModifyActiveShop(NPC npc, string shopName, Item[] items)
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
@@ -35,7 +36,11 @@ namespace UltimateRandomizer.Common.Features
 				if (original == null || original.IsAir || original.shopSpecialCurrency != -1) continue;
 				originals[i] = original.type;
 			}
-			ShopSlot[] plan = ShopPlanner.PlanShop(npc.type, shopName, originals, ProgressionSystem.UnlockedTier, Main.hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop);
+			ShopPermutation.WorldPlan permutation = ShopPermutation.Current;
+			IReadOnlyList<int> shopOnly = ShopPermutation.ItemsOf(permutation, shopName);
+			ShopSlot[] plan = ShopPlanner.PlanShop(npc.type, shopName, originals, ProgressionSystem.UnlockedTier, Main.hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop,
+				shopOnly);
+			bool[] rolled = new bool[items.Length];
 			for (int i = 0; i < items.Length; i++)
 			{
 				if (!plan[i].Replaced) continue;
@@ -43,12 +48,16 @@ namespace UltimateRandomizer.Common.Features
 				item.stack = 1;
 				item.shopCustomPrice = plan[i].Price;
 				items[i] = item;
+				rolled[i] = true;
 			}
+			List<ShopSlot> added = ShopPlanner.AddedSlots(npc.type, shopName, shopOnly, ProgressionSystem.UnlockedTier, Main.hardMode);
+			if (added.Count > 0) ShopPermutation.Append(items, ShopPermutation.SlotLimit(shopName), rolled, added);
 		}
 	}
 
-	// One shop slot as planned: the original item, what replaces it (0 when left as it is) and its price
-	public readonly record struct ShopSlot(int Original, int Replacement, int Price)
+	// One shop slot as planned: the original item, what replaces it (0 when left as it is), its price, and whether it is an
+	// added slot selling a shop-only item (ShopPermutation, Original 0) rather than a roll
+	public readonly record struct ShopSlot(int Original, int Replacement, int Price, bool Guaranteed = false)
 	{
 		public bool Replaced => Replacement > 0;
 	}
@@ -58,13 +67,17 @@ namespace UltimateRandomizer.Common.Features
 	public static class ShopPlanner
 	{
 		// originalTypes in slot order (0: slot left alone). The duplicate check follows that order, as the shop fills its slots:
-		// the result for a slot depends on the items sold before it (only those whose conditions are met in game)
-		public static ShopSlot[] PlanShop(int npcType, string shopName, IList<int> originalTypes, int unlockedTier, bool hardMode, bool followProgression, bool noDuplicates)
+		// the result for a slot depends on the items sold before it (only those whose conditions are met in game).
+		// shopOnly: the shop-only items added to the shop, which no roll gives with noDuplicates (whether or not they are
+		// unlocked yet)
+		public static ShopSlot[] PlanShop(int npcType, string shopName, IList<int> originalTypes, int unlockedTier, bool hardMode, bool followProgression, bool noDuplicates,
+			IEnumerable<int> shopOnly = null)
 		{
 			int npcKey = DetRandom.NpcKey(npcType);
 			int shopKey = DetRandom.StableHash(shopName ?? "");
 			ShopSlot[] slots = new ShopSlot[originalTypes.Count];
 			HashSet<int> used = new();
+			if (noDuplicates && shopOnly != null) used.UnionWith(shopOnly);
 			for (int i = 0; i < originalTypes.Count; i++)
 			{
 				int original = originalTypes[i];
@@ -91,12 +104,58 @@ namespace UltimateRandomizer.Common.Features
 					replacement = ItemPool.Roll(request);
 					if (!noDuplicates || !used.Contains(replacement)) break;
 				}
+				// The progression limits leave few items of a category (late potions): the re-rolls all came back to an item
+				// already sold. Another unused item of its category, no later than it, from its tier down
+				if (noDuplicates && used.Contains(replacement))
+				{
+					int other = Unused(replacement, used, DetRandom.Get(RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), RollKey.Fallback));
+					if (other > 0) replacement = other;
+				}
 				used.Add(replacement);
-				slots[i] = new ShopSlot(original, replacement, PriceRules.Price(replacement, DetRandom.Get(RollKey.Price, npcKey, shopKey, DetRandom.ItemKey(replacement))));
+				slots[i] = new ShopSlot(original, replacement, Price(npcKey, shopKey, replacement));
+			}
+			return slots;
+		}
+
+		private static int Price(int npcKey, int shopKey, int item) => PriceRules.Price(item, DetRandom.Get(RollKey.Price, npcKey, shopKey, DetRandom.ItemKey(item)));
+
+		// The added slots a shop shows at this progression: its shop-only items (ShopPermutation.ItemsOf) whose unlock tier is
+		// reached, in order, each at its own price
+		public static List<ShopSlot> AddedSlots(int npcType, string shopName, IEnumerable<int> shopOnly, int unlockedTier, bool hardMode)
+		{
+			int npcKey = DetRandom.NpcKey(npcType);
+			int shopKey = DetRandom.StableHash(shopName ?? "");
+			List<ShopSlot> slots = new();
+			if (shopOnly == null) return slots;
+			foreach (int item in shopOnly)
+			{
+				if (ShopPermutation.Unlocked(item, unlockedTier, hardMode)) slots.Add(new ShopSlot(0, item, Price(npcKey, shopKey, item), true));
 			}
 			return slots;
 		}
 
 		public const int TierJitterUp = 1;
+
+		// An item of the same category as taken, not in used, whose true tier is no later than taken's (never a hard gate
+		// unless taken is one), from taken's tier down, each bucket read from a random start; 0 when there is none
+		private static int Unused(int taken, HashSet<int> used, Random rng)
+		{
+			if (!ItemPool.IsValid(taken)) return 0;
+			ItemCategory category = ItemPool.Info[taken].Category;
+			int ceiling = ItemPool.TrueTierOf(taken);
+			int hardCeiling = ItemPool.IsHardGate(taken) ? ceiling : -1;
+			for (int t = ItemPool.TierOf(taken); t >= 0; t--)
+			{
+				int[] bucket = ItemPool.Bucket(category, t);
+				if (bucket.Length == 0) continue;
+				int start = rng.Next(bucket.Length);
+				for (int k = 0; k < bucket.Length; k++)
+				{
+					int item = bucket[(start + k) % bucket.Length];
+					if (!used.Contains(item) && ItemPool.Allowed(item, ceiling, hardCeiling)) return item;
+				}
+			}
+			return 0;
+		}
 	}
 }

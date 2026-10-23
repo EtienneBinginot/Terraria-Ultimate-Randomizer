@@ -125,7 +125,7 @@ namespace UltimateRandomizer.Common.Tests
 					if (place.Index >= drops.Count) continue;
 					PlannedDrop drop = drops[place.Index];
 					int expected = current.Surprised[p] ? current.ByUnit[place.Owner][place.Index].Entry.itemId : source.Entry.itemId;
-					if ((drop.Item != expected || drop.Original != source.Entry.itemId || drop.Surprise != current.Surprised[p] || drop.Conditions != place.Entry.conditions || !drop.Rolled) && failures.Count < 20)
+					if ((drop.Item != expected || drop.Original != source.Entry.itemId || drop.Surprise != current.Surprised[p] || !SameConditions(drop.Conditions, place.Entry.conditions) || !drop.Rolled) && failures.Count < 20)
 					{
 						failures.Add($"{NpcName(place.Owner)} entry {place.Index}: {Lang.GetItemNameValue(drop.Item)} planned, {Lang.GetItemNameValue(expected)} expected with the place's conditions");
 					}
@@ -242,6 +242,11 @@ namespace UltimateRandomizer.Common.Tests
 		// random item with at most the content's chance and the place's conditions; never a material, ore, bar or synthetic content;
 		// every item but blocks, critters and ores keeps a copy even when every candidate is surprised; a higher chance only adds
 		// surprises (each place has its own roll), with the same items
+		// The same conditions (the same objects, in order): DropRateInfo's constructor copies its conditions list, so the
+		// lists themselves are never the same
+		private static bool SameConditions(List<IItemDropRuleCondition> a, List<IItemDropRuleCondition> b) =>
+			(a?.Count ?? 0) == (b?.Count ?? 0) && (a == null || a.Count == 0 || a.SequenceEqual(b));
+
 		private static void DropPermutationSurprise()
 		{
 			List<string> failures = new();
@@ -280,7 +285,7 @@ namespace UltimateRandomizer.Common.Tests
 						if (!DropPermutation.SurpriseKind(content.itemId)) Fail($"{where}: a material, ore or bar surprised");
 						if (source.Synthetic) Fail($"{where}: a synthetic content surprised");
 						// The chance is the content's, capped by a vanilla-like rate for the new item (DropRates.Denominator)
-						if (!placed.Surprise || placed.Replaced != content.itemId || placed.Entry.dropRate <= 0f || placed.Entry.dropRate > content.dropRate || placed.Entry.conditions != place.Entry.conditions)
+						if (!placed.Surprise || placed.Replaced != content.itemId || placed.Entry.dropRate <= 0f || placed.Entry.dropRate > content.dropRate || !SameConditions(placed.Entry.conditions, place.Entry.conditions))
 						{
 							Fail($"{where}: the surprise {Lang.GetItemNameValue(placed.Entry.itemId)} lost the content's chance or the place's conditions");
 						}
@@ -571,12 +576,14 @@ namespace UltimateRandomizer.Common.Tests
 					int item = ItemPool.Roll(request);
 					int gap = ItemPool.LastJackpotGap;
 					int tier = ItemPool.TrueTierOf(item);
+					// A hard gate (chlorophyte, luminite...) gets no tier allowance: its gap is counted from its own, lower limit
+					int itemLimit = Math.Min(ItemPool.GatingLimitFor(item, 0), limit);
 					if (gap > 0)
 					{
 						gaps[Math.Min(gap, Tiers.Max)]++;
-						if (gap != tier - limit) failures.Add($"{Lang.GetItemNameValue(item)}: gap {gap}, true tier {tier}, limit {limit}");
+						if (gap != tier - itemLimit) failures.Add($"{Lang.GetItemNameValue(item)}: gap {gap}, true tier {tier}, limit {itemLimit}");
 					}
-					else if (tier > limit) failures.Add($"{Lang.GetItemNameValue(item)} (true tier {tier}) above the limit {limit} without a jackpot");
+					else if (tier > itemLimit) failures.Add($"{Lang.GetItemNameValue(item)} (true tier {tier}) above the limit {itemLimit} without a jackpot");
 					else if (tier >= (int)Tier.Hardmode) failures.Add($"{Lang.GetItemNameValue(item)} (true tier {tier}): a hardmode item before hardmode without a jackpot");
 					if (failures.Count > 20) break;
 				}
@@ -661,7 +668,7 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// An NPC spawned by another NPC (Mother Slime babies...) is flagged in its slot, even after SetDefaults, and its kill
-		// gets nothing from the extra-drop rule; the flag does not stick to the next NPC of the slot. Worm segments and bosses
+		// gets nothing from the extra-drop rule but its original entries (permutation style); the flag does not stick to the next NPC of the slot. Worm segments and bosses
 		// are never flagged. Spawned NPCs and items are removed
 		private static void SpawnedEnemyNoExtraDrops()
 		{
@@ -689,9 +696,19 @@ namespace UltimateRandomizer.Common.Tests
 				CodexSystem.SpawnLog = slots;
 				RandomNpcDropRule rule = new(child.netID);
 				DropAttemptInfo info = new() { npc = child, player = player, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode };
+				// In permutation style the rule also rolls the enemy's original entries (vanilla drops them for spawned enemies
+				// too): those may drop, nothing else (no extra, guaranteed or bonus drop)
+				bool permuted = DropPermutation.Active(child.netID) || BossPermutation.Active(child.netID);
+				HashSet<int> originals = permuted
+					? RandomNpcDropRule.OriginalDrops(child.netID, BossParts.Owner(child.type)).Where(d => d.Rolled).Select(d => d.Item).ToHashSet()
+					: new HashSet<int>();
 				ItemDropAttemptResultState state = rule.TryDroppingItem(info).State;
-				if (state != ItemDropAttemptResultState.DidNotRunCode) failures.Add($"the child's extra-drop rule ran ({state})");
-				if (slots.Count > 0) failures.Add($"the child dropped {slots.Count} items");
+				if (!permuted && state != ItemDropAttemptResultState.DidNotRunCode) failures.Add($"the child's extra-drop rule ran ({state})");
+				foreach (int slot in slots)
+				{
+					if (slot < 0 || slot >= Main.maxItems || originals.Contains(Main.item[slot].type)) continue;
+					failures.Add($"the child dropped {Lang.GetItemNameValue(Main.item[slot].type)}, not one of its original entries");
+				}
 				// A new NPC in the slot (here: the same one spawned again) gets its own flag
 				new SpawnOriginNPC().OnSpawn(child, new Terraria.DataStructures.EntitySource_SpawnNPC());
 				if (MobLootSystem.IsSpawnedByNpc(child)) failures.Add("the flag sticks to the next NPC of the slot");
@@ -940,7 +957,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Kills through the real extra-drop rule with madness at 100 %: the drops above the limit are marked with their gap,
-		// useful, and the others are not marked. The spawned items are removed
+		// useful, and the others are not marked. Batches of 40 kills (each batch read, then its items removed: Main.item would
+		// recycle them) until a jackpot shows up: the permutation style has few extra slots at vanilla-like rates
 		private static void JackpotDropsMarked()
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (drops spawn on the server)");
@@ -949,33 +967,49 @@ namespace UltimateRandomizer.Common.Tests
 			if (!ProgressionConfig.Instance.TierGating) Check.Skip("no progression limit");
 			int limit = ItemPool.GatingLimit(0);
 			if (limit >= Tiers.Max) Check.Skip("the limit is already the last tier");
+			if (RandomNpcDropRule.ExtraDrops(NPCID.Zombie, NPCID.Zombie, Main.expertMode).Count == 0) Check.Skip("the zombie has no random extra drop");
 			NPC npc = new();
 			npc.SetDefaults(NPCID.Zombie);
 			npc.Center = Main.LocalPlayer.Center;
 			npc.life = 0;
 			List<int> slots = new();
 			List<string> failures = new();
-			int marked = 0;
+			int marked = 0, drops = 0, kills = 0;
+			void Clear()
+			{
+				foreach (int slot in slots.Distinct())
+				{
+					if (slot < 0 || slot >= Main.maxItems) continue;
+					Main.item[slot].TurnToAir();
+					Main.item[slot].active = false;
+				}
+				drops += slots.Count;
+				slots.Clear();
+			}
 			try
 			{
 				ItemPool.WildChanceOverride = 100f;
-				CodexSystem.SpawnLog = slots;
 				RandomNpcDropRule rule = new(NPCID.Zombie);
-				for (int i = 0; i < 40; i++)
+				for (int batch = 0; batch < 50 && marked == 0; batch++)
 				{
-					rule.TryDroppingItem(new DropAttemptInfo { npc = npc, player = Main.LocalPlayer, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode });
-				}
-				CodexSystem.SpawnLog = null;
-				foreach (int slot in slots.Distinct())
-				{
-					if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active) continue;
-					Item item = Main.item[slot];
-					int gap = JackpotItem.GapOf(item);
-					if (gap == 0) continue;
-					marked++;
-					if (!ItemPool.IsJackpotWorthy(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} marked but not useful");
-					if (gap != ItemPool.TrueTierOf(item.type) - ItemPool.GatingLimitFor(item.type, 0)) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, true tier {ItemPool.TrueTierOf(item.type)}, limit {limit}");
-					if (CodexSystem.CountsAsDrop(item)) failures.Add($"{Lang.GetItemNameValue(item.type)} would be recorded as the zombie's drop");
+					CodexSystem.SpawnLog = slots;
+					for (int i = 0; i < 40; i++, kills++)
+					{
+						rule.TryDroppingItem(new DropAttemptInfo { npc = npc, player = Main.LocalPlayer, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode });
+					}
+					CodexSystem.SpawnLog = null;
+					foreach (int slot in slots.Distinct())
+					{
+						if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active) continue;
+						Item item = Main.item[slot];
+						int gap = JackpotItem.GapOf(item);
+						if (gap == 0) continue;
+						marked++;
+						if (!ItemPool.IsJackpotWorthy(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} marked but not useful");
+						if (gap != ItemPool.TrueTierOf(item.type) - ItemPool.GatingLimitFor(item.type, 0)) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, true tier {ItemPool.TrueTierOf(item.type)}, limit {limit}");
+						if (CodexSystem.CountsAsDrop(item)) failures.Add($"{Lang.GetItemNameValue(item.type)} would be recorded as the zombie's drop");
+					}
+					Clear();
 				}
 			}
 			finally
@@ -983,14 +1017,9 @@ namespace UltimateRandomizer.Common.Tests
 				CodexSystem.SpawnLog = null;
 				ItemPool.WildChanceOverride = null;
 				ItemPool.ClearJackpot();
-				foreach (int slot in slots.Distinct())
-				{
-					if (slot < 0 || slot >= Main.maxItems) continue;
-					Main.item[slot].TurnToAir();
-					Main.item[slot].active = false;
-				}
+				Clear();
 			}
-			Check.That(marked > 0, $"no marked jackpot in {slots.Count} drops of 40 kills");
+			Check.That(marked > 0, $"no marked jackpot in {drops} drops of {kills} kills");
 			Check.All(failures, "Jackpot drops");
 		}
 

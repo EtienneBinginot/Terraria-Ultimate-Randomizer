@@ -122,9 +122,12 @@ Tests: {
 	TierAudit: Liste dans TierAudit.tsv les objets vanilla dont le palier semble douteux (relevé par leurs sources, une source bien plus précoce, ou aucune source), et compte les objets bannis du plan des monstres (dans le journal)
 	ItemTierDump: Écrit ItemTiers.tsv, une ligne par objet vanilla avec ses paliers, sa trouvabilité, les paliers de recette vanilla et planifiés, les ingrédients planifiés et les données de minage (lecture seule)
 	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
-	ShopDump: Écrit Shops.tsv, chaque article des boutiques vanilla à chaque palier débloqué avec son remplaçant, son prix, ses conditions et des alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu) (lecture seule)
-	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques
-	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde
+	ShopDump: Écrit Shops.tsv, chaque article des boutiques vanilla à chaque palier débloqué avec son remplaçant (tirage aléatoire), puis les emplacements ajoutés qui vendent les objets exclusifs aux boutiques de ce monde, avec prix, conditions et alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu), et ShopOnly.tsv, qui indique quel marchand vend chaque objet exclusif aux boutiques de ce monde et à partir de quel palier (lecture seule)
+	WorldExport: Écrit dans Export/ les fichiers .tsv des objets, recettes, butins, sacs, boutiques, coffres, sources du monde et trouvabilité, plus un README, pour un audit de cohérence hors jeu (lecture seule)
+	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques, et aucun emplacement ajouté n'apparaît avant le palier de déblocage de son objet
+	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde : trouvés ou fabriqués à n'importe quel palier, ou vendus dans un emplacement ajouté chez un marchand fiable (une vente tardive est seulement signalée dans le journal)
+	ShopOnlyPlacement: Chaque objet exclusif aux boutiques de ce monde (vendu par un article tiré au hasard, et ni trouvé ni fabriqué nulle part dans ce monde, à aucun palier) a exactement un emplacement ajouté chez un marchand fiable (arrivée connue, ni le Père Noël, ni la Princesse, ni un marchand de passage), visible dès son palier de déblocage, sans dépasser la place libre d'une boutique tant que d'autres en ont, jamais tiré une seconde fois dans cette boutique, identique pour une même graine (les marchands tardifs sont signalés dans le journal)
+	ShopOnlySlots: Chaque boutique avec des emplacements ajoutés, remplie comme le jeu la remplit en ce moment puis complétée comme en jeu, propose chaque objet exclusif débloqué à son prix, et seul un emplacement tiré au hasard cède sa place quand la boutique est pleine
 	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant
 	ModdedRecipesRandomized: Avec Magic Storage, ses recettes sont reconstruites avec un ingrédient clé de leur palier, et les paliers de ses améliorations de stockage suivent leurs lingots dans l'ordre
 	ModdedItemsInPool: Les objets de Magic Storage peuvent être donnés au hasard ; ceux des mods utilitaires (tModLoader, Recipe Browser) et les objets créatifs jamais
@@ -159,7 +162,7 @@ Tests: {
 	CritterHabitat: Les critters aquatiques, volants et terrestres restent dans leur habitat
 	SwapStatsCount: Les apparitions naturelles sont comptées, celles des statues ignorées
 	NpcTiersNormalStats: Les tiers des ennemis viennent des stats du mode normal, quel que soit le monde joué avant un rechargement
-	CodexRecordsLoot: Le codex enregistre l'ennemi tué et chaque objet lâché par un slime
+	CodexRecordsLoot: Le codex enregistre les ennemis tués et chaque objet lâché par un ennemi courant qui a un drop assuré (un slime à défaut)
 	CodexRecipesFromGuide: Le Guide fait découvrir les recettes qui utilisent l'objet et celles qui le donnent
 	CodexSaveLoad: Le codex est sauvegardé et rechargé avec le monde sans rien perdre
 	CodexSyncRoundTrip: Les découvertes du codex passent le format réseau intactes (différences et synchro complète)
@@ -1156,7 +1159,7 @@ Configs: {
 		}
 
 		Permutation: {
-			Label: "Permutation"
+			Label: Permutation
 			Tooltip: ""
 		}
 	}
@@ -1402,28 +1405,28 @@ Configs: {
 		}
 
 		RandomizeMobDrops: {
-			Label: "Randomiser le loot des ennemis et des boss"
-			Tooltip: "Chaque objet lâché par un ennemi est remplacé par un objet de même catégorie, avec la chance et les conditions d'origine (ou, en style permutation, déplacé vers un autre ennemi du même niveau). Les objets de progression, les pièces et les sacs de trésor sont conservés."
+			Label: Randomiser le loot des ennemis et des boss
+			Tooltip: Chaque objet lâché par un ennemi est remplacé par un objet de même catégorie, avec la chance et les conditions d'origine (ou, en style permutation, déplacé vers un autre ennemi du même niveau). Les objets de progression, les pièces et les sacs de trésor sont conservés.
 		}
 
 		DropTableStyle: {
-			Label: "Style du loot des ennemis"
-			Tooltip: "Permutation (par défaut) : les drops d'origine des ennemis sont mélangés entre ennemis du même niveau ; chaque objet garde sa chance et sa quantité, et prend les conditions de l'ennemi qui le reçoit. Quelques-uns deviennent des surprises (voir plus bas). Les ennemis sans aucun drop en reçoivent un, aléatoire et de leur niveau, mélangé avec les autres. Chaque ennemi reçoit aussi quelques drops aléatoires en plus, avec des taux comme le jeu de base (voir plus bas). Façon vanilla : les drops d'origine sont remplacés, et chaque type d'ennemi a un nombre aléatoire de drops en plus (souvent peu, parfois beaucoup) avec des taux comme le jeu de base (1/1 pour les matériaux, 1/50 pour l'équipement...). Simple : drops remplacés, et chaque emplacement en plus a la chance fixe ci-dessous. Miroir de l'original : aucun drop en plus, seulement les drops d'origine (remplacés). Les boss d'un même niveau mélangent aussi leurs drops entre eux (les sacs de trésor suivent leur boss), avec les mêmes quelques drops en plus, le premier toujours obtenu."
+			Label: Style du loot des ennemis
+			Tooltip: Permutation (par défaut) : les drops d'origine des ennemis sont mélangés entre ennemis du même niveau ; chaque objet garde sa chance et sa quantité, et prend les conditions de l'ennemi qui le reçoit. Quelques-uns deviennent des surprises (voir plus bas). Les ennemis sans aucun drop en reçoivent un, aléatoire et de leur niveau, mélangé avec les autres. Chaque ennemi reçoit aussi quelques drops aléatoires en plus, avec des taux comme le jeu de base (voir plus bas). Façon vanilla : les drops d'origine sont remplacés, et chaque type d'ennemi a un nombre aléatoire de drops en plus (souvent peu, parfois beaucoup) avec des taux comme le jeu de base (1/1 pour les matériaux, 1/50 pour l'équipement...). Simple : drops remplacés, et chaque emplacement en plus a la chance fixe ci-dessous. Miroir de l'original : aucun drop en plus, seulement les drops d'origine (remplacés). Les boss d'un même niveau mélangent aussi leurs drops entre eux (les sacs de trésor suivent leur boss), avec les mêmes quelques drops en plus, le premier toujours obtenu.
 		}
 
 		PermutationExtraSlots: {
-			Label: "Drops en plus par ennemi (permutation)"
-			Tooltip: "Style permutation uniquement : nombre de drops aléatoires en plus que reçoit chaque ennemi, en plus de ses drops d'origine mélangés, avec des taux comme le jeu de base (1/1 à 1/10 pour les potions et les munitions, 1/15 à 1/150 pour l'équipement...) multipliés par le multiplicateur de drops, et plus élevés tant que certains drops de l'ennemi sont encore bloqués par la progression. L'abondance du loot ne les change pas. 0 = aucun."
+			Label: Drops en plus par ennemi (permutation)
+			Tooltip: Style permutation uniquement : nombre de drops aléatoires en plus que reçoit chaque ennemi, en plus de ses drops d'origine mélangés, avec des taux comme le jeu de base (1/1 à 1/10 pour les potions et les munitions, 1/15 à 1/150 pour l'équipement...) multipliés par le multiplicateur de drops, et plus élevés tant que certains drops de l'ennemi sont encore bloqués par la progression. L'abondance du loot ne les change pas. 0 = aucun.
 		}
 
 		PermutationExtraWeights: {
-			Label: "Poids des drops en plus (permutation)"
-			Tooltip: "Style permutation uniquement : chance relative de chaque type d'objet pour les drops aléatoires en plus. 0 = jamais. Par défaut, ni matériaux, ni minerais, ni lingots : les drops d'origine mélangés en donnent déjà beaucoup."
+			Label: Poids des drops en plus (permutation)
+			Tooltip: Style permutation uniquement : chance relative de chaque type d'objet pour les drops aléatoires en plus. 0 = jamais. Par défaut, ni matériaux, ni minerais, ni lingots : les drops d'origine mélangés en donnent déjà beaucoup.
 		}
 
 		PermutationSurpriseChance: {
-			Label: "Drops surprises (permutation, %)"
-			Tooltip: "Style permutation uniquement : part des drops mélangés (sauf matériaux, minerais et lingots) qui deviennent un objet aléatoire du niveau de l'ennemi, avec les mêmes conditions et la même chance (plus faible pour un objet rare : un drop fréquent ne devient pas une arme fréquente). Chaque objet, sauf les blocs, les créatures et les minerais, garde un exemplaire qui n'est jamais remplacé : un objet lâché par un seul ennemi reste donc toujours là."
+			Label: Drops surprises (permutation, %)
+			Tooltip: Style permutation uniquement : part des drops mélangés (sauf matériaux, minerais et lingots) qui deviennent un objet aléatoire du niveau de l'ennemi, avec les mêmes conditions et la même chance (plus faible pour un objet rare : un drop fréquent ne devient pas une arme fréquente). Chaque objet, sauf les blocs, les créatures et les minerais, garde un exemplaire qui n'est jamais remplacé : un objet lâché par un seul ennemi reste donc toujours là.
 		}
 
 		EnemiesWithoutDropsCanDrop: {
@@ -1854,7 +1857,7 @@ Configs: {
 
 		RandomizeShops: {
 			Label: Randomiser les boutiques
-			Tooltip: Chaque objet en vente est remplacé par un objet de même catégorie. Il garde les conditions d'apparition de l'objet d'origine.
+			Tooltip: Chaque objet en vente est remplacé par un objet de même catégorie. Il garde les conditions d'apparition de l'objet d'origine. Les objets que rien d'autre ne donne dans ce monde (ni trouvables ni fabricables) restent en vente, parfois chez un autre marchand.
 		}
 
 		PriceMultiplierMin: {
@@ -2366,7 +2369,7 @@ Configs: {
 		Headers: {
 			Debug: Outils de débogage
 			Messages: Messages
-			Display: "Affichage"
+			Display: Affichage
 		}
 
 		DebugTools: {
@@ -2380,8 +2383,8 @@ Configs: {
 		}
 
 		ShowWorldDrops: {
-			Label: "Afficher les drops de ce monde"
-			Tooltip: "Avec le style de loot Permutation : le bestiaire et Recipe Browser montrent ce que les ennemis, les boss et les sacs de trésor lâchent dans ce monde (drops mélangés, drops en plus et garantis) au lieu des drops vanilla. Désactivé : ils montrent les drops vanilla."
+			Label: Afficher les drops de ce monde
+			Tooltip: Avec le style de loot Permutation : le bestiaire et Recipe Browser montrent ce que les ennemis, les boss et les sacs de trésor lâchent dans ce monde (drops mélangés, drops en plus et garantis) au lieu des drops vanilla. Désactivé : ils montrent les drops vanilla.
 		}
 	}
 

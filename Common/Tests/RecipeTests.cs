@@ -1698,7 +1698,8 @@ namespace UltimateRandomizer.Common.Tests
 			RecipePlan plan = RecipePlanner.Get();
 			List<string> failures = new();
 			List<string> low = new();
-			int rebuilt = 0, valueShort = 0;
+			List<string> shortOnes = new();
+			int rebuilt = 0, valueShort = 0, shortAboveMin = 0;
 			int[] named = { ItemID.ManaCrystal, ItemID.LifeCrystal, ItemID.SoulBottleFright, ItemID.LunarBlockNebula, ItemID.LunarBlockStardust, ItemID.SolarBrick, ItemID.TrueNightsEdge };
 			UltimateRandomizer mod = ModContent.GetInstance<UltimateRandomizer>();
 			for (int i = 0; i < Count; i++)
@@ -1719,11 +1720,18 @@ namespace UltimateRandomizer.Common.Tests
 				long roundUp = plan.Ingredients[i].Where(p => RecipePlanner.IngredientReplaceable(p.type)).Sum(p => RecipeSystem.EffectiveValue(p.type));
 				string where = $"{name}: {before} -> {after} ({Ingredients(plan.Ingredients[i])})";
 				if (after > before * 2 + Item.silver + roundUp) failures.Add(where);
-				if (plan.ValueShort[i]) valueShort++;
+				if (plan.ValueShort[i])
+				{
+					valueShort++;
+					// Short of the vanilla value itself (a valuable swapped result), not of the usual minimum
+					if (after >= Math.Ceiling(before * 0.6)) shortAboveMin++;
+					if (shortOnes.Count < 10) shortOnes.Add(where);
+				}
 				else if (after < before / 2) low.Add(where);
 			}
 			if (rebuilt == 0) Check.Skip("no rebuilt recipe");
-			mod.Logger.Info($"RecipeValueSane: {rebuilt} rebuilt recipes, {valueShort} short of their value (no richer material in time), {low.Count} below half their vanilla value" +
+			mod.Logger.Info($"RecipeValueSane: {rebuilt} rebuilt recipes, {valueShort} short of their value (no richer material in time; {shortAboveMin} of them above 60 % " +
+				$"of the vanilla value){(shortOnes.Count == 0 ? "" : ": " + string.Join("; ", shortOnes))}, {low.Count} below half their vanilla value" +
 				$"{(low.Count == 0 ? "" : ": " + string.Join("; ", low.Take(10)))}");
 			Check.That(valueShort <= Math.Max(5, rebuilt / 50), $"{valueShort} of {rebuilt} rebuilt recipes short of their value");
 			Check.That(low.Count <= Math.Max(3, rebuilt / 100), $"{low.Count} recipes below half their vanilla value: {string.Join("; ", low.Take(10))}");
