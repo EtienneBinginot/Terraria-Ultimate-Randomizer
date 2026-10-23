@@ -269,6 +269,9 @@ Tests: {
 	UncraftablePricedByIngredients: Les recettes coquilles actives comptent comme randomisées : ce qu'elles fabriquent se vend au prix de ses ingrédients, pas à son prix d'origine
 	RecipePickaxeMineable: Aucune recette reconstruite de pioche ou de foreuse ne reçoit un nouvel ingrédient dont le minage exige une puissance de pioche au moins égale à la sienne
 	RecipeNotBeforeItsTier: Aucune recette reconstruite ou échangée n'est faisable avant le palier de l'objet qu'elle donne (son palier, ou son vrai palier s'il est plus tard) : pas de pioche en chlorophyte en début de mode difficile
+	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent entre la moitié et le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana, pas de fragment de nébuleuse gardé pour un objet bon marché échangé
+	ProtectedRecipesGated: Un résultat protégé dont les ingrédients sont reconstruits attend le palier débloqué de son vrai palier comme les autres : ni clé de nuit ni clé de lumière avant le mode difficile
+	PickaxeIngredientsBelowLevel: Une recette de pioche ou de foreuse ne reçoit jamais de minerai ni de lingot (ni rien qui en soit fait) dont le minage exige sa propre puissance de pioche ou plus : pas de pioche en orichalque faite de lingots de chlorophyte
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares

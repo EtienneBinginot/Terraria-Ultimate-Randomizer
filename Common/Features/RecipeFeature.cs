@@ -58,6 +58,65 @@ namespace UltimateRandomizer.Common.Features
 
 		public static int RecipeCount => originalTypes?.Length ?? 0;
 
+		// What one unit of an item is worth for the recipe plans (at least 1 copper): its value, or for a value-0 item what its
+		// cheapest vanilla recipe costs (a Large Diamond is 15 Diamonds, a Luminite Brick Wall a quarter of a brick), else a
+		// floor by rarity (a value-0 rare drop is no 1-copper filler). From the recipes as set up only: the same everywhere
+		private static long[] effectiveValues;
+
+		public static long EffectiveValue(int type)
+		{
+			if (type <= 0) return 1;
+			if (effectiveValues == null || effectiveValues.Length < ItemLoader.ItemCount)
+			{
+				effectiveValues = new long[ItemLoader.ItemCount];
+				Array.Fill(effectiveValues, -1);
+				madeBy = null;
+			}
+			if (type >= effectiveValues.Length) return Math.Max(StackRules.ValueOf(type), 1);
+			if (effectiveValues[type] >= 0) return Math.Max(effectiveValues[type], 1);
+			if (effectiveValues[type] == InProgress) return ValueFloor(type);
+			int value = StackRules.ValueOf(type);
+			if (value > 0 || originalTypes == null) return effectiveValues[type] = Math.Max(value, 1);
+			effectiveValues[type] = InProgress;
+			long best = long.MaxValue;
+			foreach (int i in MadeBy(type))
+			{
+				// A recipe looping back through the item counts its floor there
+				long cost = originalIngredients[i].Sum(p => EffectiveValue(p.type) * p.stack);
+				best = Math.Min(best, cost / Math.Max(1, originalStacks[i]));
+			}
+			return effectiveValues[type] = best == long.MaxValue ? ValueFloor(type) : Math.Max(best, 1);
+		}
+
+		private const long InProgress = -2;
+
+		// The enabled vanilla recipes (not shells, not other mods') making each item
+		private static Dictionary<int, List<int>> madeBy;
+
+		private static List<int> MadeBy(int type)
+		{
+			if (madeBy == null)
+			{
+				madeBy = new Dictionary<int, List<int>>();
+				for (int i = 0; i < originalTypes.Length; i++)
+				{
+					if (shell[i] || modded[i] || originalDisabled[i]) continue;
+					if (!madeBy.TryGetValue(originalTypes[i], out List<int> list)) madeBy[originalTypes[i]] = list = new List<int>();
+					list.Add(i);
+				}
+			}
+			return madeBy.TryGetValue(type, out List<int> found) ? found : new List<int>();
+		}
+
+		// A value-0 item no recipe makes: 1 copper when common (blocks, walls), a silver times its rarity squared, a gold for
+		// an Expert or Master drop
+		private static long ValueFloor(int type)
+		{
+			if (!ContentSamples.ItemsByType.TryGetValue(type, out Item sample)) return 1;
+			if (sample.rare is ItemRarityID.Expert or ItemRarityID.Master) return Item.gold;
+			return sample.rare <= 0 ? 1 : (long)Item.silver * sample.rare * sample.rare;
+		}
+
 		public static bool Applied => applied;
 
 		// A shell recipe of this mod (an item no other recipe makes), whether or not this world planned it
@@ -154,17 +213,19 @@ namespace UltimateRandomizer.Common.Features
 				modded[i] = recipe.Mod != null && recipe.Mod.Name != "ModLoader";
 				// Keyed on names, not on the recipe index, so the mapping survives mod updates
 				int key = DetRandom.StableHash(DetRandom.ItemName(recipe.createItem.type));
-				long value = 0;
 				foreach (Item ingredient in recipe.requiredItem)
 				{
 					key = DetRandom.Hash(key, DetRandom.StableHash(DetRandom.ItemName(ingredient.type)), ingredient.stack);
-					value += (long)Math.Max(StackRules.ValueOf(ingredient.type), 1) * ingredient.stack;
 				}
 				recipeKeys[i] = key;
-				// A shell has no ingredient: its ingredients are planned to be worth about what it makes
-				if (shell[i]) value = (long)Math.Max(StackRules.ValueOf(recipe.createItem.type), 1) * recipe.createItem.stack;
-				ingredientValues[i] = value;
 				if (!shell[i]) Obtainability.RecipeResults.Add(recipe.createItem.type);
+			}
+			// The values once every recipe is known: a value-0 ingredient is worth what its own recipe costs (EffectiveValue)
+			effectiveValues = null;
+			for (int i = 0; i < count; i++)
+			{
+				// A shell has no ingredient: its ingredients are planned to be worth about what it makes
+				ingredientValues[i] = shell[i] ? EffectiveValue(originalTypes[i]) * originalStacks[i] : originalIngredients[i].Sum(p => EffectiveValue(p.type) * p.stack);
 			}
 			int[][] decraft = ItemID.Sets.CraftingRecipeIndices;
 			originalDecraft = new int[decraft.Length][];
@@ -193,6 +254,8 @@ namespace UltimateRandomizer.Common.Features
 			originalDecraft = null;
 			originalDisabled = null;
 			shell = null;
+			effectiveValues = null;
+			madeBy = null;
 			shellRecipes.Clear();
 		}
 
