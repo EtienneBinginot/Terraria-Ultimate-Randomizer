@@ -225,6 +225,7 @@ Tests: {
 	PickaxePerMiningLevel: Chaque niveau de minage a une pioche au tier de ses minerais (fabriquée, trouvée ou garantie)
 	RecipeRandomizationShare: La plupart des recettes vanilla changent de résultat (85 %), ou de résultat ou d'ingrédients (95 %) ; les raisons sont journalisées
 	RecipeResultsConserved: Les recettes aléatoires s'échangent leurs résultats : chaque résultat vanilla est encore fabriqué par une recette, aucun par plus de recettes qu'en vanilla (Zénith, Épée en bois d'ombre)
+	RecipeRepicksKeepAvailability: Échanger les résultats des recettes faisables trop tôt ne rend jamais un objet impossible à obtenir
 	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement
 	FurnitureSurprise: Les recettes de meubles, de blocs et de murs donnent autre chose selon la chance de surprise des meubles
 	ProtectedRecipesDoable: Les recettes des stations de progression et des objets protégés sont faisables à leur niveau

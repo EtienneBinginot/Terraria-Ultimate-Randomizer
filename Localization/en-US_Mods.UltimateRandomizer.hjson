@@ -225,6 +225,7 @@ Tests: {
 	PickaxePerMiningLevel: Each mining level has a pickaxe by the tier of its ores (crafted, found or guaranteed)
 	RecipeRandomizationShare: Most vanilla recipes change their result (85%) or their result or ingredients (95%); logs the reasons
 	RecipeResultsConserved: Randomized recipes swap their results: every vanilla result is still made by a recipe, none by more recipes than in vanilla (Zenith, Shadewood Sword)
+	RecipeRepicksKeepAvailability: Swapping the results of the recipes doable too early never makes an item impossible to get
 	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks
 	FurnitureSurprise: Furniture, block and wall recipes give something else with the furniture surprise chance
 	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
