@@ -129,6 +129,7 @@ Tests: {
 	DropPermutationAccess: Expert-only, master-only and special-seed drops only move to places with the same restrictions
 	DropPermutationRuntime: Each enemy's drop rules really follow the permutation: silenced vanilla drops are rolled somewhere, nothing drops twice, variants keep their own drops, enemies without drops get one
 	DropPermutationStable: Removing one drop entry from the permutation only changes the content of very few other entries
+	DropPermutationSurprise: Permutation surprises replace about the set share of the shuffled drops, never a material nor the last copy of an item without another source
 	CodexShowsLocked: Codex interface: locked drops are greyed with the boss that unlocks them, with no chance
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
@@ -1380,12 +1381,22 @@ Configs: {
 
 		DropTableStyle: {
 			Label: "Enemy drop style"
-			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets one random extra drop (chance below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses keep the vanilla-like extras in the permutation style."
+			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. A few of them become surprises (see below). Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets a few random extra drops with vanilla-like rates (see below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses keep the vanilla-like extras in the permutation style."
 		}
 
-		PermutationExtraChance: {
-			Label: "Extra drop chance (permutation, %)"
-			Tooltip: "Permutation style only: about the chance of the one random extra drop every enemy gets on top of its shuffled original drops; more while some of the enemy's drops are still locked by progression. Loot abundance does not change it."
+		PermutationExtraSlots: {
+			Label: "Extra drops per enemy (permutation)"
+			Tooltip: "Permutation style only: number of random extra drops every enemy gets on top of its shuffled original drops, with vanilla-like rates (1/1 to 1/10 for potions and ammo, 1/15 to 1/150 for equipment...) multiplied by the drop rate multiplier, and higher while some of the enemy's drops are still locked by progression. Loot abundance does not change them. 0 = none."
+		}
+
+		PermutationExtraWeights: {
+			Label: "Extra drop weights (permutation)"
+			Tooltip: "Permutation style only: relative chance of each kind of item for the random extra drops. 0 = never. By default no materials, ores or bars: the shuffled original drops already give plenty."
+		}
+
+		PermutationSurpriseChance: {
+			Label: "Surprise drops (permutation, %)"
+			Tooltip: "Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same chance and conditions. An item is only replaced when it can still be found elsewhere (another enemy, a shop, a recipe, a bag...)."
 		}
 
 		EnemiesWithoutDropsCanDrop: {
@@ -1545,6 +1556,115 @@ Configs: {
 	}
 
 	CategoryWeights: {
+		Tooltip: ""
+
+		Material: {
+			Label: Materials
+			Tooltip: ""
+		}
+
+		OreBar: {
+			Label: Ores and bars
+			Tooltip: ""
+		}
+
+		Potion: {
+			Label: Potions
+			Tooltip: ""
+		}
+
+		Food: {
+			Label: Food
+			Tooltip: ""
+		}
+
+		Ammo: {
+			Label: Ammo
+			Tooltip: ""
+		}
+
+		WeaponMelee: {
+			Label: Melee weapons
+			Tooltip: ""
+		}
+
+		WeaponRanged: {
+			Label: Ranged weapons
+			Tooltip: ""
+		}
+
+		WeaponMagic: {
+			Label: Magic weapons
+			Tooltip: ""
+		}
+
+		WeaponSummon: {
+			Label: Summon weapons
+			Tooltip: ""
+		}
+
+		WeaponOther: {
+			Label: Other weapons
+			Tooltip: ""
+		}
+
+		Armor: {
+			Label: Armor
+			Tooltip: ""
+		}
+
+		Accessory: {
+			Label: Accessories
+			Tooltip: ""
+		}
+
+		Tool: {
+			Label: Tools
+			Tooltip: ""
+		}
+
+		Block: {
+			Label: Blocks and walls
+			Tooltip: ""
+		}
+
+		Furniture: {
+			Label: Furniture
+			Tooltip: ""
+		}
+
+		MountPet: {
+			Label: Mounts and pets
+			Tooltip: ""
+		}
+
+		Vanity: {
+			Label: Vanity
+			Tooltip: ""
+		}
+
+		Dye: {
+			Label: Dyes
+			Tooltip: ""
+		}
+
+		Critter: {
+			Label: Critters
+			Tooltip: ""
+		}
+
+		Bag: {
+			Label: Bags and crates
+			Tooltip: ""
+		}
+
+		Misc: {
+			Label: Miscellaneous
+			Tooltip: ""
+		}
+	}
+
+	PermutationExtraWeights: {
 		Tooltip: ""
 
 		Material: {

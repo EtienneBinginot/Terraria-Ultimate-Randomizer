@@ -53,6 +53,8 @@ namespace UltimateRandomizer.Common.Core
 		public const int Uncraftable = 40;
 		// The permutation of the enemies' original drops (DropPermutation), keyed by group
 		public const int DropPermutation = 41;
+		// The surprises of the drop permutation (DropPermutation.Surprises), keyed by place
+		public const int DropSurprise = 42;
 		public const int Fallback = 0xFA11;
 	}
 

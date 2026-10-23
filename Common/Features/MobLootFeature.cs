@@ -120,10 +120,12 @@ namespace UltimateRandomizer.Common.Features
 		// entry does not drop (its chance goes to the others: RandomNpcDropRule.Redistribute), except on a lucky kill
 		public int LockGap;
 		// The original item of a replaced original drop (0: an extra or guaranteed drop). Permutation style: the item itself
-		// (it moved from another enemy, it is not replaced)
+		// (it moved from another enemy, it is not replaced), or for a surprise the item of the content it replaced
 		public int Original;
 		// Permutation style: an original entry RandomNpcDropRule rolls itself (its vanilla rule is silent, PermutableRule)
 		public bool Rolled;
+		// Permutation style: a moved content replaced by a random item (PermutationSurpriseChance)
+		public bool Surprise;
 
 		public bool Locked => LockGap > 0;
 	}
@@ -363,11 +365,12 @@ namespace UltimateRandomizer.Common.Features
 		// lucky: that final plan as it is (hints, findability). Otherwise what drops now: the entries progression still locks
 		// are left out (includeLocked: kept, flagged, for the codex) and their chances go to the others (Redistribute)
 		// abundance: LootConfig.LootAbundance when null (tests pass an explicit value)
-		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true, float? abundance = null, bool includeLocked = false)
+		// style: the configured one when null (the pacing model compares both)
+		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true, float? abundance = null, bool includeLocked = false, DropTableStyle? style = null)
 		{
 			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
-			List<PlannedDrop> drops = OriginalDrops(netId, type);
-			drops.AddRange(ExtraDrops(netId, type, expert, abundance));
+			List<PlannedDrop> drops = OriginalDrops(netId, type, style);
+			drops.AddRange(ExtraDrops(netId, type, expert, abundance, style: style));
 			if (guaranteed) drops.AddRange(GuaranteedSources.For(type));
 			if (lucky)
 			{
@@ -397,7 +400,7 @@ namespace UltimateRandomizer.Common.Features
 					// Entries vanilla still rolls (rules left running) are not replaced: they drop as they are
 					int lockGap = placed.Rolled && !DropHelper.KeepOriginal(entry.itemId) ? DropHelper.LockGap(entry.itemId, minLimit) : 0;
 					drops.Add(new PlannedDrop { Item = entry.itemId, StackMin = entry.stackMin, StackMax = entry.stackMax, Chance = entry.dropRate, Conditions = entry.conditions,
-						Original = entry.itemId, LockGap = lockGap, Rolled = placed.Rolled });
+						Original = placed.Surprise ? placed.Replaced : entry.itemId, LockGap = lockGap, Rolled = placed.Rolled, Surprise = placed.Surprise });
 				}
 				return drops;
 			}
@@ -472,15 +475,17 @@ namespace UltimateRandomizer.Common.Features
 		// wildRng: at kill time only, the madness tail (WildDropChance) may replace an unlocked item by one above the limit;
 		// the chance stays the one of the planned item, so the setting really is a share of the drops. wildMultiplier: scales
 		// that chance (JackpotWorth), 0 = no madness
-		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, float? abundance = null, Random wildRng = null, float wildMultiplier = 1f)
+		// style: the configured one when null
+		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, float? abundance = null, Random wildRng = null, float wildMultiplier = 1f, DropTableStyle? style = null)
 		{
 			if (wildMultiplier <= 0f) wildRng = null;
 			List<PlannedDrop> drops = new();
 			LootConfig cfg = LootConfig.Instance;
+			DropTableStyle tableStyle = style ?? cfg.DropTableStyle;
 			float abundanceFactor = Math.Max(0f, abundance ?? cfg.LootAbundance);
 			// Split between the number of slots and their chances, so that the expected item count follows the factor
 			float slotFactor = (float)Math.Sqrt(abundanceFactor);
-			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal) return drops;
+			if (!cfg.RandomizeMobDrops || tableStyle == DropTableStyle.MirrorOriginal) return drops;
 			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) return drops;
 			List<DropRateInfo> original = LootSnapshot.ForNpc(netId);
 			bool isBoss = NpcTiers.IsBoss(type);
@@ -492,15 +497,15 @@ namespace UltimateRandomizer.Common.Features
 			int sourceTier = NpcTiers.EffectiveTier(type);
 			int minLimit = MinLimit(type);
 			bool critter = NPCID.Sets.CountsAsCritter[type];
-			// Permutation: one random extra slot (PermutationExtraChance, plus the chances of the locked entries:
-			// Redistribute), no small frequent drops. The enemies it leaves out (bosses, critters) keep the vanilla-like extras
-			bool permutation = DropPermutation.InStyle(netId);
-			float permutationChance = Math.Min(1f, Math.Max(0f, cfg.PermutationExtraChance / 100f));
-			DropTableStyle style = cfg.DropTableStyle == DropTableStyle.Permutation ? DropTableStyle.VanillaLike : cfg.DropTableStyle;
-			int slots = permutation ? (permutationChance > 0f ? 1 : 0)
+			// Permutation: PermutationExtraSlots random slots at vanilla-like rates, not scaled by abundance, with their own
+			// weights (no materials: the moved original drops give them), plus the chances of the locked entries
+			// (Redistribute); no small frequent drops. The enemies it leaves out (bosses, critters) keep the vanilla-like extras
+			bool permutation = DropPermutation.InStyle(netId, tableStyle);
+			DropTableStyle slotStyle = tableStyle == DropTableStyle.Permutation ? DropTableStyle.VanillaLike : tableStyle;
+			int slots = permutation ? Math.Clamp(cfg.PermutationExtraSlots, 0, 3)
 				: isBoss
-				? SlotCount(npcKey, true, critter, cfg.BossDropSlotsMin, cfg.BossDropSlotsMax, style, slotFactor)
-				: SlotCount(npcKey, false, critter, cfg.DropSlotsMin, cfg.DropSlotsMax, style, slotFactor);
+				? SlotCount(npcKey, true, critter, cfg.BossDropSlotsMin, cfg.BossDropSlotsMax, slotStyle, slotFactor)
+				: SlotCount(npcKey, false, critter, cfg.DropSlotsMin, cfg.DropSlotsMax, slotStyle, slotFactor);
 
 			for (int slot = 0; slot < slots; slot++)
 			{
@@ -514,15 +519,12 @@ namespace UltimateRandomizer.Common.Features
 					TierJitterUp = 1,
 					AllowJackpot = true,
 					IgnoreGating = true,
-					MinLimit = minLimit
+					MinLimit = minLimit,
+					Weights = permutation ? cfg.PermutationExtraWeights : null
 				};
 				int item = ItemPool.Roll(request, out int tier);
 				float chance;
-				if (permutation)
-				{
-					chance = permutationChance;
-				}
-				else if (style == DropTableStyle.Simple)
+				if (slotStyle == DropTableStyle.Simple)
 				{
 					chance = isBoss ? 1f : Math.Min(1f, cfg.DropChance / 100f / (1 + Math.Max(0, tier - sourceTier)) * slotFactor);
 				}
@@ -530,7 +532,7 @@ namespace UltimateRandomizer.Common.Features
 				{
 					// A boss always drops its first extra slot
 					int denominator = isBoss && slot == 0 ? 1 : DropRates.Denominator(item, tier, sourceTier, isBoss, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item, 7));
-					chance = Math.Min(1f, cfg.DropRateMultiplier * slotFactor / denominator);
+					chance = Math.Min(1f, cfg.DropRateMultiplier * (permutation ? 1f : slotFactor) / denominator);
 				}
 				int lockGap = DropHelper.LockGap(item, minLimit);
 				item = Wild(request, item, lockGap, wildRng, wildMultiplier, out int gap);

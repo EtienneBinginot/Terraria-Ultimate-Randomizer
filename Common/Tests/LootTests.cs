@@ -47,6 +47,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("DropPermutationAccess", DropPermutationAccess);
 			TestRunner.Register("DropPermutationRuntime", DropPermutationRuntime);
 			TestRunner.Register("DropPermutationStable", DropPermutationStable);
+			TestRunner.Register("DropPermutationSurprise", DropPermutationSurprise);
 		}
 
 		// Seeds of the permutation tests: the world's and two fixed ones (DropPermutation.Build is pure in the seed)
@@ -56,7 +57,8 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
 			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
-			DropPermutation.WorldPlan plan = DropPermutation.Build(seed);
+			// Without surprises: these tests check the permutation itself (DropPermutationSurprise checks the surprises)
+			DropPermutation.WorldPlan plan = DropPermutation.Build(seed, 0f);
 			if (plan.Places.Count < 30) Check.Skip($"only {plan.Places.Count} permutable drop entries");
 			return plan;
 		}
@@ -113,14 +115,19 @@ namespace UltimateRandomizer.Common.Tests
 				for (int p = 0; p < current.Places.Count; p++)
 				{
 					DropPermutation.Place place = current.Places[p];
-					if (!planned.Contains(place.Entry.itemId) && failures.Count < 20) failures.Add($"{Lang.GetItemNameValue(place.Entry.itemId)} (from {NpcName(place.Owner)}) is in no enemy's drops");
+					// Surprises may take every copy of an item found elsewhere (DropPermutation.OtherSources), never the last one otherwise
+					if (!planned.Contains(place.Entry.itemId) && !current.OtherSources.Contains(place.Entry.itemId) && failures.Count < 20)
+					{
+						failures.Add($"{Lang.GetItemNameValue(place.Entry.itemId)} (from {NpcName(place.Owner)}) is in no enemy's drops");
+					}
 					List<PlannedDrop> drops = RandomNpcDropRule.OriginalDrops(place.Owner, place.Owner, DropTableStyle.Permutation);
 					DropPermutation.Place source = current.Places[current.ContentOf[p]];
 					if (place.Index >= drops.Count) continue;
 					PlannedDrop drop = drops[place.Index];
-					if ((drop.Item != source.Entry.itemId || drop.Conditions != place.Entry.conditions || !drop.Rolled) && failures.Count < 20)
+					int expected = current.Surprised[p] ? current.ByUnit[place.Owner][place.Index].Entry.itemId : source.Entry.itemId;
+					if ((drop.Item != expected || drop.Original != source.Entry.itemId || drop.Surprise != current.Surprised[p] || drop.Conditions != place.Entry.conditions || !drop.Rolled) && failures.Count < 20)
 					{
-						failures.Add($"{NpcName(place.Owner)} entry {place.Index}: {Lang.GetItemNameValue(drop.Item)} planned, {Lang.GetItemNameValue(source.Entry.itemId)} expected with the place's conditions");
+						failures.Add($"{NpcName(place.Owner)} entry {place.Index}: {Lang.GetItemNameValue(drop.Item)} planned, {Lang.GetItemNameValue(expected)} expected with the place's conditions");
 					}
 				}
 			}
@@ -222,6 +229,77 @@ namespace UltimateRandomizer.Common.Tests
 			if (removals == 0) Check.Skip("no group large enough");
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation stability: {removals} removals, {changedTotal} assignments changed in all");
 			Check.All(failures, "Drop permutation stability");
+		}
+
+		// The surprises of the permutation, with explicit chances (not the config): about that share of the candidates becomes a
+		// random item with the content's chance and the place's conditions; never a material, ore, bar or synthetic content;
+		// an item without another source keeps a copy even when every candidate is surprised; a higher chance only adds
+		// surprises (each place has its own roll), with the same items
+		private static void DropPermutationSurprise()
+		{
+			List<string> failures = new();
+			void Fail(string message)
+			{
+				if (failures.Count < 25) failures.Add(message);
+			}
+			const float low = 0.1f, high = 0.25f;
+			int checkedSeeds = 0;
+			string shares = "";
+			foreach (int seed in PermutationSeeds())
+			{
+				DropPermutation.WorldPlan none = PermutationPlan(seed);
+				DropPermutation.WorldPlan few = DropPermutation.Build(seed, low);
+				DropPermutation.WorldPlan many = DropPermutation.Build(seed, high);
+				DropPermutation.WorldPlan all = DropPermutation.Build(seed, 1f);
+				if (none.Surprised.Any(s => s)) Fail($"seed {seed}: surprises at 0 %");
+				foreach ((float chance, DropPermutation.WorldPlan plan) in new[] { (low, few), (high, many), (1f, all) })
+				{
+					int candidates = 0, surprised = 0;
+					for (int p = 0; p < plan.Places.Count; p++)
+					{
+						DropPermutation.Place place = plan.Places[p];
+						DropPermutation.Place source = plan.Places[plan.ContentOf[p]];
+						DropPermutation.Placed placed = plan.ByUnit[place.Owner][place.Index];
+						DropRateInfo content = source.Entry;
+						if (plan.SurpriseCandidate[p]) candidates++;
+						if (!plan.Surprised[p])
+						{
+							if (placed.Surprise || placed.Entry.itemId != content.itemId) Fail($"seed {seed} at {chance:P0}: {NpcName(place.Owner)} entry {place.Index} changed without being a surprise");
+							continue;
+						}
+						surprised++;
+						string where = $"seed {seed} at {chance:P0}: {NpcName(place.Owner)} entry {place.Index} ({Lang.GetItemNameValue(content.itemId)})";
+						if (!plan.SurpriseCandidate[p]) Fail($"{where} surprised but not a candidate");
+						if (!DropPermutation.SurpriseKind(content.itemId)) Fail($"{where}: a material, ore or bar surprised");
+						if (source.Synthetic) Fail($"{where}: a synthetic content surprised");
+						if (!placed.Surprise || placed.Replaced != content.itemId || placed.Entry.dropRate != content.dropRate || placed.Entry.conditions != place.Entry.conditions)
+						{
+							Fail($"{where}: the surprise {Lang.GetItemNameValue(placed.Entry.itemId)} lost the content's chance or the place's conditions");
+						}
+						// Monotone in the chance, with the same item
+						if (plan == few && (!many.Surprised[p] || many.ByUnit[place.Owner][place.Index].Entry.itemId != placed.Entry.itemId))
+						{
+							Fail($"{where}: a surprise at {low:P0} is not the same at {high:P0}");
+						}
+					}
+					shares += $" {seed}@{chance:P0}: {surprised}/{candidates}";
+					if (candidates < 50) continue;
+					checkedSeeds++;
+					double share = surprised / (double)candidates;
+					double tolerance = 4 * Math.Sqrt(chance * (1 - chance) / candidates) + 0.02;
+					if (Math.Abs(share - chance) > tolerance) Fail($"seed {seed}: {share:P1} of {candidates} candidates surprised at {chance:P0}");
+				}
+				// Every candidate surprised: an item without another source still drops somewhere
+				HashSet<int> before = none.ByUnit.Values.SelectMany(t => t).Select(x => x.Entry.itemId).ToHashSet();
+				HashSet<int> after = all.ByUnit.Values.SelectMany(t => t).Select(x => x.Entry.itemId).ToHashSet();
+				foreach (int item in before.Where(i => !after.Contains(i) && !all.OtherSources.Contains(i)))
+				{
+					Fail($"seed {seed}: the surprises took every copy of {Lang.GetItemNameValue(item)}, found nowhere else");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation surprises (surprised/candidates):{shares}");
+			Check.All(failures, "Drop permutation surprises");
+			if (checkedSeeds == 0) Check.Skip("fewer than 50 surprise candidates");
 		}
 
 		// Contents only move within their tier group (the origin's tier is one of the group's tiers, always the base tier of
@@ -347,7 +425,8 @@ namespace UltimateRandomizer.Common.Tests
 				if (NpcTiers.IsBoss(BossParts.Owner(netId))) continue;
 				foreach (PlannedDrop drop in RandomNpcDropRule.Plan(netId, Main.expertMode, guaranteed: false, includeLocked: true))
 				{
-					if (drop.Extra || drop.Original <= ItemID.None || DropHelper.KeepOriginal(drop.Original) || drop.Item == drop.Original) continue;
+					// Permutation surprises are rolled by our rule, not swapped as they spawn
+					if (drop.Extra || drop.Surprise || drop.Original <= ItemID.None || DropHelper.KeepOriginal(drop.Original) || drop.Item == drop.Original) continue;
 					if (drop.Locked && lockedNpc == 0)
 					{
 						lockedNpc = netId;
@@ -1090,13 +1169,26 @@ namespace UltimateRandomizer.Common.Tests
 			LootConfig cfg = LootConfig.Instance;
 			if (cfg.RandomizeMobDrops && cfg.DropTableStyle == DropTableStyle.Permutation && GeneralConfig.Instance.RandomizerMode != RandomizerMode.Shuffle)
 			{
-				// Permutation: one extra slot (none at 0 %), no small frequent drops
-				int expectedSlots = cfg.PermutationExtraChance > 0 ? 1 : 0;
+				// Permutation: PermutationExtraSlots slots whatever the abundance, at vanilla-like rates (never above
+				// DropRateMultiplier / 1), no small frequent drops, and no materials, ores or bars when their weights are 0
+				int expectedSlots = Math.Clamp(cfg.PermutationExtraSlots, 0, 3);
 				foreach (int type in enemies.Where(DropPermutation.IsPermutable).Take(40))
 				{
 					List<PlannedDrop> extras = RandomNpcDropRule.ExtraDrops(type, type, Main.expertMode, 3f);
-					if (extras.Count != expectedSlots) failures.Add($"{NpcName(type)}: {extras.Count} random drops planned in the permutation style, {expectedSlots} expected");
-					else if (extras.Count == 1 && Math.Abs(extras[0].Chance - Math.Min(1f, cfg.PermutationExtraChance / 100f)) > 1e-4f) failures.Add($"{NpcName(type)}: extra drop at {extras[0].Chance:P1}, {cfg.PermutationExtraChance} % expected");
+					if (extras.Count != expectedSlots || RandomNpcDropRule.ExtraDrops(type, type, Main.expertMode, 1f).Count != expectedSlots)
+					{
+						failures.Add($"{NpcName(type)}: {extras.Count} random drops planned in the permutation style, {expectedSlots} expected");
+						continue;
+					}
+					foreach (PlannedDrop extra in extras)
+					{
+						if (extra.Chance <= 0f || extra.Chance > Math.Min(1f, cfg.DropRateMultiplier) + 1e-4f) failures.Add($"{NpcName(type)}: extra drop at {extra.Chance:P1}, at most {Math.Min(1f, cfg.DropRateMultiplier):P0}");
+						ItemCategory category = ItemPool.IsValid(extra.Item) ? ItemPool.Info[extra.Item].Category : ItemCategory.Misc;
+						if (cfg.PermutationExtraWeights.Get(category) == 0 && category is ItemCategory.Material or ItemCategory.OreBar)
+						{
+							failures.Add($"{NpcName(type)}: {Lang.GetItemNameValue(extra.Item)} ({category}) as an extra drop, its weight is 0");
+						}
+					}
 				}
 			}
 			else if (cfg.RandomizeMobDrops && cfg.DropTableStyle != DropTableStyle.MirrorOriginal && GeneralConfig.Instance.RandomizerMode != RandomizerMode.Shuffle)
@@ -1119,7 +1211,7 @@ namespace UltimateRandomizer.Common.Tests
 			LootConfig cfg = LootConfig.Instance;
 			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal) Check.Skip("random enemy drops are off");
 			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) Check.Skip("shuffle mode has no extra drops");
-			if (cfg.DropTableStyle == DropTableStyle.Permutation) Check.Skip("the permutation style has one extra drop of fixed chance, not scaled by abundance");
+			if (cfg.DropTableStyle == DropTableStyle.Permutation) Check.Skip("the permutation style's extra drops are not scaled by abundance");
 			int[] enemies = { NPCID.BlueSlime, NPCID.Zombie, NPCID.DemonEye, NPCID.CaveBat, NPCID.Skeleton, NPCID.Vulture, NPCID.Antlion, NPCID.Harpy, NPCID.GoblinScout, NPCID.Piranha };
 			float[] factors = { 1f, 2f, 4f };
 			double[] expected = new double[factors.Length];

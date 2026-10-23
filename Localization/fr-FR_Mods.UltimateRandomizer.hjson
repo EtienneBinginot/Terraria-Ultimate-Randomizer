@@ -129,6 +129,7 @@ Tests: {
 	DropPermutationAccess: Les drops réservés au mode expert, au mode maître ou à une graine spéciale ne vont qu'à des emplacements avec les mêmes restrictions
 	DropPermutationRuntime: Les règles de drop de chaque ennemi suivent vraiment la permutation : les drops vanilla réduits au silence tombent ailleurs, rien ne tombe en double, les variantes gardent leurs propres drops, les ennemis sans drop en reçoivent un
 	DropPermutationStable: Retirer un drop de la permutation ne change le contenu que de très peu d'autres drops
+	DropPermutationSurprise: Les surprises de la permutation remplacent à peu près la part réglée des drops mélangés, jamais un matériau ni le dernier exemplaire d'un objet sans autre source
 	CodexShowsLocked: Interface du codex : les butins verrouillés sont grisés avec le boss qui les débloque, sans chance
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
@@ -1380,12 +1381,22 @@ Configs: {
 
 		DropTableStyle: {
 			Label: "Style du loot des ennemis"
-			Tooltip: "Permutation (par défaut) : les drops d'origine des ennemis sont mélangés entre ennemis du même niveau ; chaque objet garde sa chance et sa quantité, et prend les conditions de l'ennemi qui le reçoit. Les ennemis sans aucun drop en reçoivent un, aléatoire et de leur niveau, mélangé avec les autres. Chaque ennemi reçoit aussi un drop aléatoire en plus (chance ci-dessous). Façon vanilla : les drops d'origine sont remplacés, et chaque type d'ennemi a un nombre aléatoire de drops en plus (souvent peu, parfois beaucoup) avec des taux comme le jeu de base (1/1 pour les matériaux, 1/50 pour l'équipement...). Simple : drops remplacés, et chaque emplacement en plus a la chance fixe ci-dessous. Miroir de l'original : aucun drop en plus, seulement les drops d'origine (remplacés). En style permutation, les boss gardent les drops en plus façon vanilla."
+			Tooltip: "Permutation (par défaut) : les drops d'origine des ennemis sont mélangés entre ennemis du même niveau ; chaque objet garde sa chance et sa quantité, et prend les conditions de l'ennemi qui le reçoit. Quelques-uns deviennent des surprises (voir plus bas). Les ennemis sans aucun drop en reçoivent un, aléatoire et de leur niveau, mélangé avec les autres. Chaque ennemi reçoit aussi quelques drops aléatoires en plus, avec des taux comme le jeu de base (voir plus bas). Façon vanilla : les drops d'origine sont remplacés, et chaque type d'ennemi a un nombre aléatoire de drops en plus (souvent peu, parfois beaucoup) avec des taux comme le jeu de base (1/1 pour les matériaux, 1/50 pour l'équipement...). Simple : drops remplacés, et chaque emplacement en plus a la chance fixe ci-dessous. Miroir de l'original : aucun drop en plus, seulement les drops d'origine (remplacés). En style permutation, les boss gardent les drops en plus façon vanilla."
 		}
 
-		PermutationExtraChance: {
-			Label: "Chance du drop en plus (permutation, %)"
-			Tooltip: "Style permutation uniquement : chance approximative du drop aléatoire en plus que reçoit chaque ennemi, en plus de ses drops d'origine mélangés ; elle augmente tant que certains drops de l'ennemi sont encore bloqués par la progression. L'abondance du loot ne la change pas."
+		PermutationExtraSlots: {
+			Label: "Drops en plus par ennemi (permutation)"
+			Tooltip: "Style permutation uniquement : nombre de drops aléatoires en plus que reçoit chaque ennemi, en plus de ses drops d'origine mélangés, avec des taux comme le jeu de base (1/1 à 1/10 pour les potions et les munitions, 1/15 à 1/150 pour l'équipement...) multipliés par le multiplicateur de drops, et plus élevés tant que certains drops de l'ennemi sont encore bloqués par la progression. L'abondance du loot ne les change pas. 0 = aucun."
+		}
+
+		PermutationExtraWeights: {
+			Label: "Poids des drops en plus (permutation)"
+			Tooltip: "Style permutation uniquement : chance relative de chaque type d'objet pour les drops aléatoires en plus. 0 = jamais. Par défaut, ni matériaux, ni minerais, ni lingots : les drops d'origine mélangés en donnent déjà beaucoup."
+		}
+
+		PermutationSurpriseChance: {
+			Label: "Drops surprises (permutation, %)"
+			Tooltip: "Style permutation uniquement : part des drops mélangés (sauf matériaux, minerais et lingots) qui deviennent un objet aléatoire du niveau de l'ennemi, avec la même chance et les mêmes conditions. Un objet n'est remplacé que s'il reste trouvable ailleurs (un autre ennemi, une boutique, une recette, un sac...)."
 		}
 
 		EnemiesWithoutDropsCanDrop: {
@@ -1545,6 +1556,115 @@ Configs: {
 	}
 
 	CategoryWeights: {
+		Tooltip: ""
+
+		Material: {
+			Label: Matériaux
+			Tooltip: ""
+		}
+
+		OreBar: {
+			Label: Minerais et lingots
+			Tooltip: ""
+		}
+
+		Potion: {
+			Label: Potions
+			Tooltip: ""
+		}
+
+		Food: {
+			Label: Nourriture
+			Tooltip: ""
+		}
+
+		Ammo: {
+			Label: Munitions
+			Tooltip: ""
+		}
+
+		WeaponMelee: {
+			Label: Armes de mêlée
+			Tooltip: ""
+		}
+
+		WeaponRanged: {
+			Label: Armes à distance
+			Tooltip: ""
+		}
+
+		WeaponMagic: {
+			Label: Armes magiques
+			Tooltip: ""
+		}
+
+		WeaponSummon: {
+			Label: Armes d'invocation
+			Tooltip: ""
+		}
+
+		WeaponOther: {
+			Label: Autres armes
+			Tooltip: ""
+		}
+
+		Armor: {
+			Label: Armures
+			Tooltip: ""
+		}
+
+		Accessory: {
+			Label: Accessoires
+			Tooltip: ""
+		}
+
+		Tool: {
+			Label: Outils
+			Tooltip: ""
+		}
+
+		Block: {
+			Label: Blocs et murs
+			Tooltip: ""
+		}
+
+		Furniture: {
+			Label: Meubles
+			Tooltip: ""
+		}
+
+		MountPet: {
+			Label: Montures et familiers
+			Tooltip: ""
+		}
+
+		Vanity: {
+			Label: Vanité
+			Tooltip: ""
+		}
+
+		Dye: {
+			Label: Teintures
+			Tooltip: ""
+		}
+
+		Critter: {
+			Label: Critters
+			Tooltip: ""
+		}
+
+		Bag: {
+			Label: Sacs et caisses
+			Tooltip: ""
+		}
+
+		Misc: {
+			Label: Divers
+			Tooltip: ""
+		}
+	}
+
+	PermutationExtraWeights: {
 		Tooltip: ""
 
 		Material: {

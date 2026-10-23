@@ -245,7 +245,9 @@ namespace UltimateRandomizer.Common.Features
 			return (benches, wooden);
 		}
 
-		public static PacingResult Simulate(int hours, int seed)
+		// style: the enemy drop style simulated, the configured one when null. Permutation: the plan's original entries are
+		// the moved contents with their own chances (its surprises among them), the extras its vanilla-like slots
+		public static PacingResult Simulate(int hours, int seed, DropTableStyle? style = null)
 		{
 			Random rng = new(seed);
 			LootConfig loot = LootConfig.Instance;
@@ -284,14 +286,17 @@ namespace UltimateRandomizer.Common.Features
 						int killed = Killed(Kind(npcs, rng), biome, rng, swapChance, pool);
 						if (!plans.TryGetValue(killed, out List<PlannedDrop> plan))
 						{
-							plan = loot.RandomizeMobDrops ? RandomNpcDropRule.Plan(killed, Main.expertMode) : new List<PlannedDrop>();
+							plan = loot.RandomizeMobDrops ? RandomNpcDropRule.Plan(killed, Main.expertMode, style: style) : new List<PlannedDrop>();
 							plans[killed] = plan;
 						}
 						kills++;
-						// Permutation: the original entries drop as they are (no surprise)
-						bool permuted = DropPermutation.InStyle(killed);
+						// Permutation: the original entries drop as they are (no runtime surprise; the plan has its own)
+						bool permuted = DropPermutation.InStyle(killed, style);
 						foreach (PlannedDrop drop in plan)
 						{
+							// Entries this early hour can't drop (hardmode or later, another difficulty: a permuted content takes the
+							// conditions of its new place)
+							if (drop.Conditions != null && (!Findability.WorldAllows(drop.Conditions) || Findability.ConditionTier(drop.Conditions, 0) > 0)) continue;
 							if (rng.NextDouble() >= drop.Chance) continue;
 							items++;
 							if (!drop.Extra && !permuted && rng.NextDouble() < surprise)
@@ -300,7 +305,8 @@ namespace UltimateRandomizer.Common.Features
 							}
 							else if (Found(drop.Item))
 							{
-								if (drop.Guaranteed) fromGuaranteed++;
+								if (drop.Surprise) fromSurprise++;
+								else if (drop.Guaranteed) fromGuaranteed++;
 								else if (drop.Extra) fromExtra++;
 								else fromOriginal++;
 							}
