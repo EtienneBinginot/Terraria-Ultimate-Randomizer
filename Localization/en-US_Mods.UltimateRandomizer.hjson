@@ -190,7 +190,7 @@ Tests: {
 	WorldSummonsProtected: The summons found in the world stay protected, crafted ones are randomized
 	UpgradesOutOfPools: Life and mana upgrades are never rolled, guaranteed or used as ingredients, and drops keep them
 	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
-	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier
+	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier, or by the progression bosses of its tier
 	GuaranteedBiomeHosts: Each guaranteed item is carried by 3 or more enemies of one biome, with the same chance on each
 	GuaranteedSeveralSeeds: Every guaranteed item gets the enemies of a biome with other seeds
 	GuaranteedBiomesSpread: The guaranteed items of a tier are spread over several biomes
@@ -218,6 +218,7 @@ Tests: {
 	HardmodeOresOfWorld: Hardmode pair ores always count as findable and are never new ingredients
 	AltarDecisionKeepsCaches: An altar choosing a hardmode ore changes neither the guaranteed sources nor findability
 	PotOnlyUnfound: Pots only give guaranteed items nobody has found yet
+	GuaranteesNotBelowTier: No guaranteed item comes before its tier (Ancient Manipulator and Celestial Sigil from the Lunatic Cultist on)
 	IngredientReplacementsFindable: New ingredients are had (found or crafted) by the tier their recipe was rebuilt for
 	RecipesDoable: At least 85% of the randomized recipes can be made at their level
 	AvailabilityConsistent: The planned item availability matches an independent recomputation over the applied recipes

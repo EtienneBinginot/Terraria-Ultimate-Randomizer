@@ -499,7 +499,16 @@ namespace UltimateRandomizer.Common.Codex
 			GuaranteedSources.Requirement requirement = GuaranteedSources.Requirements.FirstOrDefault(r => r.Item == item);
 			bool required = requirement.Item == item;
 			List<int> hosts = GuaranteedSources.HostsOf(item).ToList();
-			if (hosts.Count > 0) AddCreature(GuaranteedFact(item, hosts, required ? requirement.Tier : 0));
+			if (hosts.Count > 0 && GuaranteedSources.TryPlacement(item, out GuaranteedSources.Placement placement) && placement.Boss)
+			{
+				// Carried by the progression bosses of its tier (no natural enemy there): a boss hint for each
+				foreach (int boss in hosts)
+				{
+					int bossTier = Math.Max(NpcTiers.BaseTier(boss), required ? requirement.Tier : 0);
+					options.Add(new HintFact { Item = item, Kind = HintKind.Boss, Npc = boss, Tier = bossTier, Band = Band(bossTier), Chance = CodexStats.LuckyChance(boss, item) });
+				}
+			}
+			else if (hosts.Count > 0) AddCreature(GuaranteedFact(item, hosts, required ? requirement.Tier : 0));
 			foreach (int recipe in RecipesMaking(item))
 			{
 				(int type, int stack)[] ingredients = PlannedIngredients(recipe);
