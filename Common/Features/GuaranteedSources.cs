@@ -942,6 +942,9 @@ namespace UltimateRandomizer.Common.Features
 
 		public static IReadOnlyList<int> HerbPlants => Herbs;
 
+		// The materials gathered directly in the world, ores apart, whatever this world is (the tiers from sources)
+		public static IEnumerable<int> GatheredMaterials => WorldMaterials.Select(m => m.item);
+
 		private static readonly int[] Herbs =
 		{
 			ItemID.Daybloom, ItemID.Moonglow, ItemID.Blinkroot, ItemID.Deathweed, ItemID.Waterleaf, ItemID.Fireblossom, ItemID.Shiverthorn,

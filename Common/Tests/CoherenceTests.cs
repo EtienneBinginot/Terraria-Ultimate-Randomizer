@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -17,6 +19,7 @@ namespace UltimateRandomizer.Common.Tests
 		public static void Register()
 		{
 			TestRunner.Register("TierCoherence", TierCoherence);
+			TestRunner.Register("TierAudit", TierAudit);
 		}
 
 		private const int Never = Findability.Never;
@@ -66,6 +69,82 @@ namespace UltimateRandomizer.Common.Tests
 				ItemPool.ClearJackpot();
 			}
 			Log("end");
+		}
+
+		// Tier audit: the doubtful vanilla items (not excluded, not banned) with their earliest vanilla source, in
+		// <SavePath>/UltimateRandomizer/TierAudit.tsv; counts and examples in client.log ("TierAudit:" lines). Reasons:
+		// raised (a source raised its true tier), earlier (a source is 2 tiers or more before its true tier), nosource (no
+		// drop, bag, shop, recipe nor gathering, not in KnownTiers: its rarity alone, for materials, blocks, ammo, potions,
+		// food and misc). Always passes; only writes that file
+		private static readonly ItemCategory[] NoSourceCategories =
+		{
+			ItemCategory.Material, ItemCategory.OreBar, ItemCategory.Block, ItemCategory.Ammo, ItemCategory.Potion, ItemCategory.Misc, ItemCategory.Food
+		};
+
+		private static void TierAudit()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			void Audit(string text) => ModContent.GetInstance<UltimateRandomizer>().Logger.Info("TierAudit: " + text);
+			StringBuilder tsv = new();
+			tsv.AppendLine("id\tinternal name\tname\tcategory\trarity tier\ttier\ttrue tier\tsource tier\tearliest source\treason");
+			Dictionary<string, List<int>> byReason = new() { ["raised"] = new(), ["earlier"] = new(), ["nosource"] = new() };
+			int audited = 0;
+			for (int type = 1; type < Math.Min(ItemID.Count, ItemPool.Info.Length); type++)
+			{
+				ItemInfo info = ItemPool.Info[type];
+				if (info.Excluded || info.Banned) continue;
+				audited++;
+				List<string> reasons = new();
+				if (info.SourceRaised) reasons.Add("raised");
+				if (info.SourceTier >= 0 && info.SourceTier <= info.TrueTier - 2) reasons.Add("earlier");
+				if (info.SourceTier < 0 && !ItemClassifier.HasKnownTier(type) && Array.IndexOf(NoSourceCategories, info.Category) >= 0) reasons.Add("nosource");
+				if (reasons.Count == 0) continue;
+				foreach (string reason in reasons) byReason[reason].Add(type);
+				tsv.AppendLine(string.Join("\t", type, ItemID.Search.GetName(type), Name(type), info.Category, info.RarityTier, info.Tier, info.TrueTier,
+					info.SourceTier, info.Source ?? "none", string.Join(",", reasons)));
+			}
+			string dir = Path.Combine(Main.SavePath, "UltimateRandomizer");
+			string path = Path.Combine(dir, "TierAudit.tsv");
+			Directory.CreateDirectory(dir);
+			File.WriteAllText(path, tsv.ToString());
+			Audit($"{audited} vanilla items audited, written to {path}");
+			foreach ((string reason, List<int> items) in byReason)
+			{
+				Audit($"{reason}: {items.Count} ({ByCategory(items)})");
+				List<int> examples = Spread(items, 30);
+				for (int k = 0; k < examples.Count; k += 10)
+				{
+					Audit($"{reason} examples: " + string.Join("; ", examples.Skip(k).Take(10).Select(t =>
+						$"{Name(t)} {ItemPool.Info[t].Tier}>{ItemPool.TrueTierOf(t)} (source {ItemPool.Info[t].SourceTier}: {ItemPool.Info[t].Source ?? "none"})")));
+				}
+			}
+			// The final enemy plan (every drop table, lucky: nothing gated) as rolled without the re-pick: the banned items it
+			// would hold are the only entries the bans change
+			if (!SeedSystem.WorldReady)
+			{
+				Audit("final enemy plan: no world loaded");
+				return;
+			}
+			int total = 0;
+			List<int> banned = new();
+			try
+			{
+				ItemPool.RepickDisabled = true;
+				foreach (int netId in LootSnapshot.Npcs.Keys.OrderBy(k => k))
+				{
+					foreach (PlannedDrop drop in RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true, guaranteed: false))
+					{
+						total++;
+						if (ItemPool.IsBanned(drop.Item)) banned.Add(drop.Item);
+					}
+				}
+			}
+			finally
+			{
+				ItemPool.RepickDisabled = false;
+			}
+			Audit($"final enemy plan: {banned.Count} of {total} planned drops are banned items before the re-pick" +
+				(banned.Count > 0 ? ": " + string.Join(", ", banned.GroupBy(t => t).OrderByDescending(g => g.Count()).Take(15).Select(g => $"{Name(g.Key)} x{g.Count()}")) : ""));
 		}
 
 		// 1. What a replaced ingredient may become (RecipePlanner.IngredientCandidates: found, never crafted, randomizable, no
@@ -190,7 +269,7 @@ namespace UltimateRandomizer.Common.Tests
 			public List<(int tile, int tier)> Tiles;
 		}
 
-		// 4. Items whose true tier RaiseByRecipes raised: by (tier > true tier), by category, what set it (the ingredient or
+		// 4. Items whose true tier RaiseByRecipes or RaiseBySources raised (TierAudit details the sources): by (tier > true tier), by category, what set it (the ingredient or
 		// station at the maximum of the earliest vanilla recipe, recomputed the same way from the final true tiers) and examples
 		private static void Raised()
 		{
@@ -216,7 +295,7 @@ namespace UltimateRandomizer.Common.Tests
 					eval.Parts.Add((best, choices.Length == 0 ? Tiers.Max : TierFor(best)));
 				}
 				IEnumerable<int> tiles = i < stored ? RecipeSystem.OriginalTiles(i) : recipe.requiredTile;
-				foreach (int tile in tiles.Where(t => t >= 0).Distinct()) eval.Tiles.Add((tile, ItemClassifier.StationTier(tile, placers, TierFor)));
+				foreach (int tile in tiles.Where(t => t >= 0).Distinct()) eval.Tiles.Add((tile, ItemClassifier.RaisingStationTier(tile, placers, TierFor)));
 				eval.Tier = eval.Parts.Select(p => p.tier).Concat(eval.Tiles.Select(t => t.tier)).DefaultIfEmpty(0).Max();
 				return eval;
 			}
@@ -239,9 +318,16 @@ namespace UltimateRandomizer.Common.Tests
 			Dictionary<int, int> culpritItems = new(), culpritTiles = new();
 			int mismatch = 0, byGathered = 0, byStation = 0, byOneTier = 0;
 			List<string> mismatches = new();
+			int byLoot = 0;
 			foreach (int item in raised)
 			{
 				if (ItemPool.TrueTierOf(item) - ItemPool.TierOf(item) == 1) byOneTier++;
+				// Dropped, in a bag or sold: raised by its sources, not only by its recipes
+				if (loot.Contains(item))
+				{
+					byLoot++;
+					continue;
+				}
 				if (!earliest.TryGetValue(item, out RecipeEval eval))
 				{
 					mismatch++;
@@ -260,7 +346,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (items.Count == 0 && tiles.Count > 0) byStation++;
 				if (items.Count > 0 && items.All(c => Findability.IsWorldMaterial(c) || OreMap.IsOre(c))) byGathered++;
 			}
-			Log($"raised: {byOneTier} by one tier only; {byStation} set by a station alone; {byGathered} set only by gathered or mined materials; " +
+			Log($"raised: {byOneTier} by one tier only; {byLoot} with a loot source (not recomputed here); {byStation} set by a station alone; {byGathered} set only by gathered or mined materials; " +
 				$"{mismatch} not recomputed exactly{(mismatches.Count > 0 ? ": " + string.Join(", ", mismatches) : "")}");
 			string Culprit(int c) => $"{Name(c)} x{culpritItems[c]} (tier {TierFor(c)}, rarity tier {(ItemPool.IsValid(c) ? ItemPool.Info[c].RarityTier : -1)}, " +
 				$"found {Show(Findability.Tier(c))}{(loot.Contains(c) ? ", dropped/sold" : "")}{(Findability.IsWorldMaterial(c) ? ", gathered" : "")}" +
@@ -268,7 +354,7 @@ namespace UltimateRandomizer.Common.Tests
 			List<int> topItems = culpritItems.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Select(p => p.Key).Take(40).ToList();
 			for (int k = 0; k < topItems.Count; k += 10) Log("raised by ingredient: " + string.Join("; ", topItems.Skip(k).Take(10).Select(Culprit)));
 			Log("raised by station: " + string.Join("; ", culpritTiles.OrderByDescending(p => p.Value).ThenBy(p => p.Key)
-				.Select(p => $"{StationName(p.Key)} x{p.Value} ({Stations.Info(p.Key).Kind}, tier {ItemClassifier.StationTier(p.Key, placers, TierFor)})")));
+				.Select(p => $"{StationName(p.Key)} x{p.Value} ({Stations.Info(p.Key).Kind}, tier {ItemClassifier.RaisingStationTier(p.Key, placers, TierFor)})")));
 			string Example(int item)
 			{
 				string head = $"{Name(item)} [{ItemPool.Info[item].Category}] {ItemPool.TierOf(item)}>{ItemPool.TrueTierOf(item)}";

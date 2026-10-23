@@ -118,6 +118,7 @@ Tests: {
 	JackpotChests: Les coffres jackpot sont choisis de la même façon à chaque fois parmi les coffres éligibles et contiennent des objets utiles au-dessus de leur plafond
 	PlanDiff: Mesure à quel point le mur du mode difficile change le plan de ce monde (recettes, trouvabilité, butins garantis, butins des monstres) par rapport aux anciennes règles (dans le journal)
 	TierCoherence: Mesure, pour la refonte des recettes, les matériaux de chaque palier, les stations de progression, les recettes sans ingrédient du palier de leur résultat, les paliers relevés et la traîne des coffres jackpot (dans le journal)
+	TierAudit: Liste dans TierAudit.tsv les objets vanilla dont le palier semble douteux (relevé par leurs sources, une source bien plus précoce, ou aucune source), et compte les objets bannis du plan des monstres (dans le journal)
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires

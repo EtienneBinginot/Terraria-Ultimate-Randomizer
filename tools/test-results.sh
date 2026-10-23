@@ -14,6 +14,9 @@ grep -n "\[UltimateRandomizer\]: PlanDiff" "$LOG" | tail -13
 # TierCoherence (measurements for the recipe redesign): every line of its last run
 tc=$(grep -n "\[UltimateRandomizer\]: TierCoherence: begin" "$LOG" | tail -1 | cut -d: -f1)
 [ -n "$tc" ] && sed -n "${tc},\$p" "$LOG" | grep "\[UltimateRandomizer\]: TierCoherence:" | sed 's/^.*\]: TierCoherence:/TierCoherence:/'
+# TierAudit (doubtful item tiers, full list in TierAudit.tsv): every line of its last run
+ta=$(grep -n "\[UltimateRandomizer\]: TierAudit: [0-9]* vanilla items audited" "$LOG" | tail -1 | cut -d: -f1)
+[ -n "$ta" ] && sed -n "${ta},\$p" "$LOG" | grep "\[UltimateRandomizer\]: TierAudit:" | sed 's/^.*\]: TierAudit:/TierAudit:/'
 sed -n "${start}p" "$LOG"
 sed -n "$((start + 1)),\$p" "$LOG" | awk '/^  \[/{print; next} {exit}' | grep -v "^  \[Passed\]"
 echo "--- errors logged by the mod since the last load:"
