@@ -34,7 +34,8 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool RandomizeRecipes;
 
-		// Caps the value of randomized results (RecipeValueGuard); off: any result of the original's category and tier
+		// Weighs a randomized recipe's result against its new ingredients (RecipeValueGuard): ingredients raised when the result
+		// is worth too much more
 		[DefaultValue(false)]
 		public bool LimitRecipeValue;
 
@@ -52,7 +53,7 @@ namespace UltimateRandomizer.Common.Configs
 		public bool DisableDecraftOfRandomizedResults;
 
 		// Share of the randomized recipes that swap their result with another recipe of the same tier (by pairs: every item
-		// stays craftable), their ingredients rebuilt for the item they now give
+		// stays craftable), their ingredients rebuilt for the item they now give. Each recipe otherwise keeps its own result
 		[Range(0f, 100f)]
 		[Increment(1f)]
 		[DefaultValue(10f)]

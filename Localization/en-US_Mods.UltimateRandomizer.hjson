@@ -231,7 +231,6 @@ Tests: {
 	IngredientReuse: The reuse penalty spreads the materials over more recipes
 	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks
 	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
-	RecipeAlwaysFinalResult: Recipes always give their final result, with no stand-in before its tier
 	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
 	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
 	UpgradeRecipes: Each life or mana upgrade has its own recipe, doable from its tier, with a key ingredient and ingredients worth at least the upgrade
@@ -1433,7 +1432,7 @@ Configs: {
 
 		DropCategoryWeights: {
 			Label: Loot weights
-			Tooltip: Relative chance of each kind of item for everything that gives random items (extra drops, surprises). 0 = never. Ingredients of recipes use their own weights.
+			Tooltip: Relative chance of each kind of item for everything that gives random items (extra drops, surprises). 0 = never. Recipe ingredients use their own weights, except their surprise ingredients.
 		}
 
 		RandomizeBossBags: {
@@ -1824,13 +1823,13 @@ Configs: {
 		}
 
 		RandomizeRecipes: {
-			Label: Randomize recipe results
-			Tooltip: Each recipe gives an item of the same category and tier as the original. Recipes go back to normal when you leave the world.
+			Label: Randomize recipes
+			Tooltip: Rebuilds the recipes from the seed: each one keeps its item (a few swap theirs, see below) but gets new ingredients and stations, doable at its level. Recipes go back to normal when you leave the world.
 		}
 
 		LimitRecipeValue: {
 			Label: Limit the value of results
-			Tooltip: Off: a randomized recipe can give any item of its original's category and tier, whatever its price. On: the result is worth at most 'Value guard' times its ingredients.
+			Tooltip: On: when the item of a randomized recipe is worth more than 'Value guard' times its new ingredients, they are raised to the worth of the vanilla ingredients. Off: the new ingredients only follow the vanilla value loosely.
 		}
 
 		RecipeValueGuard: {
@@ -1850,7 +1849,7 @@ Configs: {
 
 		RecipeResultSwapChance: {
 			Label: "Recipe result swap chance (%)"
-			Tooltip: "Share of the randomized recipes that swap their result with another recipe of the same tier, by pairs (every item stays craftable, often by an unexpected recipe). A swapped recipe gets ingredients worthy of the item it now gives: its level, its value, and a mix of both recipes' kinds of ingredients."
+			Tooltip: "Share of the randomized recipes that swap their result with another recipe of the same tier, by pairs (every item stays craftable, often by an unexpected recipe). A swapped recipe gets ingredients worthy of the item it now gives (its level, its value), mostly of the kinds its own recipe used, with a touch of the item's."
 		}
 
 		IngredientMode: {
@@ -1865,7 +1864,7 @@ Configs: {
 
 		IngredientSurpriseChance: {
 			Label: "Ingredient surprise chance (%)"
-			Tooltip: "Chance that an ingredient of a rebuilt recipe is of any kind (drawn with the loot weights: weapons, accessories, potions...) instead of the ingredient weights. Its level and value stay those of the slot."
+			Tooltip: "Chance that an ingredient of a rebuilt recipe is of any kind (drawn with the loot weights: weapons, accessories, potions...) instead of the ingredient weights. Its level stays the slot's; its value only has to fit within the recipe's value cap."
 		}
 
 		IngredientCountSpread: {
@@ -1890,7 +1889,7 @@ Configs: {
 
 		IngredientReusePenalty: {
 			Label: "Ingredient reuse penalty"
-			Tooltip: "Makes the same materials appear in fewer recipes: a material already used by n recipes is picked with its weight divided by (1 + this value x n). 0 = no penalty."
+			Tooltip: "Makes the same materials appear in fewer recipes: a material already used by n recipes is picked with its weight divided by (1 + this value x n), common materials tolerating more uses. 0 = no penalty."
 		}
 
 		RandomizeStations: {

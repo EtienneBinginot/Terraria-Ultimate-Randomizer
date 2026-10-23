@@ -277,11 +277,13 @@ namespace UltimateRandomizer.Common.Features
 				// only when this world planned it
 				SetDisabled(recipe, shell[i] ? !RecipePlanner.ShellActive(plan, i) : originalDisabled[i] || plan.Twin[i]);
 				// Decrafting gives the current ingredients back: not when they are worth clearly more than before (protected
-				// results too, their ingredients may be replaced), nor when the result is found before the recipe's tier (it would
-				// shimmer into that tier's key early)
+				// results too, their ingredients may be replaced), nor when the result is had before the recipe's tier, found or made
+				// by another recipe (it would shimmer into that tier's key early)
 				if (plan.Ingredients[i] != null && plan.IngredientValues[i] > ingredientValues[i] * 5 / 4) changed[i] = true;
 				int recipeTier = Math.Max(plan.IngredientTiers[i], plan.KeyIngredient[i] ? plan.ResultTiers[i] : 0);
-				if (plan.Ingredients[i] != null && recipeTier > 0 && Findability.Tier(plan.Results[i].type) < recipeTier) changed[i] = true;
+				int made = plan.Results[i].type;
+				int had = Math.Min(Findability.Tier(made), made > 0 && made < plan.Availability.Length ? plan.Availability[made] : Findability.Never);
+				if (plan.Ingredients[i] != null && recipeTier > 0 && had < recipeTier) changed[i] = true;
 				int original = originalTypes[i];
 				if (!Touchable(i))
 				{

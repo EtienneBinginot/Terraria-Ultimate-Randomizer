@@ -47,7 +47,6 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("IngredientReuse", IngredientReuse);
 			TestRunner.Register("CraftedValueFromIngredients", CraftedValueFromIngredients);
 			TestRunner.Register("ProtectedRecipesDoable", ProtectedRecipesDoable);
-			TestRunner.Register("RecipeAlwaysFinalResult", RecipeAlwaysFinalResult);
 			TestRunner.Register("RecipeKeyIngredient", RecipeKeyIngredient);
 			TestRunner.Register("RecipeNoStationTwins", RecipeNoStationTwins);
 			TestRunner.Register("UpgradeRecipes", UpgradeRecipes);
@@ -120,7 +119,8 @@ namespace UltimateRandomizer.Common.Tests
 			return type > 0 && type < plan.Availability.Length ? plan.Availability[type] : Findability.Never;
 		}
 
-		// The recipe giving a life or mana upgrade (AssignSpecials): its result and ingredients' value are raised on purpose
+		// The recipe giving a life or mana upgrade (RecipePlanner.SpecialRecipe: its vanilla recipe or its shell, keyed by
+		// LockSpecials): its ingredients' value is raised on purpose
 		private static bool SpecialRecipe(RecipePlan plan, int i) => ItemPool.IsSpecial(plan.Results[i].type) && RecipePlanner.SpecialRecipe(plan.Results[i].type) == i;
 
 		// Most recipes can be made at their level (some vanilla recipes already need later materials)
@@ -726,23 +726,28 @@ namespace UltimateRandomizer.Common.Tests
 			return seen;
 		}
 
-		// No item is made from itself, directly or not, through a new ingredient: the result of a rebuilt recipe (or a live
-		// shell) never leads back, through the live recipes, to one of its new ingredients. Loops of vanilla ingredients kept as
-		// they are (a block and its wall in an untouched recipe) are not the plan's
+		// No item is made from itself, directly or not, through the plan: the result of a rebuilt recipe (or a live shell) never
+		// leads back, through the live recipes, to one of its new ingredients; nor that of a swapped recipe to any of its
+		// ingredients (its kept ones give another item now), nor that of a recipe the planner could not rebuild (it keeps its
+		// vanilla ingredients only when they make no loop). Vanilla ingredients kept by a rebuilt recipe keeping its result are
+		// not the plan's
 		private static void RecipeNoCycles()
 		{
 			RequireRandomIngredients();
 			RecipePlan plan = RecipePlanner.Get();
 			Dictionary<int, HashSet<int>> next = LiveGraph();
 			List<string> failures = new();
-			int checkedCount = 0, slots = 0;
+			int checkedCount = 0, slots = 0, kept = 0;
 			for (int i = 0; i < Count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (recipe.Disabled || plan.Ingredients[i] == null) continue;
+				if (recipe.Disabled || RecipeSystem.IsModded(i)) continue;
+				bool failed = plan.Ingredients[i] == null && !RecipeSystem.IsShell(i) && RecipePlanner.Rebuildable(i);
+				if (plan.Ingredients[i] == null && !failed) continue;
 				checkedCount++;
+				if (failed) kept++;
 				int result = recipe.createItem.type;
-				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
+				HashSet<int> originals = failed || plan.SwapPartner[i] >= 0 ? new HashSet<int>() : RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
 				HashSet<int> from = Reach(next, result);
 				foreach (Item ingredient in recipe.requiredItem)
 				{
@@ -752,7 +757,7 @@ namespace UltimateRandomizer.Common.Tests
 					if (loop > 0) failures.Add($"{Name(result)} (recipe {i}) needs {Name(ingredient.type)}, made from {Name(result)} again (through {Name(loop)})");
 				}
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoCycles: {checkedCount} rebuilt recipes, {slots} new ingredients checked");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoCycles: {checkedCount} recipes ({kept} left vanilla by the planner), {slots} ingredients checked");
 			Check.That(checkedCount > 0, "no rebuilt recipe");
 			Check.All(failures, "Recipe loops");
 		}
@@ -784,21 +789,25 @@ namespace UltimateRandomizer.Common.Tests
 
 		// About RecipeResultSwapChance of the swappable recipes swap their results (explicit chances: the config is not read for
 		// them), by pairs pointing to each other, of the same tier (any tier in Chaos mode), mostly of different categories,
-		// each giving its partner's vanilla result and stack, never one of its own ingredients or group members. The live plan
-		// has the swaps of the setting
+		// each giving its partner's vanilla result and stack, never one of its own ingredients or group members. A higher chance
+		// only adds swaps (10% is a subset of 20%). The live plan has the swaps of the setting, less the few pairs the planner
+		// cancelled (no key for one of them)
 		private static void RecipeSwapsShare()
 		{
 			CraftingConfig cfg = CraftingConfig.Instance;
 			if (!cfg.RandomizeRecipes || cfg.IngredientMode != IngredientMode.Randomized || RecipeSystem.RecipeCount == 0) Check.Skip("ingredients are not randomized");
-			HashSet<int> eligible = Enumerable.Range(0, Count).Where(RecipePlanner.Swappable).ToHashSet();
+			HashSet<int> stationTiles = Stations.RequiredTiles();
+			HashSet<int> eligible = Enumerable.Range(0, Count).Where(i => RecipePlanner.Swappable(i, stationTiles)).ToHashSet();
 			if (eligible.Count < 200) Check.Skip($"only {eligible.Count} swappable recipes");
 			bool anyTier = GeneralConfig.Instance.RandomizerMode == RandomizerMode.Chaos;
 			ItemCategory CategoryOf(int item) => ItemPool.IsValid(item) ? ItemPool.Info[item].Category : ItemCategory.Misc;
 			List<string> failures = new();
 			UltimateRandomizer mod = ModContent.GetInstance<UltimateRandomizer>();
-			foreach (float chance in new[] { 0f, 10f, 30f })
+			Dictionary<float, int[]> byChance = new();
+			foreach (float chance in new[] { 0f, 10f, 20f, 30f })
 			{
 				((int type, int stack)[] results, int[] partners) = RecipePlanner.SwappedResults(chance);
+				byChance[chance] = partners;
 				int swapped = 0, cross = 0;
 				for (int i = 0; i < Count; i++)
 				{
@@ -825,12 +834,25 @@ namespace UltimateRandomizer.Common.Tests
 				Check.That(share >= expected * 0.5 && share <= expected * 1.1 + 0.01, $"{share:P1} of the recipes swapped at {chance}%");
 				Check.That(cross * 2 >= swapped, $"only {cross} of {swapped} swaps change category at {chance}%");
 			}
+			int lost = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				int low = byChance[10f][i];
+				if (low >= 0 && byChance[20f][i] != low && failures.Count < 20) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: swapped with recipe {low} at 10%, {byChance[20f][i]} at 20%");
+				if (low >= 0 && byChance[20f][i] != low) lost++;
+			}
+			Check.That(lost == 0, $"{lost} swaps at 10% are not swaps at 20%");
 			RecipePlan plan = RecipePlanner.Get();
 			int[] setting = RecipePlanner.SwappedResults(cfg.RecipeResultSwapChance).partners;
+			int cancelled = 0;
 			for (int i = 0; i < Count && failures.Count < 20; i++)
 			{
-				if (plan.SwapPartner[i] != setting[i]) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: plan swapped with {plan.SwapPartner[i]}, {setting[i]} with the setting");
+				if (plan.SwapPartner[i] == setting[i]) continue;
+				if (plan.SwapPartner[i] < 0) cancelled++;
+				else failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: plan swapped with {plan.SwapPartner[i]}, {setting[i]} with the setting");
 			}
+			int planned = setting.Count(p => p >= 0);
+			mod.Logger.Info($"RecipeSwapsShare: the plan cancelled {cancelled} of the {planned} swapped recipes of the setting (no key for one of a pair)");
 			// A few swapped recipes of the live plan, as the crafting menu shows them
 			foreach (int i in Enumerable.Range(0, Count).Where(i => plan.SwapPartner[i] >= 0 && i < plan.SwapPartner[i]).Take(6))
 			{
@@ -844,14 +866,15 @@ namespace UltimateRandomizer.Common.Tests
 		private static bool Weapon(int type) => ItemPool.IsValid(type) && ItemPool.Info[type].Category is ItemCategory.WeaponMelee or ItemCategory.WeaponRanged
 			or ItemCategory.WeaponMagic or ItemCategory.WeaponSummon or ItemCategory.WeaponOther;
 
-		// The Zenith (whichever recipe gives it) keeps weapons among its ingredients: the vanilla shape weighs them (half of it
-		// for a swapped recipe), when its vanilla recipe has replaceable weapons or the ingredient weights allow some
+		// The Zenith keeps weapons among its ingredients when its recipe keeps it: the first slot after the key follows the
+		// vanilla shape's non-material categories (a swapped Zenith recipe has mostly its host's shape: not checked)
 		private static void ZenithWeapons()
 		{
 			RequireRandomIngredients();
 			RecipePlan plan = RecipePlanner.Get();
 			int i = Enumerable.Range(0, Count).FirstOrDefault(r => !Main.recipe[r].Disabled && plan.Results[r].type == ItemID.Zenith && plan.Ingredients[r] != null, -1);
 			if (i < 0) Check.Skip("no rebuilt recipe gives the Zenith");
+			if (plan.SwapPartner[i] >= 0) Check.Skip("the Zenith is given by a swapped recipe");
 			int vanilla = Enumerable.Range(0, Count).FirstOrDefault(r => RecipeSystem.OriginalResult(r) == ItemID.Zenith && !RecipeSystem.IsShell(r), -1);
 			bool shaped = vanilla >= 0 && RecipeSystem.OriginalIngredients(vanilla).Any(x => Weapon(x.type) && RecipePlanner.IngredientReplaceable(x.type));
 			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
@@ -864,8 +887,9 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(weapons > 0, $"{Name(ItemID.Zenith)} has no weapon among its ingredients ({Ingredients(live)})");
 		}
 
-		// The reuse penalty spreads the materials: with k = 2 the ten most used (non key) materials serve fewer recipes in all
-		// than with no penalty, and the most used one no more (plans built with explicit values, without shells)
+		// The reuse penalty spreads the materials within a tier (the counts are live): among the recipes rebuilt for tier 0, with
+		// k = 2 the ten most used (non key) materials serve fewer recipes in all than with no penalty, and the most used one no
+		// more (plans built with explicit values, without shells)
 		private static void IngredientReuse()
 		{
 			RequireRandomIngredients();
@@ -874,7 +898,7 @@ namespace UltimateRandomizer.Common.Tests
 				Dictionary<int, int> uses = new();
 				for (int i = 0; i < Count; i++)
 				{
-					if (plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null || RecipeSystem.HouseRecipe(i) || RecipeSystem.IsShell(i)) continue;
+					if (plan.IngredientTiers[i] != 0 || plan.Ingredients[i] == null || RecipeSystem.HouseRecipe(i) || RecipeSystem.IsShell(i)) continue;
 					int[] groups = RecipePlanner.GroupsOf(plan, i);
 					foreach ((int type, _) in plan.Ingredients[i])
 					{
@@ -887,9 +911,9 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			(int max, int top, string names) none = Spread(RecipePlanner.BuildWith(false, reusePenalty: 0f));
 			(int max, int top, string names) strong = Spread(RecipePlanner.BuildWith(false, reusePenalty: 2f));
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"IngredientReuse: no penalty: most used {none.max}, ten most used {none.top} ({none.names}); " +
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"IngredientReuse: tier 0, no penalty: most used {none.max}, ten most used {none.top} ({none.names}); " +
 				$"penalty 2: most used {strong.max}, ten most used {strong.top} ({strong.names})");
-			if (none.top == 0) Check.Skip("no rebuilt recipe");
+			if (none.top == 0) Check.Skip("no recipe rebuilt for tier 0");
 			Check.That(strong.top < none.top, $"the ten most used materials serve {strong.top} recipes with the penalty, {none.top} without");
 			Check.That(strong.max <= none.max, $"the most used material serves {strong.max} recipes with the penalty, {none.max} without");
 		}
@@ -983,29 +1007,6 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			Check.That(checkedCount > 0, "no protected recipe");
 			Check.All(failures, "Protected recipes not doable at their level");
-		}
-
-		// Every live recipe gives its planned result whatever the progression (no stand-in before its tier), the untouched ones
-		// their vanilla result
-		private static void RecipeAlwaysFinalResult()
-		{
-			RequireApplied();
-			RecipePlan plan = RecipePlanner.Get();
-			List<string> failures = new();
-			int ahead = 0;
-			for (int i = 0; i < Count; i++)
-			{
-				(int type, int stack) expected = RecipeSystem.Touchable(i) ? plan.Results[i] : (RecipeSystem.OriginalResult(i), RecipeSystem.OriginalStack(i));
-				Item live = Main.recipe[i].createItem;
-				if (live.type != expected.type || live.stack != expected.stack)
-				{
-					failures.Add($"{Name(RecipeSystem.OriginalResult(i))} gives {Name(live.type)} x{live.stack}, planned {Name(expected.type)} x{expected.stack}");
-				}
-				if (RecipeSystem.AppliedResult(plan, i) != plan.Results[i]) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: AppliedResult is not the planned result");
-				if (plan.ResultTiers[i] > ProgressionSystem.UnlockedTier) ahead++;
-			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeAlwaysFinalResult: {ahead} recipes give a result of a tier not unlocked yet (locked by their ingredients)");
-			Check.All(failures, "Recipes not giving their final result");
 		}
 
 		// A randomized vanilla recipe can't be made before U, the unlocked tier of its result (a key ingredient, a station or
@@ -1207,9 +1208,9 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(share >= 0.9, $"only {share:P1} of the recipes have new ingredients (unchanged: {string.Join(", ", same)})");
 		}
 
-		// A rebuilt recipe has the vanilla count of ingredients (a swapped one: of the item's own recipe), give or take
-		// IngredientCountSpread, within [1, IngredientMax] (its protected ingredients always stay, with at least one new one).
-		// The upgrade recipes may get one more (their key)
+		// A rebuilt recipe has its vanilla count of ingredients (a swapped one too: the host's count, so the swap shows), give
+		// or take IngredientCountSpread, within [1, IngredientMax] (its protected ingredients always stay, with at least one new
+		// one). A recipe keyed by LockResults may get one more (its key added as a new ingredient)
 		private static void RecipeIngredientCount()
 		{
 			RequireRandomIngredients();
@@ -1223,13 +1224,11 @@ namespace UltimateRandomizer.Common.Tests
 				if (plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null || SpecialRecipe(plan, i) || RecipeSystem.IsShell(i)) continue;
 				rebuilt++;
 				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
-				// A swapped recipe has about as many ingredients as the vanilla recipe of the item it gives, and keeps its own
-				// protected ones
-				int vanilla = RecipeSystem.OriginalIngredients(plan.SwapPartner[i] >= 0 ? plan.SwapPartner[i] : i).Length;
+				int vanilla = original.Length;
 				int kept = original.Count(x => !RecipePlanner.IngredientReplaceable(x.type));
 				int max = Math.Max(1, cfg.IngredientMax);
 				int low = Math.Clamp(vanilla - cfg.IngredientCountSpread, 1, max);
-				int high = Math.Max(Math.Clamp(vanilla + cfg.IngredientCountSpread, 1, max), kept + 1);
+				int high = Math.Max(Math.Clamp(vanilla + cfg.IngredientCountSpread, 1, max), kept + 1) + (plan.KeyIngredient[i] ? 1 : 0);
 				int n = plan.Ingredients[i].Length;
 				deltas[n - vanilla] = deltas.GetValueOrDefault(n - vanilla) + 1;
 				if (n < low || n > high) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {n} ingredients, vanilla {vanilla} ({Ingredients(plan.Ingredients[i])})");

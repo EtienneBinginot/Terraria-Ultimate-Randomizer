@@ -46,6 +46,7 @@ namespace UltimateRandomizer.Common.Features
 			RecipeShare share = new();
 			RecipePlan plan = RecipePlanner.Get();
 			int count = Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
+			HashSet<int> stationTiles = Stations.RequiredTiles();
 			for (int i = 0; i < count; i++)
 			{
 				// A shell is a new recipe, not a vanilla one (its item no recipe made)
@@ -65,7 +66,7 @@ namespace UltimateRandomizer.Common.Features
 				if (!ItemPool.IsRandomizable(original)) reason = Protected;
 				else if (RecipeSystem.KeptForMining(i)) reason = Mining;
 				else if (RecipeSystem.HouseRecipe(i)) reason = House;
-				else if (!RecipePlanner.Swappable(i)) reason = Unswappable;
+				else if (!RecipePlanner.Swappable(i, stationTiles)) reason = Unswappable;
 				else reason = NotSwapped;
 				if (!share.Kept.TryGetValue(reason, out List<int> list)) share.Kept[reason] = list = new List<int>();
 				list.Add(i);
