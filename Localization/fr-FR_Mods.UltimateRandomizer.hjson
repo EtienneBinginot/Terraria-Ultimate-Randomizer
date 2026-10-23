@@ -122,12 +122,12 @@ Tests: {
 	TierAudit: Liste dans TierAudit.tsv les objets vanilla dont le palier semble douteux (relevé par leurs sources, une source bien plus précoce, ou aucune source), et compte les objets bannis du plan des monstres (dans le journal)
 	ItemTierDump: Écrit ItemTiers.tsv, une ligne par objet vanilla avec ses paliers, sa trouvabilité, les paliers de recette vanilla et planifiés, les ingrédients planifiés et les données de minage (lecture seule)
 	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
-	ShopDump: Écrit Shops.tsv, chaque article des boutiques vanilla à chaque palier débloqué avec son remplaçant (tirage aléatoire, ou objet exclusif aux boutiques garanti à cet emplacement), son prix, ses conditions et des alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu), et ShopOnly.tsv, qui indique où chaque objet exclusif aux boutiques de ce monde est vendu (lecture seule)
+	ShopDump: Écrit Shops.tsv, chaque article des boutiques vanilla à chaque palier débloqué avec son remplaçant (tirage aléatoire), puis les emplacements ajoutés qui vendent les objets exclusifs aux boutiques de ce monde, avec prix, conditions et alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu), et ShopOnly.tsv, qui indique quel marchand vend chaque objet exclusif aux boutiques de ce monde et à partir de quel palier (lecture seule)
 	WorldExport: Écrit dans Export/ les fichiers .tsv des objets, recettes, butins, sacs, boutiques, coffres, sources du monde et trouvabilité, plus un README, pour un audit de cohérence hors jeu (lecture seule)
-	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques
-	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde : trouvés, fabriqués, ou vendus à un emplacement fiable à un palier près de celui de l'objet
-	ShopOnlyPlacement: Chaque objet exclusif aux boutiques de ce monde est vendu au moins une fois, à un emplacement fiable (arrivée connue, ni le Père Noël, ni la Princesse, ni un marchand de passage, aucune condition ponctuelle) à un palier près de celui de l'objet, jamais deux fois dans une même boutique
-	ShopOnlySlots: Chaque boutique qui vend un objet exclusif, remplie comme le jeu la remplit en ce moment, propose chaque objet placé dont l'emplacement est ouvert, au bon endroit
+	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques, et aucun emplacement ajouté n'apparaît avant le palier de déblocage de son objet
+	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde : trouvés ou fabriqués à n'importe quel palier, ou vendus dans un emplacement ajouté chez un marchand fiable (une vente tardive est seulement signalée dans le journal)
+	ShopOnlyPlacement: Chaque objet exclusif aux boutiques de ce monde a exactement un emplacement ajouté chez un marchand fiable (arrivée connue, ni le Père Noël, ni la Princesse, ni un marchand de passage), visible dès son palier de déblocage, sans dépasser la place libre d'une boutique tant que d'autres en ont, jamais tiré une seconde fois dans cette boutique, identique pour une même graine (les marchands tardifs sont signalés dans le journal)
+	ShopOnlySlots: Chaque boutique avec des emplacements ajoutés, remplie comme le jeu la remplit en ce moment puis complétée comme en jeu, propose chaque objet exclusif débloqué à son prix, et seul un emplacement tiré au hasard cède sa place quand la boutique est pleine
 	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant
 	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
@@ -158,7 +158,7 @@ Tests: {
 	CritterHabitat: Les critters aquatiques, volants et terrestres restent dans leur habitat
 	SwapStatsCount: Les apparitions naturelles sont comptées, celles des statues ignorées
 	NpcTiersNormalStats: Les tiers des ennemis viennent des stats du mode normal, quel que soit le monde joué avant un rechargement
-	CodexRecordsLoot: Le codex enregistre l'ennemi tué et chaque objet lâché par un slime
+	CodexRecordsLoot: Le codex enregistre les ennemis tués et chaque objet lâché par un ennemi courant qui a un drop assuré (un slime à défaut)
 	CodexRecipesFromGuide: Le Guide fait découvrir les recettes qui utilisent l'objet et celles qui le donnent
 	CodexSaveLoad: Le codex est sauvegardé et rechargé avec le monde sans rien perdre
 	CodexSyncRoundTrip: Les découvertes du codex passent le format réseau intactes (différences et synchro complète)

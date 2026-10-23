@@ -24,7 +24,19 @@ namespace UltimateRandomizer.Common.Tests
 
 		private static CodexData FreshCodex() => new() { Seed = SeedSystem.WorldSeed, HasSeed = true };
 
-		// A slime killed through NPCLoot: its kill and every item it dropped (coins and hearts aside) are recorded
+		// Common enemies tried in order: the first whose plan has a sure drop (a 100 % entry, no condition, not locked) is
+		// killed, so that it drops something (a permuted table may leave the slime nothing sure)
+		private static readonly int[] LootTesters =
+		{
+			NPCID.BlueSlime, NPCID.GreenSlime, NPCID.Zombie, NPCID.DemonEye, NPCID.PurpleSlime, NPCID.CaveBat, NPCID.Skeleton, NPCID.IceSlime,
+			NPCID.SandSlime, NPCID.JungleSlime, NPCID.Crab, NPCID.Vulture, NPCID.Harpy, NPCID.Piranha, NPCID.Antlion, NPCID.Hornet
+		};
+
+		private static bool SureDrop(int type) =>
+			RandomNpcDropRule.Plan(type, Main.expertMode).Any(d => d.Item > ItemID.None && d.Chance >= 1f - 1e-6f && !d.Locked && (d.Conditions == null || d.Conditions.Count == 0));
+
+		// An enemy killed through NPCLoot (again, up to 30 kills, when nothing of its plan is sure): its kills and every item it
+		// dropped (coins and hearts aside) are recorded
 		private static void CodexRecordsLoot()
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
@@ -32,8 +44,10 @@ namespace UltimateRandomizer.Common.Tests
 			if (Main.slimeRain) Check.Skip("slime rain in progress");
 			CodexData saved = CodexSystem.Data;
 			Player player = Main.LocalPlayer;
-			int index = NPC.NewNPC(new EntitySource_DebugCommand("UltimateRandomizer test"), (int)player.Center.X + 1200, (int)player.Center.Y - 200, NPCID.BlueSlime);
-			Check.That(index >= 0 && index < Main.maxNPCs, "could not spawn a slime");
+			int tester = LootTesters.FirstOrDefault(SureDrop);
+			if (tester == 0) tester = NPCID.BlueSlime;
+			int index = NPC.NewNPC(new EntitySource_DebugCommand("UltimateRandomizer test"), (int)player.Center.X + 1200, (int)player.Center.Y - 200, tester);
+			Check.That(index >= 0 && index < Main.maxNPCs, "could not spawn " + Lang.GetNPCNameValue(tester));
 			NPC npc = Main.npc[index];
 			int key = CodexSystem.FightKey(npc);
 			string creditId = ContentSamples.NpcBestiaryCreditIdsByNpcNetIds.TryGetValue(npc.netID, out string id) ? id : null;
@@ -48,21 +62,25 @@ namespace UltimateRandomizer.Common.Tests
 				// No banner this time (it is not loot anyway)
 				if (hasBanner) NPC.killCount[banner] = 0;
 				npc.playerInteraction[Main.myPlayer] = true;
-				npc.life = 0;
-				CodexSystem.SpawnLog = slots;
-				npc.NPCLoot();
-				CodexSystem.SpawnLog = null;
-				Check.Equal(1, CodexSystem.KillCount(key), "kills recorded");
-
 				Dictionary<int, int> spawned = new();
-				foreach (int slot in slots.Distinct())
+				int kills = 0;
+				while (spawned.Count == 0 && kills < 30)
 				{
-					if (slot < 0 || slot >= Main.maxItems) continue;
-					Item item = Main.item[slot];
-					if (!item.active || item.IsAir || ItemID.Sets.CommonCoin[item.type] || ItemID.Sets.IsAPickup[item.type] || !LootSubstitutionItem.IsDeathLoot(npc, item.type)) continue;
-					spawned[item.type] = spawned.GetValueOrDefault(item.type) + item.stack;
+					npc.life = 0;
+					CodexSystem.SpawnLog = slots;
+					npc.NPCLoot();
+					CodexSystem.SpawnLog = null;
+					kills++;
+					foreach (int slot in slots.Distinct())
+					{
+						if (slot < 0 || slot >= Main.maxItems) continue;
+						Item item = Main.item[slot];
+						if (!item.active || item.IsAir || ItemID.Sets.CommonCoin[item.type] || ItemID.Sets.IsAPickup[item.type] || !LootSubstitutionItem.IsDeathLoot(npc, item.type)) continue;
+						spawned[item.type] = spawned.GetValueOrDefault(item.type) + item.stack;
+					}
 				}
-				Check.That(spawned.Count > 0, "the slime dropped nothing");
+				Check.Equal(kills, CodexSystem.KillCount(key), "kills recorded");
+				Check.That(spawned.Count > 0, $"{Lang.GetNPCNameValue(tester)} dropped nothing in {kills} kills");
 				Dictionary<int, int> recorded = CodexSystem.DropsOf(key).ToDictionary(d => d.item, d => d.count);
 				List<string> failures = new();
 				foreach ((int type, int stack) in spawned)
@@ -80,7 +98,7 @@ namespace UltimateRandomizer.Common.Tests
 				// Statue spawns are not kills (bestiary rule)
 				npc.SpawnedFromStatue = true;
 				CodexSystem.RecordKill(npc);
-				Check.Equal(1, CodexSystem.KillCount(key), "kills after a statue kill");
+				Check.Equal(kills, CodexSystem.KillCount(key), "kills after a statue kill");
 			}
 			finally
 			{

@@ -122,12 +122,12 @@ Tests: {
 	TierAudit: Lists the vanilla items whose tier looks doubtful (raised by their sources, a source much earlier, or no source at all) in TierAudit.tsv, and counts the banned items of the enemy plan (logged)
 	ItemTierDump: Writes ItemTiers.tsv, one row per vanilla item with its tiers, findability, vanilla and planned recipe tiers, planned ingredients and mining data (read-only)
 	WorldChestTrueTiers: Items of world-generated chests are found from their chest's tier (true tier lowered, never raised)
-	ShopDump: Writes Shops.tsv, every vanilla shop entry at each unlocked tier with its replacement (a random roll, or a shop-only item guaranteed there), price, conditions and flags (too early, other category, shop-only item lost), and ShopOnly.tsv, where each shop-only item of this world is sold (read-only)
+	ShopDump: Writes Shops.tsv, every vanilla shop entry at each unlocked tier with its replacement (a random roll), then the added slots selling this world's shop-only items, with price, conditions and flags (too early, other category, shop-only item lost), and ShopOnly.tsv, which merchant sells each shop-only item of this world and from which tier (read-only)
 	WorldExport: Writes items, recipes, drops, bags, shops, chests, worldsources and findability .tsv files plus a README into Export/ next to the other dumps, for an offline coherence audit (read-only)
-	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter
-	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world: found, crafted, or sold at a reliable place within one tier of the item
-	ShopOnlyPlacement: Every shop-only item of this world is sold at least once, at a reliable place (known arrival, not Santa, the Princess or a visitor, no situational condition) within one tier of the item, never twice in a shop
-	ShopOnlySlots: Each shop selling a shop-only item, filled as the game fills it right now, shows every placed item whose entry is open, at the right slot
+	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter, and no added slot appears before its item's unlock tier
+	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world: found or crafted at any tier, or sold in an added slot of a reliable merchant (late sales are only logged)
+	ShopOnlyPlacement: Every shop-only item of this world has exactly one added slot at a reliable merchant (known arrival, not Santa, the Princess or a visitor), shown from its unlock tier, without exceeding a shop's free capacity while others have room, never rolled again in that shop, the same for the same seed (late merchants are logged)
+	ShopOnlySlots: Each shop with added slots, filled as the game fills it right now and given its added slots as in game, shows every unlocked shop-only item at its price, and only a rolled slot ever gives way when the shop is full
 	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
 	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
@@ -158,7 +158,7 @@ Tests: {
 	CritterHabitat: Water, flying and ground critters stay in their habitat
 	SwapStatsCount: Natural spawns are counted, statue spawns are left alone
 	NpcTiersNormalStats: Enemy tiers come from normal-mode stats, whatever world was played before a reload
-	CodexRecordsLoot: The codex records the kill and every item dropped by a slime
+	CodexRecordsLoot: The codex records the kills and every item dropped by a common enemy with a sure drop (a slime when none)
 	CodexRecipesFromGuide: The Guide discovers the recipes using the item and those giving it
 	CodexSaveLoad: The codex is saved and loaded with the world without loss
 	CodexSyncRoundTrip: Codex discoveries survive the network format (delta and full sync)

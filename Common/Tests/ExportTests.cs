@@ -305,7 +305,7 @@ namespace UltimateRandomizer.Common.Tests
 			return (DropHeader, rows);
 		}
 
-		// ---- shops.tsv (slot kind: roll, shop-only item guaranteed there, or unchanged)
+		// ---- shops.tsv (slot kind: roll, unchanged, or an added slot selling a shop-only item)
 		private static (string, List<string>) Shops()
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
@@ -322,6 +322,15 @@ namespace UltimateRandomizer.Common.Tests
 					ShopSlot[] slots = ShopTests.Plan(permutation, shop, tier, cfg.NoDuplicatesInShop);
 					for (int i = 0; i < slots.Length; i++)
 					{
+						if (i >= shop.Items.Count)
+						{
+							// An added slot: a shop-only item of this world, sold from its unlock tier
+							int added = slots[i].Replacement;
+							ItemInfo ainfo = ItemPool.Info[added];
+							rows.Add(Row(NpcInternal(npc), NpcName(npc), shop.Shop.FullName, tier, i, "", "", "", "", "from tier " + ItemPool.UnlockTierOf(added), "added slot",
+								Internal(added), Name(added), ainfo.Category, ainfo.Tier, ainfo.TrueTier, slots[i].Price, "", true, ShopTests.KeptBy(added, permutation, recipes)));
+							continue;
+						}
 						Item original = shop.Items[i];
 						bool replaced = cfg.RandomizeShops && slots[i].Replaced;
 						int replacement = replaced ? slots[i].Replacement : original.type;
@@ -330,7 +339,7 @@ namespace UltimateRandomizer.Common.Tests
 						bool only = shopOnly.Contains(original.type);
 						rows.Add(Row(NpcInternal(npc), NpcName(npc), shop.Shop.FullName, tier, i, Internal(original.type), Name(original.type), info?.Category, info?.Tier,
 							string.Join(" & ", shop.Conditions[i].Select(c => c.Description?.Value ?? c.ToString())),
-							!replaced ? "unchanged" : slots[i].Guaranteed ? "shop-only item" : "roll",
+							!replaced ? "unchanged" : "roll",
 							replaced ? Internal(replacement) : "(unchanged)", Name(replacement), rinfo?.Category, rinfo?.Tier, rinfo?.TrueTier,
 							replaced ? slots[i].Price : original.GetStoreValue(), original.GetStoreValue(), only, only ? ShopTests.KeptBy(original.type, permutation, recipes) : ""));
 					}
@@ -414,7 +423,7 @@ namespace UltimateRandomizer.Common.Tests
 					ShopSlot[] slots = ShopTests.Plan(permutation, shop, tier, EconomyConfig.Instance.NoDuplicatesInShop);
 					for (int i = 0; i < slots.Length; i++)
 					{
-						int item = randomized && slots[i].Replaced ? slots[i].Replacement : shop.Items[i].type;
+						int item = i >= shop.Items.Count ? slots[i].Replacement : randomized && slots[i].Replaced ? slots[i].Replacement : shop.Items[i].type;
 						if (item > 0 && !shopTier.ContainsKey(item)) shopTier[item] = tier;
 					}
 				}
