@@ -290,7 +290,7 @@ Codex: {
 	SpawnShareHover: Share of this enemy among the spawns seen in this biome
 	ChanceHover: Planned chance per kill (the loot bonus of strong enemies can raise it)
 	WhenCondition: condition
-	WhenRecipe: "Must be made: {0}."
+	WhenRecipe: Must be made: {0}.
 	ChanceUnknown: ?
 	Percent: "{0}%"
 	DropsFound: Drops found
@@ -488,7 +488,7 @@ Codex: {
 			CaughtAnywhere: catch it with a bug net where critters live
 			Harvested: given by {0} plants ({1}): the plants are randomized
 			Findable: found at random in the world (chests, fishing, crates...)
-			When: "({0})"
+			When: ({0})
 
 			Gathered: {
 				Dig: dig it up: {0}
@@ -507,8 +507,8 @@ Codex: {
 		NothingHere: Nothing in this tab for now: look in the other one.
 		LockedTitle: Later on
 		LockedSay: "{0}? Not yet: ask me again {1}."
-				LockedWhen: "Comes {0}; the Guide talks about it {1}."
-		
+		LockedWhen: Comes {0}; the Guide talks about it {1}.
+
 		Unlock: {
 			PreBoss: from the start
 			PostEyeOfCthulhu: after the Eye of Cthulhu
@@ -521,7 +521,7 @@ Codex: {
 			PostCultist: after the Lunatic Cultist
 			PostMoonLord: after the Moon Lord
 		}
-		
+
 		Syncing: One moment: I am still catching up on what was bought in this world.
 		Refused: I have already told you that much. Ask me about the next step.
 		Conditions: Mind the place: {0}.
@@ -560,9 +560,9 @@ Codex: {
 		}
 
 		When: {
-			Time: "Only {0}."
+			Time: Only {0}.
 			Conditional: It only comes with an event or certain weather (rain, sandstorm...).
-			Drop: "Mind the condition: {0}."
+			Drop: Mind the condition: {0}.
 
 			Short: {
 				Any: any hour
@@ -783,16 +783,17 @@ Codex: {
 
 			Hosts: {
 				0: "{0} carry it: look here, {1} ({2} each)."
-				1: "Hunt these: {0}, in this place: {1} ({2} chance per kill, for each of them)."
+				1: Hunt these: {0}, in this place: {1} ({2} chance per kill, for each of them).
+
 				Roaming: {
-					0: "These carry it, wherever they wander ({2} each): {0}."
+					0: These carry it, wherever they wander ({2} each): {0}.
 					1: Hunt these wherever you meet them ({2} chance per kill, for each of them): {0}.
 				}
 			}
 
 			HostsTimed: {
-				0: "Look here, {1}, for these ({2} each): {0}."
-				1: "Hunt these in this place, {1} ({2} chance per kill, for each of them): {0}."
+				0: Look here, {1}, for these ({2} each): {0}.
+				1: Hunt these in this place, {1} ({2} chance per kill, for each of them): {0}.
 			}
 
 			Roaming: {
@@ -1236,18 +1237,18 @@ Configs: {
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: "Guaranteed drop chance multiplier"
-			Tooltip: "Basic stations (and vanilla ingredients, if chosen) are placed on the common enemies of one biome of their tier. Raise this to find them sooner."
+			Label: Guaranteed drop chance multiplier
+			Tooltip: Basic stations (and vanilla ingredients, if chosen) are placed on the common enemies of one biome of their tier. Raise this to find them sooner.
 		}
 
 		GuaranteedHostsPerItem: {
-			Label: "Enemies carrying each guaranteed item"
-			Tooltip: "Each guaranteed item (stations, boss summons, pickaxes, needed ingredients) is placed on the enemies of one biome of its tier, the most frequent first, up to this many. The hints name them all."
+			Label: Enemies carrying each guaranteed item
+			Tooltip: Each guaranteed item (stations, boss summons, pickaxes, needed ingredients) is placed on the enemies of one biome of its tier, the most frequent first, up to this many. The hints name them all.
 		}
 
 		StationFindKills: {
-			Label: "Kills in its biome to find a station"
-			Tooltip: "Average number of kills in its biome before a guaranteed station, boss summon or pickaxe drops, all its enemies together. Pots and wooden chests help too. The work bench and the first stations follow the first hour of play instead."
+			Label: Kills in its biome to find a station
+			Tooltip: Average number of kills in its biome before a guaranteed station, boss summon or pickaxe drops, all its enemies together. Pots and wooden chests help too. The work bench and the first stations follow the first hour of play instead.
 		}
 
 		PotGuaranteeChance: {

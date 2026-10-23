@@ -290,7 +290,7 @@ Codex: {
 	SpawnShareHover: Part de cet ennemi parmi les apparitions vues dans ce biome
 	ChanceHover: Chance prévue par ennemi vaincu (le bonus de butin des ennemis renforcés peut l'augmenter)
 	WhenCondition: condition
-	WhenRecipe: "À fabriquer : {0}."
+	WhenRecipe: À fabriquer : {0}.
 	ChanceUnknown: ?
 	Percent: "{0} %"
 	DropsFound: Butin trouvé
@@ -488,7 +488,7 @@ Codex: {
 			CaughtAnywhere: à attraper avec un filet à insectes là où vivent les créatures
 			Harvested: donné par les plantes {0} ({1}) : les plantes sont randomisées
 			Findable: se trouve au hasard dans le monde (coffres, pêche, caisses...)
-			When: "({0})"
+			When: ({0})
 
 			Gathered: {
 				Dig: à creuser : {0}
@@ -507,8 +507,8 @@ Codex: {
 		NothingHere: Rien dans cet onglet pour l'instant : regarde dans l'autre.
 		LockedTitle: Plus tard
 		LockedSay: "{0} ? Pas encore : redemande-moi {1}."
-				LockedWhen: "Arrive {0} ; le Guide en parle {1}."
-		
+		LockedWhen: Arrive {0} ; le Guide en parle {1}.
+
 		Unlock: {
 			PreBoss: dès le début
 			PostEyeOfCthulhu: après l'Œil de Cthulhu
@@ -521,7 +521,7 @@ Codex: {
 			PostCultist: après le Cultiste lunatique
 			PostMoonLord: après le Seigneur de la lune
 		}
-		
+
 		Syncing: Un instant : je me renseigne encore sur ce qui a déjà été acheté dans ce monde.
 		Refused: Je t'ai déjà dit tout ça. Demande-moi plutôt la suite.
 		Conditions: Attention à l'endroit : {0}.
@@ -560,9 +560,9 @@ Codex: {
 		}
 
 		When: {
-			Time: "Seulement {0}."
+			Time: Seulement {0}.
 			Conditional: Elle ne vient qu'avec un événement ou une météo particulière (pluie, tempête de sable...).
-			Drop: "Attention à la condition : {0}."
+			Drop: Attention à la condition : {0}.
 
 			Short: {
 				Any: à toute heure
@@ -782,17 +782,18 @@ Codex: {
 			}
 
 			Hosts: {
-				0: "Ces créatures le transportent : {0}. Va les chercher ici : {1} ({2} chacune)."
-				1: "Tes cibles : {0}, à cet endroit : {1} ({2} de chances par créature tuée, pour chacune)."
+				0: Ces créatures le transportent : {0}. Va les chercher ici : {1} ({2} chacune).
+				1: Tes cibles : {0}, à cet endroit : {1} ({2} de chances par créature tuée, pour chacune).
+
 				Roaming: {
-					0: "Ces créatures le transportent, où qu'elles aillent ({2} chacune) : {0}."
+					0: Ces créatures le transportent, où qu'elles aillent ({2} chacune) : {0}.
 					1: Chasse-les partout où tu les croises ({2} de chances par créature tuée, pour chacune) : {0}.
 				}
 			}
 
 			HostsTimed: {
-				0: "Va chercher celles-ci ici, {1} ({2} chacune) : {0}."
-				1: "Tes cibles, à cet endroit, {1} ({2} de chances par créature tuée, pour chacune) : {0}."
+				0: Va chercher celles-ci ici, {1} ({2} chacune) : {0}.
+				1: Tes cibles, à cet endroit, {1} ({2} de chances par créature tuée, pour chacune) : {0}.
 			}
 
 			Roaming: {
@@ -1236,18 +1237,18 @@ Configs: {
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: "Multiplicateur des drops garantis"
-			Tooltip: "Les stations de base (et les ingrédients vanilla, si choisis) sont placées sur les ennemis courants d'un biome de leur tier. Augmente pour les trouver plus vite."
+			Label: Multiplicateur des drops garantis
+			Tooltip: Les stations de base (et les ingrédients vanilla, si choisis) sont placées sur les ennemis courants d'un biome de leur tier. Augmente pour les trouver plus vite.
 		}
 
 		GuaranteedHostsPerItem: {
-			Label: "Ennemis portant chaque objet garanti"
-			Tooltip: "Chaque objet garanti (stations, invocations de boss, pioches, ingrédients nécessaires) est placé sur les ennemis d'un biome de son tier, les plus fréquents d'abord, jusqu'à ce nombre. Les indices les nomment tous."
+			Label: Ennemis portant chaque objet garanti
+			Tooltip: Chaque objet garanti (stations, invocations de boss, pioches, ingrédients nécessaires) est placé sur les ennemis d'un biome de son tier, les plus fréquents d'abord, jusqu'à ce nombre. Les indices les nomment tous.
 		}
 
 		StationFindKills: {
-			Label: "Ennemis tués dans son biome pour trouver une station"
-			Tooltip: "Nombre moyen d'ennemis tués dans son biome avant qu'une station, une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les pots et les coffres en bois aident aussi. L'établi et les premières stations suivent plutôt la première heure de jeu."
+			Label: Ennemis tués dans son biome pour trouver une station
+			Tooltip: Nombre moyen d'ennemis tués dans son biome avant qu'une station, une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les pots et les coffres en bois aident aussi. L'établi et les premières stations suivent plutôt la première heure de jeu.
 		}
 
 		PotGuaranteeChance: {
