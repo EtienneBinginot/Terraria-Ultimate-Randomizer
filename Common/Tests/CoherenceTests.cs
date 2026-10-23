@@ -196,7 +196,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				for (int i = 0; i < RecipeSystem.RecipeCount; i++)
 				{
-					if (!RecipeSystem.IsModded(i)) crafted.Add(RecipeSystem.OriginalResult(i));
+					if (!RecipeSystem.IsModded(i) && !RecipeSystem.IsShell(i)) crafted.Add(RecipeSystem.OriginalResult(i));
 				}
 			}
 			else
@@ -314,7 +314,7 @@ namespace UltimateRandomizer.Common.Tests
 				int ingredientTier = ingredients.Select(x => ItemAvail(recipe, x.type)).DefaultIfEmpty(0).Max();
 				int stationTier = tiles.Select(StationAvail).DefaultIfEmpty(0).Max();
 				// The redesign would change the original recipe: a slot the planner may replace
-				bool slot = RecipeSystem.IngredientsTouchable(i) && RecipeSystem.OriginalIngredients(i).Any(x => RecipePlanner.IngredientReplaceable(recipe, x.type));
+				bool slot = RecipeSystem.IngredientsTouchable(i) && RecipeSystem.OriginalIngredients(i).Any(x => RecipePlanner.IngredientReplaceable(x.type));
 				total[u]++;
 				if (!slot) noSlot[u]++;
 				if (Math.Max(ingredientTier, stationTier) >= Never) unavailable[u]++;
@@ -390,7 +390,7 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int type in ingredients)
 				{
 					if (type <= 0 || type >= all.Length) continue;
-					int[] choices = ItemClassifier.IngredientChoices(recipe, type).Where(t => t > 0 && t < all.Length).ToArray();
+					int[] choices = (i < stored ? ItemClassifier.IngredientChoices(RecipeSystem.OriginalGroups(i), type) : ItemClassifier.IngredientChoices(recipe, type)).Where(t => t > 0 && t < all.Length).ToArray();
 					int best = choices.Length == 0 ? type : choices.OrderBy(TierFor).ThenBy(t => t).First();
 					eval.Parts.Add((best, choices.Length == 0 ? Tiers.Max : TierFor(best)));
 				}

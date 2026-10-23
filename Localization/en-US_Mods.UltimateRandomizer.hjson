@@ -203,12 +203,12 @@ Tests: {
 	HardmodeOresOfWorld: Hardmode pair ores always count as findable and are never new ingredients
 	AltarDecisionKeepsCaches: An altar choosing a hardmode ore changes neither the guaranteed sources nor findability
 	PotOnlyUnfound: Pots only give guaranteed items nobody has found yet
-	IngredientReplacementsFindable: Replaced ingredients are found (not crafted) by the recipe's level
+	IngredientReplacementsFindable: New ingredients are had (found or crafted) by the tier their recipe was rebuilt for
 	RecipesDoable: At least 85% of the randomized recipes can be made at their level
 	AvailabilityConsistent: The planned item availability matches an independent recomputation over the applied recipes
 	NoSelfIngredient: No recipe uses its own result
 	ResultNotInGroup: No randomized recipe gives an item its own ingredient group accepts
-	IngredientValueCoherent: Replaced ingredients keep about the same value
+	IngredientValueCoherent: Rebuilt recipes keep about the value of the vanilla ingredients
 	ProtectedIngredientsKept: Protected ingredients (progression materials...) are never replaced
 	RecipeGroupsSane: Every recipe group (any wood, any iron bar...) still has its ingredient
 	RecipePlanDeterminism: Ingredients and stations are the same after a rebuild
@@ -233,6 +233,17 @@ Tests: {
 	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
 	UpgradeRecipes: Each life or mana upgrade is the result of one random recipe, doable from its tier, with a key ingredient and ingredients worth at least the upgrade
 	HouseItemsObtainable: Door, platform and torch are hint targets, and their recipes change but are craftable at once (tier 0 ingredients, basic station)
+	RecipesRebuilt: At least 90% of the recipes with replaceable ingredients get new ingredients
+	RecipeIngredientCount: A rebuilt recipe has the vanilla number of ingredients give or take the set spread, within the set maximum
+	RecipeIngredientTiers: A rebuilt recipe has no ingredient above its tier, and most have one of exactly its tier
+	RecipeIngredientsAcyclic: Every crafted ingredient of a rebuilt recipe is made by a recipe planned before it
+	RecipeIngredientUseCaps: No material is an ingredient of more rebuilt recipes than its use cap
+	RecipeExamples: Logs 10 rebuilt recipes (Zenith and Chlorophyte armor among them), which really changed
+	UncraftableRecipesValid: Items no recipe makes get a live recipe, doable from their tier and never before, that never shimmers back; logs examples
+	UncraftableRecipesOff: With the setting off (planner called with explicit parameters), no shell recipe is planned and the other recipes are planned the same
+	UncraftableNoSpecials: Shell recipes never give a life or mana upgrade, keep their item and are never switched off as copies
+	UncraftablePricedByIngredients: Live shell recipes count as randomized: what they make sells for its ingredients' value, not its vanilla price
+	RecipePickaxeMineable: No rebuilt pickaxe or drill recipe gets a new ingredient that needs at least that pick power to be mined
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
@@ -1845,23 +1856,33 @@ Configs: {
 		}
 
 		IngredientMode: {
-			Label: Ingredients
-			Tooltip: Randomized: ingredients that can't be found at the recipe's level (specific drops...) are replaced by materials you can find (world, drops of this world). Vanilla: ingredients are kept and each one is placed on enemies of the recipe's level.
+			Label: "Ingredients"
+			Tooltip: "Randomized: every recipe is rebuilt from materials you can find or craft by its level, keeping only the rough shape of the vanilla recipe (number and kinds of ingredients, value), with at least one ingredient of its own level. Vanilla: ingredients are kept and each one is placed on enemies of the recipe's level."
 		}
 
 		IngredientWeights: {
-			Label: Ingredient weights
-			Tooltip: Relative chance of each kind of item when a recipe ingredient is replaced. 0 = never.
+			Label: "Ingredient weights"
+			Tooltip: "Relative chance of each kind of item among the ingredients of a rebuilt recipe. 0 = never, unless the vanilla recipe used that kind (a recipe made of weapons often gets weapons again)."
 		}
 
-		IngredientVarietyChance: {
-			Label: Ingredient variety (%)
-			Tooltip: Chance that a specific ingredient is replaced even when it can be found, for more varied recipes. Materials gathered in the world (wood, stone, ores...) are never replaced this way.
+		IngredientCountSpread: {
+			Label: "Ingredient count spread"
+			Tooltip: "Every recipe is rebuilt with about as many ingredients as the vanilla one: this many more or fewer at most (the same count, one more or one less are the most frequent). 0 = always the vanilla count."
+		}
+
+		IngredientMax: {
+			Label: "Maximum ingredients per recipe"
+			Tooltip: "A rebuilt recipe never has more ingredients than this (ingredients that can't be replaced, like boss items, are kept anyway)."
+		}
+
+		RecipesForUncraftable: {
+			Label: "Recipes for uncraftable items"
+			Tooltip: "Items that no recipe makes (walls, blocks only obtained by breaking them, furniture found in the world, vanity, dyes, food, materials) get a random recipe at a random station. It can only be made from the tier at which the item would be found, never earlier. Gear, ammo, potions, ores, stations, boss summons and bags never get one."
 		}
 
 		IngredientStackCap: {
-			Label: Maximum amount of a replaced ingredient
-			Tooltip: The amount is adjusted to keep about the same value as the original ingredient, up to this limit.
+			Label: "Maximum amount of an ingredient"
+			Tooltip: "The amounts are set so the ingredients are worth roughly what the vanilla ones were, up to this limit per ingredient."
 		}
 
 		RandomizeStations: {

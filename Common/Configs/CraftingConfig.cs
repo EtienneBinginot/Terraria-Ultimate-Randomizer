@@ -4,7 +4,8 @@ using Terraria.ModLoader.Config;
 
 namespace UltimateRandomizer.Common.Configs
 {
-	// "Ingredient" weights: relative chance of each category when a recipe ingredient is replaced (0 = never)
+	// "Ingredient" weights: relative chance of each category for a rebuilt recipe's ingredients (0 = never, unless the vanilla
+	// recipe used that category: the vanilla shape adds its own weight)
 	public class IngredientWeights : WeightTable
 	{
 		[Range(0, 100)] [DefaultValue(50)] public int Material = 50;
@@ -69,11 +70,19 @@ namespace UltimateRandomizer.Common.Configs
 
 		public IngredientWeights IngredientWeights = new();
 
-		// Chance that a specific ingredient (not gathered in the world) is replaced even when it can be found
-		[Range(0f, 100f)]
-		[Increment(5f)]
-		[DefaultValue(25f)]
-		public float IngredientVarietyChance;
+		// A rebuilt recipe has as many ingredients as the vanilla one, give or take up to this many (0 and 1 more often than 2)
+		[Range(0, 4)]
+		[DefaultValue(2)]
+		public int IngredientCountSpread;
+
+		// Most ingredients a rebuilt recipe may have
+		[Range(1, 8)]
+		[DefaultValue(8)]
+		public int IngredientMax;
+
+		// Items no recipe makes (walls, blocks, furniture, vanity, materials...) get a random recipe, doable from their tier
+		[DefaultValue(true)]
+		public bool RecipesForUncraftable;
 
 		// Largest amount of a replaced ingredient
 		[Range(1, 999)]
