@@ -64,10 +64,12 @@ namespace UltimateRandomizer.Common.Core
 		public static string CacheSignature() => CacheSignature(GeneralConfig.Instance, LootConfig.Instance, CraftingConfig.Instance, ProgressionConfig.Instance,
 			EconomyConfig.Instance, EnemiesConfig.Instance);
 
-		// What the world caches (findability, guaranteed sources, recipe plan, ore map, shuffle) are built from: enemy
-		// stats and the extras don't count, except the settings of the swap pool the guaranteed hosts are taken from
+		// What the world caches (findability, guaranteed sources, recipe plan, ore map, shuffle, shop-only places) are built
+		// from: enemy stats and the extras don't count, except the settings of the swap pool the guaranteed hosts are taken from
+		// and the town NPC order (the merchants' arrival tiers of ShopPermutation)
 		public static string CacheSignature(GeneralConfig general, LootConfig loot, CraftingConfig crafting, ProgressionConfig progression, EconomyConfig economy, EnemiesConfig enemies) =>
-			string.Join("|", Json(general), Json(loot), Json(crafting), CacheJson(progression), Json(economy), enemies.SwapModdedEnemies, enemies.SwapEventEnemies, enemies.SwapCritters);
+			string.Join("|", Json(general), Json(loot), Json(crafting), CacheJson(progression), Json(economy), enemies.SwapModdedEnemies, enemies.SwapEventEnemies, enemies.SwapCritters,
+				ExtrasConfig.Instance.RandomizeTownNpcOrder);
 
 		// Adaptive power only changes enemies at spawn: its settings don't rebuild the world caches
 		private static string CacheJson(ProgressionConfig progression)

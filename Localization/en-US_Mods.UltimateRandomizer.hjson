@@ -122,11 +122,11 @@ Tests: {
 	TierAudit: Lists the vanilla items whose tier looks doubtful (raised by their sources, a source much earlier, or no source at all) in TierAudit.tsv, and counts the banned items of the enemy plan (logged)
 	ItemTierDump: Writes ItemTiers.tsv, one row per vanilla item with its tiers, findability, vanilla and planned recipe tiers, planned ingredients and mining data (read-only)
 	WorldChestTrueTiers: Items of world-generated chests are found from their chest's tier (true tier lowered, never raised)
-	ShopDump: Permutation style: writes ShopPermutation.tsv, every vanilla shop entry with its place tier, group, received content and its origin, surprise and price. Random style: writes Shops.tsv, every entry at each unlocked tier with its replacement, price, conditions and flags (too early, other category, shop-only item lost) (read-only)
+	ShopDump: Writes Shops.tsv, every vanilla shop entry at each unlocked tier with its replacement (a random roll, or a shop-only item guaranteed there), price, conditions and flags (too early, other category, shop-only item lost), and ShopOnly.tsv, where each shop-only item of this world is sold (read-only)
 	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter
-	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world
+	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world: found, crafted, or sold at a reliable place within one tier of the item
+	ShopOnlyPlacement: Every shop-only item of this world is sold at least once, at a reliable place (known arrival, not Santa, the Princess or a visitor, no situational condition) within one tier of the item, never twice in a shop
 	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
-	ShopPermutationConserves: The shop permutation keeps every group's items, moves every content, only surprises candidates, and leaves an unsurprised copy of every item (shop-only ones included)
 	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
@@ -1850,18 +1850,8 @@ Configs: {
 		}
 
 		RandomizeShops: {
-			Label: "Randomize shops"
-			Tooltip: "Changes what the town NPCs sell, as chosen by the shop style below. Each item keeps the unlock conditions of the slot it is sold in."
-		}
-
-		ShopStyle: {
-			Label: "Shop style"
-			Tooltip: "Permutation: the shop items are shuffled between the merchants of the same progression, so every item is still sold somewhere (with the conditions of the slot it lands in). Random: each item is replaced by a random item of the same category."
-		}
-
-		ShopSurpriseChance: {
-			Label: "Shop surprise chance (%)"
-			Tooltip: "Permutation style: share of the shuffled shop items (not materials) sold as a random item of the same category instead. Every item always keeps at least one unchanged copy somewhere."
+			Label: Randomize shops
+			Tooltip: Each shop item is replaced by an item of the same category. It keeps the original item's unlock conditions. The items that nothing else gives in this world (not found nor craftable) are still sold, possibly by another merchant.
 		}
 
 		PriceMultiplierMin: {
@@ -2418,18 +2408,5 @@ Configs: {
 		}
 
 		Tooltip: ""
-	}
-
-	ShopStyle: {
-
-		Permutation: {
-			Label: "Permutation between merchants"
-			Tooltip: ""
-		}
-
-		Random: {
-			Label: "Random items"
-			Tooltip: ""
-		}
 	}
 }

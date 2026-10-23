@@ -122,11 +122,11 @@ Tests: {
 	TierAudit: Liste dans TierAudit.tsv les objets vanilla dont le palier semble douteux (relevé par leurs sources, une source bien plus précoce, ou aucune source), et compte les objets bannis du plan des monstres (dans le journal)
 	ItemTierDump: Écrit ItemTiers.tsv, une ligne par objet vanilla avec ses paliers, sa trouvabilité, les paliers de recette vanilla et planifiés, les ingrédients planifiés et les données de minage (lecture seule)
 	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
-	ShopDump: Style permutation : écrit ShopPermutation.tsv, chaque article des boutiques vanilla avec le palier de son emplacement, son groupe, l'article reçu et sa provenance, la surprise éventuelle et le prix. Style aléatoire : écrit Shops.tsv, chaque article à chaque palier débloqué avec son remplaçant, son prix, ses conditions et des alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu) (lecture seule)
+	ShopDump: Écrit Shops.tsv, chaque article des boutiques vanilla à chaque palier débloqué avec son remplaçant (tirage aléatoire, ou objet exclusif aux boutiques garanti à cet emplacement), son prix, ses conditions et des alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu), et ShopOnly.tsv, qui indique où chaque objet exclusif aux boutiques de ce monde est vendu (lecture seule)
 	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques
-	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde
+	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde : trouvés, fabriqués, ou vendus à un emplacement fiable à un palier près de celui de l'objet
+	ShopOnlyPlacement: Chaque objet exclusif aux boutiques de ce monde est vendu au moins une fois, à un emplacement fiable (arrivée connue, ni le Père Noël, ni la Princesse, ni un marchand de passage, aucune condition ponctuelle) à un palier près de celui de l'objet, jamais deux fois dans une même boutique
 	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant
-	ShopPermutationConserves: La permutation des boutiques garde les objets de chaque groupe, déplace chaque article, ne remplace par surprise que les candidats et laisse un exemplaire intact de chaque objet (y compris ceux vendus seulement en boutique)
 	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
@@ -1850,18 +1850,8 @@ Configs: {
 		}
 
 		RandomizeShops: {
-			Label: "Randomiser les boutiques"
-			Tooltip: "Change ce que vendent les PNJ, selon le style de boutique ci-dessous. Chaque article garde les conditions d'apparition de l'emplacement où il est vendu."
-		}
-
-		ShopStyle: {
-			Label: "Style des boutiques"
-			Tooltip: "Permutation : les articles sont échangés entre les marchands de même progression, chaque article reste donc vendu quelque part (avec les conditions de l'emplacement qui le reçoit). Aléatoire : chaque article est remplacé par un objet au hasard de la même catégorie."
-		}
-
-		ShopSurpriseChance: {
-			Label: "Chance de surprise en boutique (%)"
-			Tooltip: "Style permutation : part des articles échangés (hors matériaux) remplacés par un objet au hasard de la même catégorie. Chaque objet garde toujours au moins un exemplaire intact quelque part."
+			Label: Randomiser les boutiques
+			Tooltip: Chaque objet en vente est remplacé par un objet de même catégorie. Il garde les conditions d'apparition de l'objet d'origine. Les objets que rien d'autre ne donne dans ce monde (ni trouvables ni fabricables) restent en vente, parfois chez un autre marchand.
 		}
 
 		PriceMultiplierMin: {
@@ -2418,18 +2408,5 @@ Configs: {
 		}
 
 		// Tooltip: ""
-	}
-
-	ShopStyle: {
-
-		Permutation: {
-			Label: "Permutation entre marchands"
-			Tooltip: ""
-		}
-
-		Random: {
-			Label: "Objets aléatoires"
-			Tooltip: ""
-		}
 	}
 }

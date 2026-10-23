@@ -569,9 +569,6 @@ namespace UltimateRandomizer.Common.Core
 		// When a town NPC moves in, in vanilla (0: from the start, or unknown)
 		public static int VanillaArrivalTier(int npcType) => TownNpcTiers.TryGetValue(npcType, out Tier tier) ? (int)tier : 0;
 
-		// A shop condition of a special seed (true or false in a whole world)
-		public static bool IsSeedCondition(Condition condition) => SeedConditions.Contains(condition);
-
 		// The tier each known shop condition waits for (the others: none)
 		private static Dictionary<Condition, int> ShopConditionTiers()
 		{

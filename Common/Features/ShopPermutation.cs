@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
-using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
@@ -10,191 +9,249 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// ShopStyle.Permutation: the vanilla shop entries are shuffled between the merchants, like the enemies' drops
-	// (DropPermutation, whose groups and rank-based cycle are reused). Each permutable entry of a vanilla NPC's shop
-	// (NPCShopDatabase, entry index in NPCShop.Entries) is a place; its content (the entry's item) moves to another place of
-	// the same tier group and access class, and is sold with that place's conditions (moon phase, biome, bosses...). Every
-	// shop keeps its slots and every item of a permuted entry is still sold somewhere. A share of the moved contents
-	// (ShopSurpriseChance) becomes a random item of the same category, never the keeper copy of an item. Left as they are:
-	// special-currency entries (defender medals), the Traveling Merchant (not an NPCShop), pylons, items kept by the pool
-	// (DropHelper.KeepOriginal), modded items and seasonal entries (Halloween, Christmas). Computed from the world seed, the
-	// synced settings and the shop database built at load (the same on every machine); applied on the client that opens a
-	// shop (ModifyActiveShop), shops being client-side
+	// Randomized shops keep the items only a shop gives in this world. Every shop slot is a random roll (ShopPlanner.PlanShop),
+	// except the slots chosen here: each shop-only item (sold by a vanilla shop entry that is rolled, and neither found nor
+	// crafted in this world: Findability and the recipe plan, which count no shop) is moved to one reliable place of any
+	// merchant (its own place included) and sold there instead of a roll. A reliable place: a merchant whose arrival is known
+	// (not the Princess, the Skeleton Merchant, the Traveling Merchant nor Santa), and only conditions that the world fixes (and
+	// that hold in this world), progression, the time of day or a moon phase (avoided when possible); its tier is the highest
+	// of the merchant's arrival and its conditions' tiers, and must be within one tier of the item's. Built from the world
+	// seed, the synced settings and plans and the shop database built at load: the same on every machine. Applied on the
+	// client that opens a shop (ShopNPC.ModifyActiveShop), shops being client-side; the hints read the same plan
 	public static class ShopPermutation
 	{
-		// Conditions true or false for a whole world (its evil, difficulty, special seed, multiplayer): contents only move
-		// between places with the same set of them (the access class), so a Crimson-only entry stays Crimson-only
-		private static readonly Dictionary<Condition, string> Restrictive = new()
+		public enum ConditionKind { World, Progression, Daily, Moon, Situational }
+
+		// True or false for a whole world (its evil, difficulty, special seed, multiplayer): a place needs them all to hold here
+		private static readonly HashSet<Condition> WorldWide = new()
 		{
-			[Condition.CrimsonWorld] = "CrimsonWorld", [Condition.CorruptWorld] = "CorruptWorld",
-			[Condition.InClassicMode] = "Classic", [Condition.InExpertMode] = "Expert", [Condition.InMasterMode] = "Master", [Condition.InJourneyMode] = "Journey",
-			[Condition.Multiplayer] = "Multiplayer",
-			[Condition.DrunkWorld] = "Drunk", [Condition.RemixWorld] = "Remix", [Condition.NotTheBeesWorld] = "Bees", [Condition.ForTheWorthyWorld] = "Worthy",
-			[Condition.TenthAnniversaryWorld] = "Anniversary", [Condition.DontStarveWorld] = "DontStarve", [Condition.NoTrapsWorld] = "NoTraps", [Condition.ZenithWorld] = "Zenith",
-			[Condition.NotDrunkWorld] = "NotDrunk", [Condition.NotRemixWorld] = "NotRemix", [Condition.NotNotTheBeesWorld] = "NotBees", [Condition.NotForTheWorthy] = "NotWorthy",
-			[Condition.NotTenthAnniversaryWorld] = "NotAnniversary", [Condition.NotDontStarveWorld] = "NotDontStarve", [Condition.NotNoTrapsWorld] = "NotNoTraps",
-			[Condition.NotZenithWorld] = "NotZenith"
+			Condition.CrimsonWorld, Condition.CorruptWorld, Condition.InClassicMode, Condition.InExpertMode, Condition.InMasterMode, Condition.InJourneyMode,
+			Condition.Multiplayer, Condition.DrunkWorld, Condition.RemixWorld, Condition.NotTheBeesWorld, Condition.ForTheWorthyWorld, Condition.TenthAnniversaryWorld,
+			Condition.DontStarveWorld, Condition.NoTrapsWorld, Condition.ZenithWorld, Condition.NotDrunkWorld, Condition.NotRemixWorld, Condition.NotNotTheBeesWorld,
+			Condition.NotForTheWorthy, Condition.NotTenthAnniversaryWorld, Condition.NotDontStarveWorld, Condition.NotNoTrapsWorld, Condition.NotZenithWorld
 		};
 
-		// Seasonal entries keep their vanilla item: a content moved there would only be sold a few days a year
-		private static readonly HashSet<Condition> Seasonal = new() { Condition.Christmas, Condition.Halloween };
-
-		public static string AccessOf(IEnumerable<Condition> conditions) =>
-			string.Join("+", conditions.Where(c => c != null && Restrictive.ContainsKey(c)).Select(c => Restrictive[c]).Distinct().OrderBy(n => n, StringComparer.Ordinal));
-
-		// A shop entry that is a place (whatever the settings, so that a setting does not move the places of the world)
-		public static bool IsPlace(NPCShop.Entry entry)
+		// Met every day (or nearly: not during a Blood Moon or an eclipse)
+		private static readonly HashSet<Condition> Daily = new()
 		{
-			if (entry == null || entry.Disabled || entry.Item == null || entry.Item.IsAir) return false;
-			Item item = entry.Item;
-			if (item.type >= ItemID.Count || item.shopSpecialCurrency != -1 || item.createTile == TileID.TeleportationPylon) return false;
-			if (DropHelper.KeepOriginal(item.type)) return false;
-			return !entry.Conditions.Any(c => c != null && Seasonal.Contains(c));
+			Condition.TimeDay, Condition.TimeNight, Condition.NightOrEclipse, Condition.NotBloodMoon, Condition.NotEclipse, Condition.NotEclipseAndNotBloodMoon
+		};
+
+		// Met one night in eight (or more): acceptable, but other places come first
+		private static readonly HashSet<Condition> MoonPhases = new()
+		{
+			Condition.MoonPhaseFull, Condition.MoonPhaseWaningGibbous, Condition.MoonPhaseThirdQuarter, Condition.MoonPhaseWaningCrescent, Condition.MoonPhaseNew,
+			Condition.MoonPhaseWaxingCrescent, Condition.MoonPhaseFirstQuarter, Condition.MoonPhaseWaxingGibbous, Condition.MoonPhasesQuarter0, Condition.MoonPhasesQuarter1,
+			Condition.MoonPhasesQuarter2, Condition.MoonPhasesQuarter3, Condition.MoonPhasesHalf0, Condition.MoonPhasesHalf1, Condition.MoonPhasesEven, Condition.MoonPhasesOdd,
+			Condition.MoonPhasesNearNew, Condition.MoonPhasesEvenQuarters, Condition.MoonPhasesOddQuarters, Condition.MoonPhases04, Condition.MoonPhases15,
+			Condition.MoonPhases26, Condition.MoonPhases37
+		};
+
+		// Progression flags the classifier's shop table does not list
+		private static readonly Dictionary<Condition, int> ExtraProgression = new()
+		{
+			[Condition.BloodMoonOrHardmode] = (int)Tier.Hardmode,
+			[Condition.SmashedShadowOrb] = (int)Tier.PostEyeOfCthulhu
+		};
+
+		// Merchants whose arrival waits for what no table knows (the Princess: every other NPC), who only visit, or whose whole
+		// shop is seasonal (Santa)
+		public static readonly HashSet<int> UnreliableMerchants = new() { NPCID.Princess, NPCID.SkeletonMerchant, NPCID.TravellingMerchant, NPCID.SantaClaus };
+
+		// Everything not listed is situational: biomes, events, weather, parties, the bestiary, golf, carried items, nearby
+		// NPCs, the seasons, "until" conditions (pre-hardmode, not yet defeated) and any custom condition
+		public static ConditionKind Classify(Condition condition)
+		{
+			if (condition == null) return ConditionKind.Daily;
+			if (WorldWide.Contains(condition)) return ConditionKind.World;
+			if (Daily.Contains(condition)) return ConditionKind.Daily;
+			if (MoonPhases.Contains(condition)) return ConditionKind.Moon;
+			// An eclipse is in the classifier's table (its items wait for hardmode) but only lasts a day
+			if (condition != Condition.Eclipse && ConditionTier(condition) > 0) return ConditionKind.Progression;
+			return ConditionKind.Situational;
 		}
+
+		public static int ConditionTier(Condition condition) =>
+			condition != null && ExtraProgression.TryGetValue(condition, out int tier) ? tier : ItemClassifier.ShopConditionTier(condition);
 
 		// The vanilla NPC shops, in a stable order
 		public static IEnumerable<NPCShop> Shops() =>
 			NPCShopDatabase.AllShops.OfType<NPCShop>().Where(s => s.NpcType > 0 && s.NpcType < NPCID.Count).OrderBy(s => s.FullName, StringComparer.Ordinal);
 
-		public static int ShopKey(string fullName) => DetRandom.Hash(RollKey.ShopPermutation, DetRandom.StableHash(fullName ?? ""));
-
-		// When the merchant moves in: this world's arrival order (TownNpcOrderSystem, its vanilla order when not shuffled), else
-		// the vanilla arrival (Goblin Tinkerer, Wizard...)
+		// When the merchant moves in: this world's arrival order (TownNpcOrderSystem, its vanilla order when not shuffled; the
+		// setting is part of SeedSystem.CacheSignature), else the vanilla arrival (Goblin Tinkerer, Wizard...)
 		public static int ArrivalTier(int npcType)
 		{
 			int tier = TownNpcOrderSystem.ArrivalTier(npcType);
 			return tier >= 0 ? tier : ItemClassifier.VanillaArrivalTier(npcType);
 		}
 
-		// The tier of a place: the merchant's arrival, its conditions (hardmode, bosses...) and its own item's tier, the highest
-		public static int PlaceTier(int npcType, int item, IEnumerable<Condition> conditions)
+		public sealed class Place
 		{
-			int tier = Math.Max(ArrivalTier(npcType), ItemPool.TierOf(item));
-			foreach (Condition c in conditions) tier = Math.Max(tier, ItemClassifier.ShopConditionTier(c));
-			return Tiers.Clamp(tier);
+			public string Shop;
+			public int Npc;
+			// Entry index in NPCShop.Entries (lookup only: the choices never depend on it)
+			public int Index;
+			// The entry's vanilla item
+			public int Original;
+			public Condition[] Conditions;
+			// The highest of the merchant's arrival and the conditions' tiers
+			public int Tier;
+			// A random roll of ShopPlanner (randomizable item, no special currency)
+			public bool Rolled;
+			// The entry can be sold in this world (its world-wide conditions hold)
+			public bool Possible;
+			public bool Reliable;
+			public bool Moon;
+			// Why the place is not reliable ("" when it is)
+			public string Why = "";
+			// From the shop and the entry's item (and its occurrence among the shop's entries of that item), not the entry
+			// index: entries other mods insert don't move the plan
+			public int Key;
 		}
 
 		public sealed class WorldPlan
 		{
-			// DropPermutation places: Owner = merchant type, Index = entry index, OwnerKey = ShopKey, Entry.itemId = the item
-			public List<DropPermutation.Place> Places;
-			public List<string> Shops;
-			public List<Condition[]> Conditions;
-			// ContentOf[p]: the place whose content goes to place p
-			public int[] ContentOf;
-			public List<List<int>> Groups;
-			public bool[] SurpriseCandidate;
-			public bool[] Surprised;
-			// What each place sells: its content, or the surprise
-			public int[] Sold;
+			public List<Place> Places;
+			// The shop-only items of this world, in placement order
+			public List<int> ShopOnly;
+			// Per place: the shop-only item it sells instead of a roll (0: a random roll)
+			public int[] Guaranteed;
+			// Shop-only item -> its place
+			public Dictionary<int, int> SellerOf;
 			// Shop FullName -> entry index -> place
 			public Dictionary<string, Dictionary<int, int>> ByShop;
+			// Shop FullName -> the shop-only items it sells (the rolls of that shop avoid them)
+			public Dictionary<string, HashSet<int>> ShopItems;
+			// Placed out of the one-tier window (no free reliable place in it), or left at an unreliable place (none left)
+			public List<int> OutOfWindow = new();
+			public List<int> Unreliable = new();
 		}
 
 		private static WorldPlan cached;
 
 		public static void Reset() => cached = null;
 
-		public static void CollectPlaces(out List<DropPermutation.Place> places, out List<string> shops, out List<Condition[]> conditions)
+		// Every entry of the vanilla NPC shops (modded items apart)
+		public static List<Place> CollectPlaces(int seed)
 		{
-			places = new List<DropPermutation.Place>();
-			shops = new List<string>();
-			conditions = new List<Condition[]>();
+			List<Place> places = new();
 			foreach (NPCShop shop in Shops())
 			{
-				int key = ShopKey(shop.FullName);
+				int shopKey = DetRandom.StableHash(shop.FullName);
+				Dictionary<int, int> occurrences = new();
+				int arrival = ArrivalTier(shop.NpcType);
 				for (int i = 0; i < shop.Entries.Count; i++)
 				{
 					NPCShop.Entry entry = shop.Entries[i];
-					if (!IsPlace(entry)) continue;
-					Condition[] conds = entry.Conditions.Where(c => c != null).ToArray();
-					int item = entry.Item.type;
-					places.Add(new DropPermutation.Place
+					if (entry == null || entry.Disabled || entry.Item == null || entry.Item.IsAir || entry.Item.type >= ItemID.Count) continue;
+					Item item = entry.Item;
+					int occurrence = occurrences.TryGetValue(item.type, out int n) ? n : 0;
+					occurrences[item.type] = occurrence + 1;
+					Condition[] conditions = entry.Conditions.Where(c => c != null).ToArray();
+					Place place = new()
 					{
-						Owner = shop.NpcType, Index = i, OwnerKey = key, Tier = PlaceTier(shop.NpcType, item, conds), Access = AccessOf(conds),
-						Entry = new DropRateInfo(item, 1, 1, 1f, null)
-					});
-					shops.Add(shop.FullName);
-					conditions.Add(conds);
-				}
-			}
-		}
-
-		// Pure (with the item pool): the places whose content may become a surprise. Not a material, ore or bar, and not the
-		// keeper copy: every item keeps one unchanged copy, at the most reachable place selling it (lowest tier, fewest
-		// conditions, then the rank). Depends on no setting
-		public static bool[] SurpriseCandidates(IReadOnlyList<DropPermutation.Place> places, IReadOnlyList<Condition[]> conditions, int[] contentOf, int seed)
-		{
-			Dictionary<int, int> keeper = new();
-			(int, int, int, int, int, int) Order(int p) =>
-				(places[p].Tier, conditions[p].Length, DropPermutation.Rank(seed, places[p]), places[p].OwnerKey, places[p].Owner, places[p].Index);
-			for (int p = 0; p < places.Count; p++)
-			{
-				int item = places[contentOf[p]].Entry.itemId;
-				if (!keeper.TryGetValue(item, out int kept) || Order(p).CompareTo(Order(kept)) < 0) keeper[item] = p;
-			}
-			bool[] candidate = new bool[places.Count];
-			for (int p = 0; p < places.Count; p++)
-			{
-				int item = places[contentOf[p]].Entry.itemId;
-				candidate[p] = DropPermutation.SurpriseKind(item) && keeper[item] != p;
-			}
-			return candidate;
-		}
-
-		public static double SurpriseRoll(int seed, DropPermutation.Place place) => new Random(DetRandom.Hash(seed, RollKey.ShopSurprise, place.OwnerKey, place.Index)).NextDouble();
-
-		// The surprise of a place: an item of the content's category at the place's tier, everything unlocked (the place's
-		// tier and conditions already follow progression), no jackpot. 0 when the roll gives the content back
-		public static int Surprise(DropPermutation.Place place, int seed, int content)
-		{
-			RollRequest request = new()
-			{
-				Keys = new[] { RollKey.ShopSurprise, seed, place.OwnerKey, place.Index },
-				SourceTier = place.Tier,
-				OriginalItem = content,
-				Policy = CategoryPolicy.SameAsOriginal,
-				TierJitterDown = 0,
-				TierJitterUp = 0,
-				AllowJackpot = false,
-				IgnoreGating = true
-			};
-			int item = ItemPool.Roll(request);
-			return item > ItemID.None && item != content ? item : 0;
-		}
-
-		// The whole plan for a seed. surpriseChance in [0, 1] (ShopSurpriseChance when null; none in shuffle mode)
-		public static WorldPlan Build(int seed, float? surpriseChance = null)
-		{
-			CollectPlaces(out List<DropPermutation.Place> places, out List<string> shops, out List<Condition[]> conditions);
-			int[] contentOf = DropPermutation.Permute(places, seed, out List<List<int>> groups);
-			float chance = surpriseChance ?? (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle ? 0f : EconomyConfig.Instance.ShopSurpriseChance / 100f);
-			chance = Math.Clamp(chance, 0f, 1f);
-			bool[] candidates = SurpriseCandidates(places, conditions, contentOf, seed);
-			bool[] surprised = new bool[places.Count];
-			int[] sold = new int[places.Count];
-			Dictionary<string, Dictionary<int, int>> byShop = new();
-			for (int p = 0; p < places.Count; p++)
-			{
-				int content = places[contentOf[p]].Entry.itemId;
-				sold[p] = content;
-				if (chance > 0f && candidates[p] && SurpriseRoll(seed, places[p]) < chance)
-				{
-					int item = Surprise(places[p], seed, content);
-					if (item > 0)
+						Shop = shop.FullName, Npc = shop.NpcType, Index = i, Original = item.type, Conditions = conditions,
+						Rolled = item.shopSpecialCurrency == -1 && ItemPool.IsRandomizable(item.type),
+						Key = DetRandom.Hash(seed, RollKey.ShopPermutation, shopKey, DetRandom.StableHash(ItemID.Search.GetName(item.type)), occurrence)
+					};
+					int tier = arrival;
+					bool possible = true;
+					List<string> why = new();
+					if (UnreliableMerchants.Contains(shop.NpcType)) why.Add("merchant");
+					foreach (Condition c in conditions)
 					{
-						sold[p] = item;
-						surprised[p] = true;
+						switch (Classify(c))
+						{
+							case ConditionKind.World:
+								if (!c.IsMet()) possible = false;
+								break;
+							case ConditionKind.Progression:
+								tier = Math.Max(tier, ConditionTier(c));
+								break;
+							case ConditionKind.Moon:
+								place.Moon = true;
+								break;
+							case ConditionKind.Situational:
+								why.Add(c.Description?.Value ?? c.ToString());
+								break;
+						}
 					}
+					if (!possible) why.Add("not in this world");
+					if (!place.Rolled) why.Add("not rolled");
+					place.Tier = Tiers.Clamp(tier);
+					place.Possible = possible;
+					place.Reliable = why.Count == 0;
+					place.Why = string.Join(", ", why);
+					places.Add(place);
 				}
-				if (!byShop.TryGetValue(shops[p], out Dictionary<int, int> entries)) byShop[shops[p]] = entries = new Dictionary<int, int>();
+			}
+			return places;
+		}
+
+		// Found (drops, bags, gathered, guaranteed sources) or crafted in this world: Findability and the recipe plan, which
+		// never count a shop
+		public static bool HasOtherSource(int item, RecipePlan recipes)
+		{
+			if (Findability.Tier(item) != Findability.Never) return true;
+			return recipes?.Availability != null && item < recipes.Availability.Length && recipes.Availability[item] != Findability.Never;
+		}
+
+		// Is the place's tier within one tier of the item's
+		public static bool InWindow(int placeTier, int itemTier) => Math.Abs(placeTier - itemTier) <= 1;
+
+		// The whole plan for a seed; recipes: the world's recipe plan (null: crafting counts for nothing)
+		public static WorldPlan Build(int seed, RecipePlan recipes)
+		{
+			List<Place> places = CollectPlaces(seed);
+			// Shop-only: sold by a rolled entry that can be sold in this world, with no other source
+			List<int> shopOnly = places.Where(p => p.Rolled && p.Possible).Select(p => p.Original).Distinct()
+				.Where(i => !HasOtherSource(i, recipes))
+				.OrderBy(ItemPool.TierOf).ThenBy(i => ItemID.Search.GetName(i), StringComparer.Ordinal).ToList();
+			int[] guaranteed = new int[places.Count];
+			WorldPlan plan = new()
+			{
+				Places = places, ShopOnly = shopOnly, Guaranteed = guaranteed, SellerOf = new Dictionary<int, int>(),
+				ByShop = new Dictionary<string, Dictionary<int, int>>(), ShopItems = new Dictionary<string, HashSet<int>>()
+			};
+			for (int p = 0; p < places.Count; p++)
+			{
+				if (!plan.ByShop.TryGetValue(places[p].Shop, out Dictionary<int, int> entries)) plan.ByShop[places[p].Shop] = entries = new Dictionary<int, int>();
 				entries[places[p].Index] = p;
 			}
-			return new WorldPlan
+			// Moon phases last, then a rank from the place's and the item's stable keys (ties, never in practice: shop and entry)
+			(int, int, string, int) Order(int p, int item) =>
+				(places[p].Moon ? 1 : 0, DetRandom.Hash(seed, RollKey.ShopPermutation, places[p].Key, DetRandom.ItemKey(item)), places[p].Shop, places[p].Index);
+			foreach (int item in shopOnly)
 			{
-				Places = places, Shops = shops, Conditions = conditions, ContentOf = contentOf, Groups = groups,
-				SurpriseCandidate = candidates, Surprised = surprised, Sold = sold, ByShop = byShop
-			};
+				int itemTier = ItemPool.TierOf(item);
+				List<int> free = Enumerable.Range(0, places.Count).Where(p => places[p].Reliable && guaranteed[p] == 0).ToList();
+				List<int> window = free.Where(p => InWindow(places[p].Tier, itemTier)).ToList();
+				int chosen;
+				if (window.Count > 0)
+				{
+					chosen = window.OrderBy(p => Order(p, item)).First();
+				}
+				else if (free.Count > 0)
+				{
+					// The nearest tier, later rather than earlier
+					chosen = free.OrderBy(p => Math.Abs(places[p].Tier - itemTier)).ThenBy(p => places[p].Tier < itemTier ? 1 : 0).ThenBy(p => Order(p, item)).First();
+					plan.OutOfWindow.Add(item);
+				}
+				else
+				{
+					// No reliable place left: it stays at one of its own places
+					chosen = Enumerable.Range(0, places.Count).Where(p => places[p].Original == item && places[p].Rolled && places[p].Possible && guaranteed[p] == 0)
+						.DefaultIfEmpty(-1).First();
+					if (chosen < 0) continue;
+					plan.Unreliable.Add(item);
+				}
+				guaranteed[chosen] = item;
+				plan.SellerOf[item] = chosen;
+				if (!plan.ShopItems.TryGetValue(places[chosen].Shop, out HashSet<int> sold)) plan.ShopItems[places[chosen].Shop] = sold = new HashSet<int>();
+				sold.Add(item);
+			}
+			return plan;
 		}
 
 		// The plan of the current world (cleared by WorldCaches.Reset); null before the item pool and the world exist
@@ -204,23 +261,39 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (cached != null) return cached;
 				if (!ItemPool.Ready || !SeedSystem.WorldReady) return null;
-				return cached = Build(SeedSystem.WorldSeed);
+				return cached = Build(SeedSystem.WorldSeed, RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null);
 			}
 		}
 
-		// The price of an item sold by a shop: as the random style, from the merchant, the shop and the item
-		public static int PriceOf(int npcType, string shopName, int item) =>
-			PriceRules.Price(item, DetRandom.Get(RollKey.Price, DetRandom.NpcKey(npcType), DetRandom.StableHash(shopName ?? ""), DetRandom.ItemKey(item)));
+		// Who sells a shop-only item in this world, and from which tier (false: not a shop-only item, or shops not randomized)
+		public static bool Seller(int item, out int npc, out int tier)
+		{
+			npc = 0;
+			tier = 0;
+			WorldPlan plan = EconomyConfig.Instance.RandomizeShops ? Current : null;
+			if (plan == null || !plan.SellerOf.TryGetValue(item, out int p)) return false;
+			npc = plan.Places[p].Npc;
+			tier = plan.Places[p].Tier;
+			return true;
+		}
+
+		// The shop-only items a shop sells (empty: none)
+		public static IReadOnlyCollection<int> ItemsOf(WorldPlan plan, string shopName) =>
+			plan != null && shopName != null && plan.ShopItems.TryGetValue(shopName, out HashSet<int> items) ? items : Array.Empty<int>();
+
+		// The shop-only item of an entry (0: a random roll)
+		public static int GuaranteedAt(WorldPlan plan, string shopName, int entryIndex) =>
+			plan != null && shopName != null && plan.ByShop.TryGetValue(shopName, out Dictionary<int, int> entries) && entries.TryGetValue(entryIndex, out int p) ? plan.Guaranteed[p] : 0;
 
 		// Runs on the client opening the shop, after NPCShop.FillShop: replays its slot filling (entries in order, disabled
-		// ones skipped, unmet ones skipped unless their slot is reserved: an air slot) to know the entry of each slot, then
-		// sells the planned item in the slots of the places. A slot whose item is no longer its entry's (another mod changed
-		// it) is left alone
-		public static void Apply(NPC npc, string shopName, Item[] items)
+		// ones skipped, unmet ones skipped unless their slot is reserved: an air slot) to know the entry of each slot, and gives
+		// the shop-only item of each slot that sells one (0 elsewhere). A slot whose item is no longer its entry's (another mod
+		// changed it) gets none
+		public static int[] SlotItems(WorldPlan plan, string shopName, Item[] items)
 		{
-			WorldPlan plan = Current;
-			if (plan == null || shopName == null || !plan.ByShop.TryGetValue(shopName, out Dictionary<int, int> places)) return;
-			if (!NPCShopDatabase.TryGetNPCShop(shopName, out AbstractNPCShop found) || found is not NPCShop shop) return;
+			int[] result = new int[items.Length];
+			if (plan == null || shopName == null || !plan.ShopItems.ContainsKey(shopName)) return result;
+			if (!NPCShopDatabase.TryGetNPCShop(shopName, out AbstractNPCShop found) || found is not NPCShop shop) return result;
 			int limit = shop.FillLastSlot ? items.Length : items.Length - 1;
 			int slot = 0;
 			for (int e = 0; e < shop.Entries.Count && slot < limit; e++)
@@ -230,14 +303,12 @@ namespace UltimateRandomizer.Common.Features
 				bool met = entry.ConditionsMet();
 				if (!met && !entry.SlotReserved) continue;
 				int s = slot++;
-				if (!met || !places.TryGetValue(e, out int p)) continue;
+				if (!met) continue;
 				Item live = items[s];
-				if (live == null || live.IsAir || live.type != entry.Item.type || plan.Sold[p] == live.type) continue;
-				Item item = new(plan.Sold[p]);
-				item.stack = 1;
-				item.shopCustomPrice = PriceOf(npc?.type ?? shop.NpcType, shopName, plan.Sold[p]);
-				items[s] = item;
+				if (live == null || live.IsAir || live.type != entry.Item.type) continue;
+				result[s] = GuaranteedAt(plan, shopName, e);
 			}
+			return result;
 		}
 	}
 
