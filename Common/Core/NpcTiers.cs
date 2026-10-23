@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Terraria;
+using Terraria.DataStructures;
 using Terraria.ID;
 using UltimateRandomizer.Common.Configs;
 
@@ -74,7 +76,8 @@ namespace UltimateRandomizer.Common.Core
 			}
 			else if (ContentSamples.NpcsByNetId.TryGetValue(npcType, out NPC sample))
 			{
-				tier = Math.Max(LifeTier(sample.lifeMax), DamageTier(sample.damage));
+				(int life, int damage) = NormalStats(npcType);
+				tier = Math.Max(LifeTier(life), DamageTier(damage));
 				if (sample.boss) tier = Math.Max(tier, (int)Tier.PostEyeOfCthulhu);
 			}
 			else
@@ -95,6 +98,42 @@ namespace UltimateRandomizer.Common.Core
 				tier = Math.Max(tier, ProgressionSystem.UnlockedTier - 1);
 			}
 			return Tiers.Clamp(tier);
+		}
+
+		// Set while NormalStats builds its NPC: EnemyStatsNPC leaves the world's multipliers out
+		public static bool Sampling;
+
+		private static readonly FieldInfo ExpertOverride = typeof(Main).GetField("_overrideForExpertMode", BindingFlags.NonPublic | BindingFlags.Static);
+		private static readonly FieldInfo MasterOverride = typeof(Main).GetField("_overrideForMasterMode", BindingFlags.NonPublic | BindingFlags.Static);
+
+		// Base life and damage of an NPC in a plain normal-mode world. ContentSamples are scaled by the game mode (and secret
+		// seeds) of the last world played before the mods were (re)loaded: after an expert world, a reload made every enemy
+		// look stronger, which changed the tiers, the enemy swaps and the drops of a world from one session to the next
+		public static (int life, int damage) NormalStats(int netId)
+		{
+			bool goodWorld = Main.getGoodWorld, remix = Main.remixWorld, zenith = Main.zenithWorld, tenth = Main.tenthAnniversaryWorld, hardMode = Main.hardMode;
+			object expert = ExpertOverride?.GetValue(null), master = MasterOverride?.GetValue(null);
+			try
+			{
+				Main.getGoodWorld = Main.remixWorld = Main.zenithWorld = Main.tenthAnniversaryWorld = Main.hardMode = false;
+				ExpertOverride?.SetValue(null, (bool?)false);
+				MasterOverride?.SetValue(null, (bool?)false);
+				Sampling = true;
+				NPC npc = new();
+				npc.SetDefaults(netId, new NPCSpawnParams { gameModeData = GameModeData.NormalMode, strengthMultiplierOverride = 1f, playerCountForMultiplayerDifficultyOverride = 1 });
+				return (npc.lifeMax, npc.damage);
+			}
+			finally
+			{
+				Sampling = false;
+				Main.getGoodWorld = goodWorld;
+				Main.remixWorld = remix;
+				Main.zenithWorld = zenith;
+				Main.tenthAnniversaryWorld = tenth;
+				Main.hardMode = hardMode;
+				ExpertOverride?.SetValue(null, expert);
+				MasterOverride?.SetValue(null, master);
+			}
 		}
 
 		private static int LifeTier(int life) => life switch

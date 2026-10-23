@@ -45,6 +45,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ProtectedRecipesDoable", ProtectedRecipesDoable);
 			TestRunner.Register("RecipeAlwaysFinalResult", RecipeAlwaysFinalResult);
 			TestRunner.Register("RecipeKeyIngredient", RecipeKeyIngredient);
+			TestRunner.Register("RecipeNoStationTwins", RecipeNoStationTwins);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -770,7 +771,7 @@ namespace UltimateRandomizer.Common.Tests
 
 		// A randomized vanilla recipe can't be made before U, the unlocked tier of its result (a key ingredient, a station or
 		// its own ingredients make it wait), and a key ingredient makes it doable at U, not later (U + 1 only when U has no
-		// key material). A result re-picked back to the original is vanilla and not checked
+		// key material). A recipe giving its vanilla result (protected, kept, or re-picked back to it) is not checked
 		private static void RecipeKeyIngredient()
 		{
 			RequireApplied();
@@ -799,7 +800,8 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				if (doable[i] < u)
 				{
-					if (!(plan.ResultRepicked[i] && results[i] == RecipeSystem.OriginalResult(i)))
+					// A recipe still giving its vanilla result is that item's vanilla source: never locked
+					if (results[i] != RecipeSystem.OriginalResult(i))
 					{
 						failures.Add($"{Name(RecipeSystem.OriginalResult(i))} -> {Name(results[i])}: doable at {doable[i]}, before its tier {u} ({Ingredients(ingredients[i])})");
 					}
@@ -813,6 +815,48 @@ namespace UltimateRandomizer.Common.Tests
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeKeyIngredient: {gated} gated recipes, {keys} key ingredients, {repicked} results re-picked, " +
 				$"{later} doable after their tier (their own ingredients or stations), {never} never doable");
 			Check.All(failures, "Recipes doable before their result's tier");
+		}
+
+		// No two live vanilla recipes give the same result from the same ingredients (same groups and conditions) on different
+		// stations: planned twins share their stations and the copies are switched off. Two kept recipes (stations never
+		// randomized) are vanilla alternatives and not checked
+		private static void RecipeNoStationTwins()
+		{
+			RequireApplied();
+			if (!CraftingConfig.Instance.RandomizeStations) Check.Skip("stations are not randomized");
+			RecipePlan plan = RecipePlanner.Get();
+			Dictionary<string, int> seen = new();
+			List<string> failures = new();
+			List<string> examples = new();
+			int copies = 0;
+			string Key(Recipe recipe) => $"{recipe.createItem.type}x{recipe.createItem.stack}|"
+				+ string.Join(",", recipe.requiredItem.Select(item => $"{item.type}x{item.stack}").OrderBy(s => s, StringComparer.Ordinal))
+				+ "|" + string.Join(",", recipe.acceptedGroups.OrderBy(g => g)) + "|" + string.Join(",", recipe.Conditions.Select(c => c.Description.Key));
+			string Tiles(Recipe recipe) => string.Join(",", recipe.requiredTile.OrderBy(t => t));
+			for (int i = 0; i < Count; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (plan.Twin[i])
+				{
+					copies++;
+					if (!recipe.Disabled) failures.Add($"{Name(recipe.createItem.type)}: copy (recipe {i}) still enabled");
+					if (examples.Count < 5) examples.Add($"{Name(recipe.createItem.type)} ({Ingredients(recipe.requiredItem.Select(item => (item.type, item.stack)).ToArray())})");
+				}
+				if (recipe.Disabled || RecipeSystem.IsModded(i)) continue;
+				string key = Key(recipe);
+				if (!seen.TryGetValue(key, out int other))
+				{
+					seen[key] = i;
+					continue;
+				}
+				if (!RecipeSystem.Touchable(i) && !RecipeSystem.Touchable(other)) continue;
+				if (Tiles(recipe) != Tiles(Main.recipe[other]))
+				{
+					failures.Add($"{Name(recipe.createItem.type)} ({Ingredients(recipe.requiredItem.Select(item => (item.type, item.stack)).ToArray())}): recipes {other} and {i} on different stations");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoStationTwins: {copies} identical copies switched off; e.g. {(examples.Count == 0 ? "none" : string.Join("; ", examples))}");
+			Check.All(failures, "Same recipe on different stations");
 		}
 
 		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));

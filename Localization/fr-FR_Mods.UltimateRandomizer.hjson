@@ -119,6 +119,7 @@ Tests: {
 	PlanDiff: Mesure à quel point le mur du mode difficile change le plan de ce monde (recettes, trouvabilité, butins garantis) par rapport aux anciennes règles (dans le journal) ; le butin final des ennemis et des sacs ne doit pas changer
 	TierCoherence: Mesure, pour la refonte des recettes, les matériaux de chaque palier, les stations de progression, les recettes sans ingrédient du palier de leur résultat, les paliers relevés et la traîne des coffres jackpot (dans le journal)
 	TierAudit: Liste dans TierAudit.tsv les objets vanilla dont le palier semble douteux (relevé par leurs sources, une source bien plus précoce, ou aucune source), et compte les objets bannis du plan des monstres (dans le journal)
+	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
 	LockedVanillaDropRemoved: Un butin d'origine remplacé encore verrouillé par la progression ne tombe pas ; un butin débloqué tombe comme prévu
@@ -131,6 +132,7 @@ Tests: {
 	CritterPoolSafe: Aucun critter doré, Chrysope prismatique, Ver truffe ou critter de lave ne peut en remplacer un autre
 	CritterHabitat: Les critters aquatiques, volants et terrestres restent dans leur habitat
 	SwapStatsCount: Les apparitions naturelles sont comptées, celles des statues ignorées
+	NpcTiersNormalStats: Les tiers des ennemis viennent des stats du mode normal, quel que soit le monde joué avant un rechargement
 	CodexRecordsLoot: Le codex enregistre l'ennemi tué et chaque objet lâché par un slime
 	CodexRecipesFromGuide: Le Guide fait découvrir les recettes qui utilisent l'objet et celles qui le donnent
 	CodexSaveLoad: Le codex est sauvegardé et rechargé avec le monde sans rien perdre
@@ -226,6 +228,7 @@ Tests: {
 	ProtectedRecipesDoable: Les recettes des stations de progression et des objets protégés sont faisables à leur niveau
 	RecipeAlwaysFinalResult: Les recettes donnent toujours leur résultat final, sans remplaçant avant son tier
 	RecipeKeyIngredient: Les recettes randomisées ne sont pas faisables avant le tier de leur résultat (ingrédient clé)
+	RecipeNoStationTwins: Une même recette (résultat et ingrédients) n'apparaît jamais sur deux stations différentes
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares

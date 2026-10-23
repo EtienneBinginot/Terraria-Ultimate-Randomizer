@@ -119,6 +119,7 @@ Tests: {
 	PlanDiff: Measures how much of this world's plan (recipes, findability, guaranteed drops) the hardmode wall changes, compared with the older rules (logged); the final drops of enemies and bags must not change
 	TierCoherence: Measures, for the recipe redesign, the materials of each tier, the progression stations, the recipes lacking an ingredient of their result's tier, the raised tiers and the jackpot chest tail (logged)
 	TierAudit: Lists the vanilla items whose tier looks doubtful (raised by their sources, a source much earlier, or no source at all) in TierAudit.tsv, and counts the banned items of the enemy plan (logged)
+	WorldChestTrueTiers: Items of world-generated chests are found from their chest's tier (true tier lowered, never raised)
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
 	LockedVanillaDropRemoved: A replaced original drop still locked by progression does not drop; an unlocked one drops as planned
@@ -131,6 +132,7 @@ Tests: {
 	CritterPoolSafe: No gold critter, Prismatic Lacewing, Truffle Worm or lava critter can appear in place of another
 	CritterHabitat: Water, flying and ground critters stay in their habitat
 	SwapStatsCount: Natural spawns are counted, statue spawns are left alone
+	NpcTiersNormalStats: Enemy tiers come from normal-mode stats, whatever world was played before a reload
 	CodexRecordsLoot: The codex records the kill and every item dropped by a slime
 	CodexRecipesFromGuide: The Guide discovers the recipes using the item and those giving it
 	CodexSaveLoad: The codex is saved and loaded with the world without loss
@@ -226,6 +228,7 @@ Tests: {
 	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
 	RecipeAlwaysFinalResult: Recipes always give their final result, with no stand-in before its tier
 	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
+	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer

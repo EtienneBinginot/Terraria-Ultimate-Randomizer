@@ -4,6 +4,7 @@ using Terraria;
 using Terraria.DataStructures;
 using Terraria.GameContent.Events;
 using Terraria.ID;
+using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Features;
 
@@ -18,6 +19,27 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CritterPoolSafe", CritterPoolSafe);
 			TestRunner.Register("CritterHabitat", CritterHabitat);
 			TestRunner.Register("SwapStatsCount", SwapStatsCount);
+			TestRunner.Register("NpcTiersNormalStats", NpcTiersNormalStats);
+		}
+
+		// Enemy tiers come from the normal-mode stats, whatever world was played before the mods were loaded (ContentSamples
+		// are scaled by that world's game mode: an expert world made every enemy a tier or two stronger after a reload, and
+		// changed the swaps and drops of the next world). The sampling leaves the world's flags as they were
+		private static void NpcTiersNormalStats()
+		{
+			List<string> failures = new();
+			bool expert = Main.expertMode, master = Main.masterMode, goodWorld = Main.getGoodWorld, hardMode = Main.hardMode;
+			foreach ((int id, int life, int damage, int tier) in new[] { (NPCID.Zombie, 45, 14, 0), (NPCID.DemonEye, 60, 18, 1), (NPCID.BlueSlime, 25, 7, 0), (NPCID.Pinky, 150, 5, 2) })
+			{
+				(int l, int d) = Core.NpcTiers.NormalStats(id);
+				if (l != life || d != damage) failures.Add($"{Lang.GetNPCNameValue(id)}: {l} life, {d} damage, expected {life} and {damage}");
+				if (Core.NpcTiers.BaseTier(id) != tier) failures.Add($"{Lang.GetNPCNameValue(id)}: tier {Core.NpcTiers.BaseTier(id)}, expected {tier}");
+				NPC sample = ContentSamples.NpcsByNetId[id];
+				if (sample.lifeMax != life) ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"NpcTiersNormalStats: the {Lang.GetNPCNameValue(id)} sample has {sample.lifeMax} life (scaled by the game mode of the world before the last reload)");
+			}
+			if (Main.expertMode != expert || Main.masterMode != master || Main.getGoodWorld != goodWorld || Main.hardMode != hardMode) failures.Add("the sampling changed the world's flags");
+			if (Core.NpcTiers.Sampling) failures.Add("still sampling");
+			Check.All(failures, "Enemy tiers not from the normal-mode stats");
 		}
 
 		private static bool BiomeMode => EnemiesConfig.Instance.EnemySwapMode == EnemySwapMode.ByBiome;

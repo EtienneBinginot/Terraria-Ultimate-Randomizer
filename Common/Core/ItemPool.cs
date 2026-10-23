@@ -28,6 +28,8 @@ namespace UltimateRandomizer.Common.Core
 		public bool Banned;
 		// Its true tier (or ban) comes from the hand-reviewed MaterialTiers table
 		public bool FromTable;
+		// Its true tier was lowered by a world-generated chest that holds it (ItemClassifier.LowerByWorldChests)
+		public bool FromWorldChest;
 		public bool Excluded;
 		public bool Protected;
 	}
@@ -142,6 +144,9 @@ namespace UltimateRandomizer.Common.Core
 				if (set != Math.Max(tiers[type], trueTiers[type])) tableChanged++;
 				trueTiers[type] = set;
 			}
+			// Then the chests of world generation: what they hold is found from their tier (lower only)
+			bool[] fromChest = new bool[count];
+			int byChests = ItemClassifier.LowerByWorldChests(trueTiers, tiers, fromTable, overrides, fromChest, sourceTiers, sourceNames, out string chestExamples);
 			int banned = 0;
 			for (int type = 1; type < count; type++)
 			{
@@ -157,11 +162,11 @@ namespace UltimateRandomizer.Common.Core
 				// Banned items stay in their bucket (the buckets never change): rolls re-pick them
 				bool isBanned = ItemClassifier.IsBanned(item) || tableBanned[type];
 				if (isBanned) banned++;
-				// A material of the table keeps the table's tier even below its bucket's tier
-				int trueTier = fromTable[type] ? trueTiers[type] : Math.Max(tier, trueTiers[type]);
+				// A material of the table (or a world chest item) keeps that tier even below its bucket's tier
+				int trueTier = fromTable[type] || fromChest[type] ? trueTiers[type] : Math.Max(tier, trueTiers[type]);
 				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = trueTier, Banned = isBanned, Protected = isProtected,
 					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fromTable[type] && trueTiers[type] > Math.Max(tier, beforeSources[type]),
-					FromTable = fromTable[type] };
+					FromTable = fromTable[type], FromWorldChest = fromChest[type] };
 				if (!isProtected) lists[(int)category, tier].Add(type);
 			}
 
@@ -185,7 +190,7 @@ namespace UltimateRandomizer.Common.Core
 			logger.Info($"Classified {count} items in {watch.ElapsedMilliseconds} ms ({protectedItems.Count} protected, {banned} banned), "
 				+ $"tiers from recipes: {lowered} lowered ({loweredExamples}), {raised} raised ({raisedExamples}); "
 				+ $"tiers from sources: {bySources} raised ({sourceExamples}); material table: {fromTable.Count(f => f)} listed, {tableChanged} true tiers changed, "
-				+ $"{tableBanned.Count(b => b)} banned.");
+				+ $"{tableBanned.Count(b => b)} banned; world chests: {byChests} true tiers lowered ({chestExamples}).");
 			LogSuspicious(logger);
 		}
 
