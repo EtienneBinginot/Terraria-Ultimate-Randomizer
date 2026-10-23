@@ -39,10 +39,13 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("RealCrafting", RealCrafting);
 			TestRunner.Register("PickaxePerMiningLevel", PickaxePerMiningLevel);
 			TestRunner.Register("RecipeRandomizationShare", RecipeRandomizationShare);
-			TestRunner.Register("RecipeResultsConserved", RecipeResultsConserved);
-			TestRunner.Register("RecipeRepicksKeepAvailability", RecipeRepicksKeepAvailability);
+			TestRunner.Register("RecipeEveryItemKept", RecipeEveryItemKept);
+			TestRunner.Register("RecipeNoCycles", RecipeNoCycles);
+			TestRunner.Register("RecipeKeyed", RecipeKeyed);
+			TestRunner.Register("RecipeSwapsShare", RecipeSwapsShare);
+			TestRunner.Register("ZenithWeapons", ZenithWeapons);
+			TestRunner.Register("IngredientReuse", IngredientReuse);
 			TestRunner.Register("CraftedValueFromIngredients", CraftedValueFromIngredients);
-			TestRunner.Register("FurnitureSurprise", FurnitureSurprise);
 			TestRunner.Register("ProtectedRecipesDoable", ProtectedRecipesDoable);
 			TestRunner.Register("RecipeAlwaysFinalResult", RecipeAlwaysFinalResult);
 			TestRunner.Register("RecipeKeyIngredient", RecipeKeyIngredient);
@@ -284,9 +287,10 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			for (int i = 0; i < Count; i++)
 			{
-				// The upgrade recipes are worth at least their upgrade (LockSpecials)
+				// The upgrade recipes are worth at least their upgrade (LockSpecials); a swapped recipe about the vanilla recipe of
+				// the item it gives
 				if (plan.Ingredients[i] == null || SpecialRecipe(plan, i)) continue;
-				long before = RecipeSystem.OriginalIngredientValue(i);
+				long before = RecipeSystem.OriginalIngredientValue(plan.SwapPartner[i] >= 0 ? plan.SwapPartner[i] : i);
 				long after = plan.IngredientValues[i];
 				// A stack held by the cap may lose value; a new ingredient's stack is rounded up, so each one may add up to its
 				// own unit value (a x1 of something pricier than its share). Nothing else excuses a change: a rebuilt recipe is
@@ -480,10 +484,11 @@ namespace UltimateRandomizer.Common.Tests
 			for (int i = 0; i < Count; i++)
 			{
 				Item result = Main.recipe[i].createItem;
-				// Ingredients and stations were planned around the result the permutation gave the recipe
-				(int type, int stack) rolled = RecipePlanner.PermutedResult(i);
-				// An upgrade recipe gives its upgrade instead (AssignSpecials), a re-picked one (and its partner) the swapped result
-				if (rolled != plan.Results[i] && !plan.ResultRepicked[i] && !plan.ResultSwapped[i] && !SpecialRecipe(plan, i)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: planned around {Name(rolled.type)} x{rolled.stack}, gives {Name(plan.Results[i].type)} x{plan.Results[i].stack}");
+				// Every recipe plans its vanilla result, or the vanilla result (and stack) of its swap partner, which points back
+				int partner = plan.SwapPartner[i];
+				(int type, int stack) expected = partner >= 0 ? (RecipeSystem.OriginalResult(partner), RecipeSystem.OriginalStack(partner)) : (RecipeSystem.OriginalResult(i), RecipeSystem.OriginalStack(i));
+				if (expected != plan.Results[i]) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: gives {Name(plan.Results[i].type)} x{plan.Results[i].stack}, {Name(expected.type)} x{expected.stack} expected");
+				if (partner >= 0 && plan.SwapPartner[partner] != i) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: swapped with recipe {partner}, which is swapped with {plan.SwapPartner[partner]}");
 				if (plan.Results[i].type != RecipeSystem.OriginalResult(i) && Main.recipe[i].requiredItem.Any(item => item.type == plan.Results[i].type))
 				{
 					failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {Name(plan.Results[i].type)} is both an ingredient and the result");
@@ -621,111 +626,272 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Mining levels without a pickaxe in time");
 		}
 
-		// Share of the vanilla recipes the plan changes, and why the others keep their result (values logged even when passing)
+		// Share of the vanilla recipes the plan changes, and why the others keep their result (values logged even when passing):
+		// nearly all of them change (new ingredients), and few swap their result, about the swap chance
 		private static void RecipeRandomizationShare()
 		{
 			if (!CraftingConfig.Instance.RandomizeRecipes || !RecipeSystem.Applied) Check.Skip("recipes are not randomized");
 			RecipeShare share = RecipeStats.Compute();
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info(share.Summary());
 			Check.That(share.Total > 0, "no vanilla recipe");
-			Check.That(share.ResultShare >= 0.85, $"only {share.ResultShare:P1} of the recipes change their result");
+			double most = CraftingConfig.Instance.RecipeResultSwapChance / 100.0 + 0.05;
+			Check.That(share.ResultShare <= most, $"{share.ResultShare:P1} of the recipes change their result, at most {most:P0} expected (swap chance)");
 			if (CraftingConfig.Instance.IngredientMode == IngredientMode.Randomized) Check.That(share.AnyShare >= 0.95, $"only {share.AnyShare:P1} of the recipes change their result or ingredients");
 		}
 
-		// The results of the randomized vanilla recipes are a permutation of their vanilla results (RecipePlanner.PermutedResults):
-		// every item one of them made is still made by a recipe of the plan (only the hosts of the life and mana upgrades may
-		// lose theirs, when the item has another source: a shop, a drop, the world), and none is made by more of them than in
-		// vanilla (an upgrade by its own recipe). The permutation of each mode is checked too (explicit mode). Rolled one by one,
-		// the results piled up on cheap items (Shadewood Sword) and the Zenith was made by none
-		private static void RecipeResultsConserved()
+		// Every item a vanilla recipe makes is still the result of a live recipe (results swapped by pairs, the upgrades on
+		// their own recipes), and every item had in vanilla is still had with the plan (nothing lost by the swaps or the rebuilt
+		// ingredients); the Zenith by name
+		private static void RecipeEveryItemKept()
 		{
 			RequireApplied();
-			if (!CraftingConfig.Instance.RandomizeRecipes) Check.Skip("recipes are not randomized");
 			RecipePlan plan = RecipePlanner.Get();
-			HashSet<int> hosts = Protection.Upgrades.Select(RecipePlanner.SpecialRecipe).Where(i => i >= 0).ToHashSet();
-			HashSet<int> hostItems = hosts.Select(i => RecipePlanner.PermutedResult(i).type).ToHashSet();
-			HashSet<int> elsewhere = Obtainability.Collect(withRecipes: false, anyBlock: false);
-			Dictionary<int, int> vanilla = new(), planned = new(), made = new();
-			int randomized = 0;
+			HashSet<int> made = new();
 			for (int i = 0; i < Count; i++)
 			{
-				if (RecipeSystem.IsShell(i) ? !RecipePlanner.ShellActive(plan, i) : RecipeSystem.VanillaDisabled(i)) continue;
-				int result = plan.Results[i].type;
-				made[result] = made.GetValueOrDefault(result) + 1;
-				if (RecipeSystem.IsShell(i) || !RecipeSystem.Touchable(i) || RecipeSystem.HouseRecipe(i)) continue;
-				randomized++;
-				int original = RecipeSystem.OriginalResult(i);
-				vanilla[original] = vanilla.GetValueOrDefault(original) + 1;
-				planned[result] = planned.GetValueOrDefault(result) + 1;
+				if (!Main.recipe[i].Disabled) made.Add(Main.recipe[i].createItem.type);
 			}
-			Check.That(randomized > 0, "no randomized recipe");
 			List<string> failures = new();
-			foreach ((int item, int n) in vanilla.OrderBy(p => p.Key))
-			{
-				if (made.GetValueOrDefault(item) > 0) continue;
-				if (!hostItems.Contains(item)) failures.Add($"{Name(item)}: made by {n} recipe(s) in vanilla, by none now");
-				else if (!elsewhere.Contains(item)) failures.Add($"{Name(item)}: given away to an upgrade, made by no recipe and found nowhere else");
-			}
-			// Each mode's permutation, before the upgrades and the re-picks: the same results as vanilla, as many times
-			Dictionary<int, int> before = new();
+			HashSet<int> vanillaMade = new();
 			for (int i = 0; i < Count; i++)
 			{
-				if (!RecipeSystem.IsShell(i) && !RecipeSystem.VanillaDisabled(i)) before[RecipeSystem.OriginalResult(i)] = before.GetValueOrDefault(RecipeSystem.OriginalResult(i)) + 1;
+				if (RecipeSystem.IsShell(i) || RecipeSystem.VanillaDisabled(i)) continue;
+				int item = RecipeSystem.OriginalResult(i);
+				if (vanillaMade.Add(item) && !made.Contains(item)) failures.Add($"{Name(item)}: made by a vanilla recipe, by no live recipe");
 			}
-			foreach (RandomizerMode mode in new[] { RandomizerMode.Coherent, RandomizerMode.Chaos, RandomizerMode.Shuffle })
+			// What vanilla has: the original recipes as they are, with the same raw sources
+			int[] vanilla = RecipePlanner.Availability(Findability.Tier, Enumerable.Range(0, Count).Select(RecipeSystem.OriginalResult).ToArray(), new int[Count],
+				Enumerable.Range(0, Count).Select(RecipeSystem.OriginalIngredients).ToArray(), Enumerable.Range(0, Count).Select(RecipeSystem.OriginalTiles).ToArray(), out _, null,
+				Enumerable.Range(0, Count).Select(RecipeSystem.OriginalGroups).ToArray());
+			int lost = 0;
+			for (int item = 1; item < vanilla.Length && item < plan.Availability.Length; item++)
 			{
-				(int type, int stack)[] permuted = RecipePlanner.PermutedResults(randomizerMode: mode);
-				Dictionary<int, int> after = new();
-				for (int i = 0; i < Count; i++)
-				{
-					if (!RecipeSystem.IsShell(i) && !RecipeSystem.VanillaDisabled(i)) after[permuted[i].type] = after.GetValueOrDefault(permuted[i].type) + 1;
-				}
-				List<string> diff = before.Keys.Union(after.Keys).Where(item => before.GetValueOrDefault(item) != after.GetValueOrDefault(item)).OrderBy(item => item).Take(8)
-					.Select(item => $"{Name(item)} {before.GetValueOrDefault(item)} -> {after.GetValueOrDefault(item)}").ToList();
-				if (diff.Count > 0) failures.Add($"{mode}: not a permutation ({string.Join(", ", diff)})");
+				if (vanilla[item] >= Findability.Never || plan.Availability[item] < Findability.Never) continue;
+				lost++;
+				if (failures.Count < 20) failures.Add($"{Name(item)}: had at {vanilla[item]} in vanilla, never with the plan");
 			}
-			foreach ((int item, int n) in planned.OrderBy(p => p.Key))
+			if (vanillaMade.Contains(ItemID.Zenith))
 			{
-				int allowed = vanilla.GetValueOrDefault(item) + (ItemPool.IsSpecial(item) && hosts.Contains(RecipePlanner.SpecialRecipe(item)) ? 1 : 0);
-				if (n > allowed) failures.Add($"{Name(item)}: result of {n} randomized recipes, {allowed} in vanilla");
-			}
-			// The two items of the report
-			if (vanilla.ContainsKey(ItemID.Zenith))
-			{
-				Check.That(made.GetValueOrDefault(ItemID.Zenith) > 0, $"{Name(ItemID.Zenith)} is made by no recipe");
+				Check.That(made.Contains(ItemID.Zenith), $"{Name(ItemID.Zenith)} is made by no recipe");
 				Check.That(plan.Availability[ItemID.Zenith] < Findability.Never, $"{Name(ItemID.Zenith)} can't be crafted");
 			}
-			if (vanilla.ContainsKey(ItemID.ShadewoodSword))
-			{
-				int shadewood = planned.GetValueOrDefault(ItemID.ShadewoodSword);
-				Check.That(shadewood <= vanilla[ItemID.ShadewoodSword], $"{Name(ItemID.ShadewoodSword)} is the result of {shadewood} randomized recipes, {vanilla[ItemID.ShadewoodSword]} in vanilla");
-			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeResultsConserved: {randomized} randomized recipes, {vanilla.Count} distinct results, "
-				+ $"{Enumerable.Range(0, Count).Count(i => plan.ResultRepicked[i])} re-picks swapped, upgrade hosts {string.Join(", ", hostItems.Select(Name))}");
-			Check.All(failures, "Recipe results not conserved");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeEveryItemKept: {vanillaMade.Count} items made by vanilla recipes, {lost} items had in vanilla lost; " +
+				$"Zenith at {Show(plan.Availability[ItemID.Zenith])}");
+			Check.All(failures, "Items lost by the recipe plan");
 		}
 
-		// The re-picks of RecipePlanner.LockResults never make an item impossible: every item the plan has without them (the
-		// permutation and the upgrades, with the planned ingredients and stations) is still available with them (moving a
-		// result to a recipe that needs it, directly or not, made it never available)
-		private static void RecipeRepicksKeepAvailability()
+		// The live recipes as a graph: each ingredient (or every member of its recipe group) to the result
+		private static Dictionary<int, HashSet<int>> LiveGraph()
 		{
-			RequireApplied();
-			if (!CraftingConfig.Instance.RandomizeRecipes) Check.Skip("recipes are not randomized");
-			RecipePlan plan = RecipePlanner.Get();
-			int changed = Enumerable.Range(0, Count).Count(i => plan.ResultRepicked[i] || plan.ResultSwapped[i]);
-			int[] unpicked = Enumerable.Range(0, Count).Select(i => RecipePlanner.UnlockedResult(i).type).ToArray();
-			(int type, int stack)[][] ingredients = Enumerable.Range(0, Count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
-			int[][] tiles = Enumerable.Range(0, Count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
-			int[][] groups = Enumerable.Range(0, Count).Select(i => RecipePlanner.GroupsOf(plan, i)).ToArray();
-			int[] without = RecipePlanner.Availability(Findability.Tier, unpicked, new int[Count], ingredients, tiles, out _, plan.Twin, groups);
-			List<string> failures = new();
-			for (int item = 1; item < without.Length && item < plan.Availability.Length; item++)
+			Dictionary<int, HashSet<int>> next = new();
+			for (int i = 0; i < Count; i++)
 			{
-				if (without[item] < Findability.Never && plan.Availability[item] >= Findability.Never) failures.Add($"{Name(item)}: at {Show(without[item])} without the re-picks, never with them");
+				Recipe recipe = Main.recipe[i];
+				if (recipe.Disabled) continue;
+				foreach (Item ingredient in recipe.requiredItem)
+				{
+					foreach (int from in Members(recipe, ingredient.type))
+					{
+						if (!next.TryGetValue(from, out HashSet<int> set)) next[from] = set = new HashSet<int>();
+						set.Add(recipe.createItem.type);
+					}
+				}
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeRepicksKeepAvailability: {changed} recipes re-picked or swapped, {failures.Count} items lost");
-			Check.All(failures, "Items never available because of the re-picks");
+			return next;
+		}
+
+		// The items a live recipe's ingredient slot accepts (its group's members, or the item itself)
+		private static IEnumerable<int> Members(Recipe recipe, int type)
+		{
+			foreach (int id in recipe.acceptedGroups)
+			{
+				if (RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group) && group.ContainsItem(type)) return group.ValidItems;
+			}
+			return new[] { type };
+		}
+
+		private static HashSet<int> Reach(Dictionary<int, HashSet<int>> next, int item)
+		{
+			HashSet<int> seen = new() { item };
+			Stack<int> todo = new();
+			todo.Push(item);
+			while (todo.Count > 0)
+			{
+				if (!next.TryGetValue(todo.Pop(), out HashSet<int> set)) continue;
+				foreach (int to in set)
+				{
+					if (seen.Add(to)) todo.Push(to);
+				}
+			}
+			return seen;
+		}
+
+		// No item is made from itself, directly or not, through a new ingredient: the result of a rebuilt recipe (or a live
+		// shell) never leads back, through the live recipes, to one of its new ingredients. Loops of vanilla ingredients kept as
+		// they are (a block and its wall in an untouched recipe) are not the plan's
+		private static void RecipeNoCycles()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			Dictionary<int, HashSet<int>> next = LiveGraph();
+			List<string> failures = new();
+			int checkedCount = 0, slots = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe.Disabled || plan.Ingredients[i] == null) continue;
+				checkedCount++;
+				int result = recipe.createItem.type;
+				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
+				HashSet<int> from = Reach(next, result);
+				foreach (Item ingredient in recipe.requiredItem)
+				{
+					if (originals.Contains(ingredient.type)) continue;
+					slots++;
+					int loop = Members(recipe, ingredient.type).FirstOrDefault(from.Contains, 0);
+					if (loop > 0) failures.Add($"{Name(result)} (recipe {i}) needs {Name(ingredient.type)}, made from {Name(result)} again (through {Name(loop)})");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoCycles: {checkedCount} rebuilt recipes, {slots} new ingredients checked");
+			Check.That(checkedCount > 0, "no rebuilt recipe");
+			Check.All(failures, "Recipe loops");
+		}
+
+		// Every rebuilt vanilla recipe above tier 0 has a key (the planned one, or one LockResults added) and is not doable
+		// before its tier T by its ingredients: one of them is had no earlier than T (a recipe that finds no key stays vanilla)
+		private static void RecipeKeyed()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			Dictionary<int, int> byTier = new();
+			int checkedCount = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				int tier = plan.IngredientTiers[i];
+				if (tier <= 0 || plan.Ingredients[i] == null || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i) || SpecialRecipe(plan, i)) continue;
+				checkedCount++;
+				byTier[tier] = byTier.GetValueOrDefault(tier) + 1;
+				string where = $"{Name(RecipeSystem.OriginalResult(i))} -> {Name(plan.Results[i].type)} (tier {tier}: {Ingredients(plan.Ingredients[i])})";
+				if (plan.PlannedKeys[i] == 0 && !plan.KeyIngredient[i]) failures.Add($"{where}: no key");
+				int highest = plan.Ingredients[i].Select(x => IngredientAvail(plan, i, x.type)).DefaultIfEmpty(0).Max();
+				if (highest < tier) failures.Add($"{where}: its ingredients are all had at {highest}");
+			}
+			if (checkedCount == 0) Check.Skip("no rebuilt recipe above tier 0");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeKeyed: {checkedCount} rebuilt recipes above tier 0 ({string.Join(", ", byTier.OrderBy(p => p.Key).Select(p => $"tier {p.Key}: {p.Value}"))})");
+			Check.All(failures, "Rebuilt recipes without a key of their tier");
+		}
+
+		// About RecipeResultSwapChance of the swappable recipes swap their results (explicit chances: the config is not read for
+		// them), by pairs pointing to each other, of the same tier (any tier in Chaos mode), mostly of different categories,
+		// each giving its partner's vanilla result and stack, never one of its own ingredients or group members. The live plan
+		// has the swaps of the setting
+		private static void RecipeSwapsShare()
+		{
+			CraftingConfig cfg = CraftingConfig.Instance;
+			if (!cfg.RandomizeRecipes || cfg.IngredientMode != IngredientMode.Randomized || RecipeSystem.RecipeCount == 0) Check.Skip("ingredients are not randomized");
+			HashSet<int> eligible = Enumerable.Range(0, Count).Where(RecipePlanner.Swappable).ToHashSet();
+			if (eligible.Count < 200) Check.Skip($"only {eligible.Count} swappable recipes");
+			bool anyTier = GeneralConfig.Instance.RandomizerMode == RandomizerMode.Chaos;
+			ItemCategory CategoryOf(int item) => ItemPool.IsValid(item) ? ItemPool.Info[item].Category : ItemCategory.Misc;
+			List<string> failures = new();
+			UltimateRandomizer mod = ModContent.GetInstance<UltimateRandomizer>();
+			foreach (float chance in new[] { 0f, 10f, 30f })
+			{
+				((int type, int stack)[] results, int[] partners) = RecipePlanner.SwappedResults(chance);
+				int swapped = 0, cross = 0;
+				for (int i = 0; i < Count; i++)
+				{
+					int p = partners[i];
+					if (p < 0) continue;
+					swapped++;
+					int own = RecipeSystem.OriginalResult(i), other = RecipeSystem.OriginalResult(p);
+					string where = $"{chance}%: {Name(own)} <-> {Name(other)}";
+					if (partners[p] != i) failures.Add($"{where}: not a pair");
+					if (!eligible.Contains(i)) failures.Add($"{where}: not swappable");
+					if (!anyTier && ItemPool.TierOf(own) != ItemPool.TierOf(other)) failures.Add($"{where}: tiers {ItemPool.TierOf(own)} and {ItemPool.TierOf(other)}");
+					if (results[i] != (other, RecipeSystem.OriginalStack(p))) failures.Add($"{where}: gives {Name(results[i].type)} x{results[i].stack}");
+					if (RecipeSystem.OriginalIngredients(i).Any(x => x.type == results[i].type) || RecipeSystem.InOriginalGroup(i, results[i].type)) failures.Add($"{where}: gives one of its ingredients");
+					if (!RecipePlanner.Alike(CategoryOf(own), CategoryOf(other))) cross++;
+				}
+				double share = swapped / (double)eligible.Count;
+				mod.Logger.Info($"RecipeSwapsShare: at {chance}%, {swapped} of {eligible.Count} swappable recipes swapped ({share:P1}), {cross} with another category");
+				if (chance <= 0)
+				{
+					Check.That(swapped == 0, $"{swapped} recipes swapped at 0%");
+					continue;
+				}
+				double expected = chance / 100.0;
+				Check.That(share >= expected * 0.5 && share <= expected * 1.1 + 0.01, $"{share:P1} of the recipes swapped at {chance}%");
+				Check.That(cross * 2 >= swapped, $"only {cross} of {swapped} swaps change category at {chance}%");
+			}
+			RecipePlan plan = RecipePlanner.Get();
+			int[] setting = RecipePlanner.SwappedResults(cfg.RecipeResultSwapChance).partners;
+			for (int i = 0; i < Count && failures.Count < 20; i++)
+			{
+				if (plan.SwapPartner[i] != setting[i]) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: plan swapped with {plan.SwapPartner[i]}, {setting[i]} with the setting");
+			}
+			// A few swapped recipes of the live plan, as the crafting menu shows them
+			foreach (int i in Enumerable.Range(0, Count).Where(i => plan.SwapPartner[i] >= 0 && i < plan.SwapPartner[i]).Take(6))
+			{
+				int p = plan.SwapPartner[i];
+				mod.Logger.Info($"Recipes: swap {Name(RecipeSystem.OriginalResult(i))} <-> {Name(RecipeSystem.OriginalResult(p))}: {Name(Main.recipe[i].createItem.type)} from "
+					+ $"{Ingredients(Main.recipe[i].requiredItem.Select(x => (x.type, x.stack)).ToArray())}; {Name(Main.recipe[p].createItem.type)} from {Ingredients(Main.recipe[p].requiredItem.Select(x => (x.type, x.stack)).ToArray())}");
+			}
+			Check.All(failures, "Result swaps");
+		}
+
+		private static bool Weapon(int type) => ItemPool.IsValid(type) && ItemPool.Info[type].Category is ItemCategory.WeaponMelee or ItemCategory.WeaponRanged
+			or ItemCategory.WeaponMagic or ItemCategory.WeaponSummon or ItemCategory.WeaponOther;
+
+		// The Zenith (whichever recipe gives it) keeps weapons among its ingredients: the vanilla shape weighs them (half of it
+		// for a swapped recipe), when its vanilla recipe has replaceable weapons or the ingredient weights allow some
+		private static void ZenithWeapons()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			int i = Enumerable.Range(0, Count).FirstOrDefault(r => !Main.recipe[r].Disabled && plan.Results[r].type == ItemID.Zenith && plan.Ingredients[r] != null, -1);
+			if (i < 0) Check.Skip("no rebuilt recipe gives the Zenith");
+			int vanilla = Enumerable.Range(0, Count).FirstOrDefault(r => RecipeSystem.OriginalResult(r) == ItemID.Zenith && !RecipeSystem.IsShell(r), -1);
+			bool shaped = vanilla >= 0 && RecipeSystem.OriginalIngredients(vanilla).Any(x => Weapon(x.type) && RecipePlanner.IngredientReplaceable(x.type));
+			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
+			bool weighted = new[] { ItemCategory.WeaponMelee, ItemCategory.WeaponRanged, ItemCategory.WeaponMagic, ItemCategory.WeaponSummon, ItemCategory.WeaponOther }.Any(c => weights.Get(c) > 0);
+			if (!shaped && !weighted) Check.Skip("no weight leads to weapons");
+			(int type, int stack)[] live = Main.recipe[i].requiredItem.Select(x => (x.type, x.stack)).ToArray();
+			int weapons = live.Count(x => Weapon(x.type));
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ZenithWeapons: {Name(ItemID.Zenith)} from {Ingredients(live)} (recipe of {Name(RecipeSystem.OriginalResult(i))}, " +
+				$"tier {plan.IngredientTiers[i]}): {weapons} weapons");
+			Check.That(weapons > 0, $"{Name(ItemID.Zenith)} has no weapon among its ingredients ({Ingredients(live)})");
+		}
+
+		// The reuse penalty spreads the materials: with k = 2 the ten most used (non key) materials serve fewer recipes in all
+		// than with no penalty, and the most used one no more (plans built with explicit values, without shells)
+		private static void IngredientReuse()
+		{
+			RequireRandomIngredients();
+			(int max, int top, string names) Spread(RecipePlan plan)
+			{
+				Dictionary<int, int> uses = new();
+				for (int i = 0; i < Count; i++)
+				{
+					if (plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null || RecipeSystem.HouseRecipe(i) || RecipeSystem.IsShell(i)) continue;
+					int[] groups = RecipePlanner.GroupsOf(plan, i);
+					foreach ((int type, _) in plan.Ingredients[i])
+					{
+						if (type == plan.PlannedKeys[i] || !RecipePlanner.IngredientReplaceable(type) || RecipeSystem.InGroups(groups, type)) continue;
+						uses[type] = uses.GetValueOrDefault(type) + 1;
+					}
+				}
+				List<KeyValuePair<int, int>> sorted = uses.OrderByDescending(p => p.Value).ThenBy(p => p.Key).ToList();
+				return (sorted.Select(p => p.Value).FirstOrDefault(), sorted.Take(10).Sum(p => p.Value), string.Join(", ", sorted.Take(5).Select(p => $"{Name(p.Key)} x{p.Value}")));
+			}
+			(int max, int top, string names) none = Spread(RecipePlanner.BuildWith(false, reusePenalty: 0f));
+			(int max, int top, string names) strong = Spread(RecipePlanner.BuildWith(false, reusePenalty: 2f));
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"IngredientReuse: no penalty: most used {none.max}, ten most used {none.top} ({none.names}); " +
+				$"penalty 2: most used {strong.max}, ten most used {strong.top} ({strong.names})");
+			if (none.top == 0) Check.Skip("no rebuilt recipe");
+			Check.That(strong.top < none.top, $"the ten most used materials serve {strong.top} recipes with the penalty, {none.top} without");
+			Check.That(strong.max <= none.max, $"the most used material serves {strong.max} recipes with the penalty, {none.max} without");
 		}
 
 		// An item made through a randomized recipe sells for at most its ingredients' value, and keeps that value through
@@ -779,41 +945,6 @@ namespace UltimateRandomizer.Common.Tests
 			Check.Equal(expected, ItemIO.Load(ItemIO.Save(a)).value, "stacked value after a save/load");
 			Item d = new(type, 5);
 			Check.Equal(vanilla, d.value, "an uncrafted copy keeps its vanilla value");
-		}
-
-		// Recipes making furniture, blocks or walls give something else with the surprise chance (explicit chances for every
-		// recipe, results permuted as the plan permutes them). A surprise swaps with any recipe of the same tier holding a result
-		// of the drawn category (furniture for a block is no surprise, counted as unchanged), so at 60% most surprised furniture
-		// recipes change, as far as their tier has other recipes to swap with
-		private static void FurnitureSurprise()
-		{
-			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("surprises only exist in the Coherent mode");
-			if (RecipeSystem.RecipeCount == 0 || !CraftingConfig.Instance.RandomizeRecipes) Check.Skip("recipes are not randomized");
-			List<int> randomized = Enumerable.Range(0, Count).Where(i => RecipeSystem.Touchable(i) && !RecipeSystem.HouseRecipe(i) && !RecipeSystem.VanillaDisabled(i)).ToList();
-			List<int> recipes = randomized.Where(i => RecipeSystem.IsFurnitureLike(RecipeSystem.OriginalResult(i))).ToList();
-			if (recipes.Count < 50) Check.Skip($"only {recipes.Count} furniture recipes");
-			double SameCategory(float chance)
-			{
-				int same = 0;
-				(int type, int stack)[] results = RecipePlanner.PermutedResults(limitValue: false, surpriseChance: chance);
-				foreach (int i in recipes)
-				{
-					int result = results[i].type;
-					if (ItemPool.IsValid(result) && RecipePlanner.Alike(ItemPool.Info[result].Category, ItemPool.Info[RecipeSystem.OriginalResult(i)].Category)) same++;
-				}
-				return same / (double)recipes.Count;
-			}
-			// What the tiers allow at 60%: a furniture recipe changes only by swapping with another recipe of its tier
-			double capacity = randomized.GroupBy(i => ItemPool.TierOf(RecipeSystem.OriginalResult(i)))
-				.Sum(g => Math.Min(0.6 * g.Count(i => RecipeSystem.IsFurnitureLike(RecipeSystem.OriginalResult(i))), g.Count(i => !RecipeSystem.IsFurnitureLike(RecipeSystem.OriginalResult(i))))) / recipes.Count;
-			double none = SameCategory(0), sixty = SameCategory(60), all = SameCategory(100);
-			double expected = Math.Min(0.4, 0.5 * capacity);
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Furniture recipes: {recipes.Count}, same category {none:P0} at 0%, {sixty:P0} at 60%, {all:P0} at 100%; "
-				+ $"tier capacity at 60% {capacity:P0}, at least {expected:P0} expected to change");
-			Check.That(none >= 0.9, $"only {none:P0} of the furniture recipes keep their category without surprise");
-			Check.That(1 - sixty >= expected, $"only {1 - sixty:P0} of the furniture recipes change category at 60% (at least {expected:P0} expected, capacity {capacity:P0})");
-			// The pairing is greedy: a little noise between 60% and 100%
-			Check.That(all <= sixty + 0.05, $"more furniture at 100% ({all:P0}) than at 60% ({sixty:P0})");
 		}
 
 		// Recipes making a progression station or a protected item can be made at their level with the plan: their
@@ -879,8 +1010,7 @@ namespace UltimateRandomizer.Common.Tests
 
 		// A randomized vanilla recipe can't be made before U, the unlocked tier of its result (a key ingredient, a station or
 		// its own ingredients make it wait), and a key ingredient makes it doable at U, not later (U + 1 only when U has no
-		// key material). A vanilla source (its vanilla result from its vanilla ingredients and stations, or re-picked back to
-		// it) is not checked
+		// key material). A vanilla source (its vanilla result from its vanilla ingredients and stations) is not checked
 		private static void RecipeKeyIngredient()
 		{
 			RequireApplied();
@@ -891,7 +1021,7 @@ namespace UltimateRandomizer.Common.Tests
 			int[][] tiles = Enumerable.Range(0, Count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
 			RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doable, plan.Twin);
 			List<string> failures = new();
-			int gated = 0, keys = 0, repicked = 0, later = 0, never = 0;
+			int gated = 0, keys = 0, swapped = 0, later = 0, never = 0;
 			for (int i = 0; i < Count; i++)
 			{
 				if (!RecipeSystem.Touchable(i) || Main.recipe[i].Disabled) continue;
@@ -899,7 +1029,7 @@ namespace UltimateRandomizer.Common.Tests
 				int expectedU = ItemPool.IsSpecial(results[i]) ? Protection.UpgradeTier(results[i]) : Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(results[i])));
 				if (u != expectedU) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: result tier {u}, {expectedU} expected for {Name(results[i])}");
 				if (plan.KeyIngredient[i]) keys++;
-				if (plan.ResultRepicked[i]) repicked++;
+				if (plan.SwapPartner[i] >= 0) swapped++;
 				if (u == 0) continue;
 				gated++;
 				if (doable[i] >= Findability.Never)
@@ -922,7 +1052,7 @@ namespace UltimateRandomizer.Common.Tests
 					if (plan.KeyIngredient[i] && doable[i] > u + 1) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} -> {Name(results[i])}: a key ingredient but doable at {doable[i]}, tier {u}");
 				}
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeKeyIngredient: {gated} gated recipes, {keys} key ingredients, {repicked} results re-picked, " +
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeKeyIngredient: {gated} gated recipes, {keys} key ingredients, {swapped} swapped results, " +
 				$"{later} doable after their tier (their own ingredients or stations), {never} never doable");
 			Check.All(failures, "Recipes doable before their result's tier");
 		}
@@ -969,9 +1099,10 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Same recipe on different stations");
 		}
 
-		// Each life or mana upgrade is the result of exactly one live recipe (its vanilla recipe, kept or re-picked back, aside),
-		// chosen by the plan; with tier gating, that recipe is doable from the upgrade's tier (a key ingredient), not before,
-		// and at most one tier later. It always has a key ingredient, and its ingredients are worth at least the upgrade
+		// Each life or mana upgrade is the result of exactly one live recipe, its own (its shell, or its vanilla recipe), never
+		// another recipe's result. A randomized one is doable from the upgrade's tier, not before and at most one tier later
+		// (always for a shell, with tier gating for a vanilla recipe), has a key ingredient, and its ingredients are worth at
+		// least the upgrade
 		private static void UpgradeRecipes()
 		{
 			RequireApplied();
@@ -993,22 +1124,24 @@ namespace UltimateRandomizer.Common.Tests
 					continue;
 				}
 				// The live recipes, as the crafting menu reads them
-				List<int> giving = Enumerable.Range(0, Count).Where(i => !Main.recipe[i].Disabled && Main.recipe[i].createItem.type == item
-					&& !(RecipeSystem.OriginalResult(i) == item && RecipePlanner.VanillaSource(plan, i))).ToList();
-				string host = Name(RecipeSystem.OriginalResult(chosen));
-				if (giving.Count != 1 || giving[0] != chosen)
+				List<int> giving = Enumerable.Range(0, Count).Where(i => !Main.recipe[i].Disabled && Main.recipe[i].createItem.type == item).ToList();
+				bool shell = RecipeSystem.IsShell(chosen);
+				string where = $"{Name(item)} ({(shell ? "its shell" : "its vanilla recipe")}: {Ingredients(ingredients[chosen])})";
+				if (giving.Count != 1 || giving[0] != chosen) failures.Add($"{where}: given by {giving.Count} live recipes ({string.Join(", ", giving)}), planned in recipe {chosen}");
+				if (plan.Ingredients[chosen] == null)
 				{
-					failures.Add($"{Name(item)}: given by {giving.Count} recipes ({string.Join(", ", giving.Select(i => Name(RecipeSystem.OriginalResult(i))))}), planned in the recipe of {host}");
+					// A vanilla recipe left as it is (vanilla ingredients) is the upgrade's vanilla source; a shell is then off
+					if (shell) failures.Add($"{where}: shell switched off");
+					continue;
 				}
 				int u = Protection.UpgradeTier(item);
-				string where = $"{Name(item)} in the recipe of {host} ({Ingredients(ingredients[chosen])})";
 				if (doable[chosen] >= Findability.Never) failures.Add($"{where}: never doable");
-				else if (gated && (doable[chosen] < u || doable[chosen] > Math.Min(u + 1, Tiers.Max))) failures.Add($"{where}: doable at {doable[chosen]}, tier {u}");
-				if (!plan.KeyIngredient[chosen]) failures.Add($"{where}: no key ingredient");
+				else if ((shell || gated) && (doable[chosen] < u || doable[chosen] > Math.Min(u + 1, Tiers.Max))) failures.Add($"{where}: doable at {doable[chosen]}, tier {u}");
+				if (plan.PlannedKeys[chosen] == 0 && !plan.KeyIngredient[chosen]) failures.Add($"{where}: no key ingredient");
 				// As the crafting menu reads it
 				long value = Main.recipe[chosen].requiredItem.Sum(x => (long)Math.Max(StackRules.ValueOf(x.type), 1) * x.stack);
 				if (value < StackRules.ValueOf(item)) failures.Add($"{where}: ingredients worth {value}, the upgrade {StackRules.ValueOf(item)}");
-				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"UpgradeRecipes: {where}, doable at {doable[chosen]}, key ingredient {plan.KeyIngredient[chosen]}");
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"UpgradeRecipes: {where} at {string.Join(", ", tiles[chosen].Select(t => TileID.Search.GetName(t)))}, doable at {doable[chosen]}");
 			}
 			Check.All(failures, "Upgrade recipes");
 		}
@@ -1074,8 +1207,9 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(share >= 0.9, $"only {share:P1} of the recipes have new ingredients (unchanged: {string.Join(", ", same)})");
 		}
 
-		// A rebuilt recipe has the vanilla count of ingredients, give or take IngredientCountSpread, within [1, IngredientMax]
-		// (its protected ingredients always stay, with at least one new one). The upgrade recipes may get one more (their key)
+		// A rebuilt recipe has the vanilla count of ingredients (a swapped one: of the item's own recipe), give or take
+		// IngredientCountSpread, within [1, IngredientMax] (its protected ingredients always stay, with at least one new one).
+		// The upgrade recipes may get one more (their key)
 		private static void RecipeIngredientCount()
 		{
 			RequireRandomIngredients();
@@ -1089,7 +1223,9 @@ namespace UltimateRandomizer.Common.Tests
 				if (plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null || SpecialRecipe(plan, i) || RecipeSystem.IsShell(i)) continue;
 				rebuilt++;
 				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
-				int vanilla = original.Length;
+				// A swapped recipe has about as many ingredients as the vanilla recipe of the item it gives, and keeps its own
+				// protected ones
+				int vanilla = RecipeSystem.OriginalIngredients(plan.SwapPartner[i] >= 0 ? plan.SwapPartner[i] : i).Length;
 				int kept = original.Count(x => !RecipePlanner.IngredientReplaceable(x.type));
 				int max = Math.Max(1, cfg.IngredientMax);
 				int low = Math.Clamp(vanilla - cfg.IngredientCountSpread, 1, max);
@@ -1281,12 +1417,15 @@ namespace UltimateRandomizer.Common.Tests
 				if (tier < 0) failures.Add($"{where}: planned but not eligible");
 				int found = Findability.Tier(item);
 				int unlock = ItemPool.UnlockTier(ItemPool.TrueTierOf(item));
-				if (found < Findability.Never && tier < Math.Min(found, Tiers.Max) || tier < Math.Min(unlock, Tiers.Max)) failures.Add($"{where}: tier {tier}, found at {Show(found)}, unlocked at {unlock}");
+				bool upgrade = ItemPool.IsSpecial(item);
+				if (upgrade && tier != Protection.UpgradeTier(item)) failures.Add($"{where}: tier {tier}, the upgrade's tier is {Protection.UpgradeTier(item)}");
+				if (!upgrade && (found < Findability.Never && tier < Math.Min(found, Tiers.Max) || tier < Math.Min(unlock, Tiers.Max))) failures.Add($"{where}: tier {tier}, found at {Show(found)}, unlocked at {unlock}");
 				if (doable[i] >= Findability.Never) failures.Add($"{where}: never doable");
 				else if (doable[i] < tier) failures.Add($"{where}: doable at {doable[i]}, before its tier {tier}");
 				if (Terraria.GameContent.ShimmerTransforms.GetDecraftingRecipeIndex(item) == i || (ItemID.Sets.CraftingRecipeIndices[item]?.Contains(i) ?? false)) failures.Add($"{where}: shimmers back");
 			}
-			bool[] noShells = Enumerable.Range(0, Count).Select(i => RecipeSystem.IsShell(i) || (i < plan.Twin.Length && plan.Twin[i])).ToArray();
+			// The upgrades' shells are their recipes (planned whatever the setting): in both
+			bool[] noShells = Enumerable.Range(0, Count).Select(i => RecipeSystem.IsShell(i) && !ItemPool.IsSpecial(RecipeSystem.OriginalResult(i)) || (i < plan.Twin.Length && plan.Twin[i])).ToArray();
 			int[] withShells = RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out _, plan.Twin);
 			int[] without = RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doableWithout, noShells);
 			for (int i = 0; i < Count; i++)
@@ -1297,7 +1436,7 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (int i in active)
 			{
 				int item = results[i];
-				if (without[item] < Findability.Never && withShells[item] < without[item]) failures.Add($"{Name(item)}: had at {withShells[item]} with its shell, {without[item]} without");
+				if (!ItemPool.IsSpecial(item) && without[item] < Findability.Never && withShells[item] < without[item]) failures.Add($"{Name(item)}: had at {withShells[item]} with its shell, {without[item]} without");
 			}
 			if (eligible == 0) Check.Skip("no item may get a shell recipe");
 			Check.That(active.Count > 0, $"none of the {eligible} eligible shells is switched on");
@@ -1326,7 +1465,10 @@ namespace UltimateRandomizer.Common.Tests
 				if (RecipeSystem.IsShell(i))
 				{
 					shells++;
-					if (RecipePlanner.ShellActive(off, i) || off.Tiles[i] != null) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: shell planned with the setting off");
+					// The upgrades' shells are their recipes: planned whatever the setting
+					bool upgrade = ItemPool.IsSpecial(RecipeSystem.OriginalResult(i));
+					if (!upgrade && (RecipePlanner.ShellActive(off, i) || off.Tiles[i] != null)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: shell planned with the setting off");
+					if (upgrade && RecipePlanner.ShellActive(on, i) != RecipePlanner.ShellActive(off, i)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: upgrade shell planned with the setting on only");
 					continue;
 				}
 				string Plan(RecipePlan plan) => (plan.Ingredients[i] == null ? "-" : string.Join(",", plan.Ingredients[i].Select(p => p.type + "x" + p.stack)))
@@ -1339,19 +1481,14 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Shell setting");
 		}
 
-		// The upgrades never land on a shell (AssignSpecials only takes randomized vanilla recipes), a shell always gives its own
-		// item, and is never a twin (copies are found among the vanilla recipes only)
+		// A shell always gives its own item (an upgrade only from its own shell, the upgrade's recipe), is never swapped and
+		// never a twin (copies are found among the vanilla recipes only)
 		private static void UncraftableNoSpecials()
 		{
 			if (!CraftingConfig.Instance.RandomizeRecipes || RecipeSystem.RecipeCount == 0) Check.Skip("recipes are not randomized");
 			RecipePlan plan = RecipePlanner.Get();
 			List<string> failures = new();
 			int shells = 0;
-			foreach (int item in Protection.Upgrades)
-			{
-				int i = RecipePlanner.SpecialRecipe(item);
-				if (i >= 0 && RecipeSystem.IsShell(i)) failures.Add($"{Name(item)} given by the shell of {Name(RecipeSystem.OriginalResult(i))}");
-			}
 			for (int i = 0; i < Count; i++)
 			{
 				if (!RecipeSystem.IsShell(i)) continue;
@@ -1359,7 +1496,9 @@ namespace UltimateRandomizer.Common.Tests
 				int item = RecipeSystem.OriginalResult(i);
 				if (plan.Results[i].type != item) failures.Add($"{Name(item)}: shell planned to give {Name(plan.Results[i].type)}");
 				if (plan.Twin[i]) failures.Add($"{Name(item)}: shell switched off as a copy");
-				if (plan.KeyIngredient[i] || plan.ResultRepicked[i]) failures.Add($"{Name(item)}: shell locked like a randomized recipe");
+				if (plan.SwapPartner[i] >= 0) failures.Add($"{Name(item)}: shell swapped with recipe {plan.SwapPartner[i]}");
+				if (ItemPool.IsSpecial(item) && RecipePlanner.ShellActive(plan, i) && RecipePlanner.SpecialRecipe(item) != i) failures.Add($"{Name(item)}: an upgrade shell that is not its recipe");
+				if (!ItemPool.IsSpecial(item) && plan.KeyIngredient[i]) failures.Add($"{Name(item)}: shell locked like a randomized recipe");
 			}
 			if (shells == 0) Check.Skip("no shell recipe registered");
 			Check.All(failures, "Shells and special recipes");

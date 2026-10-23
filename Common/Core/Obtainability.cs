@@ -13,8 +13,8 @@ namespace UltimateRandomizer.Common.Core
 		public static readonly List<(int npc, int item, Terraria.Condition[] conditions)> ShopEntries = new();
 
 		// withRecipes: false leaves out what only a recipe makes. anyBlock: every block and critter counts as gathered (the
-		// obtainability checks); false keeps only the real sources: the world materials, ores and caught critters (the
-		// hosts of the upgrade recipes, RecipePlanner.AssignSpecials: a crafted-only brick or wall is no spare result)
+		// obtainability checks); false keeps only the real sources: the world materials, ores and caught critters (a
+		// crafted-only brick or wall is no spare result)
 		public static HashSet<int> Collect(bool withRecipes = true, bool anyBlock = true)
 		{
 			HashSet<int> set = new(ShopItems);

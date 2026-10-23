@@ -330,7 +330,7 @@ namespace UltimateRandomizer.Common.Tests
 				}
 			}
 			Log($"recipes: {total.Sum()} randomizable vanilla recipes (Touchable), {needing.Sum()} still doable before U, {noSlot.Sum()} without a replaceable slot " +
-				$"(all kept, recipe groups, bags or summons); plan: {plan.KeyIngredient.Count(k => k)} key ingredients, {plan.ResultRepicked.Count(r => r)} results re-picked");
+				$"(all kept, recipe groups, bags or summons); plan: {plan.KeyIngredient.Count(k => k)} key ingredients, {plan.SwapPartner.Count(r => r >= 0)} results swapped");
 			// Spread of the ingredients (every planned recipe, kept originals too): the busiest material of each findability tier
 			for (int t = 0; t < Tiers.Count; t++)
 			{

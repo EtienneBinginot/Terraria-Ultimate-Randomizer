@@ -28,7 +28,7 @@ namespace UltimateRandomizer.Common.Features
 		private static bool applied;
 
 		// Shell recipes: one per item no recipe made when this mod added its recipes (walls, blocks, furniture found in the
-		// world...), with no ingredient and no station, switched off as set up (so the item classification, the guaranteed
+		// world..., and the life and mana upgrades), with no ingredient and no station, switched off as set up (so the item classification, the guaranteed
 		// sources and the decraft sets never see them). RecipePlanner gives the eligible ones ingredients and a station in each
 		// world; Apply switches on those it planned. Kept by reference until PostSetupRecipes maps them to their index
 		private static readonly HashSet<Recipe> shellRecipes = new();
@@ -112,7 +112,8 @@ namespace UltimateRandomizer.Common.Features
 				if (ItemClassifier.IsBanned(item)) continue;
 				ItemCategory category = ItemClassifier.Classify(type, item);
 				if (category == ItemCategory.Misc && materials.Contains(type)) category = ItemCategory.Material;
-				if (Array.IndexOf(ShellRegistered, category) < 0) continue;
+				// The life and mana upgrades get theirs whatever their category: it is their recipe (RecipePlanner.SpecialRecipe)
+				if (Array.IndexOf(ShellRegistered, category) < 0 && !Protection.IsUpgrade(type)) continue;
 				Recipe recipe = Recipe.Create(type, ShellStack(item));
 				// Never shimmered back into its (random) ingredients
 				recipe.DisableDecraft();
@@ -276,8 +277,11 @@ namespace UltimateRandomizer.Common.Features
 				// only when this world planned it
 				SetDisabled(recipe, shell[i] ? !RecipePlanner.ShellActive(plan, i) : originalDisabled[i] || plan.Twin[i]);
 				// Decrafting gives the current ingredients back: not when they are worth clearly more than before (protected
-				// results too, their ingredients may be replaced)
+				// results too, their ingredients may be replaced), nor when the result is found before the recipe's tier (it would
+				// shimmer into that tier's key early)
 				if (plan.Ingredients[i] != null && plan.IngredientValues[i] > ingredientValues[i] * 5 / 4) changed[i] = true;
+				int recipeTier = Math.Max(plan.IngredientTiers[i], plan.KeyIngredient[i] ? plan.ResultTiers[i] : 0);
+				if (plan.Ingredients[i] != null && recipeTier > 0 && Findability.Tier(plan.Results[i].type) < recipeTier) changed[i] = true;
 				int original = originalTypes[i];
 				if (!Touchable(i))
 				{
@@ -329,28 +333,11 @@ namespace UltimateRandomizer.Common.Features
 			return false;
 		}
 
-		// Furniture, blocks and walls have their own surprise chance (RecipePlanner.PermutedResults: a swap with a recipe of
-		// another category)
-		public static bool IsFurnitureLike(int item) => ItemPool.IsValid(item) && ItemPool.Info[item].Category is ItemCategory.Furniture or ItemCategory.Block;
-
-		public static float SurpriseChanceOf(int original)
-		{
-			CraftingConfig cfg = CraftingConfig.Instance;
-			return IsFurnitureLike(original) ? cfg.FurnitureSurpriseChance : cfg.RecipeSurpriseChance;
-		}
-
 		// Value guard: crafting must not turn cheap ingredients into a fortune (1 silver of tolerance)
 		public static long MaxResultValue(int i, long ingredientValue, float guard)
 		{
 			long originalValue = (long)Math.Max(StackRules.ValueOf(originalTypes[i]), 0) * originalStacks[i];
 			return (long)(Math.Max(ingredientValue, originalValue) * guard) + Item.silver;
-		}
-
-		public static int ResultStack(int i, int replacement, int ingredientCount)
-		{
-			int stack = StackRules.Scaled(originalTypes[i], originalStacks[i], replacement);
-			if (StackRules.ValueOf(replacement) <= 0) stack = Math.Min(stack, Math.Max(1, ingredientCount));
-			return stack;
 		}
 
 		// Shimmer decrafting uses CraftingRecipeIndices[item] and the recipe's result stack: it must only point to
@@ -377,7 +364,7 @@ namespace UltimateRandomizer.Common.Features
 					if (type < decraft.Length) decraft[type] = Array.Empty<int>();
 				}
 			}
-			// The life and mana upgrades, made by a random cheap recipe, never shimmer back into anything, whatever the setting
+			// The life and mana upgrades, made by a random recipe, never shimmer back into anything, whatever the setting
 			foreach (int type in Protection.Upgrades)
 			{
 				if (ItemPool.IsSpecial(type) && type < decraft.Length) decraft[type] = Array.Empty<int>();

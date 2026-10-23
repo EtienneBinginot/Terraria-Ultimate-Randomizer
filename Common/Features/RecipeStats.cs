@@ -8,7 +8,8 @@ using UltimateRandomizer.Common.Core;
 namespace UltimateRandomizer.Common.Features
 {
 	// How much of the vanilla recipes the plan changes, and why the others keep their result (test RecipeRandomizationShare,
-	// /rdebug recipes). Read from the plan (results once unlocked), the same on every machine.
+	// /rdebug recipes): most recipes keep their item with new ingredients, a few swap it (RecipeResultSwapChance). Read from
+	// the plan, the same on every machine.
 	public class RecipeShare
 	{
 		// Vanilla recipes (not disabled, not added by another mod)
@@ -36,17 +37,15 @@ namespace UltimateRandomizer.Common.Features
 	{
 		public const string Protected = "protected result";
 		public const string Mining = "mining";
-		public const string Cap = "value cap";
-		public const string Redrawn = "original drawn again";
+		public const string House = "house item";
+		public const string Unswappable = "no swap allowed";
+		public const string NotSwapped = "not swapped";
 
 		public static RecipeShare Compute()
 		{
 			RecipeShare share = new();
 			RecipePlan plan = RecipePlanner.Get();
-			CraftingConfig cfg = CraftingConfig.Instance;
 			int count = Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
-			// What the permutation would give without the value cap
-			(int type, int stack)[] uncapped = cfg.LimitRecipeValue ? RecipePlanner.PermutedResults(limitValue: false) : null;
 			for (int i = 0; i < count; i++)
 			{
 				// A shell is a new recipe, not a vanilla one (its item no recipe made)
@@ -65,8 +64,9 @@ namespace UltimateRandomizer.Common.Features
 				string reason;
 				if (!ItemPool.IsRandomizable(original)) reason = Protected;
 				else if (RecipeSystem.KeptForMining(i)) reason = Mining;
-				else if (uncapped != null && uncapped[i].type != original) reason = Cap;
-				else reason = Redrawn;
+				else if (RecipeSystem.HouseRecipe(i)) reason = House;
+				else if (!RecipePlanner.Swappable(i)) reason = Unswappable;
+				else reason = NotSwapped;
 				if (!share.Kept.TryGetValue(reason, out List<int> list)) share.Kept[reason] = list = new List<int>();
 				list.Add(i);
 			}

@@ -45,9 +45,9 @@ namespace UltimateRandomizer.Common.Core
 		// Chests of an ongoing world brought under their cap (ChestSystem.TameChests)
 		public const int Tame = 36;
 		public const int JackpotChest = 37;
-		// Key ingredient of a recipe's tier, and the re-pick of a result that can't have one (RecipePlanner.LockResults)
+		// Key ingredient added to a recipe doable before its result's tier (RecipePlanner.LockResults)
 		public const int KeyIngredient = 38;
-		// The recipe each life or mana upgrade is the result of (RecipePlanner.AssignSpecials)
+		// The key ingredient of the recipe of each life or mana upgrade (RecipePlanner.LockSpecials)
 		public const int Special = 39;
 		// The recipe given to an item no recipe makes (RecipePlanner, shell recipes), keyed by that item
 		public const int Uncraftable = 40;

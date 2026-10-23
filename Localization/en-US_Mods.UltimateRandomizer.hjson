@@ -154,7 +154,6 @@ Tests: {
 	SurpriseZero: With 0% surprise, replaced items keep their category
 	SurpriseHundred: With 100% surprise, categories follow the loot weights
 	SurpriseGatedAndProtected: Surprises respect progression and protected items
-	RecipeSurpriseRate: The share of recipes changing category matches the setting
 	WeightTablesSeparated: Loot weights favor equipment, ingredient weights never pick it
 	TierWindowVariety: Early random rolls give many different items
 	OreMappingBijective: Each ore of this world still exists, as the drop of exactly one other ore of the world; absent ores stay themselves, and deciding a hardmode pair changes no ore of another tier; one-to-one even with both ores of a pair present
@@ -219,20 +218,23 @@ Tests: {
 	StationTierRespected: Recipes never need a station above their level, nor a themed one
 	HandCraftKept: Recipes made by hand stay made by hand
 	StationsVaried: A good share of recipes changed station
-	AppliedResultsMatchPlan: Recipes give the results the planner was built around, and its availability matches the live recipes
+	AppliedResultsMatchPlan: Recipes give their vanilla result or their swap partner's, as planned, and the availability matches the live recipes
 	StationPlanFromOriginals: The station plan depends only on the original recipes, not on the already randomized ones
 	RealCrafting: The crafting menu offers a recipe with its new ingredients, and no longer with its old ones
 	PickaxePerMiningLevel: Each mining level has a pickaxe by the tier of its ores (crafted, found or guaranteed)
-	RecipeRandomizationShare: Most vanilla recipes change their result (85%) or their result or ingredients (95%); logs the reasons
-	RecipeResultsConserved: Randomized recipes swap their results: every vanilla result is still made by a recipe, none by more recipes than in vanilla (Zenith, Shadewood Sword)
-	RecipeRepicksKeepAvailability: Swapping the results of the recipes doable too early never makes an item impossible to get
+	RecipeRandomizationShare: Nearly every vanilla recipe changes (95%), few swap their result (about the swap chance); logs the reasons
+	RecipeEveryItemKept: Every item a vanilla recipe makes is still made by a recipe, and nothing had in vanilla is lost (Zenith)
+	RecipeNoCycles: No item is made from itself through a new ingredient, directly or through other recipes
+	RecipeKeyed: Every rebuilt recipe above tier 0 has a key and can't be made before its tier
+	RecipeSwapsShare: About the swap chance of the recipes swap their results, by pairs of the same tier, mostly of different kinds
+	ZenithWeapons: The Zenith keeps weapons among its ingredients
+	IngredientReuse: The reuse penalty spreads the materials over more recipes
 	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks
-	FurnitureSurprise: Furniture, block and wall recipes give something else with the furniture surprise chance
 	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
 	RecipeAlwaysFinalResult: Recipes always give their final result, with no stand-in before its tier
 	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
 	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
-	UpgradeRecipes: Each life or mana upgrade is the result of one random recipe, doable from its tier, with a key ingredient and ingredients worth at least the upgrade
+	UpgradeRecipes: Each life or mana upgrade has its own recipe, doable from its tier, with a key ingredient and ingredients worth at least the upgrade
 	HouseItemsObtainable: Door, platform and torch are hint targets, and their recipes change but are craftable at once (tier 0 ingredients, basic station)
 	RecipesRebuilt: At least 90% of the recipes with replaceable ingredients get new ingredients
 	RecipeIngredientCount: A rebuilt recipe has the vanilla number of ingredients give or take the set spread, within the set maximum
@@ -242,7 +244,7 @@ Tests: {
 	RecipeExamples: Logs 10 rebuilt recipes (Zenith and Chlorophyte armor among them), which really changed
 	UncraftableRecipesValid: Items no recipe makes get a live recipe, doable from their tier and never before, that never shimmers back; logs examples
 	UncraftableRecipesOff: With the setting off (planner called with explicit parameters), no shell recipe is planned and the other recipes are planned the same
-	UncraftableNoSpecials: Shell recipes never give a life or mana upgrade, keep their item and are never switched off as copies
+	UncraftableNoSpecials: Shell recipes keep their item (an upgrade only its own), are never swapped and never switched off as copies
 	UncraftablePricedByIngredients: Live shell recipes count as randomized: what they make sells for its ingredients' value, not its vanilla price
 	RecipePickaxeMineable: No rebuilt pickaxe or drill recipe gets a new ingredient that needs at least that pick power to be mined
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
@@ -1846,14 +1848,9 @@ Configs: {
 			Tooltip: Prevents duplicating items by crafting a random result then decrafting it in shimmer.
 		}
 
-		RecipeSurpriseChance: {
-			Label: Recipe surprise chance (%)
-			Tooltip: Chance that a recipe gives an item of any category (loot weights) instead of an item of the same kind as the original result.
-		}
-
-		FurnitureSurpriseChance: {
-			Label: Furniture surprise chance (%)
-			Tooltip: Like the recipe surprise chance, for recipes making furniture, blocks or walls (most vanilla recipes): the chance they give an item of any category (loot weights) instead of more furniture.
+		RecipeResultSwapChance: {
+			Label: "Recipe result swap chance (%)"
+			Tooltip: "Share of the randomized recipes that swap their result with another recipe of the same tier, by pairs (every item stays craftable, often by an unexpected recipe). A swapped recipe gets ingredients worthy of the item it now gives: its level, its value, and a mix of both recipes' kinds of ingredients."
 		}
 
 		IngredientMode: {
@@ -1864,6 +1861,11 @@ Configs: {
 		IngredientWeights: {
 			Label: Ingredient weights
 			Tooltip: Relative chance of each kind of item among the ingredients of a rebuilt recipe. 0 = never, unless the vanilla recipe used that kind (a recipe made of weapons often gets weapons again).
+		}
+
+		IngredientSurpriseChance: {
+			Label: "Ingredient surprise chance (%)"
+			Tooltip: "Chance that an ingredient of a rebuilt recipe is of any kind (drawn with the loot weights: weapons, accessories, potions...) instead of the ingredient weights. Its level and value stay those of the slot."
 		}
 
 		IngredientCountSpread: {
@@ -1884,6 +1886,11 @@ Configs: {
 		IngredientStackCap: {
 			Label: Maximum amount of an ingredient
 			Tooltip: The amounts are set so the ingredients are worth roughly what the vanilla ones were, up to this limit per ingredient.
+		}
+
+		IngredientReusePenalty: {
+			Label: "Ingredient reuse penalty"
+			Tooltip: "Makes the same materials appear in fewer recipes: a material already used by n recipes is picked with its weight divided by (1 + this value x n). 0 = no penalty."
 		}
 
 		RandomizeStations: {
