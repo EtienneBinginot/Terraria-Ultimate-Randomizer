@@ -2152,8 +2152,8 @@ Configs: {
 		}
 
 		MagicStorageKit: {
-			Label: "Magic Storage kit"
-			Tooltip: "With Magic Storage loaded: gives each character, once per world, a Storage Heart, 4 Storage Units, a Crafting Access and the basic Portable Access and Portable Crafting Access."
+			Label: Magic Storage kit
+			Tooltip: With Magic Storage loaded: gives each character, once per world, a Storage Heart, 4 Storage Units, a Crafting Access and the basic Portable Access and Portable Crafting Access.
 		}
 
 		RandomizeTownNpcOrder: {

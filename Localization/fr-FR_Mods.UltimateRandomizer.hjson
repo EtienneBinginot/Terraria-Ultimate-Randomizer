@@ -2152,8 +2152,8 @@ Configs: {
 		}
 
 		MagicStorageKit: {
-			Label: "Kit Magic Storage"
-			Tooltip: "Si Magic Storage est chargé : donne à chaque personnage, une fois par monde, un Storage Heart, 4 Storage Units, un Crafting Access ainsi que le Portable Access et le Portable Crafting Access de base."
+			Label: Kit Magic Storage
+			Tooltip: Si Magic Storage est chargé : donne à chaque personnage, une fois par monde, un Storage Heart, 4 Storage Units, un Crafting Access ainsi que le Portable Access et le Portable Crafting Access de base.
 		}
 
 		RandomizeTownNpcOrder: {
