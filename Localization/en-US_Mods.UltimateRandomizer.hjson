@@ -1154,8 +1154,8 @@ Configs: {
 		}
 
 		TierAllowance: {
-			Label: "Tiers allowed above your progression"
-			Tooltip: "0 = only tiers already unlocked. 1 = one tier ahead (default), and so on. Before hardmode, nothing from hardmode is given except jackpots. Adaptive power makes enemies stronger if your equipment gets ahead of the world."
+			Label: Tiers allowed above your progression
+			Tooltip: 0 = only tiers already unlocked. 1 = one tier ahead (default), and so on. Before hardmode, nothing from hardmode is given except jackpots. Adaptive power makes enemies stronger if your equipment gets ahead of the world.
 		}
 
 		JackpotTierChance: {
@@ -1174,8 +1174,8 @@ Configs: {
 		}
 
 		WildTierDecay: {
-			Label: "Jackpots: rarity per extra tier"
-			Tooltip: "How much rarer each tier above the limit is for jackpots (madness and lucky drops): 3 (default) = one tier above is 3 times more frequent than two tiers above. There is no cap: an early hardmode item is possible, but rare. Higher = jackpots stay closer to the limit."
+			Label: Jackpots: rarity per extra tier
+			Tooltip: How much rarer each tier above the limit is for jackpots (madness and lucky drops): 3 (default) = one tier above is 3 times more frequent than two tiers above. There is no cap: an early hardmode item is possible, but rare. Higher = jackpots stay closer to the limit.
 		}
 
 		MechTierRequiresAllThree: {
@@ -1269,13 +1269,13 @@ Configs: {
 		}
 
 		PotGuaranteeChance: {
-			Label: "Guaranteed items in pots (%)"
-			Tooltip: "Chance that a pot also gives one of the guaranteed items already unlocked that nobody has found yet in this world."
+			Label: Guaranteed items in pots (%)
+			Tooltip: Chance that a pot also gives one of the guaranteed items already unlocked that nobody has found yet in this world.
 		}
 
 		ScaleGuaranteesWithPlayers: {
-			Label: "Guaranteed drops shared between players"
-			Tooltip: "In multiplayer, the chance of a guaranteed station, boss summon or pickaxe on each kill is divided by the number of players: the team finds it about as fast as one player alone, not several copies of it."
+			Label: Guaranteed drops shared between players
+			Tooltip: In multiplayer, the chance of a guaranteed station, boss summon or pickaxe on each kill is divided by the number of players: the team finds it about as fast as one player alone, not several copies of it.
 		}
 
 		ChestStationGuarantee: {
@@ -1414,8 +1414,8 @@ Configs: {
 		}
 
 		JackpotChestChance: {
-			Label: "Jackpot chests (%)"
-			Tooltip: "Share of the natural chests that become jackpot chests (at least 2 per world): 2 to 4 useful items above the chest's level (sometimes from hardmode), gold and potions. They shine with a beam of light until someone opens them. Placed with the chests, or once in a world whose chests were randomized before. 0 = none."
+			Label: Jackpot chests (%)
+			Tooltip: Share of the natural chests that become jackpot chests (at least 2 per world): 2 to 4 useful items above the chest's level (sometimes from hardmode), gold and potions. They shine with a beam of light until someone opens them. Placed with the chests, or once in a world whose chests were randomized before. 0 = none.
 		}
 
 		RandomizeFishing: {

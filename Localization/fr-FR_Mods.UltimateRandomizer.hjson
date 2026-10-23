@@ -1154,8 +1154,8 @@ Configs: {
 		}
 
 		TierAllowance: {
-			Label: "Tiers autorisés au-dessus de ta progression"
-			Tooltip: "0 = seulement les tiers déjà débloqués. 1 = un tier d'avance (par défaut), etc. Avant le mode difficile, rien du mode difficile n'est donné, sauf les jackpots. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde."
+			Label: Tiers autorisés au-dessus de ta progression
+			Tooltip: 0 = seulement les tiers déjà débloqués. 1 = un tier d'avance (par défaut), etc. Avant le mode difficile, rien du mode difficile n'est donné, sauf les jackpots. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde.
 		}
 
 		JackpotTierChance: {
@@ -1174,8 +1174,8 @@ Configs: {
 		}
 
 		WildTierDecay: {
-			Label: "Jackpots : rareté par palier en plus"
-			Tooltip: "À quel point chaque palier au-delà de la limite est plus rare pour les jackpots (folie et drops chanceux) : 3 (par défaut) = un palier au-dessus est 3 fois plus fréquent que deux paliers au-dessus. Il n'y a pas de plafond : un objet du mode difficile en début de partie est possible, mais rare. Plus haut = les jackpots restent plus près de la limite."
+			Label: Jackpots : rareté par palier en plus
+			Tooltip: À quel point chaque palier au-delà de la limite est plus rare pour les jackpots (folie et drops chanceux) : 3 (par défaut) = un palier au-dessus est 3 fois plus fréquent que deux paliers au-dessus. Il n'y a pas de plafond : un objet du mode difficile en début de partie est possible, mais rare. Plus haut = les jackpots restent plus près de la limite.
 		}
 
 		MechTierRequiresAllThree: {
@@ -1269,13 +1269,13 @@ Configs: {
 		}
 
 		PotGuaranteeChance: {
-			Label: "Objets garantis dans les pots (%)"
-			Tooltip: "Chance qu'un pot donne aussi un des objets garantis déjà débloqués que personne n'a encore trouvé dans ce monde."
+			Label: Objets garantis dans les pots (%)
+			Tooltip: Chance qu'un pot donne aussi un des objets garantis déjà débloqués que personne n'a encore trouvé dans ce monde.
 		}
 
 		ScaleGuaranteesWithPlayers: {
-			Label: "Drops garantis partagés entre joueurs"
-			Tooltip: "En multijoueur, la chance d'une station, d'une invocation de boss ou d'une pioche garantie à chaque ennemi tué est divisée par le nombre de joueurs : l'équipe la trouve à peu près aussi vite qu'un joueur seul, sans en obtenir plusieurs exemplaires."
+			Label: Drops garantis partagés entre joueurs
+			Tooltip: En multijoueur, la chance d'une station, d'une invocation de boss ou d'une pioche garantie à chaque ennemi tué est divisée par le nombre de joueurs : l'équipe la trouve à peu près aussi vite qu'un joueur seul, sans en obtenir plusieurs exemplaires.
 		}
 
 		ChestStationGuarantee: {
@@ -1414,8 +1414,8 @@ Configs: {
 		}
 
 		JackpotChestChance: {
-			Label: "Coffres jackpot (%)"
-			Tooltip: "Part des coffres naturels qui deviennent des coffres jackpot (au moins 2 par monde) : 2 à 4 objets utiles au-dessus du niveau du coffre (parfois du mode difficile), de l'or et des potions. Ils brillent d'un rayon de lumière jusqu'à ce que quelqu'un les ouvre. Placés avec les coffres, ou une fois dans un monde dont les coffres ont été randomisés avant. 0 = aucun."
+			Label: Coffres jackpot (%)
+			Tooltip: Part des coffres naturels qui deviennent des coffres jackpot (au moins 2 par monde) : 2 à 4 objets utiles au-dessus du niveau du coffre (parfois du mode difficile), de l'or et des potions. Ils brillent d'un rayon de lumière jusqu'à ce que quelqu'un les ouvre. Placés avec les coffres, ou une fois dans un monde dont les coffres ont été randomisés avant. 0 = aucun.
 		}
 
 		RandomizeFishing: {
