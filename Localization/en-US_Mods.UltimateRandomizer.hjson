@@ -1152,7 +1152,7 @@ Configs: {
 		}
 
 		Permutation: {
-			Label: "Permutation"
+			Label: Permutation
 			Tooltip: ""
 		}
 	}
@@ -1398,28 +1398,28 @@ Configs: {
 		}
 
 		RandomizeMobDrops: {
-			Label: "Randomize enemy and boss drops"
-			Tooltip: "Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions (or, in the permutation style, moved to another enemy of the same level). Progression items, coins and treasure bags are kept."
+			Label: Randomize enemy and boss drops
+			Tooltip: Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions (or, in the permutation style, moved to another enemy of the same level). Progression items, coins and treasure bags are kept.
 		}
 
 		DropTableStyle: {
-			Label: "Enemy drop style"
-			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. A few of them become surprises (see below). Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets a few random extra drops with vanilla-like rates (see below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses of the same level also shuffle their drops between them (treasure bags follow their boss), with the same few extra drops, the first one always dropped."
+			Label: Enemy drop style
+			Tooltip: Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. A few of them become surprises (see below). Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets a few random extra drops with vanilla-like rates (see below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses of the same level also shuffle their drops between them (treasure bags follow their boss), with the same few extra drops, the first one always dropped.
 		}
 
 		PermutationExtraSlots: {
-			Label: "Extra drops per enemy (permutation)"
-			Tooltip: "Permutation style only: number of random extra drops every enemy gets on top of its shuffled original drops, with vanilla-like rates (1/1 to 1/10 for potions and ammo, 1/15 to 1/150 for equipment...) multiplied by the drop rate multiplier, and higher while some of the enemy's drops are still locked by progression. Loot abundance does not change them. 0 = none."
+			Label: Extra drops per enemy (permutation)
+			Tooltip: Permutation style only: number of random extra drops every enemy gets on top of its shuffled original drops, with vanilla-like rates (1/1 to 1/10 for potions and ammo, 1/15 to 1/150 for equipment...) multiplied by the drop rate multiplier, and higher while some of the enemy's drops are still locked by progression. Loot abundance does not change them. 0 = none.
 		}
 
 		PermutationExtraWeights: {
-			Label: "Extra drop weights (permutation)"
-			Tooltip: "Permutation style only: relative chance of each kind of item for the random extra drops. 0 = never. By default no materials, ores or bars: the shuffled original drops already give plenty."
+			Label: Extra drop weights (permutation)
+			Tooltip: Permutation style only: relative chance of each kind of item for the random extra drops. 0 = never. By default no materials, ores or bars: the shuffled original drops already give plenty.
 		}
 
 		PermutationSurpriseChance: {
-			Label: "Surprise drops (permutation, %)"
-			Tooltip: "Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays."
+			Label: Surprise drops (permutation, %)
+			Tooltip: Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays.
 		}
 
 		EnemiesWithoutDropsCanDrop: {
@@ -2357,7 +2357,7 @@ Configs: {
 		Headers: {
 			Debug: Debug tools
 			Messages: Messages
-			Display: "Display"
+			Display: Display
 		}
 
 		DebugTools: {
@@ -2371,8 +2371,8 @@ Configs: {
 		}
 
 		ShowWorldDrops: {
-			Label: "Show this world's drops"
-			Tooltip: "With the Permutation enemy drop style: the bestiary and Recipe Browser show what enemies, bosses and treasure bags drop in this world (shuffled drops, extra and guaranteed drops) instead of the vanilla drops. Off: they show the vanilla drops."
+			Label: Show this world's drops
+			Tooltip: With the Permutation enemy drop style: the bestiary and Recipe Browser show what enemies, bosses and treasure bags drop in this world (shuffled drops, extra and guaranteed drops) instead of the vanilla drops. Off: they show the vanilla drops.
 		}
 	}
 
