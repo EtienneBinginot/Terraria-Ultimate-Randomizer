@@ -784,7 +784,10 @@ namespace UltimateRandomizer.Common.Tests
 						if (!ChestSystem.StationInChests(item)) failures.Add($"{name}: not hidden in chests");
 						break;
 					case HintKind.Shop:
-						bool sold = NPCShopDatabase.AllShops.OfType<NPCShop>().Any(s => s.NpcType == fact.Npc && s.Entries.Any(e => e?.Item?.type == item));
+						// A shop-only item of a randomized shop is sold in an added slot (ShopPermutation), else by its vanilla entry
+						bool sold = ShopPermutation.Seller(item, out int seller, out _)
+							? seller == fact.Npc
+							: NPCShopDatabase.AllShops.OfType<NPCShop>().Any(s => s.NpcType == fact.Npc && s.Entries.Any(e => e?.Item?.type == item));
 						if (!sold) failures.Add($"{name}: {HintFacts.NpcName(fact.Npc)} does not sell it");
 						break;
 				}

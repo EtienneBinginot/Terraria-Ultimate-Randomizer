@@ -957,7 +957,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Kills through the real extra-drop rule with madness at 100 %: the drops above the limit are marked with their gap,
-		// useful, and the others are not marked. The spawned items are removed
+		// useful, and the others are not marked. Batches of 40 kills (each batch read, then its items removed: Main.item would
+		// recycle them) until a jackpot shows up: the permutation style has few extra slots at vanilla-like rates
 		private static void JackpotDropsMarked()
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (drops spawn on the server)");
@@ -966,33 +967,49 @@ namespace UltimateRandomizer.Common.Tests
 			if (!ProgressionConfig.Instance.TierGating) Check.Skip("no progression limit");
 			int limit = ItemPool.GatingLimit(0);
 			if (limit >= Tiers.Max) Check.Skip("the limit is already the last tier");
+			if (RandomNpcDropRule.ExtraDrops(NPCID.Zombie, NPCID.Zombie, Main.expertMode).Count == 0) Check.Skip("the zombie has no random extra drop");
 			NPC npc = new();
 			npc.SetDefaults(NPCID.Zombie);
 			npc.Center = Main.LocalPlayer.Center;
 			npc.life = 0;
 			List<int> slots = new();
 			List<string> failures = new();
-			int marked = 0;
+			int marked = 0, drops = 0, kills = 0;
+			void Clear()
+			{
+				foreach (int slot in slots.Distinct())
+				{
+					if (slot < 0 || slot >= Main.maxItems) continue;
+					Main.item[slot].TurnToAir();
+					Main.item[slot].active = false;
+				}
+				drops += slots.Count;
+				slots.Clear();
+			}
 			try
 			{
 				ItemPool.WildChanceOverride = 100f;
-				CodexSystem.SpawnLog = slots;
 				RandomNpcDropRule rule = new(NPCID.Zombie);
-				for (int i = 0; i < 40; i++)
+				for (int batch = 0; batch < 50 && marked == 0; batch++)
 				{
-					rule.TryDroppingItem(new DropAttemptInfo { npc = npc, player = Main.LocalPlayer, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode });
-				}
-				CodexSystem.SpawnLog = null;
-				foreach (int slot in slots.Distinct())
-				{
-					if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active) continue;
-					Item item = Main.item[slot];
-					int gap = JackpotItem.GapOf(item);
-					if (gap == 0) continue;
-					marked++;
-					if (!ItemPool.IsJackpotWorthy(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} marked but not useful");
-					if (gap != ItemPool.TrueTierOf(item.type) - ItemPool.GatingLimitFor(item.type, 0)) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, true tier {ItemPool.TrueTierOf(item.type)}, limit {limit}");
-					if (CodexSystem.CountsAsDrop(item)) failures.Add($"{Lang.GetItemNameValue(item.type)} would be recorded as the zombie's drop");
+					CodexSystem.SpawnLog = slots;
+					for (int i = 0; i < 40; i++, kills++)
+					{
+						rule.TryDroppingItem(new DropAttemptInfo { npc = npc, player = Main.LocalPlayer, rng = Main.rand, IsExpertMode = Main.expertMode, IsMasterMode = Main.masterMode });
+					}
+					CodexSystem.SpawnLog = null;
+					foreach (int slot in slots.Distinct())
+					{
+						if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active) continue;
+						Item item = Main.item[slot];
+						int gap = JackpotItem.GapOf(item);
+						if (gap == 0) continue;
+						marked++;
+						if (!ItemPool.IsJackpotWorthy(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} marked but not useful");
+						if (gap != ItemPool.TrueTierOf(item.type) - ItemPool.GatingLimitFor(item.type, 0)) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, true tier {ItemPool.TrueTierOf(item.type)}, limit {limit}");
+						if (CodexSystem.CountsAsDrop(item)) failures.Add($"{Lang.GetItemNameValue(item.type)} would be recorded as the zombie's drop");
+					}
+					Clear();
 				}
 			}
 			finally
@@ -1000,14 +1017,9 @@ namespace UltimateRandomizer.Common.Tests
 				CodexSystem.SpawnLog = null;
 				ItemPool.WildChanceOverride = null;
 				ItemPool.ClearJackpot();
-				foreach (int slot in slots.Distinct())
-				{
-					if (slot < 0 || slot >= Main.maxItems) continue;
-					Main.item[slot].TurnToAir();
-					Main.item[slot].active = false;
-				}
+				Clear();
 			}
-			Check.That(marked > 0, $"no marked jackpot in {slots.Count} drops of 40 kills");
+			Check.That(marked > 0, $"no marked jackpot in {drops} drops of {kills} kills");
 			Check.All(failures, "Jackpot drops");
 		}
 

@@ -9,16 +9,14 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// Randomized shops keep the items only a shop gives in this world. Every shop slot is a random roll (ShopPlanner.PlanShop),
-	// except the slots chosen here: each shop-only item (sold by a vanilla shop entry that is rolled, and neither found nor
-	// crafted in this world within one tier of the item: Findability and the recipe plan, which count no shop) is moved to one
-	// reliable place of any merchant (its own place included) and sold there instead of a roll. A reliable place: a merchant
-	// whose arrival is known (not the Princess, the Skeleton Merchant, the Traveling Merchant nor Santa), and only conditions
-	// that the world fixes (and that hold in this world), progression, the time of day or a moon phase (both avoided when
-	// possible); its tier is the highest of the merchant's arrival and its conditions' tiers, and must be within one tier of
-	// the item's (never before hardmode for a hardmode item, never before its tier for a hard gate). Built from the world
-	// seed, the synced settings and plans and the shop database built at load: the same on every machine, solo or hosted.
-	// Applied on the client that opens a shop (ShopNPC.ModifyActiveShop), shops being client-side; the hints read the same plan
+	// Randomized shops keep the items only a shop gives in this world. Every vanilla shop entry is a random roll
+	// (ShopPlanner.PlanShop); each shop-only item (sold by a rolled vanilla entry, and neither found nor crafted anywhere in
+	// this world, at any tier: Findability and the recipe plan, which count no shop) gets an ADDED slot, after the rolled
+	// entries, at one reliable merchant (known arrival: not the Princess, the Skeleton Merchant, the Traveling Merchant nor
+	// Santa), shown once progression reaches the item's unlock tier. Merchants are chosen by arrival (this world's town NPC
+	// order) and free capacity (Build). Built from the world seed, the synced settings and plans and the shop database built
+	// at load: the same on every machine, solo or hosted. Applied on the client that opens a shop (ShopNPC.ModifyActiveShop),
+	// shops being client-side; the hints read the same plan
 	public static class ShopPermutation
 	{
 		public enum ConditionKind { World, Progression, Daily, Moon, Situational }
@@ -99,7 +97,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			public string Shop;
 			public int Npc;
-			// Entry index in NPCShop.Entries (lookup only: the choices never depend on it)
+			// Entry index in NPCShop.Entries
 			public int Index;
 			// The entry's vanilla item
 			public int Original;
@@ -110,35 +108,44 @@ namespace UltimateRandomizer.Common.Features
 			public bool Rolled;
 			// The entry can be sold in this world (its world-wide conditions hold)
 			public bool Possible;
+			// A reliable merchant, no situational condition, possible here and rolled
 			public bool Reliable;
-			// Sold at a time of day only (day, night, no Blood Moon...), or on a moon phase only
-			public bool Timed;
-			public bool Moon;
-			// Only sold on a server: never a shop-only item's source, so that a world has the same plan solo and hosted
+			// Only sold on a server: never makes an item shop-only, so that a world has the same plan solo and hosted
 			public bool MultiplayerOnly;
 			// Why the place is not reliable ("" when it is)
 			public string Why = "";
-			// From the shop and the entry's item (and its occurrence among the shop's entries of that item), not the entry
-			// index: entries other mods insert don't move the plan
-			public int Key;
+		}
+
+		// A shop that can take added slots: a reliable merchant's vanilla shop
+		public sealed class Merchant
+		{
+			public string Shop;
+			public int Npc;
+			// When the merchant moves in (this world's town NPC order)
+			public int Arrival;
+			// Free slots left by the vanilla entries open at the same time (EstimateOpen); the added slots fill them
+			public int Capacity;
+			// The shop-only items added to this shop, in placement order
+			public List<int> Items = new();
 		}
 
 		public sealed class WorldPlan
 		{
 			public List<Place> Places;
+			public List<Merchant> Merchants;
 			// The shop-only items of this world, in placement order
 			public List<int> ShopOnly;
-			// Per place: the shop-only item it sells instead of a roll (0: a random roll)
-			public int[] Guaranteed;
-			// Shop-only item -> its place
+			// Shop-only item -> index of the merchant that sells it in an added slot
 			public Dictionary<int, int> SellerOf;
-			// Shop FullName -> entry index -> place
-			public Dictionary<string, Dictionary<int, int>> ByShop;
-			// Shop FullName -> the shop-only items it sells (the rolls of that shop avoid them)
-			public Dictionary<string, HashSet<int>> ShopItems;
-			// Placed out of the one-tier window (no free reliable place in it), or left at an unreliable place (none left)
+			// Shop FullName -> the shop-only items added to it (the rolls of that shop avoid them)
+			public Dictionary<string, List<int>> ShopItems;
+			// Sold by a merchant arriving later than the item's tier + 1 (every merchant in time was full): late, still sold
 			public List<int> OutOfWindow = new();
-			public List<int> Unreliable = new();
+			// Every merchant was full: added beyond the estimated capacity (a full shop then gives up its last rolls for it)
+			public List<int> OverCapacity = new();
+			// Sold by a rolled entry and found or crafted only later than the item's tier + 1: no added slot (late is fine,
+			// only an item obtainable nowhere needs one), logged for the review
+			public List<int> LateSource = new();
 		}
 
 		private static WorldPlan cached;
@@ -151,22 +158,17 @@ namespace UltimateRandomizer.Common.Features
 			List<Place> places = new();
 			foreach (NPCShop shop in Shops())
 			{
-				int shopKey = DetRandom.StableHash(shop.FullName);
-				Dictionary<int, int> occurrences = new();
 				int arrival = ArrivalTier(shop.NpcType, seed);
 				for (int i = 0; i < shop.Entries.Count; i++)
 				{
 					NPCShop.Entry entry = shop.Entries[i];
 					if (entry == null || entry.Disabled || entry.Item == null || entry.Item.IsAir || entry.Item.type >= ItemID.Count) continue;
 					Item item = entry.Item;
-					int occurrence = occurrences.TryGetValue(item.type, out int n) ? n : 0;
-					occurrences[item.type] = occurrence + 1;
 					Condition[] conditions = entry.Conditions.Where(c => c != null).ToArray();
 					Place place = new()
 					{
 						Shop = shop.FullName, Npc = shop.NpcType, Index = i, Original = item.type, Conditions = conditions,
-						Rolled = item.shopSpecialCurrency == -1 && ItemPool.IsRandomizable(item.type),
-						Key = DetRandom.Hash(seed, RollKey.ShopPermutation, shopKey, DetRandom.StableHash(ItemID.Search.GetName(item.type)), occurrence)
+						Rolled = item.shopSpecialCurrency == -1 && ItemPool.IsRandomizable(item.type)
 					};
 					int tier = arrival;
 					bool possible = true;
@@ -181,12 +183,6 @@ namespace UltimateRandomizer.Common.Features
 								break;
 							case ConditionKind.Progression:
 								tier = Math.Max(tier, ConditionTier(c));
-								break;
-							case ConditionKind.Daily:
-								place.Timed = true;
-								break;
-							case ConditionKind.Moon:
-								place.Moon = true;
 								break;
 							case ConditionKind.Situational:
 								why.Add(c.Description?.Value ?? c.ToString());
@@ -206,85 +202,153 @@ namespace UltimateRandomizer.Common.Features
 			return places;
 		}
 
-		// Found (drops, bags, gathered, guaranteed sources) or crafted in this world by the item's tier + 1: Findability and the
-		// recipe plan, which never count a shop. A later source does not replace the shop
-		public static bool HasOtherSource(int item, RecipePlan recipes)
+		// Situational entries (biomes, events, pylons, golf scores...) seldom open together: this many count against the capacity
+		public const int SituationalReserve = 6;
+
+		// The slots a shop fills (NPCShop.FillShop leaves the last one empty unless FillLastSlot)
+		public static int SlotLimit(NPCShop shop) => shop.FillLastSlot ? Chest.maxItems : Chest.maxItems - 1;
+
+		// The most vanilla entries open at once, estimated: for each moon phase, day and night, the entries possible in this
+		// world whose moon and time conditions hold (progression ones counted as met), plus up to SituationalReserve situational
+		// ones. Moon conditions only read Main.moonPhase (Condition..cctor), set for the check and restored
+		public static int EstimateOpen(NPCShop shop)
+		{
+			List<Condition[]> plain = new();
+			int situational = 0;
+			foreach (NPCShop.Entry entry in shop.Entries)
+			{
+				if (entry == null || entry.Disabled) continue;
+				Condition[] conditions = entry.Conditions.Where(c => c != null).ToArray();
+				if (conditions.Any(c => Classify(c) == ConditionKind.World && !c.IsMet())) continue;
+				if (conditions.Any(c => Classify(c) == ConditionKind.Situational)) situational++;
+				else plain.Add(conditions);
+			}
+			int best = 0;
+			int phase = Main.moonPhase;
+			try
+			{
+				for (int moon = 0; moon < 8; moon++)
+				{
+					Main.moonPhase = moon;
+					foreach (bool day in new[] { true, false })
+					{
+						int open = plain.Count(conditions => conditions.All(c => Classify(c) switch
+						{
+							ConditionKind.Moon => c.IsMet(),
+							ConditionKind.Daily => c == Condition.TimeDay ? day : c == Condition.TimeNight || c == Condition.NightOrEclipse ? !day : true,
+							_ => true
+						}));
+						best = Math.Max(best, open);
+					}
+				}
+			}
+			finally
+			{
+				Main.moonPhase = phase;
+			}
+			return best + Math.Min(situational, SituationalReserve);
+		}
+
+		// The first tier the item is found (drops, bags, gathered, guaranteed sources) or crafted in this world: Findability and
+		// the recipe plan, which never count a shop (Findability.Never: obtainable nowhere but in a shop)
+		public static int SourceTier(int item, RecipePlan recipes)
 		{
 			int crafted = recipes?.Availability != null && item < recipes.Availability.Length ? recipes.Availability[item] : Findability.Never;
-			return Math.Min(Findability.Tier(item), crafted) <= ItemPool.TierOf(item) + 1;
+			return Math.Min(Findability.Tier(item), crafted);
 		}
 
-		// Never before hardmode for a hardmode item, never before the item's tier for a hard gate (ItemPool.IsHardGate)
-		public static bool NotTooEarly(int placeTier, int item)
+		// Found or crafted in this world at any tier: lateness is acceptable, only an item obtainable nowhere needs a shop slot
+		public static bool HasOtherSource(int item, RecipePlan recipes) => SourceTier(item, recipes) < Findability.Never;
+
+		// Found or crafted, but only later than the item's tier + 1 (informative: no added slot)
+		public static bool OnlyLateSource(int item, RecipePlan recipes)
 		{
-			int itemTier = ItemPool.TierOf(item);
-			if (itemTier >= (int)Tier.Hardmode && placeTier < (int)Tier.Hardmode) return false;
-			return !ItemPool.IsHardGate(item) || placeTier >= itemTier;
+			int tier = SourceTier(item, recipes);
+			return tier < Findability.Never && tier > ItemPool.TierOf(item) + 1;
 		}
 
-		// May the place sell the item: within one tier of it, and not too early
-		public static bool InWindow(int placeTier, int item) => Math.Abs(placeTier - ItemPool.TierOf(item)) <= 1 && NotTooEarly(placeTier, item);
-
-		// Sold by a rolled entry that can be sold in this world (solo as hosted), with no other source in time. None in
-		// Shuffle mode: every shop roll there comes from the guaranteed permutation (ItemPool.Shuffled), which keeps every item
-		public static List<int> ShopOnlyItems(List<Place> places, RecipePlan recipes)
+		// The items sold by a rolled entry that can be sold in this world (solo as hosted), in a stable order. None in Shuffle
+		// mode: every shop roll there comes from the guaranteed permutation (ItemPool.Shuffled), which keeps every item
+		private static List<int> RolledItems(List<Place> places)
 		{
 			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) return new List<int>();
 			return places.Where(p => p.Rolled && p.Possible && !p.MultiplayerOnly).Select(p => p.Original).Distinct()
-				.Where(i => !HasOtherSource(i, recipes))
 				.OrderBy(ItemPool.TierOf).ThenBy(i => ItemID.Search.GetName(i), StringComparer.Ordinal).ToList();
 		}
 
+		// Rolled items with no other source at all in this world
+		public static List<int> ShopOnlyItems(List<Place> places, RecipePlan recipes) => RolledItems(places).Where(i => !HasOtherSource(i, recipes)).ToList();
+
+		// From which progression an added slot sells its item: the item's unlock tier (no allowance for a hard gate, never before
+		// hardmode for a hardmode item: ItemPool.UnlockTierOf)
+		public static bool Unlocked(int item, int unlockedTier, bool hardMode)
+		{
+			int unlock = ItemPool.UnlockTierOf(item);
+			return unlockedTier >= unlock && (unlock < (int)Tier.Hardmode || hardMode);
+		}
+
+		// The tier from which a merchant sells an added item: its arrival and the item's unlock tier
+		public static int SaleTier(Merchant merchant, int item) => Math.Max(merchant.Arrival, ItemPool.UnlockTierOf(item));
+
 		// The whole plan for a seed (the town NPC order of that seed too); recipes: the world's recipe plan (null: crafting
-		// counts for nothing). Findability is always the current world's
+		// counts for nothing). Findability is always the current world's. Each shop-only item gets an added slot at one
+		// reliable merchant: its own vanilla seller when reliable and in time (arrival <= item tier + 1), else among the
+		// merchants arriving by its tier (then by its tier + 1) the one with the most free slots, then the earliest, then a
+		// stable rank; when all of them are full, the earliest merchant with room (late), and when every shop is full, the
+		// earliest merchant (beyond capacity)
 		public static WorldPlan Build(int seed, RecipePlan recipes)
 		{
 			List<Place> places = CollectPlaces(seed);
 			List<int> shopOnly = ShopOnlyItems(places, recipes);
-			int[] guaranteed = new int[places.Count];
+			List<Merchant> merchants = new();
+			foreach (NPCShop shop in Shops())
+			{
+				if (UnreliableMerchants.Contains(shop.NpcType)) continue;
+				merchants.Add(new Merchant
+				{
+					Shop = shop.FullName, Npc = shop.NpcType, Arrival = Tiers.Clamp(ArrivalTier(shop.NpcType, seed)),
+					Capacity = Math.Max(0, SlotLimit(shop) - EstimateOpen(shop))
+				});
+			}
 			WorldPlan plan = new()
 			{
-				Places = places, ShopOnly = shopOnly, Guaranteed = guaranteed, SellerOf = new Dictionary<int, int>(),
-				ByShop = new Dictionary<string, Dictionary<int, int>>(), ShopItems = new Dictionary<string, HashSet<int>>()
+				Places = places, Merchants = merchants, ShopOnly = shopOnly, SellerOf = new Dictionary<int, int>(), ShopItems = new Dictionary<string, List<int>>(),
+				LateSource = RolledItems(places).Where(i => OnlyLateSource(i, recipes)).ToList()
 			};
-			for (int p = 0; p < places.Count; p++)
-			{
-				if (!plan.ByShop.TryGetValue(places[p].Shop, out Dictionary<int, int> entries)) plan.ByShop[places[p].Shop] = entries = new Dictionary<int, int>();
-				entries[places[p].Index] = p;
-			}
-			// Always sold first, then at a time of day (night-only slots...), moon phases last; then a rank from the place's and
-			// the item's stable keys (ties, never in practice: shop and entry)
-			(int, int, string, int) Order(int p, int item) =>
-				(places[p].Moon ? 2 : places[p].Timed ? 1 : 0, DetRandom.Hash(seed, RollKey.ShopPermutation, places[p].Key, DetRandom.ItemKey(item)), places[p].Shop, places[p].Index);
+			if (merchants.Count == 0) return plan;
+			int Rank(int m, int item) => DetRandom.Hash(seed, RollKey.ShopPermutation, DetRandom.StableHash(merchants[m].Shop), DetRandom.ItemKey(item));
+			int Free(int m) => merchants[m].Capacity - merchants[m].Items.Count;
 			foreach (int item in shopOnly)
 			{
 				int itemTier = ItemPool.TierOf(item);
-				List<int> free = Enumerable.Range(0, places.Count).Where(p => places[p].Reliable && guaranteed[p] == 0).ToList();
-				List<int> window = free.Where(p => InWindow(places[p].Tier, item)).ToList();
-				List<int> later = window.Count > 0 ? window : free.Where(p => NotTooEarly(places[p].Tier, item)).ToList();
+				List<int> open = Enumerable.Range(0, merchants.Count).Where(m => Free(m) > 0).ToList();
+				HashSet<string> ownShops = places.Where(p => p.Original == item && p.Reliable).Select(p => p.Shop).ToHashSet();
+				List<int> own = open.Where(m => ownShops.Contains(merchants[m].Shop) && merchants[m].Arrival <= itemTier + 1).ToList();
+				List<int> window = open.Where(m => merchants[m].Arrival <= itemTier).ToList();
+				if (window.Count == 0) window = open.Where(m => merchants[m].Arrival <= itemTier + 1).ToList();
 				int chosen;
-				if (window.Count > 0)
+				if (own.Count > 0)
 				{
-					chosen = window.OrderBy(p => Order(p, item)).First();
+					chosen = own.OrderBy(m => merchants[m].Arrival).ThenBy(m => Rank(m, item)).First();
 				}
-				else if (later.Count > 0)
+				else if (window.Count > 0)
 				{
-					// The nearest tier, later rather than earlier, never too early
-					chosen = later.OrderBy(p => Math.Abs(places[p].Tier - itemTier)).ThenBy(p => places[p].Tier < itemTier ? 1 : 0).ThenBy(p => Order(p, item)).First();
+					chosen = window.OrderByDescending(Free).ThenBy(m => merchants[m].Arrival).ThenBy(m => Rank(m, item)).First();
+				}
+				else if (open.Count > 0)
+				{
+					chosen = open.OrderBy(m => merchants[m].Arrival).ThenByDescending(Free).ThenBy(m => Rank(m, item)).First();
 					plan.OutOfWindow.Add(item);
 				}
 				else
 				{
-					// No reliable place left (none late enough): it stays at one of its own places
-					chosen = Enumerable.Range(0, places.Count)
-						.Where(p => places[p].Original == item && places[p].Rolled && places[p].Possible && !places[p].MultiplayerOnly && guaranteed[p] == 0)
-						.DefaultIfEmpty(-1).First();
-					if (chosen < 0) continue;
-					plan.Unreliable.Add(item);
+					chosen = Enumerable.Range(0, merchants.Count).OrderBy(m => merchants[m].Arrival).ThenByDescending(Free).ThenBy(m => Rank(m, item)).First();
+					plan.OverCapacity.Add(item);
+					if (merchants[chosen].Arrival > itemTier + 1) plan.OutOfWindow.Add(item);
 				}
-				guaranteed[chosen] = item;
+				merchants[chosen].Items.Add(item);
 				plan.SellerOf[item] = chosen;
-				if (!plan.ShopItems.TryGetValue(places[chosen].Shop, out HashSet<int> sold)) plan.ShopItems[places[chosen].Shop] = sold = new HashSet<int>();
+				if (!plan.ShopItems.TryGetValue(merchants[chosen].Shop, out List<int> sold)) plan.ShopItems[merchants[chosen].Shop] = sold = new List<int>();
 				sold.Add(item);
 			}
 			return plan;
@@ -297,7 +361,15 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (cached != null) return cached;
 				if (!ItemPool.Ready || !SeedSystem.WorldReady) return null;
-				return cached = Build(SeedSystem.WorldSeed, RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null);
+				WorldPlan plan = Build(SeedSystem.WorldSeed, RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null);
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Shop-only items: {plan.ShopOnly.Count} obtainable nowhere else (added slots), "
+					+ $"{plan.LateSource.Count} other rolled shop items found or crafted only later than their tier + 1 (no slot)");
+				if (plan.OutOfWindow.Count + plan.OverCapacity.Count > 0)
+				{
+					ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Shop-only items: {plan.ShopOnly.Count} added slots, {plan.OutOfWindow.Count} at a merchant arriving "
+						+ $"later than their tier + 1, {plan.OverCapacity.Count} beyond the estimated capacity");
+				}
+				return cached = plan;
 			}
 		}
 
@@ -307,44 +379,49 @@ namespace UltimateRandomizer.Common.Features
 			npc = 0;
 			tier = 0;
 			WorldPlan plan = EconomyConfig.Instance.RandomizeShops ? Current : null;
-			if (plan == null || !plan.SellerOf.TryGetValue(item, out int p)) return false;
-			npc = plan.Places[p].Npc;
-			tier = plan.Places[p].Tier;
+			if (plan == null || !plan.SellerOf.TryGetValue(item, out int m)) return false;
+			npc = plan.Merchants[m].Npc;
+			tier = SaleTier(plan.Merchants[m], item);
 			return true;
 		}
 
-		// The shop-only items a shop sells (empty: none)
-		public static IReadOnlyCollection<int> ItemsOf(WorldPlan plan, string shopName) =>
-			plan != null && shopName != null && plan.ShopItems.TryGetValue(shopName, out HashSet<int> items) ? items : Array.Empty<int>();
+		// The shop-only items added to a shop (empty: none)
+		public static IReadOnlyList<int> ItemsOf(WorldPlan plan, string shopName) =>
+			plan != null && shopName != null && plan.ShopItems.TryGetValue(shopName, out List<int> items) ? items : Array.Empty<int>();
 
-		// The shop-only item of an entry (0: a random roll)
-		public static int GuaranteedAt(WorldPlan plan, string shopName, int entryIndex) =>
-			plan != null && shopName != null && plan.ByShop.TryGetValue(shopName, out Dictionary<int, int> entries) && entries.TryGetValue(entryIndex, out int p) ? plan.Guaranteed[p] : 0;
+		// The slots a shop fills, by name (Chest.maxItems - 1 when unknown)
+		public static int SlotLimit(string shopName) =>
+			shopName != null && NPCShopDatabase.TryGetNPCShop(shopName, out AbstractNPCShop found) && found is NPCShop shop ? SlotLimit(shop) : Chest.maxItems - 1;
 
-		// Runs on the client opening the shop, after NPCShop.FillShop: replays its slot filling (entries in order, disabled
-		// ones skipped, unmet ones skipped unless their slot is reserved: an air slot) to know the entry of each slot, and gives
-		// the shop-only item of each slot that sells one (0 elsewhere). A slot whose item is no longer its entry's (another mod
-		// changed it) gets none
-		public static int[] SlotItems(WorldPlan plan, string shopName, Item[] items)
+		// Puts the added slots into a filled shop: the free slots first (null, below the limit; a reserved air slot stays), then,
+		// when the shop is full, the last rolled slots (rolled: per slot, a random roll that may give way). Returns the slot
+		// of each added item (-1: no room at all)
+		public static int[] Append(Item[] items, int limit, IList<bool> rolled, IList<ShopSlot> added)
 		{
-			int[] result = new int[items.Length];
-			if (plan == null || shopName == null || !plan.ShopItems.ContainsKey(shopName)) return result;
-			if (!NPCShopDatabase.TryGetNPCShop(shopName, out AbstractNPCShop found) || found is not NPCShop shop) return result;
-			int limit = shop.FillLastSlot ? items.Length : items.Length - 1;
-			int slot = 0;
-			for (int e = 0; e < shop.Entries.Count && slot < limit; e++)
+			int[] where = new int[added.Count];
+			int next = 0;
+			int back = Math.Min(limit, items.Length) - 1;
+			for (int a = 0; a < added.Count; a++)
 			{
-				NPCShop.Entry entry = shop.Entries[e];
-				if (entry.Disabled) continue;
-				bool met = entry.ConditionsMet();
-				if (!met && !entry.SlotReserved) continue;
-				int s = slot++;
-				if (!met) continue;
-				Item live = items[s];
-				if (live == null || live.IsAir || live.type != entry.Item.type) continue;
-				result[s] = GuaranteedAt(plan, shopName, e);
+				while (next < limit && next < items.Length && items[next] != null) next++;
+				int slot = -1;
+				if (next < limit && next < items.Length)
+				{
+					slot = next++;
+				}
+				else
+				{
+					while (back >= 0 && !(rolled != null && back < rolled.Count && rolled[back])) back--;
+					if (back >= 0) slot = back--;
+				}
+				where[a] = slot;
+				if (slot < 0) continue;
+				Item item = new(added[a].Replacement);
+				item.stack = 1;
+				item.shopCustomPrice = added[a].Price;
+				items[slot] = item;
 			}
-			return result;
+			return where;
 		}
 	}
 
