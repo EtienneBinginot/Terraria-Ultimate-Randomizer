@@ -185,13 +185,9 @@ namespace UltimateRandomizer.Common.Features
 			RefreshCraftingMenu();
 		}
 
-		// The planned result once its tier is unlocked (the plan is built around it); before, a stand-in of an unlocked
-		// tier rolled with the same arguments, which the plan never relies on
-		public static (int type, int stack) AppliedResult(RecipePlan plan, int i)
-		{
-			if (ProgressionSystem.UnlockedTier >= plan.ResultTiers[i]) return plan.Results[i];
-			return RecipePlanner.ResultFor(i, plan.Ingredients[i] ?? originalIngredients[i], lucky: false);
-		}
+		// Always the planned result, whatever the progression: its key ingredient (or stations) make the recipe wait for its
+		// tier, there is no stand-in any more
+		public static (int type, int stack) AppliedResult(RecipePlan plan, int i) => plan.Results[i];
 
 		// Pickaxes and bars (the mining chain: anvils, Molten Pickaxe...) are never randomized when protected
 		private static bool KeepRecipe(int original, bool protectMining)

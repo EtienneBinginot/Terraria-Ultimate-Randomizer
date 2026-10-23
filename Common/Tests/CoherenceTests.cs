@@ -88,11 +88,17 @@ namespace UltimateRandomizer.Common.Tests
 			StringBuilder tsv = new();
 			tsv.AppendLine("id\tinternal name\tname\tcategory\trarity tier\ttier\ttrue tier\tsource tier\tearliest source\treason");
 			Dictionary<string, List<int>> byReason = new() { ["raised"] = new(), ["earlier"] = new(), ["nosource"] = new() };
-			int audited = 0;
+			int audited = 0, reviewed = 0;
 			for (int type = 1; type < Math.Min(ItemID.Count, ItemPool.Info.Length); type++)
 			{
 				ItemInfo info = ItemPool.Info[type];
 				if (info.Excluded || info.Banned) continue;
+				// Hand-reviewed (MaterialTiers): not doubtful
+				if (info.FromTable)
+				{
+					reviewed++;
+					continue;
+				}
 				audited++;
 				List<string> reasons = new();
 				if (info.SourceRaised) reasons.Add("raised");
@@ -107,7 +113,8 @@ namespace UltimateRandomizer.Common.Tests
 			string path = Path.Combine(dir, "TierAudit.tsv");
 			Directory.CreateDirectory(dir);
 			File.WriteAllText(path, tsv.ToString());
-			Audit($"{audited} vanilla items audited, written to {path}");
+			Audit($"{audited} vanilla items audited, written to {path}; {reviewed} materials of the reviewed table (MaterialTiers: " +
+				$"{MaterialTiers.Table.Count} listed, {MaterialTiers.Table.Count(e => e.Value.Tier == null)} banned) take its tier and are left out");
 			foreach ((string reason, List<int> items) in byReason)
 			{
 				Audit($"{reason}: {items.Count} ({ByCategory(items)})");
@@ -208,6 +215,8 @@ namespace UltimateRandomizer.Common.Tests
 		// guaranteed station, no mining ore, no bag or summon; categories of weight 0 left out as PickIngredient does), by
 		// findability tier. Natural: its own tier (or the unlock tier of it); later: a lower-tier item only a later random
 		// source gives; earlier: found before its tier (gathered, mined, herbs)
+		private const int MinTierMaterials = 10;
+
 		private static List<int>[] Candidates()
 		{
 			List<int>[,] buckets = RecipePlanner.IngredientCandidates();
@@ -227,8 +236,12 @@ namespace UltimateRandomizer.Common.Tests
 				int natural = list.Count(x => ItemPool.TierOf(x) == t || ItemPool.UnlockTier(ItemPool.TierOf(x)) == t);
 				int later = list.Count(x => ItemPool.TierOf(x) < t);
 				int earlier = list.Count(x => ItemPool.UnlockTier(ItemPool.TierOf(x)) > t);
-				Log($"candidates findable at tier {t}: {list.Count} (all categories {all}); natural {natural}, later than their tier {later}, earlier {earlier} " +
-					$"[{ByCategory(list)}]: {Names(Spread(list, 25))}");
+				// True materials (Material, OreBar) carry the recipes of a tier: fewer than 10 is too thin
+				int materials = list.Count(x => ItemPool.Info[x].Category is ItemCategory.Material or ItemCategory.OreBar);
+				int common = list.Count(x => ItemPool.CommonnessOf(x) == Commonness.Common);
+				Log($"candidates findable at tier {t}: {list.Count} (all categories {all}), {materials} materials ({common} common); natural {natural}, " +
+					$"later than their tier {later}, earlier {earlier} [{ByCategory(list)}]: {Names(Spread(list, 25))}");
+				if (materials < MinTierMaterials) Log($"WARNING tier {t}: only {materials} material candidates (fewer than {MinTierMaterials})");
 			}
 			return byTier;
 		}
@@ -298,8 +311,20 @@ namespace UltimateRandomizer.Common.Tests
 					if (!slot) needingNoSlot[u]++;
 				}
 			}
-			Log($"recipes: {total.Sum()} randomizable vanilla recipes (Touchable), {needing.Sum()} would need a key ingredient, {noSlot.Sum()} without a replaceable slot " +
-				"(all kept, recipe groups, bags or summons)");
+			Log($"recipes: {total.Sum()} randomizable vanilla recipes (Touchable), {needing.Sum()} still doable before U, {noSlot.Sum()} without a replaceable slot " +
+				$"(all kept, recipe groups, bags or summons); plan: {plan.KeyIngredient.Count(k => k)} key ingredients, {plan.ResultRepicked.Count(r => r)} results re-picked");
+			// Spread of the ingredients (every planned recipe, kept originals too): the busiest material of each findability tier
+			for (int t = 0; t < Tiers.Count; t++)
+			{
+				List<int> used = candidates[t].Where(m => uses.GetValueOrDefault(m) > 0).OrderByDescending(m => uses[m]).ThenBy(m => m).ToList();
+				if (used.Count == 0)
+				{
+					Log($"usage tier {t}: no candidate used");
+					continue;
+				}
+				Log($"usage tier {t}: {used.Count} of {candidates[t].Count} candidates used, {used.Sum(m => uses[m])} uses; top: " +
+					string.Join(", ", used.Take(5).Select(m => $"{Name(m)} x{uses[m]} ({ItemPool.CommonnessOf(m)})")));
+			}
 			for (int u = 0; u < Tiers.Count; u++)
 			{
 				if (total[u] == 0) continue;

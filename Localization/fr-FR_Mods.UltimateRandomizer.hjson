@@ -221,6 +221,8 @@ Tests: {
 	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement
 	FurnitureSurprise: Les recettes de meubles, de blocs et de murs donnent autre chose selon la chance de surprise des meubles
 	ProtectedRecipesDoable: Les recettes des stations de progression et des objets protégés sont faisables à leur niveau
+	RecipeAlwaysFinalResult: Les recettes donnent toujours leur résultat final, sans remplaçant avant son tier
+	RecipeKeyIngredient: Les recettes randomisées ne sont pas faisables avant le tier de leur résultat (ingrédient clé)
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares

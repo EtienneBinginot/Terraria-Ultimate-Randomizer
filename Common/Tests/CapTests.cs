@@ -256,7 +256,8 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				ItemInfo info = ItemPool.Info[type];
 				if (info.Excluded) continue;
-				if (info.TrueTier < info.Tier) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {info.Tier}");
+				// The hand-reviewed materials (MaterialTiers) take the table's tier exactly, lower too
+				if (info.TrueTier < info.Tier && !info.FromTable) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {info.Tier}");
 				if (info.TrueTier > info.Tier) raised++;
 			}
 			foreach (int item in new[] { ItemID.PearlwoodSword, ItemID.PearlwoodWorkBench })
