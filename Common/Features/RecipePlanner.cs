@@ -299,6 +299,14 @@ namespace UltimateRandomizer.Common.Features
 
 		private static readonly ItemCategory[] Unusable = { ItemCategory.Bag, ItemCategory.BossSummon };
 
+		// Read-only, for the tests (TierCoherence): the materials a replaced ingredient may become, by category and findability
+		// tier, exactly as PlanIngredients sees them
+		public static List<int>[,] IngredientCandidates() => FindableBuckets();
+
+		// May the planner replace this ingredient of a recipe at all (not a recipe group, randomizable, not a bag or a summon)?
+		public static bool IngredientReplaceable(Recipe recipe, int item) =>
+			!InGroup(recipe, item, out _) && ItemPool.IsRandomizable(item) && !Unusable.Contains(ItemPool.Info[item].Category);
+
 		// Materials found at each tier (by category), never crafted: a replaced ingredient only relies on raw sources
 		private static List<int>[,] FindableBuckets()
 		{
