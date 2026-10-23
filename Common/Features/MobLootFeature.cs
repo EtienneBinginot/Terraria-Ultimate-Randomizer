@@ -42,7 +42,7 @@ namespace UltimateRandomizer.Common.Features
 					npcLoot.Add(wrapped);
 					continue;
 				}
-				bool wrap = wrappable && part.Count > 0 && DropPermutation.Wrappable(rule);
+				bool wrap = wrappable && DropPermutation.Permutable(rule, part, npc.type, NPCID.Count);
 				ruleOf.AddRange(Enumerable.Repeat(wrap ? r : -1, part.Count));
 				if (!wrap) continue;
 				// Registered once per net ID: never mutate the rule itself, shared with other net IDs
@@ -212,7 +212,8 @@ namespace UltimateRandomizer.Common.Features
 		{
 			bool farm = npc.SpawnedFromStatue || MobLootSystem.IsSpawnedByNpc(npc);
 			bool lucky = !farm && DropHelper.RollLucky(JackpotWorth(npc));
-			foreach (PlannedDrop drop in OriginalDrops(netId, npc.type))
+			// The owner's floor and table, as KillDrops: an Eater of Worlds body or tail segment drops like the head
+			foreach (PlannedDrop drop in OriginalDrops(netId, BossParts.Owner(npc.type)))
 			{
 				if (!drop.Rolled || drop.Item <= ItemID.None) continue;
 				if (drop.Conditions != null && drop.Conditions.Any(c => c != null && !c.CanDrop(info))) continue;
@@ -510,15 +511,16 @@ namespace UltimateRandomizer.Common.Features
 			// permutation style: the bag rolls them, BagPlan.Plan)
 			if (isBoss && expert && original.Any(d => ItemID.Sets.BossBag[d.itemId])) return drops;
 
-			int npcKey = DetRandom.NpcKey(type);
+			// Permutation: PermutationExtraSlots random slots at vanilla-like rates, not scaled by abundance, with their own
+			// weights (no materials: the moved original drops give them), plus the chances of the locked entries
+			// (Redistribute); no small frequent drops. Bosses (BossPermutation) too, at boss rates (the first slot always drops),
+			// those of the boss owning their bag (ExtrasOwner: both Twins roll Retinazer's, as their bag). The enemies it leaves
+			// out (critters, bosses outside the boss table) keep the vanilla-like extras
+			bool permutation = DropPermutation.InStyle(netId, tableStyle) || BossPermutation.InStyle(netId, tableStyle);
+			int npcKey = DetRandom.NpcKey(permutation && isBoss ? BossPermutation.ExtrasOwner(type) : type);
 			int sourceTier = NpcTiers.EffectiveTier(type);
 			int minLimit = MinLimit(type);
 			bool critter = NPCID.Sets.CountsAsCritter[type];
-			// Permutation: PermutationExtraSlots random slots at vanilla-like rates, not scaled by abundance, with their own
-			// weights (no materials: the moved original drops give them), plus the chances of the locked entries
-			// (Redistribute); no small frequent drops. Bosses (BossPermutation) too, at boss rates (the first slot always drops).
-			// The enemies it leaves out (critters, bosses outside the boss table) keep the vanilla-like extras
-			bool permutation = DropPermutation.InStyle(netId, tableStyle) || BossPermutation.InStyle(netId, tableStyle);
 			DropTableStyle slotStyle = tableStyle == DropTableStyle.Permutation ? DropTableStyle.VanillaLike : tableStyle;
 			int slots = permutation ? Math.Clamp(cfg.PermutationExtraSlots, 0, 3)
 				: isBoss

@@ -20,13 +20,16 @@ namespace UltimateRandomizer.Common.Features
 			List<IItemDropRule> rules = itemLoot.Get(false).Where(r => r != null).Distinct().ToList();
 			if (rules.Count == 0) return;
 			bool bossBag = item.type < ItemID.Sets.BossBag.Length && ItemID.Sets.BossBag[item.type];
+			HashSet<int> running = bossBag ? RunningOnBoss(item.type) : null;
 			List<DropRateInfo> drops = new();
 			List<int> ruleOf = new();
 			for (int r = 0; r < rules.Count; r++)
 			{
 				IItemDropRule rule = rules[r];
 				List<DropRateInfo> part = LootSnapshot.Capture(new List<IItemDropRule> { rule });
-				bool wrap = bossBag && part.Count > 0 && DropPermutation.Wrappable(rule, forBosses: true);
+				// Vanilla bags only; a rule holding an item its boss's own rules still drop as vanilla (Deerclops' weapons)
+				// keeps running too, so that normal and expert mode give the same
+				bool wrap = bossBag && DropPermutation.Permutable(rule, part, item.type, ItemID.Count, true) && !part.Any(d => running.Contains(d.itemId));
 				drops.AddRange(part);
 				ruleOf.AddRange(Enumerable.Repeat(wrap ? r : -1, part.Count));
 				if (!wrap) continue;
@@ -37,6 +40,24 @@ namespace UltimateRandomizer.Common.Features
 			if (!bossBag) return;
 			LootSnapshot.ItemRules[item.type] = ruleOf.ToArray();
 			itemLoot.Add(new BossBagRule(item.type));
+		}
+
+		// Load time (tML modifies the NPCs' loot before the items': the boss snapshots are complete): the items of the boss
+		// tables dropping this bag (BossPermutation.WrapsLoot) whose entry is left to its vanilla rule (the item pool, hence
+		// DropHelper.KeepOriginal, does not exist yet: kept items count too; at worst a bag rule holding one keeps running)
+		private static HashSet<int> RunningOnBoss(int bag)
+		{
+			HashSet<int> running = new();
+			foreach ((int netId, List<DropRateInfo> entries) in LootSnapshot.Npcs)
+			{
+				if (!ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) || !BossPermutation.WrapsLoot(sample.type) || !entries.Any(d => d.itemId == bag)) continue;
+				int[] rules = LootSnapshot.RulesOf(netId);
+				for (int i = 0; i < entries.Count; i++)
+				{
+					if ((i >= rules.Length || rules[i] < 0) && entries[i].itemId != bag) running.Add(entries[i].itemId);
+				}
+			}
+			return running;
 		}
 	}
 

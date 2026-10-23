@@ -17,7 +17,8 @@ namespace UltimateRandomizer.Common.Features
 	// chance and stack in the bag it came from (BagVersion); the rolled bag entries matching no not-expert drop of their boss
 	// (expert accessories such as the Royal Gel) are places of their own (access "Bag"), moved between the bags of the group.
 	// The bag item on the boss, coins, kept items and the rules that are not complete (per-player drops, one-from-rules...)
-	// stay as they are. Computed from the world seed, the synced settings and the snapshots: the server (kills) and the
+	// stay as they are, as do the entries with a seasonal condition (DropPermutation.KeptVanilla); the other boss-specific
+	// conditions follow PlacedConditions. Groups: BossGroups. Computed from the world seed, the synced settings and the snapshots: the server (kills) and the
 	// clients (bags are opened on the client, journal, codex) get the same plan
 	public static class BossPermutation
 	{
@@ -45,6 +46,8 @@ namespace UltimateRandomizer.Common.Features
 			public Dictionary<int, DropPermutation.Placed[]> ByBag;
 			// Per bag: the places of its boss whose contents it carries, in the order of the bag's first entries
 			public Dictionary<int, List<int>> Carried;
+			// Per bag: its entries travelling with a not-expert drop of its boss (in the bag through Carried)
+			public Dictionary<int, bool[]> Matched;
 		}
 
 		private static WorldPlan cached;
@@ -69,7 +72,8 @@ namespace UltimateRandomizer.Common.Features
 		// Its loot is wrapped at load: a boss of the boss table, or one of its parts (Eater of Worlds segments), not a minion
 		public static bool WrapsLoot(int type)
 		{
-			if (type <= 0 || BossParts.IsMinion(type)) return false;
+			// Vanilla bosses only: a modded boss's rules are left alone
+			if (type <= 0 || type >= NPCID.Count || BossParts.IsMinion(type)) return false;
 			int owner = BossParts.Owner(type);
 			return NpcTiers.HasBossTier(owner) && NpcTiers.IsBoss(owner);
 		}
@@ -169,6 +173,16 @@ namespace UltimateRandomizer.Common.Features
 			return unitOfBag.TryGetValue(bag, out int unit) ? unit : 0;
 		}
 
+		// The boss type whose random extra drops a boss type rolls in the permutation style: the one of its bag's table
+		// (BagUnit), so that a kill and its bag give the same extras (the Twins: Retinazer's, whichever twin dies last)
+		public static int ExtrasOwner(int type)
+		{
+			if (!IsSource(type)) return type;
+			int bag = BagOf(UnitOf(type));
+			int unit = bag > ItemID.None ? BagUnit(bag) : 0;
+			return unit > 0 && ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? BossParts.Owner(sample.type) : type;
+		}
+
 		public static IEnumerable<int> Bags()
 		{
 			EnsureBags();
@@ -203,6 +217,34 @@ namespace UltimateRandomizer.Common.Features
 
 		private static DropRateInfo WithConditions(DropRateInfo entry, List<IItemDropRuleCondition> conditions) =>
 			new(entry.itemId, entry.stackMin, entry.stackMax, entry.dropRate, conditions);
+
+		// Pure: the conditions of a boss place holding a moved content (DropPermutation.ConditionClass). The place keeps its own
+		// conditions but those about its vanilla item (ItemSelf) and the one-time ones (OneTime): a content arriving at the
+		// first-Plantera-kill place drops at every Plantera kill. The content brings its ItemSelf conditions (the Demon Heart
+		// stays "not used yet" wherever it goes). A Fight condition stays on the place (what arrives at Terraprisma's place
+		// needs a genuinely enraged Empress). unmoved: the content is the place's own, its conditions stay as they are
+		public static List<IItemDropRuleCondition> PlacedConditions(List<IItemDropRuleCondition> place, List<IItemDropRuleCondition> content, bool unmoved)
+		{
+			if (unmoved) return place;
+			List<IItemDropRuleCondition> result = new();
+			if (place != null) result.AddRange(place.Where(c => DropPermutation.ClassOf(c) is not (DropPermutation.ConditionClass.ItemSelf or DropPermutation.ConditionClass.OneTime)));
+			if (content != null) result.AddRange(content.Where(c => DropPermutation.ClassOf(c) == DropPermutation.ConditionClass.ItemSelf));
+			return result.Count == 0 && place == null ? null : result;
+		}
+
+		// A content freed from a Fight or OneTime condition (Terraprisma, the first Plantera kill's item) drops at most at a
+		// vanilla-like boss rate for its item at the place's tier: Golem does not give Terraprisma at every kill. Deterministic
+		// (seed, place)
+		public static bool FreedRate(DropPermutation.Place source, DropPermutation.Place place, int seed, out float cap)
+		{
+			cap = 1f;
+			List<IItemDropRuleCondition> conditions = source.Entry.conditions;
+			if (!DropPermutation.Has(conditions, DropPermutation.ConditionClass.Fight) && !DropPermutation.Has(conditions, DropPermutation.ConditionClass.OneTime)) return false;
+			int item = source.Entry.itemId;
+			Random rng = new(DetRandom.Hash(seed, RollKey.BossPermutation, place.OwnerKey, place.Index, 1));
+			cap = 1f / Math.Max(1, DropRates.Denominator(item, ItemPool.TierOf(item), place.Tier, true, rng));
+			return true;
+		}
 
 		private sealed class Collected
 		{
@@ -257,21 +299,30 @@ namespace UltimateRandomizer.Common.Features
 			return c;
 		}
 
-		// Pure: the boss groups of these tables (unit, tier), lowest tier first. A tier with fewer than MinGroupBosses tables
-		// joins the group below it; the lowest one joins the group above
+		// Pure: the boss groups of these tables (unit, tier), lowest tier first. Consecutive tiers with too few tables first
+		// merge together (the Lunatic Cultist and the Moon Lord make a group); a group still smaller than MinGroupBosses then
+		// joins the group below it, the lowest one the group above. The highest bosses' loot only goes down when nothing
+		// else is possible
 		public static List<List<int>> BossGroups(IEnumerable<(int unit, int tier)> tables)
 		{
 			List<List<int>> groups = new();
+			bool openSmall = false;
 			foreach (IGrouping<int, (int unit, int tier)> bucket in tables.Distinct().OrderBy(t => t.tier).ThenBy(t => t.unit).GroupBy(t => t.tier))
 			{
 				List<int> members = bucket.Select(t => t.unit).ToList();
-				if (members.Count < MinGroupBosses && groups.Count > 0) groups[^1].AddRange(members);
+				bool small = members.Count < MinGroupBosses;
+				// A small tier joins the run of small tiers before it while that run is still too small
+				if (small && openSmall && groups[^1].Count < MinGroupBosses) groups[^1].AddRange(members);
 				else groups.Add(members);
+				openSmall = small;
 			}
-			if (groups.Count > 1 && groups[0].Count < MinGroupBosses)
+			for (int g = 0; g < groups.Count && groups.Count > 1; g++)
 			{
-				groups[1].InsertRange(0, groups[0]);
-				groups.RemoveAt(0);
+				if (groups[g].Count >= MinGroupBosses) continue;
+				if (g > 0) groups[g - 1].AddRange(groups[g]);
+				else groups[1].InsertRange(0, groups[0]);
+				groups.RemoveAt(g);
+				g--;
 			}
 			return groups;
 		}
@@ -312,7 +363,14 @@ namespace UltimateRandomizer.Common.Features
 			{
 				int s = contentOf[p];
 				DropRateInfo content = bag ? bagVersion[s] : places[s].Entry;
-				return new DropPermutation.Placed { Entry = WithConditions(content, conditions), Rolled = true, Permuted = true, FromNetId = places[s].Owner, FromIndex = places[s].Index };
+				if (!bag) conditions = PlacedConditions(places[p].Entry.conditions, places[s].Entry.conditions, s == p);
+				float rate = content.dropRate;
+				if ((s != p || bag) && FreedRate(places[s], places[p], seed, out float cap)) rate = Math.Min(rate, cap);
+				return new DropPermutation.Placed
+				{
+					Entry = new DropRateInfo(content.itemId, content.stackMin, content.stackMax, rate, conditions), Rolled = true, Permuted = true,
+					FromNetId = places[s].Owner, FromIndex = places[s].Index
+				};
 			}
 
 			Dictionary<int, DropPermutation.Placed[]> byUnit = new();
@@ -327,7 +385,7 @@ namespace UltimateRandomizer.Common.Features
 			for (int p = 0; p < places.Count; p++)
 			{
 				DropPermutation.Place place = places[p];
-				if (!IsBagOnly(place)) byUnit[place.Owner][place.Index] = Moved(p, place.Entry.conditions, false);
+				if (!IsBagOnly(place)) byUnit[place.Owner][place.Index] = Moved(p, null, false);
 			}
 			// The Twins' shared drops: the same content on both, the last one killed drops it (MissingTwin)
 			foreach (int unit in byUnit.Keys.ToList())
@@ -367,7 +425,8 @@ namespace UltimateRandomizer.Common.Features
 				for (int j = 0; j < bagEntries.Count; j++)
 				{
 					if (matched[j]) continue;
-					if (ownPlaces.TryGetValue(j, out int q)) list.Add(Moved(q, bagEntries[j].conditions, true));
+					// A bag-only content keeps its own bag conditions (the Demon Heart not used yet...): the place imposes none
+					if (ownPlaces.TryGetValue(j, out int q)) list.Add(Moved(q, bagVersion[contentOf[q]].conditions, true));
 					else list.Add(new DropPermutation.Placed { Entry = bagEntries[j], Rolled = bagRolled[j], FromNetId = unit, FromIndex = BagIndexOffset + j });
 				}
 				byBag[bag] = list.ToArray();
@@ -376,7 +435,7 @@ namespace UltimateRandomizer.Common.Features
 			return new WorldPlan
 			{
 				Places = places, ContentOf = contentOf, BagVersion = bagVersion, Groups = groups, BossGroups = bossGroups, GroupOfUnit = groupOfUnit,
-				ByUnit = byUnit, ByBag = byBag, Carried = carriedOf
+				ByUnit = byUnit, ByBag = byBag, Carried = carriedOf, Matched = c.Matched
 			};
 		}
 
@@ -384,7 +443,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			Places = new List<DropPermutation.Place>(), ContentOf = Array.Empty<int>(), BagVersion = Array.Empty<DropRateInfo>(), Groups = new List<List<int>>(),
 			BossGroups = new List<List<int>>(), GroupOfUnit = new Dictionary<int, int>(), ByUnit = new Dictionary<int, DropPermutation.Placed[]>(),
-			ByBag = new Dictionary<int, DropPermutation.Placed[]>(), Carried = new Dictionary<int, List<int>>()
+			ByBag = new Dictionary<int, DropPermutation.Placed[]>(), Carried = new Dictionary<int, List<int>>(), Matched = new Dictionary<int, bool[]>()
 		};
 
 		// The plan of the current world (cleared by WorldCaches.Reset)
@@ -425,7 +484,8 @@ namespace UltimateRandomizer.Common.Features
 
 		public static bool BagActive(int bag) => SeedSystem.WorldReady && ItemPool.Ready && BagInStyle(bag);
 
-		// Load time: the rule registered in place of a boss's rule. A complete rule is wrapped whole (PermutableRule); a
+		// Load time: the rule registered in place of a boss's rule. A complete rule without entries kept vanilla
+		// (DropPermutation.KeptVanilla) is wrapped whole (PermutableRule); a
 		// leading condition rule that is not (the Twins' MissingTwin rule also holds their bag) is copied with its complete
 		// chained rules wrapped, the others (the bag, per-player drops) kept as they are. The original instances (shared
 		// between net IDs) are never changed. next: the wrapper index, counted per net ID
@@ -435,10 +495,13 @@ namespace UltimateRandomizer.Common.Features
 			if (DropPermutation.Wrappable(rule, forBosses: true))
 			{
 				List<DropRateInfo> part = LootSnapshot.Capture(new List<IItemDropRule> { rule });
-				return part.Count == 0 ? rule : new PermutableRule(rule, netId, next++, part.Select(d => d.itemId));
+				if (part.Count == 0) return rule;
+				// An entry kept vanilla (seasonal...) keeps its rule running: its chains are looked at below
+				if (!part.Any(d => DropPermutation.KeptVanilla(d.conditions))) return new PermutableRule(rule, netId, next++, part.Select(d => d.itemId));
 			}
 			if (rule.GetType() != typeof(LeadingConditionRule) || rule.ChainedRules == null || rule.ChainedRules.Count == 0
-				|| rule.ChainedRules.Any(c => !DropPermutation.IsCompleteChain(c))) return rule;
+				|| rule.ChainedRules.Any(c => !DropPermutation.IsCompleteChain(c))
+				|| DropPermutation.ClassOf(((LeadingConditionRule)rule).condition) == DropPermutation.ConditionClass.Seasonal) return rule;
 			LeadingConditionRule copy = new(((LeadingConditionRule)rule).condition);
 			bool changed = false;
 			foreach (IItemDropRuleChainAttempt chain in rule.ChainedRules)
@@ -532,13 +595,32 @@ namespace UltimateRandomizer.Common.Features
 		public ItemDropAttemptResult TryDroppingItem(DropAttemptInfo info)
 		{
 			if (info.player == null || !BossPermutation.BagActive(bagType)) return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
-			foreach (PlannedDrop drop in BagPlan.Plan(bagType))
+			// As a boss kill (RandomNpcDropRule.DropRolledOriginals, KillDrops): a locked entry only drops on a lucky opening
+			// (a boss's worth), kept as rarely as a lucky roll that far above the limit, marked as a jackpot when useful. No
+			// madness tail: the extras are the planned ones, like the bag's other contents
+			bool lucky = DropHelper.RollLucky(1f);
+			foreach (PlannedDrop drop in BagPlan.Plan(bagType, includeLocked: true))
 			{
 				if (!drop.Rolled && !drop.Extra || drop.Item <= ItemID.None) continue;
 				if (drop.Conditions != null && drop.Conditions.Any(c => c != null && !c.CanDrop(info))) continue;
 				if (info.rng.NextFloat() >= drop.Chance) continue;
+				int gap = 0;
+				if (drop.Locked)
+				{
+					if (!lucky || drop.LockGap > 1 && info.rng.NextDouble() >= ItemPool.LuckyKeepChance(drop.LockGap)) continue;
+					gap = ItemPool.IsJackpotWorthy(drop.Item) ? drop.LockGap : 0;
+				}
 				int min = Math.Max(1, drop.StackMin);
-				CommonCode.DropItem(info, drop.Item, info.rng.Next(min, Math.Max(min, drop.StackMax) + 1), false);
+				int stack = info.rng.Next(min, Math.Max(min, drop.StackMax) + 1);
+				JackpotItem.Next = gap;
+				try
+				{
+					CommonCode.DropItem(info, drop.Item, stack, false);
+				}
+				finally
+				{
+					JackpotItem.Next = 0;
+				}
 			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
 		}

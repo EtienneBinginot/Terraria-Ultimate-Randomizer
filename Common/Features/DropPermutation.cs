@@ -41,6 +41,52 @@ namespace UltimateRandomizer.Common.Features
 			typeof(Conditions.MechdusaKill), typeof(Conditions.NeverTrue)
 		};
 
+		// Conditions on the season, the weather, the player or one NPC's own state (a named NPC, special AI values, a pirate
+		// map...): an entry holding one is never permuted (its rule keeps running as vanilla), a content moved there or away
+		// would drop at the wrong moment or never
+		private static readonly HashSet<Type> Seasonal = new()
+		{
+			typeof(Conditions.IsChristmas), typeof(Conditions.HalloweenWeapons), typeof(Conditions.HalloweenGoodieBagDrop), typeof(Conditions.XmasPresentDrop),
+			typeof(Conditions.WindyEnoughForKiteDrops), typeof(Conditions.PlayerNeedsHealing), typeof(Conditions.NamedNPC),
+			typeof(Conditions.IsUsingSpecificAIValues), typeof(Conditions.LivingFlames), typeof(Conditions.PirateMap)
+		};
+
+		// The kinds of drop conditions. Restrictive: contents only move within their access class (AccessOf). Seasonal: the
+		// entry is not permuted. For bosses (BossPermutation.PlacedConditions): ItemSelf conditions are about the item itself
+		// (the Demon Heart not used yet, no Portal Gun yet) and travel with it; Fight conditions (a genuinely enraged Empress)
+		// stay on their place, the content leaving it loses them; OneTime conditions (the first Plantera kill) are dropped on
+		// both sides. Enemies keep every other condition on the place
+		public enum ConditionClass
+		{
+			Place,
+			Restrictive,
+			Seasonal,
+			ItemSelf,
+			Fight,
+			OneTime
+		}
+
+		public static ConditionClass ClassOf(IItemDropRuleCondition condition) => condition switch
+		{
+			null => ConditionClass.Place,
+			_ when Restrictive.Contains(condition.GetType()) => ConditionClass.Restrictive,
+			_ when Seasonal.Contains(condition.GetType()) => ConditionClass.Seasonal,
+			Conditions.NotUsedDemonHeart or Conditions.NoPortalGun => ConditionClass.ItemSelf,
+			Conditions.EmpressOfLightIsGenuinelyEnraged => ConditionClass.Fight,
+			Conditions.FirstTimeKillingPlantera => ConditionClass.OneTime,
+			_ => ConditionClass.Place
+		};
+
+		public static bool Has(List<IItemDropRuleCondition> conditions, ConditionClass kind) => conditions != null && conditions.Any(c => c != null && ClassOf(c) == kind);
+
+		// An entry left to its vanilla rule (Seasonal conditions)
+		public static bool KeptVanilla(List<IItemDropRuleCondition> conditions) => Has(conditions, ConditionClass.Seasonal);
+
+		// Load time: a rule whose report is complete (Wrappable), of a vanilla NPC or bag (owner type below the vanilla
+		// count: a modded NPC's rules are left alone), and without any entry kept vanilla. part: the rule's capture
+		public static bool Permutable(IItemDropRule rule, List<DropRateInfo> part, int ownerType, int vanillaCount, bool forBosses = false) =>
+			ownerType > 0 && ownerType < vanillaCount && part.Count > 0 && !part.Any(d => KeptVanilla(d.conditions)) && Wrappable(rule, forBosses: forBosses);
+
 		// The vanilla rule types whose ReportDroprates lists everything they can drop, with its chance and conditions: only
 		// these are wrapped (and their entries permuted). Exact types: a subclass (modded) may drop differently. Anything else
 		// (modded rules, slime body items, per-player drops, OneFromRulesRule...) keeps running as it is
@@ -48,7 +94,9 @@ namespace UltimateRandomizer.Common.Features
 		{
 			typeof(CommonDrop), typeof(CommonDropNotScalingWithLuck), typeof(CommonDropWithRerolls), typeof(ItemDropWithConditionRule),
 			typeof(OneFromOptionsDropRule), typeof(OneFromOptionsNotScaledWithLuckDropRule),
-			typeof(DropBasedOnExpertMode), typeof(DropBasedOnMasterMode), typeof(LeadingConditionRule)
+			typeof(DropBasedOnExpertMode), typeof(DropBasedOnMasterMode), typeof(LeadingConditionRule),
+			// Reports nothing and drops nothing: a complete (empty) branch, as Queen Bee's expert one
+			typeof(DropNothing)
 		};
 
 		// Bosses and their bags (BossPermutation) also wrap these: their report lists every option with its own chance
@@ -65,11 +113,12 @@ namespace UltimateRandomizer.Common.Features
 		// Groups smaller than this are merged with the next tier of the same access class (like ItemPool's shuffle)
 		public const int MinGroupSize = 3;
 
-		// The access class of an entry: its restrictive condition types, sorted ("" for an ordinary entry)
+		// The access class of an entry: its restrictive condition types, sorted ("" for an ordinary entry). Seasonal ones are
+		// counted too: such entries are kept vanilla (Permutable), and would only ever move between themselves
 		public static string AccessOf(List<IItemDropRuleCondition> conditions)
 		{
 			if (conditions == null || conditions.Count == 0) return "";
-			return string.Join("+", conditions.Where(c => c != null && Restrictive.Contains(c.GetType())).Select(c => c.GetType().Name).Distinct().OrderBy(n => n, StringComparer.Ordinal));
+			return string.Join("+", conditions.Where(c => ClassOf(c) is ConditionClass.Restrictive or ConditionClass.Seasonal).Select(c => c.GetType().Name).Distinct().OrderBy(n => n, StringComparer.Ordinal));
 		}
 
 		// One entry position of an enemy's drop table
@@ -456,7 +505,8 @@ namespace UltimateRandomizer.Common.Features
 		public static Placed[] For(int netId) => Current.ByUnit.TryGetValue(UnitOf(netId), out Placed[] table) ? table : None;
 
 		// Only rules whose report is complete, chains included, are wrapped (CompleteRules). forBosses: also the few-from-options
-		// rules, and never a rule with a chain hidden from the report (its items would be silenced without being in the table)
+		// rules. Never a rule with a chain hidden from the report (its items would be silenced without being in the table: the
+		// Nailhead's nails)
 		public static bool Wrappable(IItemDropRule rule, int depth = 0, bool forBosses = false)
 		{
 			if (rule == null || depth > 10 || !(CompleteRules.Contains(rule.GetType()) || forBosses && CompleteForBosses.Contains(rule.GetType()))) return false;
@@ -467,7 +517,7 @@ namespace UltimateRandomizer.Common.Features
 				foreach (IItemDropRuleChainAttempt chain in rule.ChainedRules)
 				{
 					if (chain == null || !CompleteChains.Contains(chain.GetType()) || !Wrappable(chain.RuleToChain, depth + 1, forBosses)) return false;
-					if (forBosses && HidesReport(chain)) return false;
+					if (HidesReport(chain)) return false;
 				}
 			}
 			return true;
@@ -502,8 +552,10 @@ namespace UltimateRandomizer.Common.Features
 	// otherwise it resolves the original rule as if it were registered (ItemDropResolver.ResolveRule calls CanDrop, then
 	// TryDroppingItem with the resolve action for a nested rule, then the registered rule's chains: none here, the inner
 	// rule's own chains are resolved by the action). Runs where the loot rolls (server, single player).
-	// Accepted: another mod's ModifyNPCLoot running after ours no longer finds the wrapped vanilla rules (to remove or
-	// change them); its own rules are left alone
+	// Only vanilla NPCs and bags are wrapped (DropPermutation.Permutable). Accepted limitation: another mod's ModifyNPCLoot
+	// (or ModifyItemLoot) running after ours no longer finds the wrapped vanilla rules (to remove or change them, a "rule is
+	// CommonDrop" check fails), and a vanilla-typed rule another mod added before ours to a vanilla NPC is wrapped like the
+	// vanilla ones; rules of other types are left alone
 	public class PermutableRule : IItemDropRule, INestedItemDropRule
 	{
 		private readonly IItemDropRule inner;

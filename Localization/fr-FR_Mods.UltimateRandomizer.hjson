@@ -134,6 +134,10 @@ Tests: {
 	BossBagMatchesBoss: Chaque sac de trésor contient les drops mélangés du mode normal de son boss, avec leur chance et leur quantité dans le sac d'où ils viennent
 	BossPermutationTiers: Les drops de boss ne passent qu'entre boss du même groupe de tiers, avec les mêmes restrictions
 	BossRuntime: Les règles de drop des boss et des sacs suivent vraiment la permutation : les drops coupés sont tirés quelque part, rien ne tombe deux fois
+	PermutationConservation: Chaque entrée de drop vanilla des ennemis, des boss et des sacs de boss se trouve exactement une fois quelque part, à sa place ou déplacée
+	PermutedConditions: Les drops déplacés n'ont que des conditions possibles : ni saisonnière ni de premier kill, les conditions propres à un objet le suivent
+	EaterOfWorldsParts: Le corps et la queue du Dévoreur des mondes tirent dans la table de la tête, avec le plancher du boss
+	BossGroupsMerge: Les petits tiers de boss consécutifs se regroupent d'abord, et le butin du Seigneur de la Lune reste avec les derniers boss
 	CodexShowsLocked: Interface du codex : les butins verrouillés sont grisés avec le boss qui les débloque, sans chance
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires

@@ -1094,7 +1094,9 @@ namespace UltimateRandomizer.Common.Features
 
 		// The tier from which a drop of a source of this tier can happen, given the progression conditions of the entry
 		// (hardmode, mechanical bosses, Plantera; the remix seed's hardmode drops, such as the pre-hardmode Mimic's). Never:
-		// a pre-hardmode only drop of a hardmode source. Other conditions (events, biomes...) are left to the drop chance
+		// a pre-hardmode only drop of a hardmode source. Other conditions (events, biomes...) are left to the drop chance; so is
+		// a boss fight condition kept on a permuted place (a genuinely enraged Empress: reachable at the boss's tier). Seasonal
+		// conditions never move (DropPermutation.KeptVanilla), the first-Plantera-kill one is dropped by the boss permutation
 		public static int ConditionTier(List<IItemDropRuleCondition> conditions, int sourceTier)
 		{
 			int tier = sourceTier;

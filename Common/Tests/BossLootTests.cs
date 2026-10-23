@@ -20,6 +20,211 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BossBagMatchesBoss", BossBagMatchesBoss);
 			TestRunner.Register("BossPermutationTiers", BossPermutationTiers);
 			TestRunner.Register("BossRuntime", BossRuntime);
+			TestRunner.Register("PermutationConservation", PermutationConservation);
+			TestRunner.Register("PermutedConditions", PermutedConditions);
+			TestRunner.Register("EaterOfWorldsParts", EaterOfWorldsParts);
+			TestRunner.Register("BossGroupsMerge", BossGroupsMerge);
+		}
+
+		private static string Key((int netId, int index) k) => k.index >= BossPermutation.BagIndexOffset ? $"{NpcName(k.netId)} bag entry {k.index - BossPermutation.BagIndexOffset}" : $"{NpcName(k.netId)} entry {k.index}";
+
+		// Every vanilla entry, of every enemy table, boss table and boss bag, is somewhere exactly once (by where its content
+		// comes from): kept at its place (left to its rule, or a kept item), or moved to exactly one place. The Twins' mirrored
+		// entries are Retinazer's, and a bag's carried entries are its boss's (BossBagMatchesBoss checks both)
+		private static void PermutationConservation()
+		{
+			List<string> failures = new();
+			void Fail(string message)
+			{
+				if (failures.Count < 25) failures.Add(message);
+			}
+			void Compare(string what, int seed, Dictionary<(int, int), int> found, HashSet<(int, int)> expected)
+			{
+				foreach ((int, int) key in expected)
+				{
+					int n = found.TryGetValue(key, out int c) ? c : 0;
+					if (n != 1) Fail($"seed {seed}: {what}: the content of {Key(key)} is found {n} times");
+				}
+				foreach ((int, int) key in found.Keys.Where(k => !expected.Contains(k))) Fail($"seed {seed}: {what}: a content from {Key(key)}, no vanilla entry");
+			}
+			int checkedEntries = 0;
+			foreach (int seed in Seeds())
+			{
+				BossPermutation.WorldPlan plan = Plan(seed);
+				// Enemies: each table holds its vanilla entries (and its synthetic one) once, wherever they went
+				DropPermutation.WorldPlan enemies = DropPermutation.Build(seed, 0f);
+				Dictionary<(int, int), int> found = new();
+				HashSet<(int, int)> expected = new();
+				foreach ((int unit, DropPermutation.Placed[] table) in enemies.ByUnit)
+				{
+					for (int i = 0; i < table.Length; i++)
+					{
+						expected.Add((unit, i));
+						found[(table[i].FromNetId, table[i].FromIndex)] = found.GetValueOrDefault((table[i].FromNetId, table[i].FromIndex)) + 1;
+					}
+				}
+				checkedEntries += expected.Count;
+				Compare("enemies", seed, found, expected);
+				// Bosses
+				found = new();
+				expected = new();
+				foreach ((int unit, DropPermutation.Placed[] table) in plan.ByUnit)
+				{
+					int mirror = BossPermutation.MirrorOf(unit);
+					for (int i = 0; i < table.Length; i++)
+					{
+						if (mirror > 0 && table[i].Rolled && !DropHelper.KeepOriginal(table[i].Entry.itemId) && BossPermutation.Mirrors(unit, mirror, i)) continue;
+						expected.Add((unit, i));
+						found[(table[i].FromNetId, table[i].FromIndex)] = found.GetValueOrDefault((table[i].FromNetId, table[i].FromIndex)) + 1;
+					}
+				}
+				checkedEntries += expected.Count;
+				Compare("bosses", seed, found, expected);
+				// Bags: their own entries (not travelling with a boss drop) once among all the bags
+				found = new();
+				expected = new();
+				foreach ((int bag, DropPermutation.Placed[] table) in plan.ByBag)
+				{
+					int unit = BossPermutation.BagUnit(bag);
+					int carried = plan.Carried.TryGetValue(bag, out List<int> c) ? c.Count : 0;
+					bool[] matched = plan.Matched.TryGetValue(bag, out bool[] m) ? m : Array.Empty<bool>();
+					List<DropRateInfo> entries = LootSnapshot.ForItem(bag);
+					for (int j = 0; j < entries.Count; j++)
+					{
+						if (j >= matched.Length || !matched[j]) expected.Add((unit, BossPermutation.BagIndexOffset + j));
+					}
+					if (matched.Count(x => x) > carried) Fail($"seed {seed}: {ItemName(bag)}: {matched.Count(x => x)} entries travel with {carried} boss drops");
+					for (int k = carried; k < table.Length; k++) found[(table[k].FromNetId, table[k].FromIndex)] = found.GetValueOrDefault((table[k].FromNetId, table[k].FromIndex)) + 1;
+				}
+				checkedEntries += expected.Count;
+				Compare("bags", seed, found, expected);
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Permutation conservation: {checkedEntries} entries");
+			Check.All(failures, "Permutation conservation");
+		}
+
+		private static bool HasType(List<IItemDropRuleCondition> conditions, IItemDropRuleCondition condition) =>
+			conditions != null && conditions.Any(c => c != null && c.GetType() == condition.GetType());
+
+		// Moved contents carry only conditions they can satisfy: never a seasonal one (those entries stay vanilla), never the
+		// first-Plantera-kill one; a boss place keeps its own conditions (restrictive, Legacy "is a boss", the Twins'
+		// MissingTwin, a fight condition) plus the item's own ones (the Demon Heart, the Portal Gun), and a content freed from
+		// a fight or one-time condition has a capped chance; a bag-only content keeps its own bag conditions
+		private static void PermutedConditions()
+		{
+			List<string> failures = new();
+			void Fail(string message)
+			{
+				if (failures.Count < 25) failures.Add(message);
+			}
+			void ItemSelfOnItsItem(string where, DropRateInfo entry)
+			{
+				foreach (IItemDropRuleCondition c in entry.conditions ?? new List<IItemDropRuleCondition>())
+				{
+					if (c is Conditions.NotUsedDemonHeart && entry.itemId != ItemID.DemonHeart || c is Conditions.NoPortalGun && entry.itemId != ItemID.PortalGun)
+					{
+						Fail($"{where}: {ItemName(entry.itemId)} needs {c.GetType().Name}");
+					}
+					if (DropPermutation.ClassOf(c) is DropPermutation.ConditionClass.Seasonal or DropPermutation.ConditionClass.OneTime) Fail($"{where}: {ItemName(entry.itemId)} moved with {c.GetType().Name}");
+				}
+			}
+			int moved = 0;
+			foreach (int seed in Seeds())
+			{
+				BossPermutation.WorldPlan plan = Plan(seed);
+				DropPermutation.WorldPlan enemies = DropPermutation.Build(seed);
+				foreach ((int unit, DropPermutation.Placed[] table) in enemies.ByUnit)
+				{
+					foreach (DropPermutation.Placed placed in table.Where(p => p.Rolled))
+					{
+						if (DropPermutation.KeptVanilla(placed.Entry.conditions)) Fail($"seed {seed}: {NpcName(unit)}: {ItemName(placed.Entry.itemId)} rolled with a seasonal condition");
+					}
+				}
+				for (int p = 0; p < plan.Places.Count; p++)
+				{
+					DropPermutation.Place place = plan.Places[p];
+					int s = plan.ContentOf[p];
+					DropPermutation.Place source = plan.Places[s];
+					if (BossPermutation.IsBagOnly(place) || s == p) continue;
+					moved++;
+					DropPermutation.Placed placed = plan.ByUnit[place.Owner][place.Index];
+					string where = $"seed {seed}: {Where(place)}";
+					ItemSelfOnItsItem(where, placed.Entry);
+					foreach (IItemDropRuleCondition c in placed.Entry.conditions ?? new List<IItemDropRuleCondition>())
+					{
+						DropPermutation.ConditionClass kind = DropPermutation.ClassOf(c);
+						if (kind == DropPermutation.ConditionClass.ItemSelf ? !HasType(source.Entry.conditions, c) : !HasType(place.Entry.conditions, c))
+						{
+							Fail($"{where}: {ItemName(placed.Entry.itemId)} needs {c.GetType().Name}, from neither the place nor the item");
+						}
+						if (c is Conditions.MissingTwin && ContentSamples.NpcsByNetId[place.Owner].type is not (NPCID.Retinazer or NPCID.Spazmatism)) Fail($"{where}: MissingTwin outside the Twins");
+					}
+					if (BossPermutation.FreedRate(source, place, seed, out float cap) && placed.Entry.dropRate > cap + 1e-6f)
+					{
+						Fail($"{where}: {ItemName(placed.Entry.itemId)} freed from its condition drops at {placed.Entry.dropRate:0.###}, more than {cap:0.###}");
+					}
+				}
+				Dictionary<(int, int), int> placeOf = new();
+				for (int p = 0; p < plan.Places.Count; p++) placeOf[(plan.Places[p].Owner, plan.Places[p].Index)] = p;
+				foreach ((int bag, DropPermutation.Placed[] table) in plan.ByBag)
+				{
+					foreach (DropPermutation.Placed placed in table.Where(x => x.Permuted))
+					{
+						string where = $"seed {seed}: {ItemName(bag)}";
+						ItemSelfOnItsItem(where, placed.Entry);
+						if (placed.Entry.conditions != null && placed.Entry.conditions.Any(c => DropPermutation.ClassOf(c) == DropPermutation.ConditionClass.Fight || c is Conditions.MissingTwin or Conditions.LegacyHack_IsABoss))
+						{
+							Fail($"{where}: {ItemName(placed.Entry.itemId)} keeps a boss fight condition in a bag");
+						}
+						if (placed.FromIndex < BossPermutation.BagIndexOffset || !placeOf.TryGetValue((placed.FromNetId, placed.FromIndex), out int q)) continue;
+						IEnumerable<string> Types(List<IItemDropRuleCondition> list) => (list ?? new List<IItemDropRuleCondition>()).Select(c => c?.GetType().FullName ?? "");
+						if (!Types(placed.Entry.conditions).SequenceEqual(Types(plan.BagVersion[q].conditions))) Fail($"{where}: {ItemName(placed.Entry.itemId)} does not keep its own bag conditions");
+					}
+				}
+			}
+			if (moved == 0) Check.Skip("no moved boss content");
+			Check.All(failures, "Permuted conditions");
+		}
+
+		// The Eater of Worlds' body and tail segments use the head's table, floor and redistribution (the last segment killed
+		// drops the loot, whichever it is)
+		private static void EaterOfWorldsParts()
+		{
+			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
+			if (!BossPermutation.InStyle(NPCID.EaterofWorldsHead)) Check.Skip("bosses don't use the permutation style");
+			int head = NPCID.EaterofWorldsHead;
+			List<PlannedDrop> expected = RandomNpcDropRule.OriginalDrops(head, BossParts.Owner(head));
+			if (expected.Count == 0) Check.Skip("the Eater of Worlds has no drop");
+			foreach (int part in new[] { NPCID.EaterofWorldsBody, NPCID.EaterofWorldsTail })
+			{
+				Check.Equal(head, BossParts.Owner(part), $"owner of {NpcName(part)}");
+				if (BossPermutation.UnitOf(part) != BossPermutation.UnitOf(head)) Check.Skip($"{NpcName(part)} has a table of its own");
+				List<PlannedDrop> drops = RandomNpcDropRule.OriginalDrops(part, BossParts.Owner(part));
+				Check.Equal(expected.Count, drops.Count, $"{NpcName(part)} drop count");
+				for (int i = 0; i < drops.Count; i++)
+				{
+					Check.That(drops[i].Item == expected[i].Item && drops[i].Chance == expected[i].Chance && drops[i].LockGap == expected[i].LockGap,
+						$"{NpcName(part)} entry {i}: {ItemName(drops[i].Item)} (lock {drops[i].LockGap}), the head has {ItemName(expected[i].Item)} (lock {expected[i].LockGap})");
+				}
+			}
+		}
+
+		// Pure: small consecutive tiers merge first, then a group still too small joins the one below (the lowest the one
+		// above); the Moon Lord's loot stays with the Lunatic Cultist's
+		private static void BossGroupsMerge()
+		{
+			string Show(List<List<int>> groups) => string.Join(" | ", groups.Select(g => string.Join(",", g)));
+			void Expect((int unit, int tier)[] tables, string expected)
+			{
+				string actual = Show(BossPermutation.BossGroups(tables));
+				Check.That(actual == expected, $"groups of {string.Join(" ", tables.Select(t => $"{t.unit}@{t.tier}"))}: {actual}, expected {expected}");
+			}
+			Expect(new[] { (1, 1), (2, 1), (3, 2), (4, 2), (5, 4), (6, 5), (7, 5), (8, 7), (9, 8) }, "1,2 | 3,4,5 | 6,7 | 8,9");
+			Expect(new[] { (1, 0), (2, 1), (3, 1) }, "1,2,3");
+			Expect(new[] { (1, 0), (2, 1), (3, 2) }, "1,2,3");
+			Expect(new[] { (1, 0), (2, 0), (3, 1) }, "1,2,3");
+			Expect(new[] { (1, 0), (2, 0), (3, 1), (4, 2), (5, 3) }, "1,2 | 3,4,5");
+			Expect(new[] { (1, 3) }, "1");
 		}
 
 		private static int[] Seeds() => new[] { SeedSystem.WorldSeed, 12345, -98765 };
@@ -133,6 +338,11 @@ namespace UltimateRandomizer.Common.Tests
 						DropPermutation.Placed onBoss = plan.ByUnit[unit][place.Index];
 						DropPermutation.Placed inBag = bagTable[k];
 						DropRateInfo version = plan.BagVersion[plan.ContentOf[carried[k]]];
+						// A content freed from a fight or one-time condition is capped (BossPermutation.FreedRate)
+						if (BossPermutation.FreedRate(plan.Places[plan.ContentOf[carried[k]]], place, seed, out float cap))
+						{
+							version = new DropRateInfo(version.itemId, version.stackMin, version.stackMax, Math.Min(version.dropRate, cap), version.conditions);
+						}
 						if (inBag.Entry.itemId != onBoss.Entry.itemId || inBag.FromNetId != onBoss.FromNetId || inBag.FromIndex != onBoss.FromIndex)
 						{
 							Fail($"seed {seed}: {ItemName(bag)} entry {k} is {ItemName(inBag.Entry.itemId)}, {NpcName(unit)} drops {ItemName(onBoss.Entry.itemId)} there");
@@ -177,6 +387,20 @@ namespace UltimateRandomizer.Common.Tests
 					if (tiers.Min() <= previousMax) Fail($"seed {seed}: the groups overlap at tier {tiers.Min()}");
 					previousMax = tiers.Max();
 					if (group.Count < BossPermutation.MinGroupBosses && plan.BossGroups.Count > 1) Fail($"seed {seed}: a group of {group.Count} boss ({string.Join(", ", group.Select(NpcName))})");
+				}
+				// With enough bosses from the Lunatic Cultist on, the Moon Lord's contents never land on an earlier boss
+				List<int> late = plan.GroupOfUnit.Keys.Where(u => BossPermutation.TierOf(u) >= (int)Tier.PostCultist).ToList();
+				if (late.Count >= BossPermutation.MinGroupBosses)
+				{
+					for (int p = 0; p < plan.Places.Count; p++)
+					{
+						DropPermutation.Place source = plan.Places[plan.ContentOf[p]];
+						if (source.Tier >= (int)Tier.PostMoonLord && plan.Places[p].Tier < (int)Tier.PostCultist) Fail($"seed {seed}: {Where(plan.Places[p])} (tier {plan.Places[p].Tier}) gets the Moon Lord's {ItemName(source.Entry.itemId)}");
+					}
+					foreach (List<int> group in plan.BossGroups.Where(g => g.Any(late.Contains)))
+					{
+						if (group.Any(u => !late.Contains(u))) Fail($"seed {seed}: the late bosses share a group with {string.Join(", ", group.Where(u => !late.Contains(u)).Select(NpcName))}");
+					}
 				}
 			}
 			if (logged != null)
