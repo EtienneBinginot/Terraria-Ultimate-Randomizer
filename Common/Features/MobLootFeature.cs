@@ -191,6 +191,13 @@ namespace UltimateRandomizer.Common.Features
 			float bonus = EnemyIndividualNPC.LootBonus(npc);
 			float guaranteedBonus = EnemyIndividualNPC.LootBonus(npc, false);
 			int players = Main.netMode == NetmodeID.Server ? Main.CurrentFrameFlags.ActivePlayersCount : 1;
+			// A boss carrying guaranteed items (GuaranteedSources.BossHosts) gives them at every kill, however many players
+			// and whatever its size
+			if (NpcTiers.IsBoss(BossParts.Owner(npc.type)))
+			{
+				guaranteedBonus = Math.Max(1f, guaranteedBonus);
+				players = 1;
+			}
 			bool shared = ProgressionConfig.Instance.ScaleGuaranteesWithPlayers;
 			foreach (PlannedDrop drop in drops)
 			{

@@ -30,6 +30,12 @@ namespace UltimateRandomizer.Common.Core
 		public bool FromTable;
 		// Its true tier was lowered by a world-generated chest that holds it (ItemClassifier.LowerByWorldChests)
 		public bool FromWorldChest;
+		// Its true tier was lowered by a reliable vanilla source (a boss drop, a shop...), a hand fix (ItemClassifier.TrueTierFixes)
+		// or its recipes settled after them (ItemClassifier.SettleByRecipes): it may be below Tier
+		public bool Corrected;
+		// A hard progression gate (ItemClassifier.HardGates: luminite, chlorophyte, ectoplasm, mechanical souls... and what is only
+		// made from them): no TierAllowance (UnlockTierOf, GatingLimitFor)
+		public bool HardGate;
 		public bool Excluded;
 		public bool Protected;
 		// A life or mana upgrade (Protection.Upgrades): replaceable, Misc, but in no bucket (never rolled, never a new
@@ -71,6 +77,9 @@ namespace UltimateRandomizer.Common.Core
 		// An explicit ceiling (null: none), gated or not: nothing above it, by Tier or TrueTier, jackpots included (the
 		// hardmode wall of fishing and shimmer, chest caps)
 		public int? MaxTier;
+		// The ceiling of the hard gates (null: MaxTier), for a roll that ignores progression: a Lihzahrd chest (cap 7) gives no
+		// Beetle Husk before Golem
+		public int? HardMaxTier;
 		// The progression the gating limit reads (null: the live one, ProgressionSystem.UnlockedTier and Main.hardMode): plans
 		// simulated at another progression (the shop dump and tests)
 		public int? GatingTier;
@@ -132,12 +141,34 @@ namespace UltimateRandomizer.Common.Core
 			int[] beforeSources = (int[])trueTiers.Clone();
 			int[] sourceTiers = new int[count];
 			string[] sourceNames = new string[count];
-			int bySources = ItemClassifier.RaiseBySources(trueTiers, overrides, sourceTiers, sourceNames, out string sourceExamples);
-			// Last, the hand-reviewed materials (MaterialTiers): their true tier is exactly the table's, whatever the recipes and
-			// sources computed (lower too); null bans them. The config overrides still win. Tier and the buckets never change
+			int[] reliableTiers = new int[count];
+			int bySources = ItemClassifier.RaiseBySources(trueTiers, overrides, sourceTiers, sourceNames, reliableTiers, out string sourceExamples);
+			// A reliable source lowers the true tier below the rarity's (Slimy Saddle: the King Slime; Plantera's weapons): never
+			// below that source, never a fixed tier (KnownTiers, config overrides). Tier and the buckets never change
+			bool[] corrected = new bool[count];
+			int byReliable = 0;
+			for (int type = 1; type < count; type++)
+			{
+				if (reliableTiers[type] == int.MaxValue || overrides.ContainsKey(type) || ItemClassifier.HasKnownTier(type)) continue;
+				if (reliableTiers[type] >= Math.Max(tiers[type], trueTiers[type])) continue;
+				trueTiers[type] = reliableTiers[type];
+				corrected[type] = true;
+				byReliable++;
+			}
+			// Then the hand-reviewed materials (MaterialTiers) and the hand fixes (ItemClassifier.TrueTierFixes): their true tier is
+			// exactly the table's, whatever the recipes and sources computed (lower too); null bans them. The config overrides still
+			// win. Tier and the buckets never change
 			bool[] fromTable = new bool[count];
+			bool[] fixedTier = new bool[count];
 			bool[] tableBanned = new bool[count];
 			int tableChanged = 0;
+			void SetExactly(int type, int tier)
+			{
+				int set = Tiers.Clamp(tier);
+				if (set != (corrected[type] ? trueTiers[type] : Math.Max(tiers[type], trueTiers[type]))) tableChanged++;
+				trueTiers[type] = set;
+				fixedTier[type] = true;
+			}
 			foreach ((int type, (int? tier, _)) in MaterialTiers.Table)
 			{
 				if (type <= 0 || type >= count || overrides.ContainsKey(type)) continue;
@@ -145,15 +176,37 @@ namespace UltimateRandomizer.Common.Core
 				if (tier == null)
 				{
 					tableBanned[type] = true;
+					fixedTier[type] = true;
 					continue;
 				}
-				int set = Tiers.Clamp(tier.Value);
-				if (set != Math.Max(tiers[type], trueTiers[type])) tableChanged++;
-				trueTiers[type] = set;
+				SetExactly(type, tier.Value);
+			}
+			foreach ((int type, Tier tier) in ItemClassifier.TrueTierFixes)
+			{
+				if (type <= 0 || type >= count || overrides.ContainsKey(type) || fromTable[type]) continue;
+				SetExactly(type, (int)tier);
+				corrected[type] = true;
 			}
 			// Then the chests of world generation: what they hold is found from their tier (lower only)
 			bool[] fromChest = new bool[count];
-			int byChests = ItemClassifier.LowerByWorldChests(trueTiers, tiers, fromTable, overrides, fromChest, sourceTiers, sourceNames, out string chestExamples);
+			int byChests = ItemClassifier.LowerByWorldChests(trueTiers, tiers, fixedTier, corrected, overrides, fromChest, sourceTiers, sourceNames, out string chestExamples);
+			// The effective true tiers (never below Tier, except what the steps above lowered on purpose), with their mining floor;
+			// then the crafted items follow their ingredients' final tiers (SettleByRecipes) and the hard gates are found
+			int[] floors = new int[count];
+			for (int type = 1; type < count; type++)
+			{
+				if (overrides.ContainsKey(type) || ItemClassifier.HasKnownTier(type)) fixedTier[type] = true;
+				if (!fromTable[type] && !fromChest[type] && !corrected[type]) trueTiers[type] = Math.Max(tiers[type], trueTiers[type]);
+			}
+			for (int type = 1; type < count; type++)
+			{
+				if (fixedTier[type]) continue;
+				floors[type] = ItemClassifier.MiningFloor(type, trueTiers);
+				trueTiers[type] = Math.Max(trueTiers[type], floors[type]);
+			}
+			HashSet<int> lootSources = LootSources();
+			int settled = ItemClassifier.SettleByRecipes(trueTiers, fixedTier, floors, lootSources, fromChest, corrected, out string settleExamples);
+			bool[] hardGates = ItemClassifier.HardGates(trueTiers, lootSources, fromChest);
 			int banned = 0;
 			for (int type = 1; type < count; type++)
 			{
@@ -170,11 +223,12 @@ namespace UltimateRandomizer.Common.Core
 				// Banned items stay in their bucket (the buckets never change): rolls re-pick them
 				bool isBanned = ItemClassifier.IsBanned(item) || tableBanned[type];
 				if (isBanned) banned++;
-				// A material of the table (or a world chest item) keeps that tier even below its bucket's tier
-				int trueTier = fromTable[type] || fromChest[type] ? trueTiers[type] : Math.Max(tier, trueTiers[type]);
+				// Final (a material of the table, a world chest item or a corrected one keeps its tier even below its bucket's tier)
+				int trueTier = trueTiers[type];
 				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = trueTier, Banned = isBanned, Protected = isProtected,
-					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fromTable[type] && trueTiers[type] > Math.Max(tier, beforeSources[type]),
-					FromTable = fromTable[type], FromWorldChest = fromChest[type], Special = special };
+					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fixedTier[type] && trueTier > Math.Max(tier, beforeSources[type]),
+					FromTable = fromTable[type], FromWorldChest = fromChest[type], Corrected = corrected[type] && !fromChest[type], HardGate = hardGates[type],
+					Special = special };
 				// Upgrades stay out of the buckets: the buckets (and every plan rolled from them) are the same as when they were protected
 				if (!isProtected && !special) lists[(int)category, tier].Add(type);
 			}
@@ -198,8 +252,9 @@ namespace UltimateRandomizer.Common.Core
 			log4net.ILog logger = ModContent.GetInstance<UltimateRandomizer>().Logger;
 			logger.Info($"Classified {count} items in {watch.ElapsedMilliseconds} ms ({protectedItems.Count} protected, {banned} banned), "
 				+ $"tiers from recipes: {lowered} lowered ({loweredExamples}), {raised} raised ({raisedExamples}); "
-				+ $"tiers from sources: {bySources} raised ({sourceExamples}); material table: {fromTable.Count(f => f)} listed, {tableChanged} true tiers changed, "
-				+ $"{tableBanned.Count(b => b)} banned; world chests: {byChests} true tiers lowered ({chestExamples}).");
+				+ $"tiers from sources: {bySources} raised ({sourceExamples}), {byReliable} lowered by a reliable source; material table and fixes: "
+				+ $"{fromTable.Count(f => f)} + {ItemClassifier.TrueTierFixes.Count} listed, {tableChanged} true tiers changed, {tableBanned.Count(b => b)} banned; "
+				+ $"world chests: {byChests} true tiers lowered ({chestExamples}); settled by recipes: {settled} ({settleExamples}); {hardGates.Count(g => g)} hard gates.");
 			LogSuspicious(logger);
 		}
 
@@ -209,6 +264,7 @@ namespace UltimateRandomizer.Common.Core
 			HashSet<int> set = new(Obtainability.ShopItems);
 			foreach (List<Terraria.GameContent.ItemDropRules.DropRateInfo> drops in LootSnapshot.Npcs.Values) set.UnionWith(drops.Select(d => d.itemId));
 			foreach (List<Terraria.GameContent.ItemDropRules.DropRateInfo> drops in LootSnapshot.Items.Values) set.UnionWith(drops.Select(d => d.itemId));
+			set.UnionWith(LootSnapshot.GlobalDrops().Select(d => d.itemId));
 			return set;
 		}
 
@@ -323,14 +379,22 @@ namespace UltimateRandomizer.Common.Core
 		// TierAllowance tiers above the unlocked tier, but no hardmode item before hardmode (only a jackpot goes there), except
 		// for a source whose floor is higher: the Wall of Flesh drops its loot before Main.hardMode is set (NPC.NPCLoot calls
 		// NPCLoot_DropItems, then DoDeathEvents, which calls WorldGen.StartHardmode), its MinLimit keeps them
-		public static int GatingLimit(int unlockedTier, bool hardMode, int minLimit)
+		public static int GatingLimit(int unlockedTier, bool hardMode, int minLimit) => GatingLimit(unlockedTier, hardMode, minLimit, Allowance);
+
+		private static int GatingLimit(int unlockedTier, bool hardMode, int minLimit, int allowance)
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			if (!progression.TierGating) return Tiers.Max;
-			int limit = unlockedTier + Allowance;
+			int limit = unlockedTier + allowance;
 			if (!hardMode && !LegacyGating) limit = Math.Min(limit, PreHardmodeCap);
 			return Tiers.Clamp(Math.Max(limit, minLimit));
 		}
+
+		// The progression limit for one item: a hard gate (luminite, chlorophyte, mechanical souls...) gets no allowance
+		public static int GatingLimitFor(int type, int minLimit) =>
+			IsHardGate(type) ? GatingLimit(ProgressionSystem.UnlockedTier, Main.hardMode, minLimit, 0) : GatingLimit(minLimit);
+
+		public static bool IsHardGate(int type) => IsValid(type) && Info[type].HardGate;
 
 		// Tests only (PlanDiff, restored in finally): the planning rules of worlds made before the hardmode wall (allowance
 		// 2, no wall in GatingLimit and UnlockTier), to measure how much of a world's plan the wall changes
@@ -346,13 +410,19 @@ namespace UltimateRandomizer.Common.Core
 
 		// The inverse of GatingLimit: the unlocked tier from which gated rolls may give an item of this tier (a hardmode item
 		// waits for hardmode, whatever the allowance)
-		public static int UnlockTier(int tier)
+		public static int UnlockTier(int tier) => UnlockTier(tier, Allowance);
+
+		private static int UnlockTier(int tier, int allowance)
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			if (!progression.TierGating) return 0;
-			int unlock = Math.Max(0, tier - Allowance);
+			int unlock = Math.Max(0, tier - allowance);
 			return tier >= (int)Tier.Hardmode && !LegacyGating ? Math.Max((int)Tier.Hardmode, unlock) : unlock;
 		}
+
+		// The unlocked tier from which gated rolls give this item: UnlockTier of its true tier, without the allowance for a hard
+		// gate (Chlorophyte Bars wait for the mechanical bosses, Luminite for the Moon Lord)
+		public static int UnlockTierOf(int type) => UnlockTier(TrueTierOf(type), IsHardGate(type) ? 0 : Allowance);
 
 		public static int Roll(in RollRequest request) => Roll(request, out _);
 
@@ -401,8 +471,13 @@ namespace UltimateRandomizer.Common.Core
 			int maxTier = request.MaxTier.HasValue ? Tiers.Clamp(request.MaxTier.Value) : Tiers.Max;
 			limit = Math.Min(limit, maxTier);
 			categoryLimit = Math.Min(categoryLimit, maxTier);
-			// The highest true tier this roll may give (re-picked above it): its limit when gated, else the explicit ceiling only
+			// The highest true tier this roll may give (re-picked above it): its limit when gated, else the explicit ceiling only;
+			// the same without the allowance for the hard gates
 			int ceiling = request.IgnoreGating ? maxTier : categoryLimit;
+			int hardLimit = HardLimit(request);
+			int hardCeiling = request.IgnoreGating ? maxTier : Math.Min(maxTier, hasOriginal && category == Info[request.OriginalItem].Category
+				? Math.Max(hardLimit, Info[request.OriginalItem].Tier) : hardLimit);
+			if (request.HardMaxTier.HasValue) hardCeiling = Math.Min(hardCeiling, Tiers.Clamp(request.HardMaxTier.Value));
 			// Bags and summons stay at the limit: a wild boss bag would hand out its whole tier (Hallowed Bars before hardmode...)
 			if (request.Wild && request.WildRng != null && limit < Tiers.Max && category is not (ItemCategory.Bag or ItemCategory.BossSummon))
 			{
@@ -417,7 +492,7 @@ namespace UltimateRandomizer.Common.Core
 					int wild = Checked(PickFromBucket(category, wildTier, request.WildRng, wildTier), wildTier, wildCeiling, request.Keys, RepickStage.Wild);
 					if (TrueTierOf(wild) > limit && IsJackpotWorthy(wild))
 					{
-						LastJackpotGap = TrueTierOf(wild) - limit;
+						LastJackpotGap = TrueTierOf(wild) - Math.Min(GatingLimitFor(wild, request.MinLimit), limit);
 						rolledTier = TierOf(wild);
 						return wild;
 					}
@@ -425,12 +500,12 @@ namespace UltimateRandomizer.Common.Core
 			}
 			if (target <= limit)
 			{
-				int intended = Checked(PickFromBucket(category, target, rng, categoryLimit, window), target, ceiling, request.Keys, RepickStage.Intended, window);
+				int intended = Checked(PickFromBucket(category, target, rng, categoryLimit, window), target, ceiling, request.Keys, RepickStage.Intended, window, hardCeiling);
 				// A lucky runtime roll above the limit it ignores is a jackpot when useful; otherwise it is no jackpot, and the
 				// item is the one the limit allows
 				if (request.IgnoreGating && request.WildRng != null)
 				{
-					int gatingLimit = Math.Min(GatingLimit(request.MinLimit), maxTier);
+					int gatingLimit = Math.Min(GatingLimitFor(intended, request.MinLimit), maxTier);
 					if (TrueTierOf(intended) > gatingLimit)
 					{
 						// The planned item stays; far above the limit it is kept as rarely as the madness tail (runtime rng only),
@@ -455,7 +530,7 @@ namespace UltimateRandomizer.Common.Core
 			request.Keys.CopyTo(fallbackKeys, 0);
 			fallbackKeys[^2] = RollKey.Fallback;
 			fallbackKeys[^1] = limit;
-			int fallback = Checked(PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), categoryLimit, window), limit, ceiling, fallbackKeys, RepickStage.Fallback, window);
+			int fallback = Checked(PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), categoryLimit, window), limit, ceiling, fallbackKeys, RepickStage.Fallback, window, hardCeiling);
 			rolledTier = TierOf(fallback);
 			return fallback;
 		}
@@ -473,19 +548,26 @@ namespace UltimateRandomizer.Common.Core
 			public const int Pick = 5;
 		}
 
-		// May a roll whose true-tier ceiling is this give the item?
-		public static bool Allowed(int type, int ceiling) => !IsBanned(type) && TrueTierOf(type) <= ceiling;
+		// May a roll whose true-tier ceiling is this give the item? hardCeiling: the ceiling of the hard gates (no allowance)
+		public static bool Allowed(int type, int ceiling, int hardCeiling = Tiers.Max) =>
+			!IsBanned(type) && TrueTierOf(type) <= ceiling && (TrueTierOf(type) <= hardCeiling || !IsHardGate(type));
+
+		// The progression limit of the hard gates: the unlocked tier itself (or the source's floor), from the same progression
+		// as the roll's limit (GatingTier: a simulated one)
+		private static int HardLimit(in RollRequest request) => request.GatingTier.HasValue
+			? GatingLimit(request.GatingTier.Value, request.GatingHardMode, request.MinLimit, 0)
+			: GatingLimit(ProgressionSystem.UnlockedTier, Main.hardMode, request.MinLimit, 0);
 
 		public static bool IsBanned(int type) => IsValid(type) && Info[type].Banned;
 
-		private static int Checked(int picked, int tier, int ceiling, int[] keys, int stage, int window = 0) =>
-			RepickDisabled || Allowed(picked, ceiling) ? picked : Repick(picked, tier, ceiling, keys, stage, window);
+		private static int Checked(int picked, int tier, int ceiling, int[] keys, int stage, int window = 0, int hardCeiling = Tiers.Max) =>
+			RepickDisabled || Allowed(picked, ceiling, hardCeiling) ? picked : Repick(picked, tier, ceiling, keys, stage, window, hardCeiling);
 
 		// Isolated re-pick of a banned item, or of one whose true tier is above the ceiling: the buckets, the keys and the
 		// roll's own rng stay as they are, so every other roll gives what it gave before. Same category, from the wanted tier
 		// down, with an rng of its own (the roll's keys + RollKey.Repick + stage + attempt); then a scan downward; then any
 		// allowed material; Gel last
-		public static int Repick(int picked, int tier, int ceiling, int[] keys, int stage, int window = 0)
+		public static int Repick(int picked, int tier, int ceiling, int[] keys, int stage, int window = 0, int hardCeiling = Tiers.Max)
 		{
 			if (buckets == null) return picked;
 			ItemCategory category = IsValid(picked) ? Info[picked].Category : ItemCategory.Material;
@@ -498,17 +580,17 @@ namespace UltimateRandomizer.Common.Core
 			{
 				repickKeys[^1] = attempt;
 				int candidate = PickFromBucket(category, top, DetRandom.Get(repickKeys), top, window);
-				if (Allowed(candidate, ceiling)) return candidate;
+				if (Allowed(candidate, ceiling, hardCeiling)) return candidate;
 			}
 			repickKeys[^1] = 4;
 			Random rng = DetRandom.Get(repickKeys);
-			int found = ScanAllowed(category, top, ceiling, rng);
-			if (found <= 0 && category != ItemCategory.Material) found = ScanAllowed(ItemCategory.Material, top, ceiling, rng);
+			int found = ScanAllowed(category, top, ceiling, rng, hardCeiling);
+			if (found <= 0 && category != ItemCategory.Material) found = ScanAllowed(ItemCategory.Material, top, ceiling, rng, hardCeiling);
 			return found > 0 ? found : ItemID.Gel;
 		}
 
 		// The first allowed item from the tier down, each bucket read from a random start
-		private static int ScanAllowed(ItemCategory category, int top, int ceiling, Random rng)
+		private static int ScanAllowed(ItemCategory category, int top, int ceiling, Random rng, int hardCeiling)
 		{
 			for (int t = top; t >= 0; t--)
 			{
@@ -518,7 +600,7 @@ namespace UltimateRandomizer.Common.Core
 				for (int i = 0; i < bucket.Length; i++)
 				{
 					int item = bucket[(start + i) % bucket.Length];
-					if (Allowed(item, ceiling)) return item;
+					if (Allowed(item, ceiling, hardCeiling)) return item;
 				}
 			}
 			return 0;

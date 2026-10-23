@@ -233,8 +233,9 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// An item that may be re-picked: banned, or given later than its bucket's tier (a re-pick only happens when the true
-		// tier is above the roll's ceiling, which is never below the bucket it picked from)
-		private static bool Flagged(int item) => ItemPool.IsBanned(item) || ItemPool.TrueTierOf(item) > ItemPool.TierOf(item);
+		// tier is above the roll's ceiling, which is never below the bucket it picked from), or a hard gate (its ceiling has no
+		// allowance: it may be below the bucket)
+		private static bool Flagged(int item) => ItemPool.IsBanned(item) || ItemPool.TrueTierOf(item) > ItemPool.TierOf(item) || ItemPool.IsHardGate(item);
 
 		// The same rolls with and without the re-pick: every difference is an item the re-pick had to replace, so every other
 		// roll (mob plans, chest slots, gated rolls) gives exactly what it gave before the re-pick existed. Recipe results never
@@ -288,7 +289,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Crafted items that no recipe makes before hardmode wait for it (true tier), so do items whose every vanilla source
-		// is late (Portal Gun: the Moon Lord only); nothing is lowered, except by the material table and world chests
+		// is late (Portal Gun: the Moon Lord only); nothing is lowered, except by the material table, the hand fixes, reliable
+		// sources (and the recipes settled after them) and world chests
 		private static void RaisedTiers()
 		{
 			List<string> failures = new();
@@ -299,7 +301,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (info.Excluded) continue;
 				// The hand-reviewed materials (MaterialTiers) take the table's tier exactly, lower too; world-generated chests
 				// lower what they hold (Band of Regeneration: a gold chest item, found at 1)
-				if (info.TrueTier < info.Tier && !info.FromTable && !info.FromWorldChest) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {info.Tier}");
+				if (info.TrueTier < info.Tier && !info.FromTable && !info.FromWorldChest && !info.Corrected) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {info.Tier}");
 				if (info.TrueTier > info.Tier) raised++;
 			}
 			foreach (int item in new[] { ItemID.PearlwoodSword, ItemID.PearlwoodWorkBench })
@@ -384,7 +386,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Magic Storage items");
 		}
 
-		// Chest slots (world creation and taming) never go above the chest's cap, nor reach hardmode in a pre-hardmode chest
+		// Chest slots (world creation and taming) never go above the chest's cap, nor reach hardmode in a pre-hardmode chest; a
+		// hard gate never above the chest's own tier (no Beetle Husk in a Lihzahrd chest before Golem)
 		private static void ChestCap()
 		{
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only in Coherent mode (shuffle and chaos keep no tier)");
@@ -405,6 +408,7 @@ namespace UltimateRandomizer.Common.Tests
 					{
 						int item = ChestSystem.RollChestSlot(200 + k, 400 + chestTier, k % 40, chestTier, originals[k], tame);
 						if (ItemPool.TrueTierOf(item) > cap) failures.Add($"{Name(item)} (true tier {ItemPool.TrueTierOf(item)}) in a chest of tier {chestTier}, cap {cap}");
+						if (ItemPool.IsHardGate(item) && ItemPool.TrueTierOf(item) > chestTier) failures.Add($"hard gate {Name(item)} (true tier {ItemPool.TrueTierOf(item)}) in a chest of tier {chestTier}");
 						if (ItemPool.IsBanned(item)) failures.Add($"{Name(item)} is banned");
 					}
 				}

@@ -211,7 +211,9 @@ namespace UltimateRandomizer.Common.Features
 				AllowJackpot = false,
 				// The world does not exist yet: progression can't lock chest content, the cap does
 				IgnoreGating = true,
-				MaxTier = cap
+				MaxTier = cap,
+				// A hard gate (no allowance) never above the chest's own tier
+				HardMaxTier = chestTier
 			};
 			if (tame) return ItemPool.Roll(request);
 			return ItemPool.RollReplacement(request, LootConfig.Instance.SurpriseChance, DetRandom.Get(RollKey.Chest, x, y, slot, RollKey.Surprise));

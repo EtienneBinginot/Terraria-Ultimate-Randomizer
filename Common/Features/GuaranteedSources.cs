@@ -15,7 +15,8 @@ namespace UltimateRandomizer.Common.Features
 	// Items that must be findable in the world (crafting stations, crafted and dropped boss summons; vanilla recipe
 	// ingredients when chosen): each one is placed as an extra drop of the common enemies of one biome of its tier (so that
 	// the biome gives it in about StationFindKills kills by day and by night) and in the pot pool; basic stations also in
-	// wooden chests.
+	// wooden chests. Never before its tier: without natural enemies of its tier, the progression bosses of that tier carry it
+	// (with neither, an ordinary item goes to the closest lower tier, a hard gate to the next higher one: Assign).
 	// Computed from the seed and the settings only, so every machine gets the same result.
 	public static class GuaranteedSources
 	{
@@ -166,6 +167,11 @@ namespace UltimateRandomizer.Common.Features
 			public List<int> Forced;
 			// A critical station on the Forest's critical hosts: no early biome qualified
 			public bool Fallback;
+			// On the progression bosses of its tier (BossHosts): no natural enemy of its tier can carry it
+			public bool Boss;
+			// Last resort: nothing of its tier could carry it, placed on the closest tier with hosts (Tier): a lower one for
+			// an ordinary item, a higher one for a hard gate
+			public bool Shifted;
 		}
 
 		// The placement of a guaranteed item in this world (tests)
@@ -237,7 +243,8 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Progression stations (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...) at their
-		// tier, and themed ones at their item's tier, when unprotected: their recipe, shop or drop may be randomized away
+		// tier, and themed ones at their item's true tier (the Flesh Cloning Vat is a hardmode station whatever its rarity
+		// says), when unprotected: their recipe, shop or drop may be randomized away
 		public static IEnumerable<Requirement> OtherStationRequirements()
 		{
 			foreach (int tile in Stations.RequiredTiles().OrderBy(t => t))
@@ -245,7 +252,7 @@ namespace UltimateRandomizer.Common.Features
 				int item = StationItem(tile);
 				if (item <= 0) continue;
 				Stations.StationInfo info = Stations.Info(tile);
-				int tier = info.Kind == StationKind.Progression ? info.Tier : ItemPool.TierOf(item);
+				int tier = info.Kind == StationKind.Progression ? info.Tier : ItemPool.TrueTierOf(item);
 				yield return new Requirement { Item = item, Tier = Tiers.Clamp(tier), Station = true };
 			}
 		}
@@ -295,15 +302,22 @@ namespace UltimateRandomizer.Common.Features
 			if (missing > 0) ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Guaranteed sources: {missing} item(s) without any host");
 			HostLoad load = Load(planned, places);
 			int below = all.Count(r => places.TryGetValue(r.Item, out Placement p) && p.Tier < Tiers.Clamp(r.Tier));
+			List<string> shifted = all.Where(r => places.TryGetValue(r.Item, out Placement p) && p.Shifted)
+				.Select(r => $"{Lang.GetItemNameValue(r.Item)} (tier {Tiers.Clamp(r.Tier)} on tier {places[r.Item].Tier})").ToList();
+			string shiftLine = shifted.Count == 0 ? "" : $"Guaranteed sources: {shifted.Count} item(s) without hosts of their tier, placed on the closest tier: {string.Join(", ", shifted)}";
+			if (shiftLine.Length > 0 && shiftLine != lastShiftLine) ModContent.GetInstance<UltimateRandomizer>().Logger.Info(shiftLine);
+			lastShiftLine = shiftLine;
 			string line = load.MaxItemsHost == 0 ? "" : $"Guaranteed load: at most {load.MaxItems} items on {Lang.GetNPCNameValue(load.MaxItemsHost)}, busiest "
 				+ $"{Lang.GetNPCNameValue(load.MaxDropsHost)} with {load.MaxDrops:0.000} guaranteed drops per kill, {load.Forced} host(s) kept although full, "
-				+ $"{below} item(s) placed below their tier, {places.Values.Count(p => p.Fallback)} critical station(s) on the Forest's critical hosts";
+				+ $"{below} item(s) placed below their tier, {places.Values.Count(p => p.Fallback)} critical station(s) on the Forest's critical hosts, "
+				+ $"{places.Values.Count(p => p.Boss)} item(s) on bosses";
 			// Once per plan of this world: the plan is made again after a test plans another seed, with the same result
 			if (line.Length > 0 && line != lastLoadLine) ModContent.GetInstance<UltimateRandomizer>().Logger.Info(line);
 			lastLoadLine = line;
 		}
 
 		private static string lastLoadLine;
+		private static string lastShiftLine;
 
 		public struct HostLoad
 		{
@@ -345,9 +359,10 @@ namespace UltimateRandomizer.Common.Features
 		{
 			List<Requirement> all = StationRequirements().Concat(OtherStationRequirements()).Concat(SummonRequirements()).ToList();
 			foreach (Func<IEnumerable<Requirement>> provider in ExtraRequirements) all.AddRange(provider());
+			// A hard gate (no allowance) is never required before its true tier
 			return all.GroupBy(r => r.Item).Select(g => new Requirement
 			{
-				Item = g.Key, Tier = g.Min(r => r.Tier), Station = g.Any(r => r.Station), Critical = g.Any(r => r.Critical), Tool = g.Any(r => r.Tool)
+				Item = g.Key, Tier = ItemPool.IsHardGate(g.Key) ? Math.Max(g.Min(r => r.Tier), ItemPool.TrueTierOf(g.Key)) : g.Min(r => r.Tier), Station = g.Any(r => r.Station), Critical = g.Any(r => r.Critical), Tool = g.Any(r => r.Tool)
 			}).OrderBy(r => r.Tier).ThenBy(r => DetRandom.ItemKey(r.Item)).ToList();
 		}
 
@@ -387,10 +402,13 @@ namespace UltimateRandomizer.Common.Features
 		// BiomeSlots.WithMap): one biome per item at the highest tier at or below its own that has a qualifying biome
 		// (BiomeCandidates, ChooseHosts), picked at random among them, less likely the more items it already holds
 		// (BiomeWeight), so that the items of a tier spread over its biomes. Full hosts (HostLoads) are left aside: they are
-		// kept (never Overloaded) only when no biome of the tier works without them; the item goes a tier lower only when its
-		// tier has no biome at all. One chance on every host (PeriodChances). Critical stations go to an early biome of the
-		// pacing model with its chance (PickCritical), else to the Forest's critical hosts. Without any biome, common hosts of
-		// the tier
+		// kept (never Overloaded) only when no biome of the tier works without them. One chance on every host (PeriodChances).
+		// Critical stations go to an early biome of the pacing model with its chance (PickCritical), else to the Forest's
+		// critical hosts. Without any biome, common hosts of the tier; without any natural enemy of the tier (nothing
+		// spawns naturally after Golem), the progression bosses of the tier (BossHosts: Golem, Lunatic Cultist, Moon Lord).
+		// An item is never placed below its tier: until 1.5.0 it went to lower hosts, and the Celestial Sigil and the Ancient
+		// Manipulator dropped from post-Plantera enemies. Only when nothing of its tier can carry it (Shifted): an ordinary item
+		// goes to the closest lower tier's common hosts, a hard gate to the next tier with hosts
 		public static Dictionary<int, List<PlannedDrop>> Assign(List<Requirement> all, int seed, out int missing, out Dictionary<int, Placement> places)
 		{
 			missing = 0;
@@ -445,15 +463,14 @@ namespace UltimateRandomizer.Common.Features
 				}
 				else
 				{
-					// At the highest tier that has a biome (nothing spawns from tier 8, post-Cultist, on: such items go to tier 7
-					// or lower hosts, a little earlier than their tier)
-					for (int t = Tiers.Clamp(requirement.Tier); t >= 0 && picked == null; t--)
+					// A biome of the item's own tier, never a lower one (the guaranteed drop has no progression lock)
+					int t = Tiers.Clamp(requirement.Tier);
+					List<BiomeEligible> eligible = Eligible(t);
+					List<BiomeHosts> candidates = eligible.Select(b => ChooseHosts(b, perItem, load, false)).Where(c => c != null).Select(c => c.Value).ToList();
+					// Full hosts only when no biome of the tier works without them
+					if (candidates.Count == 0) candidates = eligible.Select(b => ChooseHosts(b, perItem, load, true)).Where(c => c != null).Select(c => c.Value).ToList();
+					if (candidates.Count > 0)
 					{
-						List<BiomeEligible> eligible = Eligible(t);
-						List<BiomeHosts> candidates = eligible.Select(b => ChooseHosts(b, perItem, load, false)).Where(c => c != null).Select(c => c.Value).ToList();
-						// Full hosts only when no biome of the tier works without them
-						if (candidates.Count == 0) candidates = eligible.Select(b => ChooseHosts(b, perItem, load, true)).Where(c => c != null).Select(c => c.Value).ToList();
-						if (candidates.Count == 0) continue;
 						int index = PickWeighted(Enumerable.Range(0, candidates.Count).ToList(), i => BiomeWeight(biomeItems.GetValueOrDefault(candidates[i].Biome)), rng);
 						picked = candidates[index];
 						place.Tier = t;
@@ -469,20 +486,50 @@ namespace UltimateRandomizer.Common.Features
 					place.HostTimes = hosts.HostTimes;
 					place.Forced = hosts.Forced;
 				}
+				bool boss = false;
+				// No biome: common hosts of a tier, the total chance split between them (the hosts not full yet first)
+				bool UseCommon(int t)
+				{
+					if (common[t].Count == 0) return false;
+					chosen = common[t].Select(h => (h, roll: rng.Next())).OrderBy(x => load.Full(x.h) ? 1 : 0).ThenBy(x => x.roll)
+						.Select(x => x.h).Take(perItem).ToList();
+					place.Forced = chosen.Where(load.Full).ToList();
+					float chance = (single ? UnknownShareStationChance : UnknownShareMaterialChance) * UnknownShareHosts / chosen.Count;
+					chances = chosen.Select(_ => chance).ToList();
+					place.Tier = t;
+					return true;
+				}
+				// No natural enemy of a tier: its progression bosses, at every kill (a boss is fought a few times only).
+				// The Lunatic Cultist is also where the Ancient Manipulator comes from in vanilla
+				bool UseBosses(int t)
+				{
+					List<int> bosses = BossHosts(t);
+					if (bosses.Count == 0) return false;
+					chosen = bosses;
+					chances = bosses.Select(_ => 1f).ToList();
+					place.Tier = t;
+					boss = place.Boss = true;
+					return true;
+				}
 				if (chosen == null)
 				{
-					// No biome: common hosts of the tier (or below), the total chance split between them
-					for (int t = Tiers.Clamp(requirement.Tier); t >= 0 && chosen == null; t--)
+					int t = Tiers.Clamp(requirement.Tier);
+					if (!UseCommon(t)) UseBosses(t);
+				}
+				if (chosen == null)
+				{
+					// Last resort (no natural enemy nor progression boss of the tier: tier 2 has no boss). A hard gate goes up
+					// to the next tier with hosts (it has no allowance: never early); anything else to the closest lower tier's
+					// common hosts (an early item beats a missing one, the guaranteed drop has no progression lock)
+					bool gate = ItemPool.IsHardGate(requirement.Item);
+					int from = Tiers.Clamp(requirement.Tier);
+					for (int step = 1; step < Tiers.Count && chosen == null; step++)
 					{
-						if (common[t].Count == 0) continue;
-						// The hosts not full yet first
-						chosen = common[t].Select(h => (h, roll: rng.Next())).OrderBy(x => load.Full(x.h) ? 1 : 0).ThenBy(x => x.roll)
-							.Select(x => x.h).Take(perItem).ToList();
-						place.Forced = chosen.Where(load.Full).ToList();
-						float chance = (single ? UnknownShareStationChance : UnknownShareMaterialChance) * UnknownShareHosts / chosen.Count;
-						chances = chosen.Select(_ => chance).ToList();
-						place.Tier = t;
+						int t = gate ? from + step : from - step;
+						if (t < 0 || t >= Tiers.Count) break;
+						if (!UseCommon(t) && gate) UseBosses(t);
 					}
+					if (chosen != null) place.Shifted = true;
 				}
 				if (chosen == null || chosen.Count == 0)
 				{
@@ -494,11 +541,12 @@ namespace UltimateRandomizer.Common.Features
 				{
 					int host = chosen[i];
 					float baseChance = chances[i];
-					float chance = Math.Min(1f, baseChance * multiplier);
+					// A boss gives it at every kill, whatever GuaranteedDropMultiplier says; bosses are no hosts of HostLoads
+					float chance = boss ? 1f : Math.Min(1f, baseChance * multiplier);
 					if (single) chance = Math.Max(MinStationChance, chance);
 					if (!result.TryGetValue(host, out List<PlannedDrop> drops)) result[host] = drops = new List<PlannedDrop>();
 					drops.Add(new PlannedDrop { Item = requirement.Item, StackMin = min, StackMax = Math.Max(min, max), Chance = chance, Extra = true, Guaranteed = true, Single = single });
-					load.Add(host, single, baseChance);
+					if (!boss) load.Add(host, single, baseChance);
 				}
 				load.Forced.UnionWith(place.Forced);
 				place.Hosts = chosen;
@@ -508,6 +556,40 @@ namespace UltimateRandomizer.Common.Features
 			}
 			return result;
 		}
+
+		// The tier from which the guaranteed hosts of a requirement give it (Findability.Never: none): a natural host from the
+		// tier it is met at (its drop has no progression lock), a boss host from the requirement's tier at the earliest (its
+		// drop waits for the tier: the Twins give it once the last one dies)
+		public static int FoundTier(Requirement requirement)
+		{
+			bool boss = TryPlacement(requirement.Item, out Placement place) && place.Boss;
+			int found = Findability.Never;
+			foreach (int host in HostsOf(requirement.Item))
+			{
+				int from = boss ? Math.Max(HostTier(host), Tiers.Clamp(requirement.Tier)) : HostTier(host);
+				found = Math.Min(found, from);
+			}
+			return found;
+		}
+
+		// The bosses every world must beat to reach a tier, which drop the loot themselves (the Twins: the last one alive,
+		// RandomNpcDropRule.ExtraDropsAllowedNow). Hosts of the items no natural enemy of their tier can carry: from Golem on
+		// nothing spawns naturally (Martian, pillar and moon enemies are event enemies). Not the evil boss (the Eater of Worlds
+		// drops from whichever segment dies last) nor the optional ones (Duke Fishron, Empress of Light, Martian Saucer...)
+		private static readonly Dictionary<int, int[]> ProgressionBosses = new()
+		{
+			[(int)Core.Tier.PostEyeOfCthulhu] = new int[] { NPCID.EyeofCthulhu },
+			[(int)Core.Tier.PostSkeletron] = new int[] { NPCID.SkeletronHead },
+			[(int)Core.Tier.Hardmode] = new int[] { NPCID.WallofFlesh },
+			[(int)Core.Tier.PostMechBoss] = new int[] { NPCID.TheDestroyer, NPCID.Retinazer, NPCID.Spazmatism, NPCID.SkeletronPrime },
+			[(int)Core.Tier.PostPlantera] = new int[] { NPCID.Plantera },
+			[(int)Core.Tier.PostGolem] = new int[] { NPCID.Golem },
+			[(int)Core.Tier.PostCultist] = new int[] { NPCID.CultistBoss },
+			[(int)Core.Tier.PostMoonLord] = new int[] { NPCID.MoonLordCore }
+		};
+
+		// The progression bosses of exactly this tier (none for tiers 0 and 2)
+		public static List<int> BossHosts(int tier) => ProgressionBosses.TryGetValue(Tiers.Clamp(tier), out int[] bosses) ? bosses.ToList() : new List<int>();
 
 		// A host is full with this many guaranteed items, or once one kill gives MaxHostSingleChance stations, summons or tools
 		// on average (before GuaranteedDropMultiplier): it takes no more while another host or biome of the tier works
@@ -569,17 +651,14 @@ namespace UltimateRandomizer.Common.Features
 			TimeOf(BiomeSlots.SteadyShareAt(biome, type, tier, SlotTime.Day), BiomeSlots.SteadyShareAt(biome, type, tier, SlotTime.Night));
 
 		// The biomes that may carry the items of a tier: open at that tier (AllowedTier), with at least MinBiomeHosts natural
-		// hosts of that tier or the one before (a tier 3 station never comes from tier 0 enemies) met steadily there through
-		// slots of that tier or below (BiomeSlots.SteadyShareAt), the most met first
+		// hosts of exactly that tier met steadily there through slots of that tier or below (BiomeSlots.SteadyShareAt), the
+		// most met first. Never the enemies of the tier before: the guaranteed drop has no progression lock, and until 1.5.1 a
+		// 200 pickaxe guaranteed after the mechanical bosses dropped from hardmode enemies before them
 		private static List<BiomeEligible> BiomeCandidates(int tier)
 		{
 			List<BiomeEligible> result = new();
 			if (!BiomeSlots.SpawnsPlanned) return result;
-			// The enemies of the tier, and of the tier before in the same band (never pre-hardmode enemies for hardmode items,
-			// nor across Plantera): a biome rarely holds enough enemies of exactly one tier
-			List<int> natural = NaturalHosts(tier);
-			if (tier > 0 && BiomeSlots.BandOf(tier - 1) == BiomeSlots.BandOf(tier)) natural.AddRange(NaturalHosts(tier - 1));
-			natural = natural.Where(n => !(ContentSamples.NpcsByNetId.TryGetValue(n, out NPC sample) && sample.rarity > 0)).ToList();
+			List<int> natural = NaturalHosts(tier).Where(n => !(ContentSamples.NpcsByNetId.TryGetValue(n, out NPC sample) && sample.rarity > 0)).ToList();
 			if (natural.Count < MinBiomeHosts) return result;
 			foreach (int biome in BiomeSlots.BiomesAt(tier))
 			{
@@ -931,13 +1010,13 @@ namespace UltimateRandomizer.Common.Features
 			(ItemID.DirtBlock, 0), (ItemID.StoneBlock, 0), (ItemID.Wood, 0), (ItemID.BorealWood, 0), (ItemID.PalmWood, 0), (ItemID.RichMahogany, 0),
 			(ItemID.Ebonwood, 0), (ItemID.Shadewood, 0), (ItemID.Cactus, 0), (ItemID.ClayBlock, 0), (ItemID.MudBlock, 0), (ItemID.SandBlock, 0),
 			(ItemID.SnowBlock, 0), (ItemID.IceBlock, 0), (ItemID.SiltBlock, 0), (ItemID.SlushBlock, 0), (ItemID.Cobweb, 0), (ItemID.GraniteBlock, 0),
-			(ItemID.MarbleBlock, 0), (ItemID.Sandstone, 0), (ItemID.HardenedSand, 0), (ItemID.EbonstoneBlock, 0), (ItemID.CrimstoneBlock, 0),
+			(ItemID.MarbleBlock, 0), (ItemID.Sandstone, 0), (ItemID.HardenedSand, 0), (ItemID.EbonstoneBlock, 2), (ItemID.CrimstoneBlock, 2),
 			(ItemID.Hive, 0), (ItemID.DesertFossil, 0), (ItemID.Amethyst, 0), (ItemID.Topaz, 0), (ItemID.Sapphire, 0), (ItemID.Emerald, 0),
 			(ItemID.Ruby, 0), (ItemID.Diamond, 0), (ItemID.Amber, 0), (ItemID.FallenStar, 0), (ItemID.Seashell, 0), (ItemID.Coral, 0),
 			(ItemID.Starfish, 0), (ItemID.Acorn, 0), (ItemID.Pumpkin, 0), (ItemID.Vine, 0), (ItemID.Daybloom, 0), (ItemID.Moonglow, 0),
 			(ItemID.Blinkroot, 0), (ItemID.Waterleaf, 0), (ItemID.Shiverthorn, 0), (ItemID.Deathweed, 1), (ItemID.Fireblossom, 2),
 			(ItemID.Mushroom, 0), (ItemID.GlowingMushroom, 0), (ItemID.VileMushroom, 0), (ItemID.ViciousMushroom, 0), (ItemID.JungleSpores, 0),
-			(ItemID.AshBlock, 2), (ItemID.Obsidian, 2), (ItemID.Pearlwood, 4), (ItemID.PearlstoneBlock, 4), (ItemID.CrystalShard, 4)
+			(ItemID.AshBlock, 2), (ItemID.Obsidian, 0), (ItemID.Pearlwood, 4), (ItemID.PearlstoneBlock, 4), (ItemID.CrystalShard, 4)
 		};
 
 		public static IReadOnlyList<int> HerbPlants => Herbs;
@@ -984,7 +1063,7 @@ namespace UltimateRandomizer.Common.Features
 			};
 		}
 
-		// Including the guaranteed sources
+		// Including the guaranteed sources (GuaranteedSources.FoundTier)
 		public static int Tier(int item)
 		{
 			if (tiers == null)
@@ -992,10 +1071,7 @@ namespace UltimateRandomizer.Common.Features
 				int[] result = (int[])BaseTiers().Clone();
 				foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements)
 				{
-					foreach (int host in GuaranteedSources.HostsOf(requirement.Item))
-					{
-						result[requirement.Item] = Math.Min(result[requirement.Item], GuaranteedSources.HostTier(host));
-					}
+					result[requirement.Item] = Math.Min(result[requirement.Item], GuaranteedSources.FoundTier(requirement));
 				}
 				tiers = result;
 			}
@@ -1027,7 +1103,7 @@ namespace UltimateRandomizer.Common.Features
 			LootConfig loot = LootConfig.Instance;
 			// Drops and bag contents are locked by the item's true tier (DropHelper.LockGap), herbs by the same progression
 			// checks. Mined ores keep their tier: mining is not gated, and the mining levels use it (RecipePlanner.MiningTier)
-			int Gated(int item) => ItemPool.UnlockTier(ItemPool.TrueTierOf(item));
+			int Gated(int item) => ItemPool.UnlockTierOf(item);
 
 			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, tier);
 			if (loot.RandomizeHerbs)

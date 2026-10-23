@@ -126,6 +126,7 @@ Tests: {
 	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques
 	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde
 	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant
+	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
 	LockedVanillaDropRemoved: Un butin d'origine remplacé encore verrouillé par la progression ne tombe pas ; un butin débloqué tombe comme prévu
@@ -194,7 +195,7 @@ Tests: {
 	WorldSummonsProtected: Les invocations trouvées dans le monde restent protégées, celles qu'on fabrique sont randomisées
 	UpgradesOutOfPools: Les améliorations de vie et de mana ne sont jamais tirées au sort, garanties ni utilisées comme ingrédients, et les drops les gardent
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
-	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
+	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier, ou par les boss de progression de son tier
 	GuaranteedBiomeHosts: Chaque objet garanti est porté par au moins 3 ennemis d'un même biome, avec la même chance sur chacun
 	GuaranteedSeveralSeeds: Chaque objet garanti obtient les ennemis d'un biome avec d'autres graines
 	GuaranteedBiomesSpread: Les objets garantis d'un tier sont répartis sur plusieurs biomes
@@ -222,6 +223,7 @@ Tests: {
 	HardmodeOresOfWorld: Les minerais des paires hardmode comptent toujours comme trouvables et ne deviennent jamais de nouveaux ingrédients
 	AltarDecisionKeepsCaches: Le choix d'un minerai hardmode par un autel ne change ni les sources garanties ni la trouvabilité
 	PotOnlyUnfound: Les pots ne donnent que des objets garantis que personne n'a encore trouvés
+	GuaranteesNotBelowTier: Aucun objet garanti n'arrive avant son tier (Manipulateur antique et Sceau céleste pas avant le Cultiste lunatique)
 	IngredientReplacementsFindable: Les nouveaux ingrédients s'obtiennent (trouvés ou fabriqués) au palier pour lequel leur recette a été reconstruite
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
 	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
@@ -268,6 +270,9 @@ Tests: {
 	UncraftablePricedByIngredients: Les recettes coquilles actives comptent comme randomisées : ce qu'elles fabriquent se vend au prix de ses ingrédients, pas à son prix d'origine
 	RecipePickaxeMineable: Aucune recette reconstruite de pioche ou de foreuse ne reçoit un nouvel ingrédient dont le minage exige une puissance de pioche au moins égale à la sienne
 	RecipeNotBeforeItsTier: Aucune recette reconstruite ou échangée n'est faisable avant le palier de l'objet qu'elle donne (son palier, ou son vrai palier s'il est plus tard) : pas de pioche en chlorophyte en début de mode difficile
+	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent entre la moitié et le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana, pas de fragment de nébuleuse gardé pour un objet bon marché échangé
+	ProtectedRecipesGated: Un résultat protégé dont les ingrédients sont reconstruits attend le palier débloqué de son vrai palier comme les autres : ni clé de nuit ni clé de lumière avant le mode difficile
+	PickaxeIngredientsBelowLevel: Une recette de pioche ou de foreuse ne reçoit jamais de minerai ni de lingot (ni rien qui en soit fait) dont le minage exige sa propre puissance de pioche ou plus : pas de pioche en orichalque faite de lingots de chlorophyte
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares

@@ -891,7 +891,8 @@ namespace UltimateRandomizer.Common.Tests
 					if (gap == 0) continue;
 					jackpots++;
 					if (!ItemPool.IsJackpotWorthy(item)) failures.Add($"{Lang.GetItemNameValue(item)} ({ItemPool.Info[item].Category}) as a jackpot");
-					if (gap != ItemPool.TrueTierOf(item) - limit) failures.Add($"{Lang.GetItemNameValue(item)}: gap {gap}, true tier {ItemPool.TrueTierOf(item)}, limit {limit}");
+					// A hard gate's gap counts from the limit without the allowance (ItemPool.GatingLimitFor)
+					if (gap != ItemPool.TrueTierOf(item) - ItemPool.GatingLimitFor(item, 0)) failures.Add($"{Lang.GetItemNameValue(item)}: gap {gap}, true tier {ItemPool.TrueTierOf(item)}, limit {limit}");
 					if (failures.Count > 20) break;
 				}
 				// Plans never roll jackpots
@@ -973,7 +974,7 @@ namespace UltimateRandomizer.Common.Tests
 					if (gap == 0) continue;
 					marked++;
 					if (!ItemPool.IsJackpotWorthy(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} marked but not useful");
-					if (gap != ItemPool.TrueTierOf(item.type) - limit) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, true tier {ItemPool.TrueTierOf(item.type)}, limit {limit}");
+					if (gap != ItemPool.TrueTierOf(item.type) - ItemPool.GatingLimitFor(item.type, 0)) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, true tier {ItemPool.TrueTierOf(item.type)}, limit {limit}");
 					if (CodexSystem.CountsAsDrop(item)) failures.Add($"{Lang.GetItemNameValue(item.type)} would be recorded as the zombie's drop");
 				}
 			}

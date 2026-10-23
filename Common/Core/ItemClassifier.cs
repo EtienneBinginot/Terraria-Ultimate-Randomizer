@@ -17,9 +17,11 @@ namespace UltimateRandomizer.Common.Core
 		{
 			[ItemID.Meteorite] = Tier.PostEvilBoss,
 			[ItemID.MeteoriteBar] = Tier.PostEvilBoss,
-			[ItemID.Hellstone] = Tier.PostSkeletron,
-			[ItemID.HellstoneBar] = Tier.PostSkeletron,
-			[ItemID.Obsidian] = Tier.PostEvilBoss,
+			// Pick power 65 (Nightmare / Deathbringer Pickaxe, after the evil boss): nothing waits for Skeletron (user decision)
+			[ItemID.Hellstone] = Tier.PostEvilBoss,
+			[ItemID.HellstoneBar] = Tier.PostEvilBoss,
+			// Pick power 55: a Gold or Platinum Pickaxe mines it (water and lava anywhere)
+			[ItemID.Obsidian] = Tier.PreBoss,
 			[ItemID.CobaltOre] = Tier.Hardmode,
 			[ItemID.PalladiumOre] = Tier.Hardmode,
 			[ItemID.MythrilOre] = Tier.Hardmode,
@@ -49,7 +51,8 @@ namespace UltimateRandomizer.Common.Core
 			[ItemID.Ectoplasm] = Tier.PostPlantera,
 			[ItemID.SpectreBar] = Tier.PostPlantera,
 			[ItemID.ShroomiteBar] = Tier.PostPlantera,
-			[ItemID.TurtleShell] = Tier.PostPlantera,
+			// Giant Tortoise, any hardmode jungle (the material table agrees)
+			[ItemID.TurtleShell] = Tier.Hardmode,
 			[ItemID.BeetleHusk] = Tier.PostGolem,
 			[ItemID.LihzahrdBrick] = Tier.PostPlantera,
 			[ItemID.FragmentSolar] = Tier.PostCultist,
@@ -82,7 +85,9 @@ namespace UltimateRandomizer.Common.Core
 		// both, "(inactive)"), which ItemID.Sets.Deprecated does not flag
 		private static readonly HashSet<int> BannedVanilla = new()
 		{
-			ItemID.DontHurtCrittersBookInactive, ItemID.DontHurtNatureBookInactive, ItemID.DontHurtComboBookInactive
+			ItemID.DontHurtCrittersBookInactive, ItemID.DontHurtNatureBookInactive, ItemID.DontHurtComboBookInactive,
+			// The Lunatic Cultist has a bag sprite but never drops it
+			ItemID.CultistBossBag
 		};
 
 		// Items of storage mods other than Magic Storage (its own are all banned by mod name): storage units, hearts, cores,
@@ -269,14 +274,17 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		// Kinds of vanilla sources (RaiseBySources, TierAudit)
-		private const int SourceGathered = 0, SourceDrop = 1, SourceBag = 2, SourceShop = 3, SourceRecipe = 4;
+		private const int SourceGathered = 0, SourceDrop = 1, SourceBag = 2, SourceShop = 3, SourceRecipe = 4, SourceGlobal = 5;
 
 		// The true tier of every item from its vanilla sources, the earliest of:
-		// - NPC drops (LootSnapshot.Npcs): a boss at its tier (NpcTiers.BaseTier: the boss table), any other enemy at 0: its
-		//   BaseTier is a guess from its stats (Doctor Bones, Tim or the Dungeon Guardian would look mid or late game), and
-		//   EffectiveTier follows the world's progression and the config, unknown at load; then raised by the drop's known
+		// - NPC drops (LootSnapshot.Npcs): a boss (its parts and minions too) at its tier (NpcTiers.BaseTier: the boss table), an
+		//   enemy that only spawns later at its spawn tier (NpcTiers.SpawnTier: hardmode, the Temple, events...), any other
+		//   at 0: its BaseTier is a guess from its stats (Doctor Bones, Tim or the Dungeon Guardian would look mid or late game),
+		//   and EffectiveTier follows the world's progression and the config, unknown at load; then raised by the drop's known
 		//   conditions (hardmode, mechanical bosses, Plantera, the moon events...); a drop that needs a special seed is none;
-		// - bags and crates (LootSnapshot.Items): a boss bag at its boss's tier, any other at its own true tier, + conditions;
+		// - global drops (any enemy: Pirate Map, biome keys, souls...) at their conditions' tier;
+		// - bags and crates (LootSnapshot.Items): a boss bag at its boss's tier, any other at its own true tier (a lock box no
+		//   earlier than its key, a hardmode or dungeon crate no earlier than where it is caught), + conditions;
 		// - shops (Obtainability.ShopEntries): from when the NPC moves in (Wizard: hardmode, Cyborg: Plantera...), + the
 		//   entry's conditions; an entry of a special seed is none;
 		// - vanilla recipes, as in RaiseByRecipes (thematic stations raise nothing);
@@ -286,23 +294,28 @@ namespace UltimateRandomizer.Common.Core
 		// The true tier is raised to that source tier, never lowered; items without any source, set by KnownTiers or the
 		// config, or with a modded recipe (their mod chose the rarity) keep theirs. Repeated until nothing changes (a bag or
 		// an ingredient raised raises what comes from it). sourceTiers / sources (filled, per item): the earliest source and
-		// its description, -1 / null without one. Load time (ItemPool.Build), the same on every machine: the snapshots, shops
-		// and recipes are the vanilla ones, read in a fixed order. Returns how many items it raised, and examples
-		public static int RaiseBySources(int[] trueTiers, Dictionary<int, Tier> overrides, int[] sourceTiers, string[] sources, out string examples)
+		// its description, -1 / null without one. reliableTiers (filled, per item): the earliest reliable source (ReliableDrop: a
+		// boss drop or boss bag item, a fair enemy drop; a shop entry whose conditions are all known), int.MaxValue without one:
+		// it may lower the true tier below the rarity's (ItemPool.Build). Load time (ItemPool.Build), the same on every machine:
+		// the snapshots, shops and recipes are the vanilla ones, read in a fixed order. Returns how many items it raised, and
+		// examples
+		public static int RaiseBySources(int[] trueTiers, Dictionary<int, Tier> overrides, int[] sourceTiers, string[] sources, int[] reliableTiers, out string examples)
 		{
 			int count = trueTiers.Length;
 			int[] before = (int[])trueTiers.Clone();
 			bool Valid(int t) => t > 0 && t < count;
 			List<(int item, int kind, int reference, int tier)> fixedSources = new();
+			System.Array.Fill(reliableTiers, int.MaxValue);
+			void Reliable(int item, int tier) => reliableTiers[item] = System.Math.Min(reliableTiers[item], tier);
 
-			// Gathered or placed by world generation: their own tier
+			// Gathered or placed by world generation: their own tier (the Jungle Temple's furniture: once the temple opens)
 			HashSet<int> gathered = Features.Findability.GatheredMaterials.Concat(WorldSourced).Where(Valid).ToHashSet();
 			for (int type = 1; type < count; type++)
 			{
 				if (!ContentSamples.ItemsByType.TryGetValue(type, out Item sample) || sample == null) continue;
 				if (sample.createTile >= TileID.Dirt && sample.createTile < TileID.Sets.Ore.Length && TileID.Sets.Ore[sample.createTile] || PlacedByWorldGen(type)) gathered.Add(type);
 			}
-			foreach (int item in gathered.OrderBy(t => t)) fixedSources.Add((item, SourceGathered, 0, before[item]));
+			foreach (int item in gathered.OrderBy(t => t)) fixedSources.Add((item, SourceGathered, 0, TempleFurniture(item) ? System.Math.Max(before[item], (int)Tier.PostPlantera) : before[item]));
 
 			// Drops, and the tier of each boss bag (its earliest boss)
 			Dictionary<int, int> bossBags = new();
@@ -315,8 +328,15 @@ namespace UltimateRandomizer.Common.Core
 					if (condition < 0 || !Valid(drop.itemId)) continue;
 					int tier = System.Math.Max(npcTier, condition);
 					fixedSources.Add((drop.itemId, SourceDrop, netId, tier));
+					if (ReliableDrop(netId, drop.dropRate)) Reliable(drop.itemId, tier);
 					if (ItemID.Sets.BossBag[drop.itemId] && npcTier > 0) bossBags[drop.itemId] = bossBags.TryGetValue(drop.itemId, out int other) ? System.Math.Min(other, tier) : tier;
 				}
+			}
+			// Global drops (any enemy): at their conditions' tier; rare and anywhere, so no reliable source
+			foreach (DropRateInfo drop in LootSnapshot.GlobalDrops())
+			{
+				int condition = DropConditionTier(drop.conditions);
+				if (condition >= 0 && Valid(drop.itemId)) fixedSources.Add((drop.itemId, SourceGlobal, 0, condition));
 			}
 
 			// Bags: a boss bag at its boss's tier, any other at its own (current) true tier
@@ -327,12 +347,16 @@ namespace UltimateRandomizer.Common.Core
 				{
 					int condition = DropConditionTier(drop.conditions);
 					if (condition < 0 || !Valid(drop.itemId)) continue;
-					if (bossBags.TryGetValue(bag, out int bossTier)) fixedSources.Add((drop.itemId, SourceBag, bag, System.Math.Max(bossTier, condition)));
+					if (bossBags.TryGetValue(bag, out int bossTier))
+					{
+						fixedSources.Add((drop.itemId, SourceBag, bag, System.Math.Max(bossTier, condition)));
+						if (drop.dropRate >= ReliableBossChance) Reliable(drop.itemId, System.Math.Max(bossTier, condition));
+					}
 					else if (Valid(bag)) bagSources.Add((drop.itemId, bag, condition));
 				}
 			}
 
-			// Shops
+			// Shops; an entry is reliable when the NPC's arrival and every condition are known
 			Dictionary<Condition, int> shopConditions = ShopConditionTiers();
 			foreach ((int npc, int item, Condition[] conditions) in Obtainability.ShopEntries)
 			{
@@ -340,6 +364,7 @@ namespace UltimateRandomizer.Common.Core
 				int tier = TownNpcTiers.TryGetValue(npc, out Tier arrival) ? (int)arrival : 0;
 				foreach (Condition c in conditions) tier = System.Math.Max(tier, shopConditions.TryGetValue(c, out int t) ? t : 0);
 				fixedSources.Add((item, SourceShop, npc, tier));
+				if (!UnknownArrival.Contains(npc) && conditions.All(shopConditions.ContainsKey)) Reliable(item, tier);
 			}
 
 			// Vanilla recipes (every one of them is a source); a modded recipe makes its result keep its tier
@@ -383,7 +408,7 @@ namespace UltimateRandomizer.Common.Core
 				changed = false;
 				System.Array.Fill(best, int.MaxValue);
 				foreach ((int item, int kind, int reference, int tier) in fixedSources) Offer(item, tier, kind, reference);
-				foreach ((int item, int bag, int condition) in bagSources) Offer(item, System.Math.Max(trueTiers[bag], condition), SourceBag, bag);
+				foreach ((int item, int bag, int condition) in bagSources) Offer(item, System.Math.Max(System.Math.Max(trueTiers[bag], condition), BagAccessTier(bag, trueTiers)), SourceBag, bag);
 				foreach ((int result, List<int[]> parts, List<int> tiles) in recipes)
 				{
 					int tier = 0;
@@ -417,17 +442,59 @@ namespace UltimateRandomizer.Common.Core
 			SourceDrop => "drop: " + Lang.GetNPCNameValue(reference),
 			SourceBag => "bag: " + Lang.GetItemNameValue(reference),
 			SourceShop => "shop: " + Lang.GetNPCNameValue(reference),
+			SourceGlobal => "drop: any enemy",
 			_ => "recipe"
 		};
 
-		// The tier of an NPC as a drop source: a boss (its parts too) at its tier, any other enemy at 0 (see RaiseBySources)
-		private static int NpcSourceTier(int netId)
+		// The tier of an NPC as a drop source: a boss (its parts and minions too: the Creeper's Tissue Samples are the Brain's) at
+		// its tier, an enemy that only spawns later at its spawn tier (NpcTiers.SpawnTier), any other enemy at 0 (see
+		// RaiseBySources)
+		public static int NpcSourceTier(int netId)
 		{
-			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
+			int type = BossParts.Leader(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
 			// Flagged as a boss, but only a guard of the dungeon before Skeletron is beaten (its stats say Moon Lord)
 			if (type == NPCID.DungeonGuardian) return (int)Tier.PostSkeletron;
-			return NpcTiers.HasBossTier(type) || NpcTiers.IsBoss(type) ? NpcTiers.BaseTier(type) : 0;
+			int spawn = NpcTiers.SpawnTier(type);
+			if (spawn >= 0) return spawn;
+			return IsBossSource(type) ? NpcTiers.BaseTier(type) : 0;
 		}
+
+		private static bool IsBossSource(int type) => type == NPCID.DungeonGuardian || NpcTiers.HasBossTier(type) || NpcTiers.IsBoss(type);
+
+		// Smallest chances of a reliable drop (RaiseBySources): a boss's (its bag's) at 1 in 50 (Binoculars: the Eye, 1 in 40),
+		// an early enemy's at 1 in 100 (Jellyfish Necklace), an enemy of a later stage's at 1 in 500 (its spawn is the gate:
+		// Plantera's dungeon enemies drop their weapons at 1 in 150 to 450)
+		private const float ReliableBossChance = 0.0199f, ReliableEnemyChance = 0.0099f, ReliableLateEnemyChance = 0.0019f;
+
+		// A drop that may lower its item's true tier to its source's: a boss's (parts, minions) or an enemy's of known spawn tier
+		// with a fair chance, never a rare enemy (Nymph, Tim...) nor an unlisted enemy whose stats look like hardmode (its
+		// spawn tier is unknown: it stays a source, not a reliable one)
+		private static bool ReliableDrop(int netId, float chance)
+		{
+			if (!ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample)) return false;
+			int type = BossParts.Leader(sample.type);
+			if (IsBossSource(type)) return chance >= ReliableBossChance;
+			if (sample.rarity > 0 || NPCID.Sets.CountsAsCritter[sample.type] || sample.friendly) return false;
+			int spawn = NpcTiers.SpawnTier(type);
+			if (spawn >= (int)Tier.Hardmode) return chance >= ReliableLateEnemyChance;
+			if (spawn < 0 && NpcTiers.BaseTier(type) >= (int)Tier.Hardmode) return false;
+			return chance >= ReliableEnemyChance;
+		}
+
+		// A bag that can only be opened, or caught, from a stage on: the Golden Lock Box needs a Golden Key, the Obsidian Lock
+		// Box a Shadow Key (post-Skeletron dungeon keys), hardmode crates wait for hardmode, the Dungeon Crate for Skeletron
+		// (1.4.4: no dungeon fishing loot before him)
+		private static int BagAccessTier(int bag, int[] trueTiers)
+		{
+			if (bag == ItemID.LockBox) return trueTiers[ItemID.GoldenKey];
+			if (bag == ItemID.ObsidianLockbox) return trueTiers[ItemID.ShadowKey];
+			if (ItemID.Sets.IsFishingCrateHardmode[bag] || bag == ItemID.HallowedFishingCrate) return (int)Tier.Hardmode;
+			if (bag == ItemID.DungeonFishingCrate) return (int)Tier.PostSkeletron;
+			return 0;
+		}
+
+		// Placed by world generation inside the Jungle Temple, which opens after Plantera (its Temple Key)
+		private static bool TempleFurniture(int type) => PlacedByWorldGen(type) && ItemID.Search.GetName(type).StartsWith("Lihzahrd");
 
 		// The tier a drop's conditions need (vanilla conditions known to wait for a stage of the game, others ignored), -1 when
 		// it never happens in a normal world (special seeds)
@@ -446,7 +513,9 @@ namespace UltimateRandomizer.Common.Core
 					Conditions.YoyoCascade => (int)Tier.PostSkeletron,
 					Conditions.IsHardmode or Conditions.SoulOfNight or Conditions.SoulOfLight or Conditions.LivingFlames or Conditions.PirateMap
 						or Conditions.HallowKeyCondition or Conditions.JungleKeyCondition or Conditions.CorruptKeyCondition or Conditions.CrimsonKeyCondition
-						or Conditions.FrozenKeyCondition or Conditions.DesertKeyCondition or Conditions.YoyosAmarok or Conditions.YoyosHelFire => (int)Tier.Hardmode,
+						or Conditions.FrozenKeyCondition or Conditions.DesertKeyCondition or Conditions.YoyosAmarok or Conditions.YoyosHelFire
+						// The mechanical summons' global drop: hardmode, before their bosses
+						or Conditions.MechanicalBossesDummyCondition => (int)Tier.Hardmode,
 					Conditions.BeatAnyMechBoss or Conditions.DownedAllMechBosses or Conditions.YoyosYelets => (int)Tier.PostMechBoss,
 					// The moon events: their medallions are made of Ectoplasm
 					Conditions.DownedPlantera or Conditions.FirstTimeKillingPlantera or Conditions.YoyosKraken or Conditions.IsPumpkinMoon
@@ -477,6 +546,10 @@ namespace UltimateRandomizer.Common.Core
 			[NPCID.Cyborg] = Tier.PostPlantera
 		};
 
+		// Town NPCs whose arrival waits for something the table does not know (the Princess: every other NPC), or who only visit:
+		// their shop entries are sources, never reliable ones
+		private static readonly HashSet<int> UnknownArrival = new() { NPCID.Princess, NPCID.SkeletonMerchant, NPCID.TravellingMerchant };
+
 		// Shop entries of a special seed: no source in a normal world
 		private static readonly Condition[] SeedConditions =
 		{
@@ -495,7 +568,8 @@ namespace UltimateRandomizer.Common.Core
 			Set((int)Tier.PostEyeOfCthulhu, Condition.DownedKingSlime, Condition.DownedEyeOfCthulhu, Condition.DownedEarlygameBoss, Condition.DownedGoblinArmy);
 			Set((int)Tier.PostEvilBoss, Condition.DownedEowOrBoc, Condition.DownedEaterOfWorlds, Condition.DownedBrainOfCthulhu, Condition.DownedOldOnesArmyAny,
 				Condition.DownedOldOnesArmyT1);
-			Set((int)Tier.PostSkeletron, Condition.DownedQueenBee, Condition.DownedSkeletron, Condition.DownedDeerclops);
+			Set((int)Tier.PostEvilBoss, Condition.DownedQueenBee, Condition.DownedDeerclops);
+			Set((int)Tier.PostSkeletron, Condition.DownedSkeletron);
 			Set((int)Tier.Hardmode, Condition.Hardmode, Condition.Eclipse, Condition.DownedClown, Condition.DownedPirates, Condition.DownedFrostLegion);
 			Set((int)Tier.PostMechBoss, Condition.DownedQueenSlime, Condition.DownedMechBossAny, Condition.DownedTwins, Condition.DownedDestroyer,
 				Condition.DownedSkeletronPrime, Condition.DownedMechBossAll, Condition.DownedOldOnesArmyT2);
@@ -549,7 +623,7 @@ namespace UltimateRandomizer.Common.Core
 			("ice chest", 1, new int[] { ItemID.IceBoomerang, ItemID.IceBlade, ItemID.IceSkates, ItemID.SnowballCannon, ItemID.BlizzardinaBottle, ItemID.FlurryBoots,
 				ItemID.Fish, ItemID.IceMirror, ItemID.IceMachine }),
 			("ivy chest", 1, new int[] { ItemID.FeralClaws, ItemID.AnkletoftheWind, ItemID.StaffofRegrowth, ItemID.Seaweed, ItemID.Boomstick, ItemID.FiberglassFishingPole,
-				ItemID.FlowerBoots, ItemID.BeeMinecart, ItemID.LivingMahoganyWand, ItemID.LivingMahoganyLeafWand }),
+				ItemID.FlowerBoots, ItemID.BeeMinecart, ItemID.LivingMahoganyWand, ItemID.LivingMahoganyLeafWand, ItemID.HoneyDispenser }),
 			("sandstone chest", 1, new int[] { ItemID.DesertMinecart }),
 			("mushroom chest", 1, new int[] { ItemID.ShroomMinecart, ItemID.MushroomHat, ItemID.MushroomVest, ItemID.MushroomPants }),
 			("pyramid chest", 1, new int[] { ItemID.PharaohsMask, ItemID.PharaohsRobe, ItemID.SandstorminaBottle, ItemID.FlyingCarpet }),
@@ -567,8 +641,9 @@ namespace UltimateRandomizer.Common.Core
 
 		// World-generated chests are a source too: they lower the true tier of what they hold (Trident: rarity 2, a water chest
 		// item), never Tier nor the buckets, like MaterialTiers. Config overrides and the reviewed materials keep theirs.
-		// lowered[t]: lowered here (its true tier may then be below Tier). Returns how many, and examples
-		public static int LowerByWorldChests(int[] trueTiers, int[] tiers, bool[] fromTable, Dictionary<int, Tier> overrides, bool[] lowered, int[] sourceTiers, string[] sources, out string examples)
+		// exact[t]: trueTiers[t] is final even below tiers[t] (lowered by a reliable source). lowered[t]: lowered here (its true
+		// tier may then be below Tier). Returns how many, and examples
+		public static int LowerByWorldChests(int[] trueTiers, int[] tiers, bool[] fromTable, bool[] exact, Dictionary<int, Tier> overrides, bool[] lowered, int[] sourceTiers, string[] sources, out string examples)
 		{
 			List<string> shown = new();
 			int count = 0;
@@ -582,7 +657,7 @@ namespace UltimateRandomizer.Common.Core
 						sourceTiers[type] = tier;
 						sources[type] = kind;
 					}
-					int now = System.Math.Max(tiers[type], trueTiers[type]);
+					int now = exact[type] ? trueTiers[type] : System.Math.Max(tiers[type], trueTiers[type]);
 					if (tier >= now) continue;
 					trueTiers[type] = tier;
 					lowered[type] = true;
@@ -592,6 +667,222 @@ namespace UltimateRandomizer.Common.Core
 			}
 			examples = string.Join(", ", shown);
 			return count;
+		}
+
+		// Hand corrections of true tiers from the tier audits (terraria.wiki.gg), for items the material table does not list:
+		// set exactly like the table's (lower too), before the recipes settle the crafted items again; Tier and the buckets never
+		// change. Config overrides still win
+		public static readonly Dictionary<int, Tier> TrueTierFixes = new()
+		{
+			// Dropped by the Lunatic Cultist (Stations says 8 too); rarity 9
+			[ItemID.LunarCraftingStation] = Tier.PostCultist,
+			// The Zoologist sells it at a 100% Bestiary, which needs the Moon Lord (the shop condition is not read)
+			[ItemID.TeleportationPylonVictory] = Tier.PostMoonLord,
+			// Mechanical Eye, Worm and Skull at a hardmode anvil
+			[ItemID.MechdusaSummon] = Tier.Hardmode,
+			// Living Trees and a shimmered Loom (1.4.4), not only the Steampunker
+			[ItemID.LivingLoom] = Tier.PreBoss,
+			// Underground hearts from the start; the Life Fruit grows after a mechanical boss
+			[ItemID.LifeCrystal] = Tier.PreBoss,
+			[ItemID.LifeFruit] = Tier.PostMechBoss,
+			// The Jungle Temple, opened by Plantera's Temple Key: its enemies, chests and furnace
+			[ItemID.LihzahrdPowerCell] = Tier.PostPlantera,
+			[ItemID.LizardEgg] = Tier.PostPlantera,
+			[ItemID.LihzahrdFurnace] = Tier.PostPlantera,
+			[ItemID.SolarTablet] = Tier.PostPlantera,
+			// Prismatic Lacewing: the Hallow at night after Plantera; Truffle Worm: hardmode glowing mushrooms; Gelatin Crystal:
+			// the underground Hallow in hardmode; Abigail's Flower: near graves whatever the stage
+			[ItemID.EmpressButterfly] = Tier.PostPlantera,
+			[ItemID.TruffleWorm] = Tier.Hardmode,
+			[ItemID.QueenSlimeCrystal] = Tier.Hardmode,
+			[ItemID.AbigailsFlower] = Tier.PreBoss,
+			// Hardmode global drops: the Pirate Map (usable before, so it would start a pre-hardmode invasion) and the biome keys
+			// (only their chests wait for Plantera)
+			[ItemID.PirateMap] = Tier.Hardmode,
+			[ItemID.JungleKey] = Tier.Hardmode,
+			[ItemID.CorruptionKey] = Tier.Hardmode,
+			[ItemID.CrimsonKey] = Tier.Hardmode,
+			[ItemID.HallowedKey] = Tier.Hardmode,
+			[ItemID.FrozenKey] = Tier.Hardmode,
+			[ItemID.DungeonDesertKey] = Tier.Hardmode,
+			// The Pirate Invasion's rare drops (rarity 5 and 6), any time in hardmode
+			[ItemID.CoinGun] = Tier.Hardmode,
+			[ItemID.LuckyCoin] = Tier.Hardmode,
+			[ItemID.DiscountCard] = Tier.Hardmode,
+			[ItemID.GoldRing] = Tier.Hardmode,
+			[ItemID.PirateStaff] = Tier.Hardmode,
+			// Dungeon only (the Golden Lock Box needs a Golden Key; 1.4.4: no dungeon fishing loot before Skeletron)
+			[ItemID.LockBox] = Tier.PostSkeletron,
+			[ItemID.DungeonFishingCrate] = Tier.PostSkeletron,
+			[ItemID.AlchemyTable] = Tier.PostSkeletron,
+			// Made with Pearlstone (hardmode)
+			[ItemID.HallowedTorch] = Tier.Hardmode,
+			[ItemID.HallowedCampfire] = Tier.Hardmode,
+			// Fishing, Angler rewards and the Traveling Merchant, from the start (no source is read for them)
+			[ItemID.ReaverShark] = Tier.PreBoss,
+			[ItemID.Sextant] = Tier.PreBoss,
+			[ItemID.WeatherRadio] = Tier.PreBoss,
+			[ItemID.FishermansGuide] = Tier.PreBoss,
+			[ItemID.HighTestFishingLine] = Tier.PreBoss,
+			[ItemID.AnglerEarring] = Tier.PreBoss,
+			[ItemID.TackleBox] = Tier.PreBoss,
+			[ItemID.FrogLeg] = Tier.PreBoss,
+			[ItemID.BalloonPufferfish] = Tier.PreBoss,
+			[ItemID.LifeformAnalyzer] = Tier.PreBoss,
+			[ItemID.Stopwatch] = Tier.PreBoss,
+			[ItemID.DPSMeter] = Tier.PreBoss,
+			// The Skeleton Merchant, underground from the start (moon phase shop conditions are not read)
+			[ItemID.MagicLantern] = Tier.PreBoss
+		};
+
+		// Pick power gates that hold whatever the stage, their ore being in the world from the start: Hellstone (65),
+		// Chlorophyte (200), the Temple's Lihzahrd Bricks (210). Hardmode ores wait for hardmode itself, Meteorite and the evil
+		// ores for their event or boss, not for a pickaxe
+		public static readonly (int pick, int ore)[] PickGates = { (65, ItemID.Hellstone), (200, ItemID.ChlorophyteOre), (210, ItemID.LihzahrdBrick) };
+
+		// The lowest true tier mining allows: a pickaxe or drill no earlier than the gated ore its power reaches (Nightmare
+		// Pickaxe, Molten Pickaxe: Hellstone; Pickaxe Axe, Spectre Pickaxe: Chlorophyte), a block no earlier than a pickaxe that
+		// mines it (Ebonstone, Crimstone, Hellforge: 65). 0 without any
+		public static int MiningFloor(int type, int[] trueTiers)
+		{
+			if (!ContentSamples.ItemsByType.TryGetValue(type, out Item sample) || sample == null) return 0;
+			int power = System.Math.Max(sample.pick, Features.RecipePlanner.PickToMine(type));
+			int floor = 0;
+			foreach ((int pick, int ore) in PickGates)
+			{
+				if (power >= pick && ore < trueTiers.Length) floor = System.Math.Max(floor, trueTiers[ore]);
+			}
+			return floor;
+		}
+
+		// The vanilla recipes that set tiers (SetsTier, as LowerByRecipes), and the results some modded recipe makes
+		private static List<(int result, List<int[]> parts, List<int> tiles)> TierRecipes(int count, out HashSet<int> moddedResults)
+		{
+			moddedResults = new HashSet<int>();
+			List<(int result, List<int[]> parts, List<int> tiles)> recipes = new();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i) || recipe.createItem == null || recipe.createItem.type <= 0) continue;
+				int result = recipe.createItem.type;
+				if (!IsVanillaRecipe(recipe))
+				{
+					moddedResults.Add(result);
+					continue;
+				}
+				if (result >= count || !SetsTier(recipe, recipe.requiredItem.Select(i => i.type).ToList())) continue;
+				List<int[]> parts = new();
+				foreach (Item ingredient in recipe.requiredItem)
+				{
+					if (ingredient == null || ingredient.type <= 0 || ingredient.type >= count) continue;
+					parts.Add(IngredientChoices(recipe, ingredient.type).Where(t => t > 0 && t < count).ToArray());
+				}
+				recipes.Add((result, parts, recipe.requiredTile.Where(t => t >= 0).Distinct().ToList()));
+			}
+			return recipes;
+		}
+
+		// Items whose true tier the recipes may raise in SettleByRecipes: no other source (as RaiseByRecipes: no drop, bag nor
+		// shop, nothing the world places or gives, no world chest), no modded recipe
+		private static bool RaisableByRecipes(int type, HashSet<int> lootSources, bool[] fromChest, HashSet<int> moddedResults) =>
+			!lootSources.Contains(type) && !fromChest[type] && !moddedResults.Contains(type) && !PlacedByWorldGen(type) && !WorldSourced.Contains(type)
+			&& !Features.Findability.GatheredMaterials.Contains(type);
+
+		// Once the hand-set tiers (material table, TrueTierFixes, KnownTiers), the reliable sources and the world chests are in:
+		// the true tiers of crafted items again, from the final true tiers of their ingredients (Bone Wings follow the table's
+		// Bone Feather, a Gold Crown its tier-0 gems, the Molten set Hellstone, Lava Waders the chest-lowered Water Walking
+		// Boots). Each item: lowered to its earliest vanilla recipe (as LowerByRecipes, on true tiers), else raised to it when it
+		// has no other source (as RaiseByRecipes); never below its mining floor (MiningFloor); fixed tiers stay (fixedTier).
+		// trueTiers holds the effective true tiers and changes in place; lowered[t]: lowered here. Returns how many changed
+		public static int SettleByRecipes(int[] trueTiers, bool[] fixedTier, int[] floors, HashSet<int> lootSources, bool[] fromChest, bool[] lowered, out string examples)
+		{
+			int count = trueTiers.Length;
+			List<(int result, List<int[]> parts, List<int> tiles)> recipes = TierRecipes(count, out HashSet<int> moddedResults);
+			Dictionary<int, List<int>> placers = Stations.PlacersByTile();
+			int[] before = (int[])trueTiers.Clone();
+			int TierOf(int t) => t < count ? trueTiers[t] : Tiers.Max;
+			bool changed = true;
+			for (int pass = 0; pass < 32 && changed; pass++)
+			{
+				changed = false;
+				// The earliest recipe of each result with this pass's tiers: by any station (to lower), by the stations that raise
+				Dictionary<int, (int low, int high)> earliest = new();
+				foreach ((int result, List<int[]> parts, List<int> tiles) in recipes)
+				{
+					if (fixedTier[result] || moddedResults.Contains(result)) continue;
+					int ingredients = 0;
+					foreach (int[] part in parts) ingredients = System.Math.Max(ingredients, part.Length == 0 ? Tiers.Max : part.Min(TierOf));
+					int low = ingredients, high = ingredients;
+					foreach (int tile in tiles)
+					{
+						low = System.Math.Max(low, StationTier(tile, placers, TierOf));
+						high = System.Math.Max(high, RaisingStationTier(tile, placers, TierOf));
+					}
+					earliest[result] = earliest.TryGetValue(result, out (int low, int high) other) ? (System.Math.Min(other.low, low), System.Math.Min(other.high, high)) : (low, high);
+				}
+				foreach ((int result, (int low, int high)) in earliest)
+				{
+					int down = System.Math.Max(low, floors[result]);
+					if (down < trueTiers[result])
+					{
+						trueTiers[result] = down;
+						lowered[result] = true;
+						changed = true;
+						continue;
+					}
+					int up = System.Math.Max(high, floors[result]);
+					if (up > trueTiers[result] && RaisableByRecipes(result, lootSources, fromChest, moddedResults))
+					{
+						trueTiers[result] = Tiers.Clamp(up);
+						changed = true;
+					}
+				}
+			}
+			int settled = Enumerable.Range(1, count - 1).Count(t => trueTiers[t] != before[t]);
+			examples = string.Join(", ", new int[] { ItemID.BoneWings, ItemID.FrozenWings, ItemID.GoldCrown, ItemID.MoltenPickaxe, ItemID.LavaWaders, ItemID.TerraBlade, ItemID.CrimsonHelmet }
+				.Where(t => t < count).Select(t => $"{Lang.GetItemNameValue(t)} {before[t]} > {trueTiers[t]}"));
+			return settled;
+		}
+
+		// Hard progression gates (user decision): vanilla makes them absolute (a 200 pickaxe, Plantera, Golem, the Moon Lord, the
+		// three mechanical bosses' souls), so gated rolls, findability and recipe locks give them no TierAllowance (ItemPool)
+		public static readonly int[] HardGateMaterials =
+		{
+			ItemID.LunarOre, ItemID.LunarBar, ItemID.ChlorophyteOre, ItemID.ChlorophyteBar, ItemID.Ectoplasm, ItemID.SpectreBar, ItemID.ShroomiteBar,
+			ItemID.BeetleHusk, ItemID.HallowedBar, ItemID.SoulofMight, ItemID.SoulofSight, ItemID.SoulofFright
+		};
+
+		// The hard gates: those materials, and every item only made from them (each vanilla recipe needs one at least as late
+		// as the item, and no drop, bag, shop or world source gives it: Chlorophyte and lunar gear, Hallowed armor, Drax)
+		public static bool[] HardGates(int[] trueTiers, HashSet<int> lootSources, bool[] fromChest)
+		{
+			int count = trueTiers.Length;
+			bool[] gate = new bool[count];
+			foreach (int item in HardGateMaterials)
+			{
+				if (item < count) gate[item] = true;
+			}
+			List<(int result, List<int[]> parts, List<int> tiles)> recipes = TierRecipes(count, out HashSet<int> moddedResults);
+			Dictionary<int, List<List<int[]>>> byResult = new();
+			foreach ((int result, List<int[]> parts, _) in recipes)
+			{
+				if (!byResult.TryGetValue(result, out List<List<int[]>> list)) byResult[result] = list = new List<List<int[]>>();
+				list.Add(parts);
+			}
+			bool changed = true;
+			for (int pass = 0; pass < 32 && changed; pass++)
+			{
+				changed = false;
+				foreach ((int result, List<List<int[]>> made) in byResult)
+				{
+					if (gate[result] || !RaisableByRecipes(result, lootSources, fromChest, moddedResults)) continue;
+					bool Gated(List<int[]> parts) => parts.Any(part => part.Length > 0 && part.All(t => gate[t] && trueTiers[t] >= trueTiers[result]));
+					if (!made.All(Gated)) continue;
+					gate[result] = true;
+					changed = true;
+				}
+			}
+			return gate;
 		}
 
 		// Name parts of dungeon and Lihzahrd items that are no furniture placed by world generation
