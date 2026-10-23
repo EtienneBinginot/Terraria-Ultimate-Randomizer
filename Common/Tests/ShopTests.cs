@@ -24,7 +24,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ShopNoDuplicates", ShopNoDuplicates);
 		}
 
-		private sealed class VanillaShop
+		internal sealed class VanillaShop
 		{
 			public AbstractNPCShop Shop;
 			public List<Item> Items = new();
@@ -35,7 +35,7 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Every vanilla NPC's shop (NPCShopDatabase.AllShops, keyed and passed to ModifyActiveShop by FullName), every entry
 		// not disabled whatever its conditions: in game only the entries whose conditions are met fill slots
-		private static List<VanillaShop> VanillaShops()
+		internal static List<VanillaShop> VanillaShops()
 		{
 			List<VanillaShop> shops = new();
 			foreach (AbstractNPCShop shop in NPCShopDatabase.AllShops)
@@ -55,21 +55,21 @@ namespace UltimateRandomizer.Common.Tests
 			return shops;
 		}
 
-		private static ShopSlot[] Plan(VanillaShop shop, int tier, bool noDuplicates)
+		internal static ShopSlot[] Plan(VanillaShop shop, int tier, bool noDuplicates)
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
 			return ShopPlanner.PlanShop(shop.Shop.NpcType, shop.Shop.FullName, shop.Originals, tier, tier >= (int)Tier.Hardmode, cfg.ShopsFollowProgression, noDuplicates);
 		}
 
 		// Sold by a vanilla shop and by nothing else in the base game: no drop, bag, recipe, gathered material, ore nor critter
-		private static HashSet<int> VanillaShopOnly()
+		internal static HashSet<int> VanillaShopOnly()
 		{
 			HashSet<int> other = Obtainability.Collect(withRecipes: true, anyBlock: false, withShops: false);
 			return Obtainability.ShopItems.Where(i => ItemPool.IsValid(i) && !other.Contains(i)).ToHashSet();
 		}
 
 		// What the shops still sell in this world, simulated at every tier: unchanged items and replacements
-		private static HashSet<int> SoldSomewhere(List<VanillaShop> shops)
+		internal static HashSet<int> SoldSomewhere(List<VanillaShop> shops)
 		{
 			HashSet<int> sold = new();
 			bool randomized = EconomyConfig.Instance.RandomizeShops;
@@ -88,7 +88,7 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// How an item stays obtainable once shops are randomized ("" when it doesn't)
-		private static string KeptBy(int item, HashSet<int> sold, RecipePlan recipes)
+		internal static string KeptBy(int item, HashSet<int> sold, RecipePlan recipes)
 		{
 			if (sold.Contains(item)) return "sold";
 			if (Findability.Tier(item) != Findability.Never) return "found (tier " + Findability.Tier(item) + ")";
