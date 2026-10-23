@@ -18,6 +18,7 @@ namespace UltimateRandomizer.Common.Features
 		private static int[] originalStacks;
 		private static (int type, int stack)[][] originalIngredients;
 		private static int[][] originalTiles;
+		private static int[][] originalGroups;
 		private static int[] recipeKeys;
 		private static long[] ingredientValues;
 		private static bool[] modded;
@@ -41,6 +42,9 @@ namespace UltimateRandomizer.Common.Features
 
 		public static int[] OriginalTiles(int recipeIndex) => originalTiles[recipeIndex];
 
+		// Recipe groups as set up (the planner may replace a group slot or add a group: it never reads the live ones)
+		public static int[] OriginalGroups(int recipeIndex) => originalGroups[recipeIndex];
+
 		public static int RecipeKey(int recipeIndex) => recipeKeys[recipeIndex];
 
 		public static long OriginalIngredientValue(int recipeIndex) => ingredientValues[recipeIndex];
@@ -58,6 +62,7 @@ namespace UltimateRandomizer.Common.Features
 			originalStacks = new int[count];
 			originalIngredients = new (int, int)[count][];
 			originalTiles = new int[count][];
+			originalGroups = new int[count][];
 			recipeKeys = new int[count];
 			ingredientValues = new long[count];
 			modded = new bool[count];
@@ -71,6 +76,7 @@ namespace UltimateRandomizer.Common.Features
 				originalStacks[i] = recipe.createItem.stack;
 				originalIngredients[i] = recipe.requiredItem.Select(ingredient => (ingredient.type, ingredient.stack)).ToArray();
 				originalTiles[i] = recipe.requiredTile.ToArray();
+				originalGroups[i] = recipe.acceptedGroups.ToArray();
 				modded[i] = recipe.Mod != null && recipe.Mod.Name != "ModLoader";
 				// Keyed on names, not on the recipe index, so the mapping survives mod updates
 				int key = DetRandom.StableHash(DetRandom.ItemName(recipe.createItem.type));
@@ -104,6 +110,7 @@ namespace UltimateRandomizer.Common.Features
 			originalStacks = null;
 			originalIngredients = null;
 			originalTiles = null;
+			originalGroups = null;
 			recipeKeys = null;
 			ingredientValues = null;
 			modded = null;
@@ -184,6 +191,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				Recipe recipe = Main.recipe[i];
 				SetIngredients(recipe, plan.Ingredients[i] ?? originalIngredients[i]);
+				SetGroups(recipe, plan.Groups[i] ?? originalGroups[i]);
 				SetTiles(recipe, plan.Tiles[i] ?? originalTiles[i]);
 				// A copy of another recipe (same result, ingredients and stations) would show twice: switched off
 				SetDisabled(recipe, originalDisabled[i] || plan.Twin[i]);
@@ -222,12 +230,19 @@ namespace UltimateRandomizer.Common.Features
 			return ContentSamples.ItemsByType.TryGetValue(original, out Item sample) && sample.pick > 0;
 		}
 
-		// Is this item one of the recipe's own ingredients through a group (any Wood -> N Boreal Wood)? Groups are never
-		// randomized: the live recipe's are the originals
+		// Is this item one of the live recipe's ingredients through a group (any Wood -> N Boreal Wood)?
 		public static bool InAcceptedGroup(int i, int item)
 		{
 			if (i < 0 || i >= Recipe.numRecipes) return false;
-			foreach (int id in Main.recipe[i].acceptedGroups)
+			return InGroups(Main.recipe[i].acceptedGroups, item);
+		}
+
+		// The same with the recipe's groups as set up: what the results are rolled against (never the live, planned ones)
+		public static bool InOriginalGroup(int i, int item) => originalGroups != null && i >= 0 && i < originalGroups.Length && InGroups(originalGroups[i], item);
+
+		public static bool InGroups(IEnumerable<int> groups, int item)
+		{
+			foreach (int id in groups)
 			{
 				if (RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group) && group.ValidItems.Contains(item)) return true;
 			}
@@ -268,7 +283,7 @@ namespace UltimateRandomizer.Common.Features
 				};
 				int replacement = ItemPool.Roll(request);
 				// A recipe must never give back one of its own ingredients (1 Wood -> 4 Wood would be infinite)
-				if (ingredientTypes.Contains(replacement) || InAcceptedGroup(i, replacement)) continue;
+				if (ingredientTypes.Contains(replacement) || InOriginalGroup(i, replacement)) continue;
 				int stack = ResultStack(i, replacement, ingredientCount);
 				if ((long)StackRules.ValueOf(replacement) * stack <= maxValue) return (replacement, stack);
 			}
@@ -315,7 +330,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				foreach (int item in ItemPool.Bucket(category, t))
 				{
-					if (item == original || ingredientTypes.Contains(item) || InAcceptedGroup(i, item)) continue;
+					if (item == original || ingredientTypes.Contains(item) || InOriginalGroup(i, item)) continue;
 					int stack = ResultStack(i, item, ingredientCount);
 					candidates.Add((item, stack, (long)StackRules.ValueOf(item) * stack));
 				}
@@ -385,6 +400,7 @@ namespace UltimateRandomizer.Common.Features
 				Recipe recipe = Main.recipe[i];
 				SetResult(recipe.createItem, originalTypes[i], originalStacks[i]);
 				SetIngredients(recipe, originalIngredients[i]);
+				SetGroups(recipe, originalGroups[i]);
 				SetTiles(recipe, originalTiles[i]);
 				SetDisabled(recipe, originalDisabled[i]);
 			}
@@ -414,6 +430,14 @@ namespace UltimateRandomizer.Common.Features
 			if (same) return;
 			recipe.requiredItem.Clear();
 			foreach ((int type, int stack) in ingredients) recipe.requiredItem.Add(new Item(type, stack));
+		}
+
+		// Read live by the crafting checks (AcceptedByItemGroups) and the quick lookups RefreshCraftingMenu rebuilds
+		private static void SetGroups(Recipe recipe, int[] groups)
+		{
+			if (recipe.acceptedGroups.SequenceEqual(groups)) return;
+			recipe.acceptedGroups.Clear();
+			recipe.acceptedGroups.AddRange(groups);
 		}
 
 		private static void SetDisabled(Recipe recipe, bool disabled)

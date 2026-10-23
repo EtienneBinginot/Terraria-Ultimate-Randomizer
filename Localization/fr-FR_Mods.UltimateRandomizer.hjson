@@ -203,12 +203,12 @@ Tests: {
 	HardmodeOresOfWorld: Les minerais des paires hardmode comptent toujours comme trouvables et ne deviennent jamais de nouveaux ingrédients
 	AltarDecisionKeepsCaches: Le choix d'un minerai hardmode par un autel ne change ni les sources garanties ni la trouvabilité
 	PotOnlyUnfound: Les pots ne donnent que des objets garantis que personne n'a encore trouvés
-	IngredientReplacementsFindable: Les ingrédients remplacés se trouvent (sans craft) au niveau de la recette
+	IngredientReplacementsFindable: Les nouveaux ingrédients s'obtiennent (trouvés ou fabriqués) au palier pour lequel leur recette a été reconstruite
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
 	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
 	NoSelfIngredient: Aucune recette n'utilise son propre résultat
 	ResultNotInGroup: Aucune recette randomisée ne donne un objet accepté par son propre groupe d'ingrédients
-	IngredientValueCoherent: Les ingrédients remplacés gardent à peu près la même valeur
+	IngredientValueCoherent: Les recettes reconstruites gardent à peu près la valeur des ingrédients vanilla
 	ProtectedIngredientsKept: Les ingrédients protégés (matériaux de progression...) ne sont jamais remplacés
 	RecipeGroupsSane: Chaque groupe de recette (n'importe quel bois, lingot de fer...) garde son ingrédient
 	RecipePlanDeterminism: Ingrédients et stations identiques après reconstruction
@@ -233,6 +233,12 @@ Tests: {
 	RecipeNoStationTwins: Une même recette (résultat et ingrédients) n'apparaît jamais sur deux stations différentes
 	UpgradeRecipes: Chaque amélioration de vie ou de mana est le résultat d'une recette aléatoire, faisable dès son tier, avec un ingrédient clé et des ingrédients valant au moins l'amélioration
 	HouseItemsObtainable: La porte, la plateforme et la torche sont des cibles d'indices, et leurs recettes changent mais restent fabricables dès le début (ingrédients de palier 0, station de base)
+	RecipesRebuilt: Au moins 90 % des recettes aux ingrédients remplaçables reçoivent de nouveaux ingrédients
+	RecipeIngredientCount: Une recette reconstruite a le nombre d'ingrédients vanilla, à l'écart réglé près, sans dépasser le maximum réglé
+	RecipeIngredientTiers: Une recette reconstruite n'a aucun ingrédient au-dessus de son palier, et la plupart en ont un exactement de son palier
+	RecipeIngredientsAcyclic: Chaque ingrédient fabriqué d'une recette reconstruite est donné par une recette planifiée avant elle
+	RecipeIngredientUseCaps: Aucun matériau n'est ingrédient de plus de recettes reconstruites que sa limite d'usage
+	RecipeExamples: Journalise 10 recettes reconstruites (dont le Zénith et l'armure de chlorophyte), réellement changées
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares
@@ -1845,23 +1851,28 @@ Configs: {
 		}
 
 		IngredientMode: {
-			Label: Ingrédients
-			Tooltip: Randomisés : les ingrédients introuvables au niveau de la recette (drops spécifiques...) sont remplacés par des matériaux trouvables (monde, drops de ce monde). Vanilla : les ingrédients sont conservés et chacun est placé sur des ennemis du niveau de la recette.
+			Label: "Ingrédients"
+			Tooltip: "Randomisés : chaque recette est reconstruite à partir de matériaux trouvables ou fabricables à son niveau, en gardant seulement la forme générale de la recette vanilla (nombre et types d'ingrédients, valeur), avec au moins un ingrédient de son propre niveau. Vanilla : les ingrédients sont conservés et chacun est placé sur des ennemis du niveau de la recette."
 		}
 
 		IngredientWeights: {
-			Label: Poids des ingrédients
-			Tooltip: Chance relative de chaque type d'objet quand un ingrédient de recette est remplacé. 0 = jamais.
+			Label: "Poids des ingrédients"
+			Tooltip: "Chance relative de chaque type d'objet parmi les ingrédients d'une recette reconstruite. 0 = jamais, sauf si la recette vanilla utilisait ce type (une recette faite d'armes reçoit souvent des armes)."
 		}
 
-		IngredientVarietyChance: {
-			Label: Variété des ingrédients (%)
-			Tooltip: Chance qu'un ingrédient spécifique soit remplacé même s'il est trouvable, pour des recettes plus variées. Les matériaux récoltés dans le monde (bois, pierre, minerais...) ne sont jamais remplacés ainsi.
+		IngredientCountSpread: {
+			Label: "Écart du nombre d'ingrédients"
+			Tooltip: "Chaque recette est reconstruite avec à peu près autant d'ingrédients que la recette vanilla : au plus ce nombre en plus ou en moins (le même nombre, un de plus ou un de moins sont les plus fréquents). 0 = toujours le nombre vanilla."
+		}
+
+		IngredientMax: {
+			Label: "Nombre maximal d'ingrédients par recette"
+			Tooltip: "Une recette reconstruite n'a jamais plus d'ingrédients que cela (les ingrédients qui ne peuvent pas être remplacés, comme les objets de boss, sont gardés quand même)."
 		}
 
 		IngredientStackCap: {
-			Label: Quantité maximale d'un ingrédient remplacé
-			Tooltip: La quantité est ajustée pour garder à peu près la valeur de l'ingrédient d'origine, jusqu'à cette limite.
+			Label: "Quantité maximale d'un ingrédient"
+			Tooltip: "Les quantités sont choisies pour que les ingrédients valent à peu près autant que ceux de la recette vanilla, jusqu'à cette limite par ingrédient."
 		}
 
 		RandomizeStations: {

@@ -636,9 +636,12 @@ namespace UltimateRandomizer.Common.Core
 			&& recipe.createItem != null && recipe.createItem.type > 0;
 
 		// The items an ingredient of a recipe accepts: every item of its recipe group, else itself
-		public static IEnumerable<int> IngredientChoices(Recipe recipe, int ingredient)
+		public static IEnumerable<int> IngredientChoices(Recipe recipe, int ingredient) => IngredientChoices(recipe.acceptedGroups, ingredient);
+
+		// The same with a recipe's groups (the original ones once the live recipes are randomized: RecipeSystem.OriginalGroups)
+		public static IEnumerable<int> IngredientChoices(IEnumerable<int> groups, int ingredient)
 		{
-			RecipeGroup group = recipe.acceptedGroups.Select(g => RecipeGroup.recipeGroups.TryGetValue(g, out RecipeGroup found) ? found : null)
+			RecipeGroup group = groups.Select(g => RecipeGroup.recipeGroups.TryGetValue(g, out RecipeGroup found) ? found : null)
 				.FirstOrDefault(g => g != null && g.ContainsItem(ingredient));
 			return group != null ? group.ValidItems.Append(ingredient).Distinct() : new[] { ingredient };
 		}

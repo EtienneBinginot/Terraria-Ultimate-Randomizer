@@ -80,7 +80,7 @@ namespace UltimateRandomizer.Common.Tests
 				foreach ((int type, _) in Features.RecipeSystem.OriginalIngredients(i))
 				{
 					if (type <= 0 || type >= tiers.Length) continue;
-					tier = Math.Max(tier, ItemClassifier.IngredientChoices(recipe, type).Where(t => t > 0 && t < tiers.Length).Select(t => tiers[t]).DefaultIfEmpty(Tiers.Max).Min());
+					tier = Math.Max(tier, ItemClassifier.IngredientChoices(Features.RecipeSystem.OriginalGroups(i), type).Where(t => t > 0 && t < tiers.Length).Select(t => tiers[t]).DefaultIfEmpty(Tiers.Max).Min());
 				}
 				foreach (int tile in Features.RecipeSystem.OriginalTiles(i).Where(t => t >= 0)) tier = Math.Max(tier, ItemClassifier.StationTier(tile, placers, t => tiers[t]));
 				best[result] = Math.Min(best.GetValueOrDefault(result, int.MaxValue), tier);
