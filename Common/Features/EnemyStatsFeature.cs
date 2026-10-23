@@ -243,7 +243,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (!Eligible(npc)) return;
 			EnemiesConfig cfg = EnemiesConfig.Instance;
-			bool boss = npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[npc.type];
+			bool boss = NpcTiers.IsBoss(npc);
 			double extremeness = boss ? cfg.BossStatExtremeness : cfg.StatExtremeness;
 			float variation = (boss ? cfg.BossIndividualVariation : cfg.RandomizeEnemyStats ? cfg.IndividualVariation : 0) / 100f;
 			bool scalable = Scalable(npc);

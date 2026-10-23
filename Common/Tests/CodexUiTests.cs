@@ -216,7 +216,7 @@ namespace UltimateRandomizer.Common.Tests
 					if (bottom.Count == 0 || bottom.Count > MaxElements) failures.Add($"{tab}: {bottom.Count} elements at the bottom");
 					if (tab == CodexPageKind.Items)
 					{
-						int last = CodexSystem.ItemsSeen().OrderBy(CodexDraw.ItemName, StringComparer.CurrentCultureIgnoreCase).Last();
+						int last = CodexSystem.ItemsSeen().OrderBy(HintFacts.ItemName, StringComparer.CurrentCultureIgnoreCase).Last();
 						if (!bottom.OfType<CodexItemIcon>().Any(i => i.Type == last)) failures.Add($"Items: the last item {last} is not shown at the bottom");
 						if (list.Count < 3000 / 40) failures.Add($"Items: only {list.Count} rows for 3000 items");
 					}
@@ -266,7 +266,6 @@ namespace UltimateRandomizer.Common.Tests
 				fresh.Apply(CodexEntry.Sighting("Forest", slime, 3));
 				fresh.Apply(CodexEntry.Sighting("Forest", CodexNames.Npc(NPCID.Bunny), 1));
 				CodexSystem.Data = fresh;
-				CodexSystem.RefreshIndex();
 				state.ClearFilters();
 
 				string Caption(IEnumerable<UIElement> elements, Func<UIElement, bool> inner) =>
@@ -294,7 +293,6 @@ namespace UltimateRandomizer.Common.Tests
 			finally
 			{
 				CodexSystem.Data = savedData;
-				CodexSystem.RefreshIndex();
 				state.RestoreNavigation(saved);
 			}
 			Check.All(failures, "Chances shown");
@@ -342,7 +340,6 @@ namespace UltimateRandomizer.Common.Tests
 				fresh.Apply(CodexEntry.Sighting(biomeName, key, 3));
 				if (planned > 0) fresh.Apply(CodexEntry.Drop(key, CodexNames.Item(planned), 1));
 				CodexSystem.Data = fresh;
-				CodexSystem.RefreshIndex();
 				state.ClearFilters();
 				string who = $"{Lang.GetNPCNameValue(npc)} ({time} in {biomeName})";
 
@@ -369,7 +366,6 @@ namespace UltimateRandomizer.Common.Tests
 			finally
 			{
 				CodexSystem.Data = savedData;
-				CodexSystem.RefreshIndex();
 				state.RestoreNavigation(saved);
 			}
 			Check.All(failures, "Times shown in the codex");

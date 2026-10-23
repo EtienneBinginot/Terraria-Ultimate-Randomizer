@@ -184,7 +184,7 @@ namespace UltimateRandomizer.Common.Core
 			List<int> list = new();
 			for (int type = 1; type < Info.Length; type++)
 			{
-				if (IsRandomizable(type) && Stations.PlacedTile(type, out int tile) && tile != TileID.DemonAltar && Stations.Info(tile).Kind == StationKind.Progression) list.Add(type);
+				if (IsRandomizable(type) && Stations.PlacedTile(type, out int tile) && !Stations.Info(tile).World && Stations.Info(tile).Kind == StationKind.Progression) list.Add(type);
 			}
 			return progressionStations = list.ToArray();
 		}
@@ -213,6 +213,13 @@ namespace UltimateRandomizer.Common.Core
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			return progression.TierGating ? Tiers.Clamp(Math.Max(ProgressionSystem.UnlockedTier + progression.TierAllowance, minLimit)) : Tiers.Max;
+		}
+
+		// The inverse of GatingLimit: the unlocked tier from which gated rolls may give an item of this tier
+		public static int UnlockTier(int tier)
+		{
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			return progression.TierGating ? Math.Max(0, tier - progression.TierAllowance) : 0;
 		}
 
 		public static int Roll(in RollRequest request) => Roll(request, out _);
@@ -251,8 +258,7 @@ namespace UltimateRandomizer.Common.Core
 				_ => WeightedCategory(rng, request.Weights ?? LootConfig.Instance.DropCategoryWeights)
 			};
 			int window = LootConfig.Instance.TierWindow;
-			bool gated = !request.IgnoreGating && progression.TierGating;
-			int limit = gated ? Tiers.Clamp(Math.Max(ProgressionSystem.UnlockedTier + progression.TierAllowance, request.MinLimit)) : Tiers.Max;
+			int limit = request.IgnoreGating ? Tiers.Max : GatingLimit(request.MinLimit);
 			// Some categories have nothing in the early tiers (dyes, summon weapons...): rather than changing the category,
 			// a replacement may go up to the original item's own tier, which this source already gives in vanilla
 			int categoryLimit = hasOriginal && category == Info[request.OriginalItem].Category ? Math.Max(limit, Info[request.OriginalItem].Tier) : limit;

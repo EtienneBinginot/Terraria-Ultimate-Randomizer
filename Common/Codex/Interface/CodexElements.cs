@@ -118,9 +118,13 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		// 12345 -> 12.3k: counts stay readable on a small icon
 		public static string Count(int count) => count >= 100000 ? $"{count / 1000}k" : count >= 10000 ? $"{count / 1000f:0.#}k" : count.ToString();
 
-		public static string NpcName(int netId) => ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.TypeName : "?";
-
-		public static string ItemName(int type) => type > 0 && type < ItemLoader.ItemCount ? Lang.GetItemNameValue(type) : "?";
+		// Shortened with "..." to fit a width (the full text shows on hover)
+		public static string Fit(string text, float scale, float width)
+		{
+			if (TextWidth(text, scale) <= width) return text;
+			while (text.Length > 4 && TextWidth(text + "...", scale) > width) text = text.Substring(0, text.Length - 1);
+			return text + "...";
+		}
 
 		// A black shape with a faint outline (hints): what it is, without its colours
 		public static void Silhouette(SpriteBatch spriteBatch, Texture2D texture, Vector2 center, Rectangle source, float scale, SpriteEffects effects = SpriteEffects.None)
@@ -282,7 +286,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 			else if (IsMouseHovering)
 			{
-				string text = HoverText ?? CodexDraw.NpcName(NetId);
+				string text = HoverText ?? HintFacts.NpcName(NetId);
 				int kills = CodexSystem.KillCount(NetId);
 				if (HoverText == null && kills > 0) text += "\n" + CodexText.Get("Kills", kills);
 				CodexHover.Text = text;
@@ -588,10 +592,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			foreach (int tile in recipe.requiredTile)
 			{
 				if (tile < 0) continue;
-				int style = Recipe.GetRequiredTileStyle(tile);
-				int item = TileLoader.GetItemDropFromTypeAndStyle(tile, style);
+				int item = HintFacts.StationItem(tile);
 				if (item > 0) Add(new CodexItemIcon(item, 0, iconSize - 6) { Tint = new Color(170, 230, 170) }, 4);
-				else Add(new CodexLabel(Lang.GetMapObjectName(MapHelper.TileToLookup(tile, style)), 0.8f), 6);
+				else Add(new CodexLabel(HintFacts.StationName(tile), 0.8f), 6);
 			}
 			// Where it must be made (near water, in the snow, in a graveyard...), the whole sentence on hover
 			string where = CodexWhen.Recipe(recipeIndex).Full;

@@ -140,7 +140,6 @@ namespace UltimateRandomizer.Common.Codex
 		private static Dictionary<int, List<(int bag, int tier, float chance)>> bagContents;
 		// The first tier at which each natural enemy spawns (EnemySwapPool.NaturalEnemies), bosses at their own
 		private static Dictionary<int, int> naturalTiers;
-		private static Dictionary<int, List<int>> placers;
 		private static Dictionary<int, int> shopKeepers;
 		// The indexes above, built a few enemies at a time (Warm) or all at once when needed first
 		private static IEnumerator<bool> indexer;
@@ -192,9 +191,9 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (int tile in Stations.RequiredTiles())
 			{
 				Stations.StationInfo info = Stations.Info(tile);
-				if (info.Kind != StationKind.Progression || tile == TileID.DemonAltar) continue;
+				if (info.Kind != StationKind.Progression || info.World) continue;
 				// The vanilla item of the station that is obtained first (Mythril or Orichalcum Anvil...)
-				int best = Placers(tile).Where(p => p < ItemID.Count).OrderBy(p => Availability(plan, p)).ThenBy(p => p).FirstOrDefault();
+				int best = Stations.Placers(tile).Where(p => p < ItemID.Count).OrderBy(p => Availability(plan, p)).ThenBy(p => p).FirstOrDefault();
 				if (best > 0) Add(best, info.Tier, HintTargetKind.Station);
 			}
 			// Boss and event summons (not the life crystals and mirrors sorted with them), needed before their boss
@@ -312,35 +311,9 @@ namespace UltimateRandomizer.Common.Codex
 
 		private static int Availability(RecipePlan plan, int item) => item > 0 && item < plan.Availability.Length ? plan.Availability[item] : Findability.Never;
 
-		private static List<int> Placers(int tile)
-		{
-			if (placers == null)
-			{
-				placers = new Dictionary<int, List<int>>();
-				foreach ((int type, Item sample) in ContentSamples.ItemsByType)
-				{
-					if (sample.createTile < TileID.Dirt) continue;
-					if (!placers.TryGetValue(sample.createTile, out List<int> list)) placers[sample.createTile] = list = new List<int>();
-					list.Add(type);
-				}
-			}
-			return placers.TryGetValue(tile, out List<int> found) ? found : new List<int>();
-		}
-
-		// Tier from which a station can be placed (tiles without an item, like the Demon Altar, are part of the world)
-		private static int TileTier(RecipePlan plan, int tile)
-		{
-			List<int> list = Placers(tile);
-			return list.Count == 0 ? 0 : list.Min(p => Availability(plan, p));
-		}
-
 		public static int Band(int tier) => tier <= 0 ? 0 : tier <= 3 ? 1 : tier <= 6 ? 2 : 3;
 
-		private static int Gated(int item)
-		{
-			ProgressionConfig progression = ProgressionConfig.Instance;
-			return progression.TierGating ? Math.Max(0, ItemPool.TierOf(item) - progression.TierAllowance) : 0;
-		}
+		private static int Gated(int item) => ItemPool.UnlockTier(ItemPool.TierOf(item));
 
 		// Recipes making the item once unlocked (RecipePlan.Results), with their planned ingredients and stations
 		public static IEnumerable<int> RecipesMaking(int item)
@@ -529,7 +502,7 @@ namespace UltimateRandomizer.Common.Codex
 				if (ingredients.Any(x => x.type == item)) continue;
 				int[] tiles = PlannedTiles(recipe);
 				int ingredientTier = ingredients.Select(x => Availability(plan, x.type)).DefaultIfEmpty(0).Max();
-				int tier = Math.Max(plan.ResultTiers[recipe], Math.Max(ingredientTier, tiles.Where(t => t >= 0).Select(t => TileTier(plan, t)).DefaultIfEmpty(0).Max()));
+				int tier = Math.Max(plan.ResultTiers[recipe], Math.Max(ingredientTier, tiles.Where(t => t >= 0).Select(t => RecipePlanner.StationTier(t, plan.Availability)).DefaultIfEmpty(0).Max()));
 				if (tier >= Findability.Never) continue;
 				options.Add(new HintFact { Item = item, Kind = HintKind.Recipe, Recipe = recipe, Ingredients = ingredients, Tiles = tiles.Where(t => t >= 0).ToArray(), Tier = tier, Band = Band(ingredientTier) });
 			}
@@ -539,7 +512,7 @@ namespace UltimateRandomizer.Common.Codex
 				{
 					// The chance the codex shows too: every planned entry of the item together
 					float chance = CodexStats.LuckyChance(npc, item);
-					if (RandomNpcDropRule.IsBossType(BossParts.Owner(npc)))
+					if (NpcTiers.IsBoss(BossParts.Owner(npc)))
 					{
 						(chance >= MinBossChance - 1e-6f ? options : weak).Add(new HintFact { Item = item, Kind = HintKind.Boss, Npc = npc, Tier = tier, Band = Band(tier), Chance = chance });
 					}
@@ -980,7 +953,7 @@ namespace UltimateRandomizer.Common.Codex
 		public static readonly string[] TreeTextKeys =
 		{
 			"Title", "Also", "OwnHint", "Station", "More", "Mined", "Repeat", "Unknown", "Findable", "WorldStation", "Caught", "CaughtAnywhere", "Harvested", "Filled.Water", "Filled.Lava",
-			"Filled.Honey", "Gathered.Dig", "Gathered.Chop", "Gathered.Grow", "Gathered.Gem", "Gathered.Beach", "Gathered.Star", "Gathered.Obsidian", "Gathered.Other",
+			"Filled.Honey",
 			"Recipe", "Creature", "CreatureAnywhere", "Hosts", "HostsAnywhere", "Boss", "Shop",
 			"Bag", "Chest", "Pot", "World", "When"
 		};
@@ -989,16 +962,12 @@ namespace UltimateRandomizer.Common.Codex
 
 		public static string LevelFamily(HintFact fact, int level)
 		{
+			string stem = level switch { 1 => "Kind", 2 => "Where", 3 => "Shape", _ => "Name" };
 			// Several enemies without a biome: plural sentences
-			if (Roaming(fact) && fact.Hosts.Count > 1) return (level switch { 1 => "Kind", 2 => "Where", 3 => "Shape", _ => "Name" }) + ".Hosts.Roaming";
-			return level switch
-			{
-				1 => Roaming(fact) ? "Kind.Roaming" : "Kind." + fact.Kind,
-				2 => Roaming(fact) ? "Where.Roaming" : "Where." + fact.Kind,
-				3 => Roaming(fact) ? "Shape.Roaming" : "Shape." + fact.Kind,
-				// Several enemies: their names and the chance on each
-				_ => Roaming(fact) ? "Name.Roaming" : fact.Kind == HintKind.Creature && fact.Hosts.Count > 1 ? (MixedTimes(fact) ? "Name.HostsTimed" : "Name.Hosts") : "Name." + fact.Kind
-			};
+			if (Roaming(fact)) return stem + (fact.Hosts.Count > 1 ? ".Hosts.Roaming" : ".Roaming");
+			// Several enemies: their names and the chance on each
+			if (stem == "Name" && fact.Kind == HintKind.Creature && fact.Hosts.Count > 1) return MixedTimes(fact) ? "Name.HostsTimed" : "Name.Hosts";
+			return stem + "." + fact.Kind;
 		}
 
 		// A creature without a known biome: its own sentences, never "here: anywhere"
@@ -1186,6 +1155,7 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			foreach (string group in StationGroups) yield return "Hint.Station." + group;
 			foreach (string key in TreeTextKeys) yield return "Hint.Tree." + key;
+			foreach (string kind in GatherKinds) yield return "Hint.Tree.Gathered." + kind;
 			yield return "Hint.Around";
 			yield return "Hint.Place.Known";
 			yield return "Hint.Share";

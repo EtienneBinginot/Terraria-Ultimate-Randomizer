@@ -148,19 +148,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				Color color = hidden ? CodexDraw.Gold : node.Leaf == HintTreeLeaf.Repeat ? CodexDraw.Muted : Color.White;
 				// Several enemies are shortened ("Zombie, Blue Slime +4"): every name on hover
 				string hover = !silhouette && fact != null && fact.Hosts.Count > 2 ? text + "\n" + HintFacts.HostNames(fact) : text;
-				row.Add(new CodexLabel(Fit(text, 0.75f, width - row.Used - 16), 0.75f, color) { HoverText = silhouette ? null : hover });
+				row.Add(new CodexLabel(CodexDraw.Fit(text, 0.75f, width - row.Used - 16), 0.75f, color) { HoverText = silhouette ? null : hover });
 				rows.Add(row);
 			}
 			if (HintFacts.TreeTruncated(item)) rows.Add(new CodexRow(26, 8).WithLabel(CodexText.Get("Hint.Tree.More"), 0.75f, CodexDraw.Muted));
 			return rows;
-		}
-
-		// Shortened with "..." to fit a width (the full text shows on hover)
-		private static string Fit(string text, float scale, float width)
-		{
-			if (CodexDraw.TextWidth(text, scale) <= width) return text;
-			while (text.Length > 4 && CodexDraw.TextWidth(text + "...", scale) > width) text = text.Substring(0, text.Length - 1);
-			return text + "...";
 		}
 
 		private static CodexItemIcon Icon(int type, int count, float size, bool silhouette) =>

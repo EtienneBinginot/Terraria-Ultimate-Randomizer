@@ -36,7 +36,6 @@ namespace UltimateRandomizer.Common.Core
 		public const int TreeShake = 27;
 		public const int Extractinator = 28;
 		public const int Angler = 29;
-		public const int IndividualStats = 30;
 		public const int GiantMini = 31;
 		public const int BiomeSlots = 32;
 		public const int BiomeExtras = 33;

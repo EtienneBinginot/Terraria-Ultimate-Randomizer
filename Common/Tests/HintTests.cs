@@ -374,7 +374,6 @@ namespace UltimateRandomizer.Common.Tests
 			finally
 			{
 				CodexSystem.Data = saved;
-				CodexSystem.RefreshIndex();
 			}
 		}
 
@@ -670,7 +669,6 @@ namespace UltimateRandomizer.Common.Tests
 			finally
 			{
 				CodexSystem.Data = saved;
-				CodexSystem.RefreshIndex();
 			}
 		}
 

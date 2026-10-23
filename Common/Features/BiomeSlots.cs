@@ -70,13 +70,6 @@ namespace UltimateRandomizer.Common.Features
 		public int ClassKey => Movement * 100 + (Rare ? 50 : 0) + (Conditional ? 20 : 0) + TierGroup;
 	}
 
-	// What the planned shares say about a type in one band of a map, beyond its share of each biome
-	public struct SpawnInfo
-	{
-		// Spawns in at least one slot that is not rare (any biome)
-		public bool CommonSlot;
-	}
-
 	// The planned shares of one band of a map, computed in one pass over its slots
 	internal class ShareTable
 	{
@@ -86,7 +79,8 @@ namespace UltimateRandomizer.Common.Features
 		public readonly Dictionary<int, Dictionary<int, double>> Steady = new();
 		// Times of the slots of a type in a biome: 1 by day, 2 by night (3: both)
 		public readonly Dictionary<(int biome, int type), int> Times = new();
-		public readonly Dictionary<int, SpawnInfo> ByType = new();
+		// Every type with a share somewhere
+		public readonly HashSet<int> Types = new();
 	}
 
 	// The evil biomes of a world: both in drunk (and zenith) worlds, else only the one it was generated with
@@ -115,6 +109,8 @@ namespace UltimateRandomizer.Common.Features
 		internal Dictionary<int, int> MeetTiers;
 		// Steady shares by (tier, period): biome, then type (BiomeSlots.SteadyShareAt)
 		internal readonly Dictionary<(int tier, SlotTime period), Dictionary<int, Dictionary<int, double>>> PeriodShares = new();
+		// Enemy types by (vanilla mixed in, band, biome) (FrequentShare)
+		internal readonly Dictionary<(bool mixed, int band, int biome), int> TypeCounts = new();
 		// For each type (slime colours are Blue Slimes): the tier from which it spawns somewhere, as an owner or an extra
 		public readonly Dictionary<int, int> SpawnTier = new();
 
@@ -761,7 +757,6 @@ namespace UltimateRandomizer.Common.Features
 			if (map.Shares.TryGetValue(band, out ShareTable cached)) return cached;
 			ShareTable table = new();
 			Dictionary<int, double> totals = new();
-			HashSet<int> common = new();
 			foreach (BiomeSlot slot in map.Slots)
 			{
 				if (!Counted(slot, band)) continue;
@@ -777,21 +772,9 @@ namespace UltimateRandomizer.Common.Features
 					byType[type] = byType.GetValueOrDefault(type) + weight * part;
 					if (steady) steadyByType[type] = steadyByType.GetValueOrDefault(type) + weight * part;
 					table.Times[(slot.Biome, type)] = table.Times.GetValueOrDefault((slot.Biome, type)) | flags;
-					if (!slot.Rare) common.Add(type);
 				}
-				// Split as Pick splits it: the absent-evil owners it shares, then its extra, then its owner
-				double rest = 1;
-				if (slot.EvilShared is { Count: > 0 } shared)
-				{
-					for (int k = 0; k < shared.Count; k++) Add(shared[k], EvilShare / shared.Count);
-					rest = 1 - EvilShare;
-				}
-				if (slot.Extra != 0)
-				{
-					Add(slot.Extra, rest * ExtraShare);
-					rest *= 1 - ExtraShare;
-				}
-				Add(slot.Owner, rest);
+				// Split as Pick splits it
+				foreach ((int id, double part) in SpawnParts(slot)) Add(id, part);
 			}
 			foreach ((int biome, Dictionary<int, double> byType) in table.ByBiome)
 			{
@@ -799,7 +782,7 @@ namespace UltimateRandomizer.Common.Features
 				Dictionary<int, double> steadyByType = table.Steady[biome];
 				foreach (int type in byType.Keys.ToList()) byType[type] /= total;
 				foreach (int type in steadyByType.Keys.ToList()) steadyByType[type] /= total;
-				foreach (int type in byType.Keys) table.ByType[type] = new SpawnInfo { CommonSlot = common.Contains(type) };
+				table.Types.UnionWith(byType.Keys);
 			}
 			map.Shares[band] = table;
 			return table;
@@ -814,13 +797,20 @@ namespace UltimateRandomizer.Common.Features
 		// other swap modes put any enemy anywhere: hints and guarantees then judge enemies by their rarity only
 		public static bool SpawnsPlanned => Active || !EnemiesConfig.Instance.RandomizeEnemySpawns;
 
+		// A share in the current map, with the vanilla share of BiomeVanillaChance mixed in (only the vanilla one when the
+		// spawns are not redistributed by biome)
+		private static double Mix(Func<BiomeSlotMap, double> shareIn)
+		{
+			if (!Active) return shareIn(Vanilla);
+			double keep = VanillaKeep;
+			double share = (1 - keep) * shareIn(Current);
+			return keep > 0 ? share + keep * shareIn(Vanilla) : share;
+		}
+
 		private static double Mixed(int biome, int type, int tier, bool steady)
 		{
 			int band = BandOf(Tiers.Clamp(tier));
-			if (!Active) return ShareIn(Vanilla, band, biome, type, steady);
-			double keep = VanillaKeep;
-			double share = (1 - keep) * ShareIn(Current, band, biome, type, steady);
-			return keep > 0 ? share + keep * ShareIn(Vanilla, band, biome, type, steady) : share;
+			return Mix(map => ShareIn(map, band, biome, type, steady));
 		}
 
 		// Expected share of the enemy spawns of a biome that are this type (slime colours are Blue Slimes), with the slots open
@@ -843,10 +833,7 @@ namespace UltimateRandomizer.Common.Features
 		public static double SteadyShareAt(int biome, int type, int tier, SlotTime period)
 		{
 			tier = Tiers.Clamp(tier);
-			if (!Active) return PeriodShareIn(Vanilla, tier, period, biome, type);
-			double keep = VanillaKeep;
-			double share = (1 - keep) * PeriodShareIn(Current, tier, period, biome, type);
-			return keep > 0 ? share + keep * PeriodShareIn(Vanilla, tier, period, biome, type) : share;
+			return Mix(map => PeriodShareIn(map, tier, period, biome, type));
 		}
 
 		private static double PeriodShareIn(BiomeSlotMap map, int tier, SlotTime period, int biome, int type) =>
@@ -880,15 +867,6 @@ namespace UltimateRandomizer.Common.Features
 			return result;
 		}
 
-		// Enemy slots of a biome open at a tier whose original is of that tier or below, in the spawn map (how big the biome is
-		// for the enemies of that tier)
-		public static int SlotCountAt(int biome, int tier)
-		{
-			tier = Tiers.Clamp(tier);
-			int band = BandOf(tier);
-			return SpawnMap.Slots.Count(s => s.Biome == biome && Counted(s, band) && EffectiveTier(s) <= tier);
-		}
-
 		// Every biome where a type spawns at a tier, the highest steady share first (then the whole share), with the time of
 		// its slots there. The share given is the whole one
 		public static List<(int biome, double share, SlotTime time)> PlannedBiomes(int type, int tier = Tiers.Max)
@@ -908,9 +886,6 @@ namespace UltimateRandomizer.Common.Features
 		// often there with half the average share of the biome's enemy types, or the cap when that is lower
 		public const double RelativeFrequentShare = 0.5;
 
-		// Enemy types by (map, vanilla mixed in, band, biome): the maps are rebuilt when the seed or settings change
-		private static readonly Dictionary<(BiomeSlotMap map, bool mixed, int band, int biome), int> typeCounts = new();
-
 		public static double FrequentShare(int biome, int tier, double cap)
 		{
 			int count = TypeCount(biome, BandOf(Tiers.Clamp(tier)));
@@ -921,8 +896,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			BiomeSlotMap map = Active ? Current : Vanilla;
 			bool mixed = Active && VanillaKeep > 0;
-			if (typeCounts.TryGetValue((map, mixed, band, biome), out int cached)) return cached;
-			if (typeCounts.Count > 4000) typeCounts.Clear();
+			if (map.TypeCounts.TryGetValue((mixed, band, biome), out int cached)) return cached;
 			HashSet<int> types = new();
 			void From(BiomeSlotMap map)
 			{
@@ -930,7 +904,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 			From(map);
 			if (mixed) From(Vanilla);
-			typeCounts[(map, mixed, band, biome)] = types.Count;
+			map.TypeCounts[(mixed, band, biome)] = types.Count;
 			return types.Count;
 		}
 
@@ -954,10 +928,6 @@ namespace UltimateRandomizer.Common.Features
 		public static Dictionary<int, double> SharesIn(BiomeSlotMap map, int biome, int tier = Tiers.Max) =>
 			Table(map, BandOf(Tiers.Clamp(tier))).ByBiome.TryGetValue(biome, out Dictionary<int, double> byType) ? new Dictionary<int, double>(byType) : new Dictionary<int, double>();
 
-		// Does a type spawn in at least one slot that is not rare, at a tier?
-		public static bool SpawnsInCommonSlot(int type, int tier = Tiers.Max) =>
-			Table(SpawnMap, BandOf(Tiers.Clamp(tier))).ByType.TryGetValue(type, out SpawnInfo info) && info.CommonSlot;
-
 		// Does a type have any slot at all (as an original, owner, extra or shared owner, even in the absent evil)? Enemies
 		// without any (modded ones without a bestiary biome) are judged by their bestiary rarity only
 		public static bool HasAnySlot(int type)
@@ -979,7 +949,7 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Has slots, but none that ever opens in this world (only in the absent evil): never met
-		public static bool NeverSpawns(int type) => HasAnySlot(type) && !Table(SpawnMap, 2).ByType.ContainsKey(type);
+		public static bool NeverSpawns(int type) => HasAnySlot(type) && !Table(SpawnMap, 2).Types.Contains(type);
 
 		// Is this slot open now? Hardmode slots only once hardmode starts, post-Plantera ones once Plantera is dead
 		public static bool SlotActive(BiomeSlot slot) => slot.Band switch

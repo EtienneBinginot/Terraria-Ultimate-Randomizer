@@ -209,7 +209,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			if (tested == 0) Check.Skip("the bosses are alive");
 			// RaiseBosses touches every living boss and minion: only without a fight going on
-			bool fight = Main.npc.Any(n => n.active && (AdaptivePower.IsBoss(n) || AdaptivePower.IsFollower(n.type)));
+			bool fight = Main.npc.Any(n => n.active && (NpcTiers.IsBoss(n) || AdaptivePower.IsFollower(n.type)));
 			if (Main.netMode == NetmodeID.SinglePlayer && !fight) LiveOwner(failures);
 			Check.All(failures, "Boss parts not scaled like their owner");
 		}

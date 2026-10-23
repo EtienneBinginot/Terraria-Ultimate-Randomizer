@@ -40,7 +40,6 @@ namespace UltimateRandomizer.Common.Features
 
 		public static bool Applied => applied;
 
-		public static int[] OriginalDecraft(int type) => originalDecraft != null && type < originalDecraft.Length ? originalDecraft[type] : null;
 
 		public override void PostSetupRecipes()
 		{
@@ -279,7 +278,7 @@ namespace UltimateRandomizer.Common.Features
 			int tier = ItemPool.TierOf(originalTypes[i]);
 			if (!lucky && progression.TierGating && GeneralConfig.Instance.RandomizerMode == RandomizerMode.Coherent)
 			{
-				tier = Math.Min(tier, Tiers.Clamp(ProgressionSystem.UnlockedTier + progression.TierAllowance));
+				tier = Math.Min(tier, ItemPool.GatingLimit(0));
 			}
 			return tier;
 		}

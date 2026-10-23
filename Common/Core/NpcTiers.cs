@@ -9,6 +9,13 @@ namespace UltimateRandomizer.Common.Core
 	// How far in the game an enemy is: bosses from a table, other enemies estimated from their base stats
 	public static class NpcTiers
 	{
+		// A boss by its type (net IDs too): its sample is a boss, or it counts as one (Eater of Worlds segments...)
+		public static bool IsBoss(int type) =>
+			type > 0 && (NPCID.Sets.ShouldBeCountedAsBoss[type] || (ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample) && sample.boss));
+
+		// A live NPC fighting as a boss
+		public static bool IsBoss(NPC npc) => npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[npc.type];
+
 		private static readonly Dictionary<int, Tier> BossTiers = new()
 		{
 			[NPCID.KingSlime] = Tier.PostEyeOfCthulhu,

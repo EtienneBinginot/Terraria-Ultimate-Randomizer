@@ -109,7 +109,7 @@ namespace UltimateRandomizer.Common.Debug
 			GeneralConfig general = GeneralConfig.Instance;
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			int unlocked = ProgressionSystem.UnlockedTier;
-			int limit = progression.TierGating ? Tiers.Clamp(unlocked + progression.TierAllowance) : Tiers.Max;
+			int limit = ItemPool.GatingLimit(0);
 			int randomizable = Enumerable.Range(1, ItemPool.Info.Length - 1).Count(ItemPool.IsRandomizable);
 			int protectedCount = ItemPool.Info.Count(i => i.Protected);
 			Text($"[c/FFD966:{T("Seed")}] {SeedSystem.WorldSeed}   [c/FFD966:{T("Mode")}] {general.RandomizerMode}   [c/FFD966:{T("Network")}] {(Main.netMode == NetmodeID.SinglePlayer ? T("SinglePlayer") : T("Multiplayer"))}");

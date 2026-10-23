@@ -27,8 +27,6 @@ namespace UltimateRandomizer.Common.Debug
 			state = null;
 		}
 
-		public static bool Visible => userInterface?.CurrentState != null;
-
 		public static void Toggle()
 		{
 			if (userInterface == null) return;

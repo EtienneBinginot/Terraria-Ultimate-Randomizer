@@ -77,14 +77,14 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private static string CategoryName(int category) => category < 0 ? CodexText.Get("Category.All") : CodexText.Of("Category", (ItemCategory)category);
 
 		private List<int> SortedItems(string key, Func<IEnumerable<int>> items) => Cached(key, () => items().Distinct().Where(t => t > 0 && t < ItemLoader.ItemCount)
-			.OrderBy(CodexDraw.ItemName, StringComparer.CurrentCultureIgnoreCase).ToList());
+			.OrderBy(HintFacts.ItemName, StringComparer.CurrentCultureIgnoreCase).ToList());
 
 		// ---- Enemies ----
 
 		private void BuildEnemies()
 		{
-			List<int> killed = Cached("killed", () => CodexSystem.KnownNpcs().OrderBy(CodexDraw.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList());
-			List<int> shown = Filtered("killed", killed, id => Matches(CodexDraw.NpcName(id)));
+			List<int> killed = Cached("killed", () => CodexSystem.KnownNpcs().OrderBy(HintFacts.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList());
+			List<int> shown = Filtered("killed", killed, id => Matches(HintFacts.NpcName(id)));
 			Text(CodexText.Get("EnemiesCount", killed.Count), CodexDraw.Gold);
 			if (shown.Count == 0)
 			{
@@ -96,7 +96,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		private void BuildNpc(int netId)
 		{
-			string name = CodexDraw.NpcName(netId);
+			string name = HintFacts.NpcName(netId);
 			CodexRow header = new(160);
 			header.Add(new CodexNpcPortrait(netId, 280, 150, true, 0, false), 16);
 			UIElement info = new();
@@ -168,7 +168,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				categoryFilter = Cycle(categoryFilter, step, ItemCategories.Count)));
 			filters.Add(FilterButton(CodexText.Get("FilterTier", tierFilter < 0 ? CodexText.Get("Category.All") : tierFilter.ToString()), 180, step =>
 				tierFilter = Cycle(tierFilter, step, Tiers.Count)));
-			List<int> shown = Filtered("seen", seen, t => Matches(CodexDraw.ItemName(t)) && PassesFilters(t));
+			List<int> shown = Filtered("seen", seen, t => Matches(HintFacts.ItemName(t)) && PassesFilters(t));
 			filters.Add(new CodexLabel(CodexText.Get("ItemsCount", shown.Count, seen.Count), 0.85f, CodexDraw.Gold));
 			Add(filters);
 			if (shown.Count == 0)
@@ -219,7 +219,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			UIElement info = new();
 			info.Width.Set(420, 0);
 			info.Height.Set(66, 0);
-			CodexLabel name = new(CodexDraw.ItemName(type), 1.2f, sample != null && sample.rare != ItemRarityID.White ? ItemRarity.GetColor(sample.rare) : Color.White);
+			CodexLabel name = new(HintFacts.ItemName(type), 1.2f, sample != null && sample.rare != ItemRarityID.White ? ItemRarity.GetColor(sample.rare) : Color.White);
 			info.Append(name);
 			string details = ItemPool.IsValid(type) ? $"{CategoryName((int)ItemPool.Info[type].Category)}  -  {Tier(ItemPool.Info[type].Tier)}" : "";
 			CodexLabel sub = new(details, 0.85f, CodexDraw.Muted);
@@ -266,7 +266,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 					if ((kind == CodexSource.Bag || kind == CodexSource.Shimmer) && from > 0)
 					{
 						row.Add(new CodexItemIcon(from, 0, 36), 6);
-						row.Add(new CodexLabel(CodexDraw.ItemName(from), 0.85f), 10);
+						row.Add(new CodexLabel(HintFacts.ItemName(from), 0.85f), 10);
 					}
 					row.Add(new CodexLabel("x" + CodexDraw.Count(count), 0.9f, CodexDraw.Gold), 10);
 					CodexNote when = kind == CodexSource.Bag && from > 0 ? CodexWhen.Bag(from, type) : CodexNote.None;
@@ -315,7 +315,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				return results;
 			});
 			Text(CodexText.Get("PickItem"), CodexDraw.Gold);
-			List<int> shown = Filtered("craftable", craftable, t => Matches(CodexDraw.ItemName(t)));
+			List<int> shown = Filtered("craftable", craftable, t => Matches(HintFacts.ItemName(t)));
 			if (shown.Count == 0)
 			{
 				Empty(craftable.Count == 0);
@@ -333,7 +333,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 			if (treeRoot != root) ResetTree(root);
 			CodexRow header = new(40);
-			header.Add(new CodexLabel(CodexText.Get("TreeOf", CodexDraw.ItemName(root)), 1f, CodexDraw.Gold), 16);
+			header.Add(new CodexLabel(CodexText.Get("TreeOf", HintFacts.ItemName(root)), 1f, CodexDraw.Gold), 16);
 			header.Add(new CodexButton(CodexText.Get("ItemPage"), 150, () => Navigate(CodexPage.ItemPage(root))));
 			Add(header);
 			int rows = 0;
@@ -365,7 +365,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				row.Space(36);
 			}
 			row.Add(new CodexItemIcon(item, amount, 38), 8);
-			row.Add(new CodexLabel(CodexDraw.ItemName(item), 0.9f), 12);
+			row.Add(new CodexLabel(HintFacts.ItemName(item), 0.9f), 12);
 			if (cycle) row.Add(new CodexLabel(CodexText.Get("Cycle"), 0.8f, CodexDraw.Muted));
 			else if (recipes.Count == 0) LeafSources(row, item);
 			else if (!canExpand) row.Add(new CodexLabel(CodexText.Get("TooDeep"), 0.8f, CodexDraw.Muted));
@@ -403,7 +403,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				CodexNpcPortrait portrait = row.Add(new CodexNpcPortrait(npc, 38, 38, false, count), 4);
 				if (!when.IsEmpty)
 				{
-					portrait.HoverText = $"{CodexDraw.NpcName(npc)} ({when.Short})\n{when.Full}";
+					portrait.HoverText = $"{HintFacts.NpcName(npc)} ({when.Short})\n{when.Full}";
 					row.Add(new CodexLabel($"({when.Short})", 0.7f, CodexWhen.NoteColor) { HoverText = when.Full }, 6);
 				}
 			}
@@ -419,7 +419,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private void BuildBags()
 		{
 			List<int> bags = SortedItems("bags", CodexSystem.OpenedBags);
-			List<int> shown = Filtered("bags", bags, b => Matches(CodexDraw.ItemName(b)));
+			List<int> shown = Filtered("bags", bags, b => Matches(HintFacts.ItemName(b)));
 			if (shown.Count == 0)
 			{
 				Empty(bags.Count == 0);
@@ -429,7 +429,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			{
 				CodexRow header = new(46);
 				header.Add(new CodexItemIcon(bag, 0, 42), 10);
-				header.Add(new CodexLabel(CodexDraw.ItemName(bag), 1f, CodexDraw.Gold), 12);
+				header.Add(new CodexLabel(HintFacts.ItemName(bag), 1f, CodexDraw.Gold), 12);
 				header.Add(new CodexLabel(Tier(LootSnapshot.BagTier(bag)), 0.8f, CodexDraw.Muted));
 				Add(header);
 				BagContents(bag);
@@ -452,9 +452,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			foreach (string biome in biomes)
 			{
 				string biomeName = BiomeSlots.BiomeDisplayName(biome);
-				List<int> npcs = Cached("biome|" + biome, () => CodexSystem.NpcsSeenIn(biome).Distinct().OrderBy(CodexDraw.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList());
+				List<int> npcs = Cached("biome|" + biome, () => CodexSystem.NpcsSeenIn(biome).Distinct().OrderBy(HintFacts.NpcName, StringComparer.CurrentCultureIgnoreCase).ToList());
 				// The search matches the biome, or else the enemies seen there
-				if (!Matches(biomeName)) npcs = Filtered("biome|" + biome, npcs, id => Matches(CodexDraw.NpcName(id)));
+				if (!Matches(biomeName)) npcs = Filtered("biome|" + biome, npcs, id => Matches(HintFacts.NpcName(id)));
 				if (npcs.Count == 0) continue;
 				any = true;
 				CodexRow header = new(44);

@@ -153,13 +153,7 @@ namespace UltimateRandomizer.Common.Core
 				}
 				recipes.Add((result, parts, recipe.requiredTile.Where(t => t >= 0).Distinct().ToList()));
 			}
-			Dictionary<int, List<int>> placers = new();
-			foreach ((int type, Item sample) in ContentSamples.ItemsByType)
-			{
-				if (sample == null || sample.createTile < TileID.Dirt || type <= 0 || type >= tiers.Length) continue;
-				if (!placers.TryGetValue(sample.createTile, out List<int> list)) placers[sample.createTile] = list = new List<int>();
-				list.Add(type);
-			}
+			Dictionary<int, List<int>> placers = Stations.PlacersByTile();
 			int[] before = (int[])tiers.Clone();
 			bool changed = true;
 			for (int pass = 0; pass < 32 && changed; pass++)
@@ -169,7 +163,7 @@ namespace UltimateRandomizer.Common.Core
 				{
 					int tier = 0;
 					foreach (int[] part in parts) tier = System.Math.Max(tier, part.Length == 0 ? Tiers.Max : part.Min(t => tiers[t]));
-					foreach (int tile in tiles) tier = System.Math.Max(tier, StationTier(tile, placers, t => tiers[t]));
+					foreach (int tile in tiles) tier = System.Math.Max(tier, StationTier(tile, placers, t => t < tiers.Length ? tiers[t] : Tiers.Max));
 					if (tier >= tiers[result]) continue;
 					tiers[result] = tier;
 					changed = true;

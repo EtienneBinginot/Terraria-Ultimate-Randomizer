@@ -574,7 +574,7 @@ namespace UltimateRandomizer.Common.Tests
 			List<int> enemies = new();
 			for (int type = 1; type < NPCID.Count; type++)
 			{
-				if (NPCID.Sets.CountsAsCritter[type] || RandomNpcDropRule.IsBossType(type)) continue;
+				if (NPCID.Sets.CountsAsCritter[type] || NpcTiers.IsBoss(type)) continue;
 				if (RandomNpcDropRule.CanHaveExtraDrops(type, false, LootSnapshot.ForNpc(type))) enemies.Add(type);
 			}
 			if (enemies.Count < 50) Check.Skip($"only {enemies.Count} enemies can get extra drops with these settings");
@@ -666,7 +666,7 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (int type in noExtra)
 			{
 				// The number of extra drops is random and may be 0: check the rule itself
-				if (RandomNpcDropRule.CanHaveExtraDrops(type, RandomNpcDropRule.IsBossType(type), LootSnapshot.ForNpc(type))) failures.Add($"{NpcName(type)} can get extra drops");
+				if (RandomNpcDropRule.CanHaveExtraDrops(type, NpcTiers.IsBoss(type), LootSnapshot.ForNpc(type))) failures.Add($"{NpcName(type)} can get extra drops");
 			}
 			Check.All(failures, "Minions or town NPCs get random drops");
 		}
@@ -681,7 +681,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			Check.All(failures, "Event items can be replaced");
 			Check.Equal(NPCID.EaterofWorldsHead, BossParts.Owner(NPCID.EaterofWorldsTail), "owner of the Eater of Worlds tail");
-			Check.That(RandomNpcDropRule.IsBossType(BossParts.Owner(NPCID.EaterofWorldsBody)), "Eater of Worlds segments count as the boss");
+			Check.That(NpcTiers.IsBoss(BossParts.Owner(NPCID.EaterofWorldsBody)), "Eater of Worlds segments count as the boss");
 		}
 
 		private static void BagPlansValid()

@@ -27,6 +27,8 @@ namespace UltimateRandomizer.Common.Core
 			public int Item;
 			// Needed for almost everything: found sooner
 			public bool Critical;
+			// Stands in the world and has no item (Demon Altar): never guaranteed, rolled or given to other recipes
+			public bool World;
 		}
 
 		private static readonly Dictionary<int, StationInfo> Known = new()
@@ -55,7 +57,7 @@ namespace UltimateRandomizer.Common.Core
 			[TileID.Autohammer] = new StationInfo { Kind = StationKind.Progression, Tier = 6 },
 			[TileID.LihzahrdFurnace] = new StationInfo { Kind = StationKind.Progression, Tier = 7 },
 			[TileID.LunarCraftingStation] = new StationInfo { Kind = StationKind.Progression, Tier = 8 },
-			[TileID.DemonAltar] = new StationInfo { Kind = StationKind.Progression, Tier = 0 },
+			[TileID.DemonAltar] = new StationInfo { Kind = StationKind.Progression, Tier = 0, World = true },
 
 			[TileID.GlassKiln] = new StationInfo { Kind = StationKind.Thematic },
 			[TileID.BoneWelder] = new StationInfo { Kind = StationKind.Thematic },
@@ -101,6 +103,24 @@ namespace UltimateRandomizer.Common.Core
 				if (info.Kind == StationKind.Basic) yield return (tile, info);
 			}
 		}
+
+		private static Dictionary<int, List<int>> placers;
+
+		// Items placing each tile (content samples are fixed once loaded). Do not modify the lists
+		public static Dictionary<int, List<int>> PlacersByTile()
+		{
+			if (placers != null) return placers;
+			Dictionary<int, List<int>> result = new();
+			foreach ((int type, Item sample) in ContentSamples.ItemsByType)
+			{
+				if (sample == null || sample.createTile < TileID.Dirt) continue;
+				if (!result.TryGetValue(sample.createTile, out List<int> list)) result[sample.createTile] = list = new List<int>();
+				list.Add(type);
+			}
+			return placers = result;
+		}
+
+		public static List<int> Placers(int tile) => PlacersByTile().TryGetValue(tile, out List<int> list) ? list : new List<int>();
 
 		// The tile an item places, if any
 		public static bool PlacedTile(int item, out int tile)

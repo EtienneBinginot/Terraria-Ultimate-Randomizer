@@ -40,7 +40,7 @@ namespace UltimateRandomizer.Common.Features
 		// devotees) and Dungeon Spirits (a rare reward of their own, not a swarm)
 		public static bool IsNpcChild(NPC npc, IEntitySource source) =>
 			source is EntitySource_Parent { Entity: NPC parent } && parent.whoAmI != npc.whoAmI && npc.aiStyle != NPCAIStyleID.Worm
-			&& npc.type != NPCID.DungeonSpirit && !RandomNpcDropRule.IsBossType(BossParts.Owner(npc.type));
+			&& npc.type != NPCID.DungeonSpirit && !NpcTiers.IsBoss(BossParts.Owner(npc.type));
 	}
 
 	public class MobLootSystem : ModSystem
@@ -164,7 +164,7 @@ namespace UltimateRandomizer.Common.Features
 			if (!ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample)) return 1f;
 			if (NPCID.Sets.CountsAsCritter[sample.type]) return 0f;
 			int owner = BossParts.Owner(sample.type);
-			if (IsBossType(owner)) return 1f;
+			if (NpcTiers.IsBoss(owner)) return 1f;
 			// Parts share their owner's life
 			if (owner != sample.type && ContentSamples.NpcsByNetId.TryGetValue(owner, out NPC ownerSample)) sample = ownerSample;
 			return WorthOf(sample.lifeMax, MobLootSystem.MedianLife(NpcTiers.EffectiveTier(owner)));
@@ -216,7 +216,7 @@ namespace UltimateRandomizer.Common.Features
 		public static bool GiantBonusAllowed(int netId, int npcType)
 		{
 			int owner = BossParts.Owner(npcType);
-			return !BossParts.IsMinion(npcType) && !BossParts.IsMinion(owner) && CanHaveExtraDrops(owner, IsBossType(owner), LootSnapshot.ForNpc(netId));
+			return !BossParts.IsMinion(npcType) && !BossParts.IsMinion(owner) && CanHaveExtraDrops(owner, NpcTiers.IsBoss(owner), LootSnapshot.ForNpc(netId));
 		}
 
 		// A giant's bonus item: always useful (ItemPool.IsJackpotWorthy: equipment that does something, a progression station),
@@ -270,14 +270,11 @@ namespace UltimateRandomizer.Common.Features
 		private bool ExtraDropsAllowedNow(DropAttemptInfo info)
 		{
 			NPC npc = info.npc;
-			if (!IsBossType(BossParts.Owner(npc.type))) return true;
+			if (!NpcTiers.IsBoss(BossParts.Owner(npc.type))) return true;
 			if (!npc.boss) return false;
 			if (npc.type == NPCID.Retinazer || npc.type == NPCID.Spazmatism) return new Conditions.MissingTwin().CanDrop(info);
 			return true;
 		}
-
-		public static bool IsBossType(int type) =>
-			type > 0 && (NPCID.Sets.ShouldBeCountedAsBoss[type] || (ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample) && sample.boss));
 
 		// Everything an enemy can drop in this world: the replaced original drops, then the extra ones and the guaranteed ones.
 		// lucky: ignores the progression lock (what the enemy gives once everything is unlocked)
@@ -286,7 +283,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			List<PlannedDrop> drops = new();
 			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
-			bool isBoss = IsBossType(type);
+			bool isBoss = NpcTiers.IsBoss(type);
 			foreach (DropRateInfo entry in LootSnapshot.ForNpc(netId))
 			{
 				int item = entry.itemId;
@@ -318,7 +315,7 @@ namespace UltimateRandomizer.Common.Features
 			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal) return drops;
 			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) return drops;
 			List<DropRateInfo> original = LootSnapshot.ForNpc(netId);
-			bool isBoss = IsBossType(type);
+			bool isBoss = NpcTiers.IsBoss(type);
 			if (!CanHaveExtraDrops(type, isBoss, original)) return drops;
 			// In expert mode, a boss with a treasure bag gets no extra drops: the content of its bag is replaced instead
 			if (isBoss && expert && original.Any(d => ItemID.Sets.BossBag[d.itemId])) return drops;

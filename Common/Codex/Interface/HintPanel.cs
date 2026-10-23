@@ -483,12 +483,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			CodexItemIcon icon = new(item, 0, 40, () => HintSystem.OpenInCodex(item)) { Silhouette = !found, HoverText = CodexText.Get("Hint.OpenCodex", HintFacts.ItemName(item)) };
 			row.Add(icon, 6);
 			float nameWidth = panelWidth - 330;
-			string name = HintFacts.ItemName(item);
-			if (CodexDraw.TextWidth(name, 0.8f) > nameWidth)
-			{
-				while (name.Length > 4 && CodexDraw.TextWidth(name + "...", 0.8f) > nameWidth) name = name.Substring(0, name.Length - 1);
-				name += "...";
-			}
+			string name = CodexDraw.Fit(HintFacts.ItemName(item), 0.8f, nameWidth);
 			row.Add(new CodexLabel(name, 0.8f, found ? new Color(140, 230, 140) : Color.White) { HoverText = found ? CodexText.Get("Hint.Found") : null });
 			CodexLabel levelLabel = new(CodexText.Get("Hint.Level", level, HintFacts.MaxLevel), 0.75f, level > 0 ? CodexDraw.Gold : CodexDraw.Muted);
 			levelLabel.Left.Set(-232, 1f);
@@ -513,12 +508,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			row.OnLeftClick += (_, _) => HintShop.Say(CodexText.Get("Hint.LockedSay", HintFacts.ItemName(target.Item), when));
 			row.Add(new CodexItemIcon(target.Item, 0, 40) { Silhouette = !CodexSystem.HasSeen(target.Item), HoverText = hover }, 6);
 			float nameWidth = panelWidth - 330;
-			string name = HintFacts.ItemName(target.Item);
-			if (CodexDraw.TextWidth(name, 0.8f) > nameWidth)
-			{
-				while (name.Length > 4 && CodexDraw.TextWidth(name + "...", 0.8f) > nameWidth) name = name.Substring(0, name.Length - 1);
-				name += "...";
-			}
+			string name = CodexDraw.Fit(HintFacts.ItemName(target.Item), 0.8f, nameWidth);
 			row.Add(new CodexLabel(name, 0.8f, CodexDraw.Muted));
 			CodexLabel unlock = new(comes, 0.72f, CodexDraw.Muted) { HoverText = hover };
 			unlock.Left.Set(-232, 1f);

@@ -125,11 +125,6 @@ namespace UltimateRandomizer.Common.Features
 		// Same exclusions as the individual stats, but boss parts are included
 		public static bool Applies(NPC npc) => Enabled && EnemyIndividualNPC.Rollable(npc);
 
-		public static bool CountsAsBoss(int npcType) =>
-			ContentSamples.NpcsByNetId.TryGetValue(npcType, out NPC sample) && (sample.boss || NPCID.Sets.ShouldBeCountedAsBoss[npcType]);
-
-		public static bool IsBoss(NPC npc) => npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[npc.type];
-
 		// Boss parts and minions answer to their boss
 		public static bool IsFollower(int npcType) => BossParts.IsPart(npcType) || BossParts.IsMinion(npcType);
 
@@ -142,10 +137,10 @@ namespace UltimateRandomizer.Common.Features
 			{
 				NPC owner = FindLeader(npc);
 				if (owner != null && owner.TryGetGlobalNPC(out EnemyIndividualNPC rolled) && rolled.Rolled) return (rolled.AdaptiveLife, rolled.AdaptiveDamage);
-				bool ownerBoss = CountsAsBoss(BossParts.Leader(npc.type));
+				bool ownerBoss = NpcTiers.IsBoss(BossParts.Leader(npc.type));
 				return Multipliers(Gap(PowerNear(npc, ownerBoss)), ownerBoss);
 			}
-			bool boss = IsBoss(npc);
+			bool boss = NpcTiers.IsBoss(npc);
 			return Multipliers(Gap(PowerNear(npc, boss)), boss);
 		}
 
@@ -183,7 +178,7 @@ namespace UltimateRandomizer.Common.Features
 					NPC npc = Main.npc[i];
 					if (!npc.active || !npc.TryGetGlobalNPC(out EnemyIndividualNPC individual) || !individual.Rolled || !Applies(npc)) continue;
 					bool follower = IsFollower(npc.type);
-					if (pass == 0 ? follower || !IsBoss(npc) : !follower) continue;
+					if (pass == 0 ? follower || !NpcTiers.IsBoss(npc) : !follower) continue;
 					(float life, float damage) = ForNpc(npc);
 					individual.RaiseAdaptive(npc, life, damage);
 				}

@@ -63,7 +63,7 @@ namespace UltimateRandomizer.Common.Features
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			if (!Randomized(i) || !progression.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) return 0;
 			int tier = Math.Max(ItemPool.TierOf(RecipeSystem.OriginalResult(i)), ItemPool.TierOf(result));
-			return Math.Max(0, tier - progression.TierAllowance);
+			return ItemPool.UnlockTier(tier);
 		}
 
 		// The level of a recipe: its original result, and the level of its stations
@@ -88,23 +88,6 @@ namespace UltimateRandomizer.Common.Features
 			return false;
 		}
 
-		private static Dictionary<int, List<int>> itemsByTile;
-
-		// Items placing each tile (content samples are fixed once loaded)
-		private static Dictionary<int, List<int>> ItemsByTile() => itemsByTile ??= BuildItemsByTile();
-
-		private static Dictionary<int, List<int>> BuildItemsByTile()
-		{
-			Dictionary<int, List<int>> result = new();
-			foreach ((int type, Item item) in ContentSamples.ItemsByType)
-			{
-				if (item.createTile < TileID.Dirt) continue;
-				if (!result.TryGetValue(item.createTile, out List<int> list)) result[item.createTile] = list = new List<int>();
-				list.Add(type);
-			}
-			return result;
-		}
-
 		// Availability fixed point: found items, then items crafted from available ingredients at available stations.
 		// recipeTiers[i] = tier from which recipe i can be made (ingredients and stations only); recipe i gives results[i]
 		// from resultTiers[i].
@@ -112,7 +95,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			int[] avail = new int[ItemPool.Info.Length];
 			for (int item = 1; item < avail.Length; item++) avail[item] = found(item);
-			Dictionary<int, List<int>> itemsByTile = ItemsByTile();
+			Dictionary<int, List<int>> itemsByTile = Stations.PlacersByTile();
 			// Each station's availability, kept up to date as its placing items become available
 			Dictionary<int, int> tileAvail = new();
 			foreach (int tile in itemsByTile.Keys) tileAvail[tile] = TileAvailability(tile, itemsByTile, avail);
@@ -222,7 +205,7 @@ namespace UltimateRandomizer.Common.Features
 		// ---------------------------------------------------------------- Stations
 
 		// Tier from which a station can be placed with an availability (RecipePlan.Availability), for the tests
-		public static int StationTier(int tile, int[] avail) => TileAvailability(tile, ItemsByTile(), avail);
+		public static int StationTier(int tile, int[] avail) => TileAvailability(tile, Stations.PlacersByTile(), avail);
 
 		// Earliest tier a station can be placed: its cheapest placing item (crafted, found or guaranteed: avail), or its
 		// protected tier
@@ -256,13 +239,13 @@ namespace UltimateRandomizer.Common.Features
 		private static bool Assignable(int tile)
 		{
 			StationKind kind = Stations.Info(tile).Kind;
-			return tile != TileID.DemonAltar && (kind == StationKind.Basic || kind == StationKind.Progression);
+			return !Stations.Info(tile).World && (kind == StationKind.Basic || kind == StationKind.Progression);
 		}
 
 		private static void PlanStations(RecipePlan result, int[] results, int[] avail, int[] recipeTiers)
 		{
 			// avail does not change while stations are planned: each station's availability is computed once
-			Dictionary<int, List<int>> itemsByTile = ItemsByTile();
+			Dictionary<int, List<int>> itemsByTile = Stations.PlacersByTile();
 			Dictionary<int, int> tileAvail = new();
 			int TileAvail(int tile)
 			{

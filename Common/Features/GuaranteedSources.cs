@@ -82,7 +82,6 @@ namespace UltimateRandomizer.Common.Features
 		private static List<Requirement> requirements;
 		// The biome each item was placed in and the tier its shares were read at (biome -1: common hosts without a biome)
 		private static Dictionary<int, Placement> placements;
-		private static readonly Dictionary<(int npc, int tier), double> shares = new();
 		private static Dictionary<int, int> hostTiers;
 		// The spawn map the frequent cache was computed with (rebuilt when the world evil arrives, or the settings change)
 		private static BiomeSlotMap frequentMap;
@@ -98,7 +97,6 @@ namespace UltimateRandomizer.Common.Features
 			requirements = null;
 			placements = null;
 			Missing = 0;
-			shares.Clear();
 			hostTiers = null;
 			frequentMap = null;
 		}
@@ -212,8 +210,8 @@ namespace UltimateRandomizer.Common.Features
 		public static int StationItem(int tile)
 		{
 			Stations.StationInfo info = Stations.Info(tile);
-			if (tile == TileID.DemonAltar || info.Kind is not (StationKind.Progression or StationKind.Thematic)) return 0;
-			List<int> placers = ContentSamples.ItemsByType.Where(pair => pair.Value.createTile == tile).Select(pair => pair.Key).ToList();
+			if (info.World || info.Kind is not (StationKind.Progression or StationKind.Thematic)) return 0;
+			List<int> placers = Stations.Placers(tile);
 			if (placers.Any(p => ItemPool.IsValid(p) && ItemPool.Info[p].Protected)) return 0;
 			return placers.Where(p => p < ItemID.Count && ItemPool.IsRandomizable(p)).OrderBy(ItemPool.TierOf).ThenBy(p => p).FirstOrDefault();
 		}
@@ -718,7 +716,8 @@ namespace UltimateRandomizer.Common.Features
 		private static List<int> CriticalForestHosts(int tier)
 		{
 			HashSet<int> set = new();
-			for (int s = 0; s < CriticalHostSets; s++) set.UnionWith(CriticalHosts(s));
+			set.UnionWith(BiomeSlots.ForestFamilyHosts(BiomeSlots.SpawnMap, true));
+			set.UnionWith(BiomeSlots.ForestFamilyHosts(BiomeSlots.SpawnMap, false));
 			return set.Where(n => IsNaturalHost(n, tier) && NpcTiers.BaseTier(n) <= tier).OrderByDescending(n => PacingModel.EarlyKillShare(k => k == n))
 				.ThenBy(DetRandom.NpcKey).ToList();
 		}
@@ -736,22 +735,6 @@ namespace UltimateRandomizer.Common.Features
 				if (roll < 0) return candidates[i];
 			}
 			return candidates[^1];
-		}
-
-		// Steady share of the spawns of a host's best biome at a tier (BiomeSlots.SteadyShare), -1 when unknown (no slot, or
-		// spawns swapped another way)
-		public static double HostShare(int npc, int tier)
-		{
-			FollowMap();
-			if (shares.TryGetValue((npc, tier), out double cached)) return cached;
-			double share = -1;
-			if (BiomeSlots.SpawnsPlanned && BiomeSlots.HasAnySlot(npc))
-			{
-				(int biome, _, _) = BiomeSlots.BestBiome(npc, tier);
-				if (biome >= 0) share = BiomeSlots.SteadyShare(biome, npc, tier);
-			}
-			shares[(npc, tier)] = share;
-			return share;
 		}
 
 		// The chance of a critical station on its hosts (before GuaranteedDropMultiplier): the early kills of the pacing
@@ -789,11 +772,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// Critical stations (work bench, furnace, anvil, table, chair) are carried by the enemies met most in the first hour:
 		// slimes by day (every colour shares the Blue Slime's type), zombies and demon eyes of every kind by night (each kind
-		// has its own Forest slot: vanilla picks one at random). Other hosts are judged by their spawn share
-		private const int CriticalHostSets = 2;
-
-		// The enemies that spawn in those Forest slots (redistributed by biome, else the vanilla ones)
-		public static int[] CriticalHosts(int set) => BiomeSlots.ForestFamilyHosts(BiomeSlots.SpawnMap, set == 0).ToArray();
+		// has its own Forest slot: vanilla picks one at random), from the Forest slots (redistributed by biome, else the vanilla
+		// ones). Other hosts are judged by their spawn share
 
 		// The caches below follow the spawn map (rebuilt when the world evil arrives, the settings change, or a test plans
 		// another map)
@@ -809,7 +789,6 @@ namespace UltimateRandomizer.Common.Features
 				placements = null;
 				Findability.Reset();
 			}
-			shares.Clear();
 			hostTiers = null;
 			frequentMap = map;
 		}
@@ -912,6 +891,9 @@ namespace UltimateRandomizer.Common.Features
 	{
 		public const int Never = int.MaxValue;
 
+		// Does this world have that evil biome? Both in drunk worlds
+		private static bool HasEvil(bool crimson) => Main.drunkWorld || WorldGen.crimson == crimson;
+
 		// Gathered directly in the world
 		private static readonly (int item, int tier)[] WorldMaterials =
 		{
@@ -960,11 +942,10 @@ namespace UltimateRandomizer.Common.Features
 		// The materials of one evil only grow in its worlds (both in drunk worlds), until hardmode spreads them
 		private static bool InThisWorld(int item)
 		{
-			bool Evil(bool crimson) => Main.drunkWorld || WorldGen.crimson == crimson;
 			return item switch
 			{
-				ItemID.Ebonwood or ItemID.EbonstoneBlock or ItemID.VileMushroom => Evil(false),
-				ItemID.Shadewood or ItemID.CrimstoneBlock or ItemID.ViciousMushroom => Evil(true),
+				ItemID.Ebonwood or ItemID.EbonstoneBlock or ItemID.VileMushroom => HasEvil(false),
+				ItemID.Shadewood or ItemID.CrimstoneBlock or ItemID.ViciousMushroom => HasEvil(true),
 				_ => true
 			};
 		}
@@ -1010,8 +991,7 @@ namespace UltimateRandomizer.Common.Features
 				if (item > 0 && item < result.Length) result[item] = Math.Min(result[item], Math.Max(0, tier));
 			}
 			LootConfig loot = LootConfig.Instance;
-			ProgressionConfig progression = ProgressionConfig.Instance;
-			int Gated(int item) => progression.TierGating ? Math.Max(0, ItemPool.TierOf(item) - progression.TierAllowance) : 0;
+			int Gated(int item) => ItemPool.UnlockTier(ItemPool.TierOf(item));
 
 			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, tier);
 			if (loot.RandomizeHerbs)
@@ -1029,7 +1009,7 @@ namespace UltimateRandomizer.Common.Features
 				if (OreMap.IsOre(type) && OreMap.IsFindable(type)) Add(type, ItemPool.TierOf(type));
 			}
 
-			float minChance = progression.MinFindableChance / 100f;
+			float minChance = ProgressionConfig.Instance.MinFindableChance / 100f;
 			void AddPlan(List<PlannedDrop> plan, int sourceTier)
 			{
 				foreach (PlannedDrop drop in plan)
@@ -1081,7 +1061,6 @@ namespace UltimateRandomizer.Common.Features
 		public static bool WorldAllows(List<IItemDropRuleCondition> conditions)
 		{
 			if (conditions == null) return true;
-			bool Evil(bool crimson) => Main.drunkWorld || WorldGen.crimson == crimson;
 			foreach (IItemDropRuleCondition condition in conditions)
 			{
 				bool allowed = condition switch
@@ -1090,10 +1069,10 @@ namespace UltimateRandomizer.Common.Features
 					Conditions.NotExpert => !Main.expertMode,
 					Conditions.IsMasterMode => Main.masterMode,
 					Conditions.NotMasterMode => !Main.masterMode,
-					Conditions.IsCrimson => Evil(true),
-					Conditions.IsCorruption => Evil(false),
-					Conditions.IsCrimsonAndNotExpert => Evil(true) && !Main.expertMode,
-					Conditions.IsCorruptionAndNotExpert => Evil(false) && !Main.expertMode,
+					Conditions.IsCrimson => HasEvil(true),
+					Conditions.IsCorruption => HasEvil(false),
+					Conditions.IsCrimsonAndNotExpert => HasEvil(true) && !Main.expertMode,
+					Conditions.IsCorruptionAndNotExpert => HasEvil(false) && !Main.expertMode,
 					Conditions.LegacyHack_IsBossAndExpert => Main.expertMode,
 					Conditions.LegacyHack_IsBossAndNotExpert => !Main.expertMode,
 					Conditions.TenthAnniversaryIsUp => Main.tenthAnniversaryWorld,
@@ -1120,9 +1099,8 @@ namespace UltimateRandomizer.Common.Features
 		public static int CrateAccessTier(int crate)
 		{
 			// Evil crates need their evil (both in drunk worlds); the Hallow only exists before hardmode in drunk and remix worlds
-			bool Evil(bool crimson) => Main.drunkWorld || WorldGen.crimson == crimson;
-			if (crate is ItemID.CorruptFishingCrate or ItemID.CorruptFishingCrateHard && !Evil(false)) return Never;
-			if (crate is ItemID.CrimsonFishingCrate or ItemID.CrimsonFishingCrateHard && !Evil(true)) return Never;
+			if (crate is ItemID.CorruptFishingCrate or ItemID.CorruptFishingCrateHard && !HasEvil(false)) return Never;
+			if (crate is ItemID.CrimsonFishingCrate or ItemID.CrimsonFishingCrateHard && !HasEvil(true)) return Never;
 			if (crate is ItemID.HallowedFishingCrate && !Main.drunkWorld && !Main.remixWorld) return Never;
 			if (ItemID.Sets.IsFishingCrateHardmode[crate] || crate is ItemID.LavaCrate or ItemID.LavaCrateHard) return (int)Core.Tier.Hardmode;
 			if (crate is ItemID.DungeonFishingCrate) return (int)Core.Tier.PostSkeletron;

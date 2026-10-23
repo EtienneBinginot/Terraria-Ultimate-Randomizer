@@ -20,7 +20,7 @@ namespace UltimateRandomizer.Common.Features
 				case EntitySource_Loot loot when loot.Context != DropHelper.ExtraDropContext && loot.Entity is NPC npc:
 					if (!cfg.RandomizeMobDrops || !IsDeathLoot(npc, item.type)) return;
 					int owner = BossParts.Owner(npc.type);
-					bool isBoss = RandomNpcDropRule.IsBossType(owner);
+					bool isBoss = NpcTiers.IsBoss(owner);
 					System.Random dropRng = new(Main.rand.Next());
 					// Same anti-farm rules as the extra drops: weak swarms get a share of the jackpot chances, critters and
 					// NPCs spawned by another NPC none (their replaced drop stays the planned one)
