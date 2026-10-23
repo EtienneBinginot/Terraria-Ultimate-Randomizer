@@ -22,14 +22,27 @@ namespace UltimateRandomizer.Common.Features
 		{
 			List<IItemDropRule> rules = npcLoot.Get(false).Where(r => r != null).Distinct().ToList();
 			bool wrappable = !npc.boss && !npc.townNPC && !BossParts.IsPart(npc.type) && !BossParts.IsMinion(npc.type) && !NpcTiers.IsBoss(npc.type);
+			// Bosses of the boss table (BossPermutation): their complete rules are wrapped too, nested ones included
+			bool bossWrap = !wrappable && BossPermutation.WrapsLoot(npc.type);
+			int nextWrapper = 0;
 			List<DropRateInfo> drops = new();
 			List<int> ruleOf = new();
 			for (int r = 0; r < rules.Count; r++)
 			{
 				IItemDropRule rule = rules[r];
 				List<DropRateInfo> part = LootSnapshot.Capture(new List<IItemDropRule> { rule });
-				bool wrap = wrappable && part.Count > 0 && DropPermutation.Wrappable(rule);
 				drops.AddRange(part);
+				if (bossWrap)
+				{
+					IItemDropRule wrapped = part.Count > 0 ? BossPermutation.Wrap(rule, npc.netID, ref nextWrapper) : rule;
+					int[] owners = wrapped != rule ? BossPermutation.Track(wrapped, part) : null;
+					ruleOf.AddRange(owners ?? Enumerable.Repeat(-1, part.Count));
+					if (owners == null) continue;
+					while (npcLoot.Get(false).Contains(rule)) npcLoot.Remove(rule);
+					npcLoot.Add(wrapped);
+					continue;
+				}
+				bool wrap = wrappable && part.Count > 0 && DropPermutation.Wrappable(rule);
 				ruleOf.AddRange(Enumerable.Repeat(wrap ? r : -1, part.Count));
 				if (!wrap) continue;
 				// Registered once per net ID: never mutate the rule itself, shared with other net IDs
@@ -163,7 +176,7 @@ namespace UltimateRandomizer.Common.Features
 			if (!SeedSystem.WorldReady || !ItemPool.Ready || npc == null) return new ItemDropAttemptResult { State = ItemDropAttemptResultState.DidNotRunCode };
 			// Permutation: the original entries replace the silent vanilla rules, so statue and NPC-spawned enemies drop them
 			// as vanilla would (NotFromStatue conditions included); only the extra, guaranteed and bonus drops are withheld
-			bool permuted = DropPermutation.Active(netId);
+			bool permuted = DropPermutation.Active(netId) || BossPermutation.Active(netId);
 			if (permuted) DropRolledOriginals(info, npc);
 			if (npc.SpawnedFromStatue || MobLootSystem.IsSpawnedByNpc(npc) || !ExtraDropsAllowedNow(info))
 			{
@@ -387,14 +400,17 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// The original drops of an enemy and their final replacements (LootSubstitutionItem swaps them as they spawn). In the
-		// permutation style (style: the configured one when null), the entries of the net ID's permuted table instead
+		// permutation style (style: the configured one when null), the entries of the net ID's permuted table instead (bosses:
+		// BossPermutation's)
 		public static List<PlannedDrop> OriginalDrops(int netId, int type, DropTableStyle? style = null)
 		{
 			List<PlannedDrop> drops = new();
 			int minLimit = MinLimit(type);
-			if (DropPermutation.InStyle(netId, style))
+			DropPermutation.Placed[] table = BossPermutation.InStyle(netId, style) ? BossPermutation.For(netId)
+				: DropPermutation.InStyle(netId, style) ? DropPermutation.For(netId) : null;
+			if (table != null)
 			{
-				foreach (DropPermutation.Placed placed in DropPermutation.For(netId))
+				foreach (DropPermutation.Placed placed in table)
 				{
 					DropRateInfo entry = placed.Entry;
 					// Entries vanilla still rolls (rules left running) are not replaced: they drop as they are
@@ -490,7 +506,8 @@ namespace UltimateRandomizer.Common.Features
 			List<DropRateInfo> original = LootSnapshot.ForNpc(netId);
 			bool isBoss = NpcTiers.IsBoss(type);
 			if (!CanHaveExtraDrops(type, isBoss, original)) return drops;
-			// In expert mode, a boss with a treasure bag gets no extra drops: the content of its bag is replaced instead
+			// In expert mode, a boss with a treasure bag gets no extra drops: the content of its bag is replaced instead (the
+			// permutation style: the bag rolls them, BagPlan.Plan)
 			if (isBoss && expert && original.Any(d => ItemID.Sets.BossBag[d.itemId])) return drops;
 
 			int npcKey = DetRandom.NpcKey(type);
@@ -499,8 +516,9 @@ namespace UltimateRandomizer.Common.Features
 			bool critter = NPCID.Sets.CountsAsCritter[type];
 			// Permutation: PermutationExtraSlots random slots at vanilla-like rates, not scaled by abundance, with their own
 			// weights (no materials: the moved original drops give them), plus the chances of the locked entries
-			// (Redistribute); no small frequent drops. The enemies it leaves out (bosses, critters) keep the vanilla-like extras
-			bool permutation = DropPermutation.InStyle(netId, tableStyle);
+			// (Redistribute); no small frequent drops. Bosses (BossPermutation) too, at boss rates (the first slot always drops).
+			// The enemies it leaves out (critters, bosses outside the boss table) keep the vanilla-like extras
+			bool permutation = DropPermutation.InStyle(netId, tableStyle) || BossPermutation.InStyle(netId, tableStyle);
 			DropTableStyle slotStyle = tableStyle == DropTableStyle.Permutation ? DropTableStyle.VanillaLike : tableStyle;
 			int slots = permutation ? Math.Clamp(cfg.PermutationExtraSlots, 0, 3)
 				: isBoss

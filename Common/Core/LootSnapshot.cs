@@ -14,6 +14,8 @@ namespace UltimateRandomizer.Common.Core
 		// Per enemy net ID, for each entry of Npcs: the index of the registered rule it comes from when that rule was wrapped
 		// (DropPermutation's PermutableRule), -1 when the rule stays as it is (per-player drops)
 		public static readonly Dictionary<int, int[]> NpcRules = new();
+		// The same per boss bag, for each entry of Items (BossPermutation)
+		public static readonly Dictionary<int, int[]> ItemRules = new();
 
 		private static readonly Dictionary<int, int> bagTiers = new();
 
@@ -46,6 +48,8 @@ namespace UltimateRandomizer.Common.Core
 
 		public static List<DropRateInfo> ForItem(int itemType) => Items.TryGetValue(itemType, out List<DropRateInfo> drops) ? drops : None;
 
+		public static int[] RulesOfItem(int itemType) => ItemRules.TryGetValue(itemType, out int[] rules) ? rules : NoRules;
+
 		// A boss bag is as advanced as the weakest boss dropping it
 		public static int BagTier(int bagType)
 		{
@@ -72,6 +76,7 @@ namespace UltimateRandomizer.Common.Core
 			Npcs.Clear();
 			NpcRules.Clear();
 			Items.Clear();
+			ItemRules.Clear();
 			bagTiers.Clear();
 		}
 	}

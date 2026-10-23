@@ -1306,6 +1306,15 @@ namespace UltimateRandomizer.Common.Tests
 				List<DropRateInfo> original = LootSnapshot.ForItem(bag);
 				// Locked entries kept: one entry per original one
 				List<PlannedDrop> plan = BagPlan.Plan(bag, includeLocked: true);
+				// A permuted bag's table is in another order (BossPermutation): its coins are still all there, as they are
+				if (BossPermutation.BagInStyle(bag))
+				{
+					foreach (int coin in original.Where(o => ItemID.Sets.CommonCoin[o.itemId]).Select(o => o.itemId).Distinct())
+					{
+						if (plan.Count(d => d.Item == coin) < original.Count(o => o.itemId == coin)) failures.Add($"{Lang.GetItemNameValue(bag)} loses its coins");
+					}
+					continue;
+				}
 				for (int i = 0; i < original.Count && i < plan.Count; i++)
 				{
 					if (ItemID.Sets.CommonCoin[original[i].itemId] && plan[i].Item != original[i].itemId) failures.Add($"{Lang.GetItemNameValue(bag)} loses its coins");

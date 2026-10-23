@@ -16,7 +16,7 @@ namespace UltimateRandomizer.Common.Features
 	// and every item of a permuted vanilla entry still drops somewhere. An eligible enemy without any vanilla entry gets one
 	// synthetic place (a random item of its level), permuted like the others. A share of the moved contents
 	// (PermutationSurpriseChance) then becomes a random item, never a material nor the last copy of an item without another
-	// source (SurpriseCandidates). Bosses, their parts and minions, town NPCs,
+	// source (SurpriseCandidates). Bosses and their parts (BossPermutation has their own), minions, town NPCs,
 	// critters and harmless NPCs are left out. Tables are per net ID (variants such as Pinky have rules of their own); a
 	// variant whose snapshot is the same as its type's shares the type's table. Computed from the world seed, the synced
 	// settings and the snapshot only: the server (kills) and the clients (journal, codex) get the same plan
@@ -49,6 +49,12 @@ namespace UltimateRandomizer.Common.Features
 			typeof(CommonDrop), typeof(CommonDropNotScalingWithLuck), typeof(CommonDropWithRerolls), typeof(ItemDropWithConditionRule),
 			typeof(OneFromOptionsDropRule), typeof(OneFromOptionsNotScaledWithLuckDropRule),
 			typeof(DropBasedOnExpertMode), typeof(DropBasedOnMasterMode), typeof(LeadingConditionRule)
+		};
+
+		// Bosses and their bags (BossPermutation) also wrap these: their report lists every option with its own chance
+		private static readonly HashSet<Type> CompleteForBosses = new()
+		{
+			typeof(FewFromOptionsDropRule), typeof(FewFromOptionsNotScaledWithLuckDropRule), typeof(FromOptionsWithoutRepeatsDropRule)
 		};
 
 		private static readonly HashSet<Type> CompleteChains = new()
@@ -203,7 +209,7 @@ namespace UltimateRandomizer.Common.Features
 			return unit;
 		}
 
-		private static bool SameSnapshot(int a, int b)
+		public static bool SameSnapshot(int a, int b)
 		{
 			List<DropRateInfo> x = LootSnapshot.ForNpc(a), y = LootSnapshot.ForNpc(b);
 			if (x.Count != y.Count || !LootSnapshot.RulesOf(a).SequenceEqual(LootSnapshot.RulesOf(b))) return false;
@@ -466,21 +472,33 @@ namespace UltimateRandomizer.Common.Features
 
 		public static Placed[] For(int netId) => Current.ByUnit.TryGetValue(UnitOf(netId), out Placed[] table) ? table : None;
 
-		// Only rules whose report is complete, chains included, are wrapped (CompleteRules)
-		public static bool Wrappable(IItemDropRule rule, int depth = 0)
+		// Only rules whose report is complete, chains included, are wrapped (CompleteRules). forBosses: also the few-from-options
+		// rules, and never a rule with a chain hidden from the report (its items would be silenced without being in the table)
+		public static bool Wrappable(IItemDropRule rule, int depth = 0, bool forBosses = false)
 		{
-			if (rule == null || depth > 10 || !CompleteRules.Contains(rule.GetType())) return false;
-			if (rule is DropBasedOnExpertMode expert && !(Wrappable(expert.ruleForNormalMode, depth + 1) && Wrappable(expert.ruleForExpertMode, depth + 1))) return false;
-			if (rule is DropBasedOnMasterMode master && !(Wrappable(master.ruleForDefault, depth + 1) && Wrappable(master.ruleForMasterMode, depth + 1))) return false;
+			if (rule == null || depth > 10 || !(CompleteRules.Contains(rule.GetType()) || forBosses && CompleteForBosses.Contains(rule.GetType()))) return false;
+			if (rule is DropBasedOnExpertMode expert && !(Wrappable(expert.ruleForNormalMode, depth + 1, forBosses) && Wrappable(expert.ruleForExpertMode, depth + 1, forBosses))) return false;
+			if (rule is DropBasedOnMasterMode master && !(Wrappable(master.ruleForDefault, depth + 1, forBosses) && Wrappable(master.ruleForMasterMode, depth + 1, forBosses))) return false;
 			if (rule.ChainedRules != null)
 			{
 				foreach (IItemDropRuleChainAttempt chain in rule.ChainedRules)
 				{
-					if (chain == null || !CompleteChains.Contains(chain.GetType()) || !Wrappable(chain.RuleToChain, depth + 1)) return false;
+					if (chain == null || !CompleteChains.Contains(chain.GetType()) || !Wrappable(chain.RuleToChain, depth + 1, forBosses)) return false;
+					if (forBosses && HidesReport(chain)) return false;
 				}
 			}
 			return true;
 		}
+
+		public static bool IsCompleteChain(IItemDropRuleChainAttempt chain) => chain != null && CompleteChains.Contains(chain.GetType());
+
+		public static bool HidesReport(IItemDropRuleChainAttempt chain) => chain switch
+		{
+			Chains.TryIfSucceeded s => s.hideLootReport,
+			Chains.TryIfFailedRandomRoll f => f.hideLootReport,
+			Chains.TryIfDoesntFillConditions c => c.hideLootReport,
+			_ => true
+		};
 	}
 
 	public class DropPermutationSystem : ModSystem
@@ -519,16 +537,23 @@ namespace UltimateRandomizer.Common.Features
 
 		public IReadOnlyList<int> Items => items;
 
-		public PermutableRule(IItemDropRule inner, int netId, int ruleIndex, IEnumerable<int> items)
+		// A boss bag's rule (BossPermutation, NetId 0): silent when the bag's permutation is active
+		public int BagType { get; }
+
+		public PermutableRule(IItemDropRule inner, int netId, int ruleIndex, IEnumerable<int> items, int bagType = 0)
 		{
 			this.inner = inner;
 			NetId = netId;
 			RuleIndex = ruleIndex;
+			BagType = bagType;
 			this.items = items.ToArray();
 		}
 
 		// Same test as DropPermutation.RolledEntries
-		private bool Silenced => DropPermutation.Active(NetId) && DropPermutation.Silences(items);
+		private bool Silenced => (BagType > 0 ? BossPermutation.BagActive(BagType) : DropPermutation.Active(NetId) || BossPermutation.Active(NetId)) && DropPermutation.Silences(items);
+
+		// Load time only (BossPermutation.Track): the wrapper reporting each entry of a capture, by entry index
+		public static Dictionary<int, int> Tracked;
 
 		public bool CanDrop(DropAttemptInfo info) => true;
 
@@ -542,7 +567,10 @@ namespace UltimateRandomizer.Common.Features
 		public void ReportDroprates(List<DropRateInfo> drops, DropRateInfoChainFeed ratesInfo)
 		{
 			if (Silenced) return;
+			int before = drops.Count;
 			inner.ReportDroprates(drops, ratesInfo.With(1f));
+			if (Tracked == null) return;
+			for (int i = before; i < drops.Count; i++) Tracked[i] = RuleIndex;
 		}
 	}
 }

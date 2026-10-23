@@ -130,6 +130,10 @@ Tests: {
 	DropPermutationRuntime: Les règles de drop de chaque ennemi suivent vraiment la permutation : les drops vanilla réduits au silence tombent ailleurs, rien ne tombe en double, les variantes gardent leurs propres drops, les ennemis sans drop en reçoivent un
 	DropPermutationStable: Retirer un drop de la permutation ne change le contenu que de très peu d'autres drops
 	DropPermutationSurprise: Les surprises de la permutation remplacent à peu près la part réglée des drops mélangés, jamais un matériau ni le dernier exemplaire d'un objet sans autre source
+	BossPermutationConserves: La permutation des boss ne perd et ne double rien : chaque drop de boss et contenu de sac mélangé est toujours dans un boss ou un sac
+	BossBagMatchesBoss: Chaque sac de trésor contient les drops mélangés du mode normal de son boss, avec leur chance et leur quantité dans le sac d'où ils viennent
+	BossPermutationTiers: Les drops de boss ne passent qu'entre boss du même groupe de tiers, avec les mêmes restrictions
+	BossRuntime: Les règles de drop des boss et des sacs suivent vraiment la permutation : les drops coupés sont tirés quelque part, rien ne tombe deux fois
 	CodexShowsLocked: Interface du codex : les butins verrouillés sont grisés avec le boss qui les débloque, sans chance
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
@@ -1381,7 +1385,7 @@ Configs: {
 
 		DropTableStyle: {
 			Label: "Style du loot des ennemis"
-			Tooltip: "Permutation (par défaut) : les drops d'origine des ennemis sont mélangés entre ennemis du même niveau ; chaque objet garde sa chance et sa quantité, et prend les conditions de l'ennemi qui le reçoit. Quelques-uns deviennent des surprises (voir plus bas). Les ennemis sans aucun drop en reçoivent un, aléatoire et de leur niveau, mélangé avec les autres. Chaque ennemi reçoit aussi quelques drops aléatoires en plus, avec des taux comme le jeu de base (voir plus bas). Façon vanilla : les drops d'origine sont remplacés, et chaque type d'ennemi a un nombre aléatoire de drops en plus (souvent peu, parfois beaucoup) avec des taux comme le jeu de base (1/1 pour les matériaux, 1/50 pour l'équipement...). Simple : drops remplacés, et chaque emplacement en plus a la chance fixe ci-dessous. Miroir de l'original : aucun drop en plus, seulement les drops d'origine (remplacés). En style permutation, les boss gardent les drops en plus façon vanilla."
+			Tooltip: "Permutation (par défaut) : les drops d'origine des ennemis sont mélangés entre ennemis du même niveau ; chaque objet garde sa chance et sa quantité, et prend les conditions de l'ennemi qui le reçoit. Quelques-uns deviennent des surprises (voir plus bas). Les ennemis sans aucun drop en reçoivent un, aléatoire et de leur niveau, mélangé avec les autres. Chaque ennemi reçoit aussi quelques drops aléatoires en plus, avec des taux comme le jeu de base (voir plus bas). Façon vanilla : les drops d'origine sont remplacés, et chaque type d'ennemi a un nombre aléatoire de drops en plus (souvent peu, parfois beaucoup) avec des taux comme le jeu de base (1/1 pour les matériaux, 1/50 pour l'équipement...). Simple : drops remplacés, et chaque emplacement en plus a la chance fixe ci-dessous. Miroir de l'original : aucun drop en plus, seulement les drops d'origine (remplacés). Les boss d'un même niveau mélangent aussi leurs drops entre eux (les sacs de trésor suivent leur boss), avec les mêmes quelques drops en plus, le premier toujours obtenu."
 		}
 
 		PermutationExtraSlots: {
@@ -1461,7 +1465,7 @@ Configs: {
 
 		RandomizeBossBags: {
 			Label: Randomiser les sacs de trésor
-			Tooltip: Chaque objet du sac est remplacé par un objet de même catégorie et de même tier.
+			Tooltip: Chaque objet du sac est remplacé par un objet de même catégorie et de même tier. Avec le style de drops permutation, un sac de boss contient plutôt les drops mélangés de son boss (et ses drops en plus).
 		}
 
 		RandomizeCrates: {

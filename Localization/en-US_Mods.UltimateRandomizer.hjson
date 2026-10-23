@@ -130,6 +130,10 @@ Tests: {
 	DropPermutationRuntime: Each enemy's drop rules really follow the permutation: silenced vanilla drops are rolled somewhere, nothing drops twice, variants keep their own drops, enemies without drops get one
 	DropPermutationStable: Removing one drop entry from the permutation only changes the content of very few other entries
 	DropPermutationSurprise: Permutation surprises replace about the set share of the shuffled drops, never a material nor the last copy of an item without another source
+	BossPermutationConserves: The boss permutation loses and duplicates nothing: every shuffled boss drop and treasure bag content is still in some boss or bag
+	BossBagMatchesBoss: Each treasure bag holds the shuffled normal-mode drops of its boss, with their chance and stack in the bag they come from
+	BossPermutationTiers: Boss drops only move between bosses of the same group of tiers, with the same restrictions
+	BossRuntime: The bosses' and bags' drop rules really follow the permutation: silenced drops are rolled somewhere, nothing drops twice
 	CodexShowsLocked: Codex interface: locked drops are greyed with the boss that unlocks them, with no chance
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
@@ -1381,7 +1385,7 @@ Configs: {
 
 		DropTableStyle: {
 			Label: "Enemy drop style"
-			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. A few of them become surprises (see below). Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets a few random extra drops with vanilla-like rates (see below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses keep the vanilla-like extras in the permutation style."
+			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. A few of them become surprises (see below). Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets a few random extra drops with vanilla-like rates (see below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses of the same level also shuffle their drops between them (treasure bags follow their boss), with the same few extra drops, the first one always dropped."
 		}
 
 		PermutationExtraSlots: {
@@ -1461,7 +1465,7 @@ Configs: {
 
 		RandomizeBossBags: {
 			Label: Randomize treasure bags
-			Tooltip: Each item in the bag is replaced by an item of the same category and tier.
+			Tooltip: Each item in the bag is replaced by an item of the same category and tier. With the permutation drop style, a boss bag holds the shuffled drops of its boss instead (and its extra drops).
 		}
 
 		RandomizeCrates: {

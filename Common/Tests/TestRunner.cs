@@ -94,6 +94,7 @@ namespace UltimateRandomizer.Common.Tests
 			if (tests.Count > 0) return;
 			CoreTests.Register();
 			LootTests.Register();
+			BossLootTests.Register();
 			WorldTests.Register();
 			ConfigTests.Register();
 			EnemyTests.Register();
