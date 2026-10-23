@@ -230,7 +230,7 @@ namespace UltimateRandomizer.Common.Core
 				}
 				if (!SetsTier(recipe, recipe.requiredItem.Select(i => i.type).ToList())) continue;
 				if (result >= trueTiers.Length || overrides.ContainsKey(result) || KnownTiers.ContainsKey(result) || lootSources.Contains(result)) continue;
-				if (PlacedByWorldGen(result)) continue;
+				if (PlacedByWorldGen(result) || WorldSourced.Contains(result)) continue;
 				List<int[]> parts = new();
 				foreach (Item ingredient in recipe.requiredItem)
 				{
@@ -280,8 +280,9 @@ namespace UltimateRandomizer.Common.Core
 		// - shops (Obtainability.ShopEntries): from when the NPC moves in (Wizard: hardmode, Cyborg: Plantera...), + the
 		//   entry's conditions; an entry of a special seed is none;
 		// - vanilla recipes, as in RaiseByRecipes (thematic stations raise nothing);
-		// - gathered in the world (ores, gems, herbs, Fallen Star, blocks) or placed by world generation (dungeon furniture):
-		//   their own tier, so these are never raised.
+		// - gathered in the world (ores, gems, herbs, Fallen Star, blocks, WorldSourced: Life Crystal, clouds, seeds of
+		//   plants, Extractinator outputs) or placed by world generation (dungeon furniture): their own tier, so these are
+		//   never raised.
 		// The true tier is raised to that source tier, never lowered; items without any source, set by KnownTiers or the
 		// config, or with a modded recipe (their mod chose the rarity) keep theirs. Repeated until nothing changes (a bag or
 		// an ingredient raised raises what comes from it). sourceTiers / sources (filled, per item): the earliest source and
@@ -295,7 +296,7 @@ namespace UltimateRandomizer.Common.Core
 			List<(int item, int kind, int reference, int tier)> fixedSources = new();
 
 			// Gathered or placed by world generation: their own tier
-			HashSet<int> gathered = Features.Findability.GatheredMaterials.Where(Valid).ToHashSet();
+			HashSet<int> gathered = Features.Findability.GatheredMaterials.Concat(WorldSourced).Where(Valid).ToHashSet();
 			for (int type = 1; type < count; type++)
 			{
 				if (!ContentSamples.ItemsByType.TryGetValue(type, out Item sample) || sample == null) continue;
@@ -512,6 +513,24 @@ namespace UltimateRandomizer.Common.Core
 		// reshapes its materials and raises nothing (0), the others as StationTier
 		public static int RaisingStationTier(int tile, Dictionary<int, List<int>> placers, System.Func<int, int> tierOf) =>
 			Stations.Info(tile).Kind == StationKind.Thematic ? 0 : StationTier(tile, placers, tierOf);
+
+		// Other items the world gives from the start, besides GatheredMaterials, ores and PlacedByWorldGen (checked in
+		// WorldGen.KillTile_GetItemDrops, Check3x2, the island generators and Player.ExtractinatorUse): never raised by a
+		// shop, bag or drop that also sells or holds them. Not here, as they have no world source: Corrupt / Crimson Seeds
+		// (Eye of Cthulhu, Dryad), Hallowed Seeds, Gold Dust (hardmode Merchant only), Beeswax (Queen Bee only)
+		private static readonly int[] WorldSourced =
+		{
+			// Placed by world generation: Life Crystal hearts, floating islands (Rain Cloud: cloud lakes; Snow Cloud: snow
+			// islands), surface Sunflowers, the Enchanted Sword shrine
+			ItemID.LifeCrystal, ItemID.Cloud, ItemID.RainCloud, ItemID.SnowCloudBlock, ItemID.Sunflower, ItemID.EnchantedSword,
+			// Dropped by cutting plants: grass, jungle, mushroom and ash grass seeds, blooming herbs' seeds
+			ItemID.GrassSeeds, ItemID.JungleGrassSeeds, ItemID.MushroomGrassSeeds, ItemID.AshGrassSeeds, ItemID.DaybloomSeeds, ItemID.MoonglowSeeds,
+			ItemID.BlinkrootSeeds, ItemID.DeathweedSeeds, ItemID.WaterleafSeeds, ItemID.FireblossomSeeds, ItemID.ShiverthornSeeds,
+			// Extractinator outputs (ores and gems apart, already gathered): Sturdy Fossil (Desert Fossil), Amber Mosquito,
+			// Apprentice Bait, and the moss of each moss kind
+			ItemID.FossilOre, ItemID.AmberMosquito, ItemID.ApprenticeBait, ItemID.GreenMoss, ItemID.BrownMoss, ItemID.RedMoss, ItemID.BlueMoss,
+			ItemID.PurpleMoss, ItemID.LavaMoss, ItemID.KryptonMoss, ItemID.XenonMoss, ItemID.ArgonMoss, ItemID.VioletMoss
+		};
 
 		// Name parts of dungeon and Lihzahrd items that are no furniture placed by world generation
 		private static readonly string[] NotWorldFurniture = { "Brick", "Banner", "MusicBox", "Crate", "Desert", "Fake_", "Altar", "Furnace", "PowerCell", "Key" };

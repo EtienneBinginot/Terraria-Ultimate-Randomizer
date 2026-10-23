@@ -118,6 +118,7 @@ namespace UltimateRandomizer.Common.Tests
 						$"{Name(t)} {ItemPool.Info[t].Tier}>{ItemPool.TrueTierOf(t)} (source {ItemPool.Info[t].SourceTier}: {ItemPool.Info[t].Source ?? "none"})")));
 				}
 			}
+			TierMaterials(dir, Audit);
 			// The final enemy plan (every drop table, lucky: nothing gated) as rolled without the re-pick: the banned items it
 			// would hold are the only entries the bans change
 			if (!SeedSystem.WorldReady)
@@ -145,6 +146,62 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			Audit($"final enemy plan: {banned.Count} of {total} planned drops are banned items before the re-pick" +
 				(banned.Count > 0 ? ": " + string.Join(", ", banned.GroupBy(t => t).OrderByDescending(g => g.Count()).Take(15).Select(g => $"{Name(g.Key)} x{g.Count()}")) : ""));
+		}
+
+		// TierMaterials.tsv (next to TierAudit.tsv): every vanilla item a replaced ingredient may become in this world
+		// (RecipePlanner.IngredientCandidates, categories of weight 0 left out as Candidates does; needs a world), and every
+		// other vanilla Material or OreBar not excluded nor banned, crafted or not, with its tiers and earliest source
+		private static void TierMaterials(string dir, Action<string> audit)
+		{
+			bool world = SeedSystem.WorldReady && RecipeSystem.RecipeCount > 0;
+			HashSet<int> candidates = new();
+			if (world)
+			{
+				List<int>[,] buckets = RecipePlanner.IngredientCandidates();
+				WeightTable weights = CraftingConfig.Instance.IngredientWeights;
+				for (int c = 0; c < ItemCategories.Count; c++)
+				{
+					if (weights.Get((ItemCategory)c) <= 0) continue;
+					for (int t = 0; t < Tiers.Count; t++) candidates.UnionWith(buckets[c, t]);
+				}
+			}
+			// Results of the original vanilla recipes (live ones when the recipes are not stored yet)
+			HashSet<int> crafted = new();
+			if (RecipeSystem.RecipeCount > 0)
+			{
+				for (int i = 0; i < RecipeSystem.RecipeCount; i++)
+				{
+					if (!RecipeSystem.IsModded(i)) crafted.Add(RecipeSystem.OriginalResult(i));
+				}
+			}
+			else
+			{
+				for (int i = 0; i < Recipe.numRecipes; i++)
+				{
+					if (Main.recipe[i]?.createItem != null && ItemClassifier.IsVanillaRecipe(Main.recipe[i])) crafted.Add(Main.recipe[i].createItem.type);
+				}
+			}
+			List<int> rows = new();
+			for (int type = 1; type < Math.Min(ItemID.Count, ItemPool.Info.Length); type++)
+			{
+				ItemInfo info = ItemPool.Info[type];
+				bool material = !info.Excluded && !info.Banned && info.Category is ItemCategory.Material or ItemCategory.OreBar;
+				if (material || candidates.Contains(type)) rows.Add(type);
+			}
+			rows = rows.OrderBy(t => ItemPool.Info[t].TrueTier).ThenBy(t => ItemPool.Info[t].Category).ThenBy(Name, StringComparer.CurrentCulture).ThenBy(t => t).ToList();
+			StringBuilder tsv = new();
+			tsv.AppendLine("id	internal name	name	category	rarity tier	tier	true tier	unlock tier	findability tier	source tier	earliest source	crafted	candidate");
+			foreach (int type in rows)
+			{
+				ItemInfo info = ItemPool.Info[type];
+				int found = world ? Findability.Tier(type) : Never;
+				tsv.AppendLine(string.Join("	", type, ItemID.Search.GetName(type), Name(type), info.Category, info.RarityTier, info.Tier, info.TrueTier,
+					ItemPool.UnlockTier(info.TrueTier), found >= Never ? -1 : found, info.SourceTier, info.Source ?? "none", crafted.Contains(type) ? "yes" : "no",
+					candidates.Contains(type) ? "yes" : "no"));
+			}
+			string path = Path.Combine(dir, "TierMaterials.tsv");
+			File.WriteAllText(path, tsv.ToString());
+			audit($"{rows.Count} materials and ingredient candidates ({candidates.Count} candidates{(world ? "" : ", no world loaded")}), written to {path}");
 		}
 
 		// 1. What a replaced ingredient may become (RecipePlanner.IngredientCandidates: found, never crafted, randomizable, no
