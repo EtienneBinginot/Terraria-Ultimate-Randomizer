@@ -14,10 +14,10 @@ namespace UltimateRandomizer.Common.Core
 
 		// withRecipes: false leaves out what only a recipe makes. anyBlock: every block and critter counts as gathered (the
 		// obtainability checks); false keeps only the real sources: the world materials, ores and caught critters (a
-		// crafted-only brick or wall is no spare result)
-		public static HashSet<int> Collect(bool withRecipes = true, bool anyBlock = true)
+		// crafted-only brick or wall is no spare result). withShops: false leaves out what only a shop sells (the shop dump)
+		public static HashSet<int> Collect(bool withRecipes = true, bool anyBlock = true, bool withShops = true)
 		{
-			HashSet<int> set = new(ShopItems);
+			HashSet<int> set = withShops ? new(ShopItems) : new();
 			if (withRecipes) set.UnionWith(RecipeResults);
 			foreach (List<DropRateInfo> drops in LootSnapshot.Npcs.Values) AddDrops(set, drops);
 			foreach (List<DropRateInfo> drops in LootSnapshot.Items.Values) AddDrops(set, drops);

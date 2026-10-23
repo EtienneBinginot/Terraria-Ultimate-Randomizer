@@ -71,6 +71,10 @@ namespace UltimateRandomizer.Common.Core
 		// An explicit ceiling (null: none), gated or not: nothing above it, by Tier or TrueTier, jackpots included (the
 		// hardmode wall of fishing and shimmer, chest caps)
 		public int? MaxTier;
+		// The progression the gating limit reads (null: the live one, ProgressionSystem.UnlockedTier and Main.hardMode): plans
+		// simulated at another progression (the shop dump and tests)
+		public int? GatingTier;
+		public bool GatingHardMode;
 	}
 
 	// Every randomizable item sorted by category and tier. All features pick their items here.
@@ -389,7 +393,8 @@ namespace UltimateRandomizer.Common.Core
 				_ => WeightedCategory(rng, request.Weights ?? LootConfig.Instance.DropCategoryWeights)
 			};
 			int window = LootConfig.Instance.TierWindow;
-			int limit = request.IgnoreGating ? Tiers.Max : GatingLimit(request.MinLimit);
+			int limit = request.IgnoreGating ? Tiers.Max
+				: request.GatingTier.HasValue ? GatingLimit(request.GatingTier.Value, request.GatingHardMode, request.MinLimit) : GatingLimit(request.MinLimit);
 			// Some categories have nothing in the early tiers (dyes, summon weapons...): rather than changing the category,
 			// a replacement may go up to the original item's own tier, which this source already gives in vanilla
 			int categoryLimit = hasOriginal && category == Info[request.OriginalItem].Category ? Math.Max(limit, Info[request.OriginalItem].Tier) : limit;
@@ -658,6 +663,8 @@ namespace UltimateRandomizer.Common.Core
 		{
 			int[] map = new int[Info.Length];
 			for (int i = 0; i < map.Length; i++) map[i] = i;
+			// TODO(shops): Collect() counts every vanilla shop item as obtainable, but randomized shops (ShopFeature.PlanShop) may
+			// no longer sell it; the permutation only stays complete if shops use Shuffled too (Roll does in Shuffle mode)
 			HashSet<int> obtainable = Obtainability.Collect();
 			for (int c = 0; c < ItemCategories.Count; c++)
 			{
