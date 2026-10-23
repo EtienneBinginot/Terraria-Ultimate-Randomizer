@@ -212,6 +212,8 @@ namespace UltimateRandomizer.Common.Features
 				{
 					if (drop.JackpotGap > 0) jackpots += Math.Clamp(drop.Chance, 0f, 1f);
 				}
+				// Permutation: the original entries are not replaced as they spawn (no luck nor madness on them)
+				if (DropPermutation.InStyle(owner)) continue;
 				foreach (Terraria.GameContent.ItemDropRules.DropRateInfo entry in LootSnapshot.ForNpc(killed))
 				{
 					Random wild = new(rng.Next());
@@ -286,11 +288,13 @@ namespace UltimateRandomizer.Common.Features
 							plans[killed] = plan;
 						}
 						kills++;
+						// Permutation: the original entries drop as they are (no surprise)
+						bool permuted = DropPermutation.InStyle(BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(killed, out NPC killedSample) ? killedSample.type : killed));
 						foreach (PlannedDrop drop in plan)
 						{
 							if (rng.NextDouble() >= drop.Chance) continue;
 							items++;
-							if (!drop.Extra && rng.NextDouble() < surprise)
+							if (!drop.Extra && !permuted && rng.NextDouble() < surprise)
 							{
 								if (Found(SurpriseItem(NpcTiers.EffectiveTier(killed)))) fromSurprise++;
 							}

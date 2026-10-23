@@ -11,6 +11,9 @@ namespace UltimateRandomizer.Common.Core
 	{
 		public static readonly Dictionary<int, List<DropRateInfo>> Npcs = new();
 		public static readonly Dictionary<int, List<DropRateInfo>> Items = new();
+		// Per enemy net ID, for each entry of Npcs: the index of the registered rule it comes from when that rule was wrapped
+		// (DropPermutation's PermutableRule), -1 when the rule stays as it is (per-player drops)
+		public static readonly Dictionary<int, int[]> NpcRules = new();
 
 		private static readonly Dictionary<int, int> bagTiers = new();
 
@@ -36,6 +39,10 @@ namespace UltimateRandomizer.Common.Core
 		private static readonly List<DropRateInfo> None = new();
 
 		public static List<DropRateInfo> ForNpc(int npcType) => Npcs.TryGetValue(npcType, out List<DropRateInfo> drops) ? drops : None;
+
+		private static readonly int[] NoRules = Array.Empty<int>();
+
+		public static int[] RulesOf(int npcType) => NpcRules.TryGetValue(npcType, out int[] rules) ? rules : NoRules;
 
 		public static List<DropRateInfo> ForItem(int itemType) => Items.TryGetValue(itemType, out List<DropRateInfo> drops) ? drops : None;
 
@@ -63,6 +70,7 @@ namespace UltimateRandomizer.Common.Core
 		public static void Unload()
 		{
 			Npcs.Clear();
+			NpcRules.Clear();
 			Items.Clear();
 			bagTiers.Clear();
 		}

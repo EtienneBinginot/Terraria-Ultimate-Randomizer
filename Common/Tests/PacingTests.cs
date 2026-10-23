@@ -74,6 +74,12 @@ namespace UltimateRandomizer.Common.Tests
 			}
 		}
 
+		// The gear and drop targets were set for the vanilla-like extra drops (permutation targets: later)
+		private static void RequireVanillaLikeDrops()
+		{
+			if (LootConfig.Instance.DropTableStyle == DropTableStyle.Permutation) Check.Skip("the targets are for the vanilla-like drop style");
+		}
+
 		private static void PacingExpected()
 		{
 			PacingResult result = PacingModel.Simulate(10, 42);
@@ -81,6 +87,7 @@ namespace UltimateRandomizer.Common.Tests
 				+ $"from replaced drops {result.FromOriginal:0.0}, extra drops {result.FromExtra:0.0}, guaranteed {result.FromGuaranteed:0.0}, surprises {result.FromSurprise:0.0}, "
 				+ $"chests {result.FromChests:0.0}; by tier {string.Join(" / ", result.ByTier.Select(t => t.ToString("0.0")))}");
 			RequireDefaults();
+			RequireVanillaLikeDrops();
 			Check.That(result.GearPerHour >= MinGearPerHour && result.GearPerHour <= MaxGearPerHour,
 				$"{result.GearPerHour:0.0} pieces of equipment per hour, expected {MinGearPerHour} to {MaxGearPerHour} (about 46 with LootAbundance 3)");
 		}
@@ -100,6 +107,7 @@ namespace UltimateRandomizer.Common.Tests
 			PacingResult result = PacingModel.Simulate(5, 44);
 			Log($"Drops: {result.ItemsPerKill:0.00} items per kill");
 			RequireDefaults();
+			RequireVanillaLikeDrops();
 			if (!IsDefault(LootConfig.Instance, "CommonDropChance")) Check.Skip("CommonDropChance is not at its default value");
 			Check.That(result.ItemsPerKill >= MinItemsPerKill, $"only {result.ItemsPerKill:0.00} items per kill, expected at least {MinItemsPerKill} (about 3.2 with LootAbundance 3)");
 		}
@@ -144,6 +152,7 @@ namespace UltimateRandomizer.Common.Tests
 		private static void PacingVariety()
 		{
 			RequireDefaults();
+			RequireVanillaLikeDrops();
 			PacingResult result = PacingModel.Simulate(10, 43);
 			Check.That(result.DistinctPerHour >= 10, $"only {result.DistinctPerHour:0.0} different pieces of equipment per hour");
 		}

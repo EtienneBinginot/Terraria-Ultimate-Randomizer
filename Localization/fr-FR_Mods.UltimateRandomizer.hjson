@@ -124,6 +124,9 @@ Tests: {
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
 	LockedVanillaDropRemoved: Un butin d'origine remplacé encore verrouillé par la progression ne tombe pas ; un butin débloqué tombe comme prévu
+	DropPermutationConserves: La permutation des drops ne perd et ne duplique rien : chaque drop vanilla permuté tombe toujours d'un ennemi
+	DropPermutationMoves: Les drops permutés restent dans leur groupe de palier et la plupart passent à un autre ennemi
+	DropPermutationAccess: Les drops réservés au mode expert, au mode maître ou à une graine spéciale ne vont qu'à des emplacements avec les mêmes restrictions
 	CodexShowsLocked: Interface du codex : les butins verrouillés sont grisés avec le boss qui les débloque, sans chance
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
@@ -1121,6 +1124,11 @@ Configs: {
 			Label: Simple
 			Tooltip: ""
 		}
+
+		Permutation: {
+			Label: "Permutation"
+			Tooltip: ""
+		}
 	}
 
 	GeneralConfig: {
@@ -1364,13 +1372,18 @@ Configs: {
 		}
 
 		RandomizeMobDrops: {
-			Label: Randomiser le loot des ennemis et des boss
-			Tooltip: Chaque objet lâché par un ennemi est remplacé par un objet de même catégorie, avec la chance et les conditions d'origine. Les objets de progression, les pièces et les sacs de trésor sont conservés.
+			Label: "Randomiser le loot des ennemis et des boss"
+			Tooltip: "Chaque objet lâché par un ennemi est remplacé par un objet de même catégorie, avec la chance et les conditions d'origine (ou, en style permutation, déplacé vers un autre ennemi du même niveau). Les objets de progression, les pièces et les sacs de trésor sont conservés."
 		}
 
 		DropTableStyle: {
-			Label: Drops supplémentaires
-			Tooltip: En plus des drops d'origine remplacés. Façon vanilla : chaque type d'ennemi a un nombre aléatoire de drops en plus (souvent peu, parfois beaucoup) avec des taux comme le jeu de base (1/1 pour les matériaux, 1/50 pour l'équipement...). Simple : chaque emplacement a la chance fixe ci-dessous. Miroir de l'original : aucun drop en plus, seulement les drops d'origine (remplacés).
+			Label: "Style du loot des ennemis"
+			Tooltip: "Permutation (par défaut) : les drops d'origine des ennemis sont mélangés entre ennemis du même niveau ; chaque objet garde sa chance et sa quantité, et prend les conditions de l'ennemi qui le reçoit. Chaque ennemi reçoit aussi un drop aléatoire en plus (chance ci-dessous). Façon vanilla : les drops d'origine sont remplacés, et chaque type d'ennemi a un nombre aléatoire de drops en plus (souvent peu, parfois beaucoup) avec des taux comme le jeu de base (1/1 pour les matériaux, 1/50 pour l'équipement...). Simple : drops remplacés, et chaque emplacement en plus a la chance fixe ci-dessous. Miroir de l'original : aucun drop en plus, seulement les drops d'origine (remplacés). En style permutation, les boss gardent les drops en plus façon vanilla."
+		}
+
+		PermutationExtraChance: {
+			Label: "Chance du drop en plus (permutation, %)"
+			Tooltip: "Style permutation uniquement : chance du drop aléatoire en plus que reçoit chaque ennemi, en plus de ses drops d'origine mélangés. L'abondance du loot ne la change pas."
 		}
 
 		EnemiesWithoutDropsCanDrop: {

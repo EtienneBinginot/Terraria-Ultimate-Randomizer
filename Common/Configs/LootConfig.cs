@@ -38,7 +38,10 @@ namespace UltimateRandomizer.Common.Configs
 		// Same number of drops and same rates as the original enemy, each item replaced by one of the same category
 		MirrorOriginal,
 		// Fixed chance for every slot
-		Simple
+		Simple,
+		// The original drops of the enemies are shuffled between enemies of the same tier (each keeps its own chance and
+		// stack, the conditions are the receiving enemy's), plus one random extra drop (PermutationExtraChance)
+		Permutation
 	}
 
 	public class LootConfig : RandomizerConfig
@@ -64,9 +67,15 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool RandomizeMobDrops;
 
-		[DefaultValue(DropTableStyle.VanillaLike)]
+		[DefaultValue(DropTableStyle.Permutation)]
 		[DrawTicks]
 		public DropTableStyle DropTableStyle;
+
+		// Permutation style: chance (%) of the one random extra drop of each enemy (not scaled by loot abundance)
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(10f)]
+		public float PermutationExtraChance;
 
 		[DefaultValue(true)]
 		public bool EnemiesWithoutDropsCanDrop;
