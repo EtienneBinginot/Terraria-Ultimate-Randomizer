@@ -19,8 +19,10 @@ namespace UltimateRandomizer.Common.Features
 	// (expert accessories such as the Royal Gel) are places of their own (access "Bag"), moved between the bags of the group.
 	// The bag item on the boss, coins, kept items and the rules that are not complete (per-player drops, one-from-rules...)
 	// stay as they are, as do the entries with a seasonal condition (DropPermutation.KeptVanilla); the other boss-specific
-	// conditions follow PlacedConditions. Groups: BossGroups. Computed from the world seed, the synced settings and the snapshots: the server (kills) and the
-	// clients (bags are opened on the client, journal, codex) get the same plan
+	// conditions follow PlacedConditions. Groups: BossGroups; a hard gate only moves to bosses of its true tier or later
+	// (DropPermutation.GateBands). The evil boss the world lacks is left out (AbsentEvil). Computed from the world seed, the
+	// synced settings, the world's evil and the snapshots: the server (kills) and the clients (bags are opened on the
+	// client, journal, codex) get the same plan
 	public static class BossPermutation
 	{
 		// Index of a bag-only place: this offset + the entry index in the bag's snapshot
@@ -49,6 +51,8 @@ namespace UltimateRandomizer.Common.Features
 			public Dictionary<int, List<int>> Carried;
 			// Per bag: its entries travelling with a not-expert drop of its boss (in the bag through Carried)
 			public Dictionary<int, bool[]> Matched;
+			// The world evil the plan was made for (AbsentEvil)
+			public WorldEvil Evil;
 		}
 
 		private static WorldPlan cached;
@@ -129,6 +133,17 @@ namespace UltimateRandomizer.Common.Features
 			IEnumerable<string> ca = a.conditions.Select(c => c?.GetType().FullName ?? "");
 			IEnumerable<string> cb = (b.conditions ?? new List<IItemDropRuleCondition>()).Select(c => c?.GetType().FullName ?? "");
 			return ca.SequenceEqual(cb);
+		}
+
+		// The evil boss this world lacks: the Eater of Worlds in a Crimson world, the Brain of Cthulhu in a Corruption one (both
+		// are fought in drunk and zenith worlds: BiomeSlots.CurrentEvil, from the synced world data). Its summon can't be used
+		// without its biome, so its places are left out of the permutation: its own contents are missing as in vanilla (Shadow
+		// Scales in a Crimson world), and no content of the other evil boss is sent where nobody can get it. Its table and bag
+		// stay vanilla
+		public static bool AbsentEvil(int unit, WorldEvil evil)
+		{
+			int owner = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? sample.type : unit);
+			return owner == NPCID.EaterofWorldsHead && evil == WorldEvil.Crimson || owner == NPCID.BrainofCthulhu && evil == WorldEvil.Corruption;
 		}
 
 		// The boss tier of a table
@@ -266,11 +281,12 @@ namespace UltimateRandomizer.Common.Features
 			public Dictionary<int, bool[]> Matched = new();
 		}
 
-		private static Collected Collect()
+		private static Collected Collect(WorldEvil evil)
 		{
 			Collected c = new();
 			foreach (int unit in Units())
 			{
+				if (AbsentEvil(unit, evil)) continue;
 				List<DropRateInfo> entries = LootSnapshot.ForNpc(unit);
 				bool[] rolled = DropPermutation.RolledEntries(entries, LootSnapshot.RulesOf(unit));
 				int key = DetRandom.NpcKey(unit);
@@ -342,8 +358,8 @@ namespace UltimateRandomizer.Common.Features
 		// The rank of a place in its group: from the seed and its identity only (stable, as DropPermutation.Rank)
 		public static int Rank(int seed, DropPermutation.Place place) => DetRandom.Hash(seed, RollKey.BossPermutation, place.OwnerKey, place.Index);
 
-		// Pure: ContentOf for these places. Groups: one boss group and one access class each; in each, the places sorted by rank
-		// take the content of the next one (a random cycle)
+		// Pure: ContentOf for these places. Groups: one boss group and one access class each; in each (each of its gate bands:
+		// DropPermutation.GateBands), the places sorted by rank take the content of the next one (a random cycle)
 		public static int[] Permute(IReadOnlyList<DropPermutation.Place> places, int seed, Dictionary<int, int> groupOfUnit, out List<List<int>> groups)
 		{
 			int[] contentOf = Enumerable.Range(0, places.Count).ToArray();
@@ -353,15 +369,20 @@ namespace UltimateRandomizer.Common.Features
 				.Select(g => g.ToList()).ToList();
 			foreach (List<int> group in groups)
 			{
-				List<int> order = group.OrderBy(i => Rank(seed, places[i])).ThenBy(i => places[i].OwnerKey).ThenBy(i => places[i].Owner).ThenBy(i => places[i].Index).ToList();
-				for (int k = 0; k < order.Count; k++) contentOf[order[k]] = order[(k + 1) % order.Count];
+				foreach (List<int> band in DropPermutation.GateBands(group, i => DropPermutation.PlaceTier(places[i]), i => DropPermutation.GateTier(places[i].Entry.itemId), i => places[i].Owner))
+				{
+					List<int> order = band.OrderBy(i => Rank(seed, places[i])).ThenBy(i => places[i].OwnerKey).ThenBy(i => places[i].Owner).ThenBy(i => places[i].Index).ToList();
+					for (int k = 0; k < order.Count; k++) contentOf[order[k]] = order[(k + 1) % order.Count];
+				}
 			}
 			return contentOf;
 		}
 
-		public static WorldPlan Build(int seed)
+		// evil: the world evil to plan for (this world's when null)
+		public static WorldPlan Build(int seed, WorldEvil? evil = null)
 		{
-			Collected c = Collect();
+			WorldEvil worldEvil = evil ?? BiomeSlots.CurrentEvil;
+			Collected c = Collect(worldEvil);
 			List<DropPermutation.Place> places = c.Places;
 			List<List<int>> bossGroups = BossGroups(places.Select(p => (p.Owner, GroupTierOf(p.Owner))));
 			Dictionary<int, int> groupOfUnit = new();
@@ -447,7 +468,7 @@ namespace UltimateRandomizer.Common.Features
 			return new WorldPlan
 			{
 				Places = places, ContentOf = contentOf, BagVersion = bagVersion, Groups = groups, BossGroups = bossGroups, GroupOfUnit = groupOfUnit,
-				ByUnit = byUnit, ByBag = byBag, Carried = carriedOf, Matched = c.Matched
+				ByUnit = byUnit, ByBag = byBag, Carried = carriedOf, Matched = c.Matched, Evil = worldEvil
 			};
 		}
 
@@ -458,12 +479,12 @@ namespace UltimateRandomizer.Common.Features
 			ByBag = new Dictionary<int, DropPermutation.Placed[]>(), Carried = new Dictionary<int, List<int>>(), Matched = new Dictionary<int, bool[]>()
 		};
 
-		// The plan of the current world (cleared by WorldCaches.Reset)
+		// The plan of the current world (cleared by WorldCaches.Reset; made again when the world's evil arrives on a client)
 		public static WorldPlan Current
 		{
 			get
 			{
-				if (cached != null) return cached;
+				if (cached != null && cached.Evil == BiomeSlots.CurrentEvil) return cached;
 				if (!ItemPool.Ready || !SeedSystem.WorldReady) return Empty();
 				return cached = Build(SeedSystem.WorldSeed);
 			}

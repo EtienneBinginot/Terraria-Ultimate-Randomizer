@@ -353,8 +353,9 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Recipes whose result, ingredients and station may change: vanilla recipes (and other mods' ones unless LeftAlone) of
-		// randomizable items, except the mining chain. A house recipe (HouseRecipe) is touchable but keeps its result (RecipePlanner)
-		public static bool Touchable(int i) => !LeftAlone(i) && !shell[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+		// randomizable items, the mining chain too (RecipePlanner.MiningRequirements guarantees a pickaxe for each mining level).
+		// A house recipe (HouseRecipe) is touchable but keeps its result (RecipePlanner)
+		public static bool Touchable(int i) => !LeftAlone(i) && !shell[i] && ItemPool.IsRandomizable(originalTypes[i]);
 
 		// What a house needs besides the table and the chair (basic stations, guaranteed in the world): hint targets. Their
 		// recipes keep their result but get random ingredients found at tier 0 and a basic station (RecipePlanner), so a
@@ -391,9 +392,6 @@ namespace UltimateRandomizer.Common.Features
 			Assembly own = typeof(Recipe).Assembly;
 			return condition != null && (condition.GetType().Assembly != own || condition.Predicate?.Method.Module.Assembly is Assembly code && code != own);
 		}
-
-		// A recipe kept only because the mining chain is protected
-		public static bool KeptForMining(int i) => !LeftAlone(i) && !shell[i] && ItemPool.IsRandomizable(originalTypes[i]) && KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
 
 		// The live recipe differs from the vanilla one (result or ingredients): what it makes sells for its ingredients
 		public static bool IsRandomized(int i)
@@ -454,15 +452,6 @@ namespace UltimateRandomizer.Common.Features
 		// Always the planned result, whatever the progression: its key ingredient (or stations) make the recipe wait for its
 		// tier, there is no stand-in any more
 		public static (int type, int stack) AppliedResult(RecipePlan plan, int i) => plan.Results[i];
-
-		// Pickaxes and bars (the mining chain: anvils, Molten Pickaxe...) are never randomized when protected
-		private static bool KeepRecipe(int original, bool protectMining)
-		{
-			if (!ItemPool.IsRandomizable(original)) return true;
-			if (!protectMining) return false;
-			if (ItemPool.Info[original].Category == ItemCategory.OreBar) return true;
-			return ContentSamples.ItemsByType.TryGetValue(original, out Item sample) && sample.pick > 0;
-		}
 
 		// Is this item one of the live recipe's ingredients through a group (any Wood -> N Boreal Wood)?
 		public static bool InAcceptedGroup(int i, int item)

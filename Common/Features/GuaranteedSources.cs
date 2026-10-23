@@ -258,9 +258,10 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// Crafted and dropped vanilla boss summons (Guide Voodoo Doll included) when unprotected, at the tier before their
-		// boss's; dropped one at a time, as rarely as a station. Only the summon of the world's evil (both in drunk and zenith
-		// worlds: BiomeSlots.CurrentEvil, from the synced world data). Modded summons stay protected (Protection)
+		// Vanilla boss summons (Guide Voodoo Doll included; those found in the world too: Truffle Worm, Prismatic Lacewing,
+		// Lihzahrd Power Cell, Gelatin Crystal, guaranteed as items) when unprotected, at the tier before their boss's; dropped
+		// one at a time, as rarely as a station. Only the summon of the world's evil (both in drunk and zenith worlds:
+		// BiomeSlots.CurrentEvil, from the synced world data). Modded summons stay protected (Protection)
 		public static IEnumerable<Requirement> SummonRequirements()
 		{
 			WorldEvil evil = BiomeSlots.CurrentEvil;
@@ -269,6 +270,17 @@ namespace UltimateRandomizer.Common.Features
 				if (!Protection.IsBossSummon(type) || !ItemPool.IsRandomizable(type)) continue;
 				if (type == ItemID.WormFood && evil == WorldEvil.Crimson || type == ItemID.BloodySpine && evil == WorldEvil.Corruption) continue;
 				yield return new Requirement { Item = type, Tier = Protection.SummonTier(type), Station = true };
+			}
+		}
+
+		// The progression tools a boss gives in vanilla (Protection.ProgressionTools: the Pwnhammer from hardmode, the Temple
+		// Key after Plantera) when unprotected: their boss's drop is permuted away, or randomized. Dropped one at a time, as
+		// rarely as a station, by the enemies of their tier (hardmode biomes, the Temple or the Dungeon after Plantera)
+		public static IEnumerable<Requirement> ProgressionToolRequirements()
+		{
+			foreach ((int item, Core.Tier tier) in Protection.ProgressionTools)
+			{
+				if (ItemPool.IsRandomizable(item)) yield return new Requirement { Item = item, Tier = (int)tier, Station = true };
 			}
 		}
 
@@ -358,7 +370,7 @@ namespace UltimateRandomizer.Common.Features
 		// Every requirement once: the earliest tier, keeping every flag (a pickaxe also needed as an ingredient stays a tool)
 		private static List<Requirement> CollectRequirements()
 		{
-			List<Requirement> all = StationRequirements().Concat(OtherStationRequirements()).Concat(SummonRequirements()).ToList();
+			List<Requirement> all = StationRequirements().Concat(OtherStationRequirements()).Concat(SummonRequirements()).Concat(ProgressionToolRequirements()).ToList();
 			foreach (Func<IEnumerable<Requirement>> provider in ExtraRequirements) all.AddRange(provider());
 			// A hard gate (no allowance) is never required before its true tier
 			return all.GroupBy(r => r.Item).Select(g => new Requirement
@@ -1144,7 +1156,11 @@ namespace UltimateRandomizer.Common.Features
 				// Event, moon and seasonal enemies (in the pool when SwapEventEnemies is on) are no reliable source
 				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) AddPlan(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false), t);
 			}
-			foreach (int boss in NpcTiers.BossTypes) AddPlan(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss));
+			// Not the evil boss this world lacks (BossPermutation.AbsentEvil): its summon needs its biome
+			foreach (int boss in NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, BiomeSlots.CurrentEvil)))
+			{
+				AddPlan(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss));
+			}
 			// A bag's content is found once the bag is (bags may hold bags: repeat until nothing changes)
 			Dictionary<int, List<PlannedDrop>> bagPlans = LootSnapshot.Items.Keys.Where(b => !SeasonalBags.Contains(b)).OrderBy(b => b)
 				.ToDictionary(b => b, b => BagPlan.Plan(b, lucky: true));

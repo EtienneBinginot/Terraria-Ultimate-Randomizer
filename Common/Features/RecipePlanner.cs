@@ -2610,12 +2610,12 @@ namespace UltimateRandomizer.Common.Features
 
 		// ---------------------------------------------------------------- Vanilla ingredients
 
-		// The tier of each guaranteed station and summon, for the providers that can't read Findability.Tier (it depends on them)
+		// The tier of each guaranteed station, summon and progression tool, for the providers that can't read Findability.Tier (it depends on them)
 		private static Dictionary<int, int> GuaranteedStationTiers()
 		{
 			Dictionary<int, int> tiers = new();
 			foreach (GuaranteedSources.Requirement station in GuaranteedSources.StationRequirements().Concat(GuaranteedSources.OtherStationRequirements())
-				.Concat(GuaranteedSources.SummonRequirements()))
+				.Concat(GuaranteedSources.SummonRequirements()).Concat(GuaranteedSources.ProgressionToolRequirements()))
 			{
 				tiers[station.Item] = Math.Min(tiers.GetValueOrDefault(station.Item, station.Tier), station.Tier);
 			}

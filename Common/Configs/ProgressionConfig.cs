@@ -128,17 +128,14 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Header("Protection")]
 		[ReloadRequired]
-		public List<ItemDefinition> ProtectedItems = new()
-		{
-			// The hardmode ore chain (Pwnhammer), keys and the summons found in the world. Crafted and dropped boss summons are
-			// randomized and guaranteed on common enemies (GuaranteedSources.SummonRequirements). The ingredients of protected
-			// results that can't be found in time are replaced by findable ones (or guaranteed in Vanilla mode), so their
-			// materials (souls of light and night...) need no protection
-			new(ItemID.Pwnhammer), new(ItemID.TempleKey), new(ItemID.LihzahrdPowerCell), new(ItemID.GoldenKey), new(ItemID.ShadowKey),
-			new(ItemID.QueenSlimeCrystal), new(ItemID.TruffleWorm), new(ItemID.LihzahrdAltar)
-		};
+		// Empty by default: boss summons (crafted, dropped or found in the world), the Pwnhammer and the Temple Key are
+		// randomized and guaranteed on common enemies of their tier (GuaranteedSources), the keys move with the drop
+		// permutation, the Lihzahrd Altar is never given (ItemClassifier.BannedVanilla)
+		public List<ItemDefinition> ProtectedItems = new();
 
-		[DefaultValue(true)]
+		// Off by default: the materials are randomized, recipes give each crafted item a key of its tier, and hard gates
+		// (Luminite, mechanical souls, Ectoplasm...) never move below their true tier
+		[DefaultValue(false)]
 		[ReloadRequired]
 		public bool ProtectProgressionMaterials;
 
@@ -150,12 +147,6 @@ namespace UltimateRandomizer.Common.Configs
 		[DrawTicks]
 		[ReloadRequired]
 		public StationProtection StationProtection;
-
-		// Off: pickaxe and bar recipes are randomized like the others, and the recipe planner guarantees a pickaxe for each
-		// mining level instead (RecipePlanner.MiningRequirements)
-		[DefaultValue(false)]
-		[ReloadRequired]
-		public bool ProtectPickaxeProgression;
 
 		[Header("Guarantees")]
 		// Chance multiplier of the drops placed on common enemies so that unprotected stations can be found

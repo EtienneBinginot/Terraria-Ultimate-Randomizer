@@ -13,7 +13,8 @@ namespace UltimateRandomizer.Common.Features
 	// DropTableStyle.Permutation: the original drop entries of the ordinary enemies, vanilla and modded (their tier: NpcTiers'
 	// estimate), are shuffled between them. Each entry of
 	// an enemy's flattened drop table (LootSnapshot) is a place; its content (item, stack range, own chance) moves to another
-	// place of the same tier and access class, and takes that place's conditions. Every enemy keeps its number of entries,
+	// place of the same tier and access class (a hard gate never to a place below its true tier: GateBands), and takes that
+	// place's conditions. Every enemy keeps its number of entries,
 	// and every item of a permuted vanilla entry still drops somewhere. An eligible enemy without any vanilla entry gets one
 	// synthetic place (a random item of its level), permuted like the others. A share of the moved contents
 	// (PermutationSurpriseChance) then becomes a random item, never a material nor the keeper copy of an item
@@ -211,19 +212,78 @@ namespace UltimateRandomizer.Common.Features
 		// joining or leaving a group (a setting changed which entries are kept) does not move the others
 		public static int Rank(int seed, Place place) => DetRandom.Hash(seed, RollKey.DropPermutation, place.OwnerKey, place.Index);
 
-		// Pure: ContentOf for these places and this seed. In each group the places are sorted by rank, and each takes the
-		// content of the next one (a random cycle: no content stays at its place). Removing one place only changes the
-		// content of the place before it
+		// Pure: ContentOf for these places and this seed. In each group (each of its GateBands) the places are sorted by rank,
+		// and each takes the content of the next one (a random cycle: no content stays at its place, but a hard gate alone in
+		// its band). Removing one place only changes the content of the place before it
 		public static int[] Permute(IReadOnlyList<Place> places, int seed, out List<List<int>> groups)
 		{
 			int[] contentOf = Enumerable.Range(0, places.Count).ToArray();
 			groups = Groups(places);
 			foreach (List<int> group in groups)
 			{
-				List<int> order = group.OrderBy(i => Rank(seed, places[i])).ThenBy(i => places[i].OwnerKey).ThenBy(i => places[i].Owner).ThenBy(i => places[i].Index).ToList();
-				for (int k = 0; k < order.Count; k++) contentOf[order[k]] = order[(k + 1) % order.Count];
+				foreach (List<int> band in GateBands(group, i => PlaceTier(places[i]), i => GateTier(places[i].Entry.itemId), i => places[i].Owner))
+				{
+					List<int> order = band.OrderBy(i => Rank(seed, places[i])).ThenBy(i => places[i].OwnerKey).ThenBy(i => places[i].Owner).ThenBy(i => places[i].Index).ToList();
+					for (int k = 0; k < order.Count; k++) contentOf[order[k]] = order[(k + 1) % order.Count];
+				}
 			}
 			return contentOf;
+		}
+
+		// Hard gates (ItemPool.IsHardGate: Luminite, the mechanical souls, Ectoplasm, Beetle Husks...) have no tier allowance:
+		// a content holding one never moves to a place of a lower tier. -1: any place
+		public static int GateTier(int item) => ItemPool.IsHardGate(item) ? ItemPool.TrueTierOf(item) : -1;
+
+		// The tier from which a place gives its content: its own, raised by its progression conditions (hardmode, Plantera...:
+		// Findability.ConditionTier); -1 for a place that never drops (a pre-hardmode only entry of a hardmode enemy)
+		public static int PlaceTier(Place place)
+		{
+			int tier = Findability.ConditionTier(place.Entry.conditions, place.Tier);
+			return tier == Findability.Never ? -1 : tier;
+		}
+
+		// Pure: the parts of a group its contents cycle in. The group itself, unless it holds a hard gate whose true tier is
+		// above its lowest place (Luminite with the Lunatic Cultist, Ectoplasm with early Dungeon enemies). Then the true
+		// tiers of those gates cut the places into bands by placeTier (from one cut to the next), and every content cycles in
+		// its own place's band: a gate only reaches places of its true tier or later. A band of a single owner (the Moon
+		// Lord alone from tier 9) would only shuffle that owner's own loot: it joins the band below, its gates too high for
+		// it staying where they are, as does a gate whose own place is below its true tier (vanilla put it there). Each band
+		// keeps the group's order
+		public static List<List<int>> GateBands(List<int> group, Func<int, int> placeTier, Func<int, int> gateTier, Func<int, int> ownerOf)
+		{
+			if (group.Count < 2) return new List<List<int>> { group };
+			int lowest = group.Min(placeTier);
+			List<int> cuts = group.Select(gateTier).Where(g => g > lowest).Distinct().OrderBy(g => g).ToList();
+			if (cuts.Count == 0) return new List<List<int>> { group };
+			List<List<int>> stay = new();
+			Dictionary<int, List<int>> byCut = new();
+			List<int> Band(int cut)
+			{
+				if (!byCut.TryGetValue(cut, out List<int> band)) byCut[cut] = band = new List<int>();
+				return band;
+			}
+			foreach (int p in group)
+			{
+				int tier = placeTier(p);
+				if (gateTier(p) > tier) stay.Add(new List<int> { p });
+				else Band(cuts.Where(c => c <= tier).DefaultIfEmpty(-1).Max()).Add(p);
+			}
+			cuts.Insert(0, -1);
+			for (int k = cuts.Count - 1; k > 0; k--)
+			{
+				if (!byCut.TryGetValue(cuts[k], out List<int> band) || band.Select(ownerOf).Distinct().Count() >= 2) continue;
+				byCut.Remove(cuts[k]);
+				// The lowest band takes any gate up to the group's lowest tier
+				int floor = k == 1 ? lowest : cuts[k - 1];
+				foreach (int p in band)
+				{
+					if (gateTier(p) > floor) stay.Add(new List<int> { p });
+					else Band(cuts[k - 1]).Add(p);
+				}
+			}
+			// In the group's order (a merged band had its members appended)
+			Dictionary<int, int> position = group.Select((p, i) => (p, i)).ToDictionary(x => x.p, x => x.i);
+			return stay.Concat(byCut.OrderBy(b => b.Key).Select(b => b.Value.OrderBy(p => position[p]).ToList())).ToList();
 		}
 
 		// Load-time facts (samples, snapshot): cached until unload

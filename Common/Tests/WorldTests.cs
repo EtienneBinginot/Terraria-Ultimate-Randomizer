@@ -15,7 +15,6 @@ namespace UltimateRandomizer.Common.Tests
 		public static void Register()
 		{
 			TestRunner.Register("RecipesSafe", RecipesSafe);
-			TestRunner.Register("MiningProtected", MiningProtected);
 			TestRunner.Register("DecraftSafe", DecraftSafe);
 			TestRunner.Register("ShimmerCoherent", ShimmerCoherent);
 			TestRunner.Register("ShopSimulation", ShopSimulation);
@@ -48,21 +47,6 @@ namespace UltimateRandomizer.Common.Tests
 				if (value > max) failures.Add($"{Lang.GetItemNameValue(result.type)} x{result.stack} worth {value} > {max}");
 			}
 			Check.All(failures, "Unsafe recipes");
-		}
-
-		private static void MiningProtected()
-		{
-			if (!RecipeSystem.Applied) Check.Skip("recipes are not randomized");
-			if (!ProgressionConfig.Instance.ProtectPickaxeProgression) Check.Skip("mining protection is off");
-			List<string> failures = new();
-			for (int i = 0; i < RecipeSystem.RecipeCount && i < Recipe.numRecipes; i++)
-			{
-				int original = RecipeSystem.OriginalResult(i);
-				if (!ItemPool.IsValid(original)) continue;
-				bool mining = ItemPool.Info[original].Category == ItemCategory.OreBar || (ContentSamples.ItemsByType.TryGetValue(original, out Item sample) && sample.pick > 0);
-				if (mining && Main.recipe[i].createItem.type != original) failures.Add($"{Lang.GetItemNameValue(original)} recipe changed");
-			}
-			Check.All(failures, "Mining progression recipes changed");
 		}
 
 		private static void DecraftSafe()

@@ -19,7 +19,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BasicStationsUnprotected", BasicStationsUnprotected);
 			TestRunner.Register("ProgressionStationsProtected", ProgressionStationsProtected);
 			TestRunner.Register("ProgressionStationsGuaranteed", ProgressionStationsGuaranteed);
-			TestRunner.Register("WorldSummonsProtected", WorldSummonsProtected);
+			TestRunner.Register("ProtectionsRemoved", ProtectionsRemoved);
+			TestRunner.Register("AbsentEvilBoss", AbsentEvilBoss);
 			TestRunner.Register("UpgradesOutOfPools", UpgradesOutOfPools);
 			TestRunner.Register("BasicStationsFindable", BasicStationsFindable);
 			TestRunner.Register("GuaranteedReachability", GuaranteedReachability);
@@ -207,7 +208,7 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Stations against StationProtection");
 		}
 
-		// Every unprotected progression or themed station and every crafted or dropped boss summon is dropped by the common
+		// Every unprotected progression or themed station, every boss summon and progression tool is dropped by the common
 		// enemies (not rare, no event) of one biome at or below its tier, which make together at least MinBiomeShare of its
 		// spawns, with a chance of at least 1 %, and is available by then in the recipe plan; every station a recipe needs can
 		// be placed
@@ -215,7 +216,8 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			Check.Equal(0, Protection.SummonTier(ItemID.SuspiciousLookingEye), "tier of the Suspicious Looking Eye");
 			Check.That(Protection.SummonTier(ItemID.GuideVoodooDoll) <= (int)Core.Tier.PostSkeletron, $"Guide Voodoo Doll at tier {Protection.SummonTier(ItemID.GuideVoodooDoll)}, after the Wall of Flesh");
-			List<GuaranteedSources.Requirement> wanted = GuaranteedSources.OtherStationRequirements().Concat(GuaranteedSources.SummonRequirements()).ToList();
+			List<GuaranteedSources.Requirement> wanted = GuaranteedSources.OtherStationRequirements().Concat(GuaranteedSources.SummonRequirements())
+				.Concat(GuaranteedSources.ProgressionToolRequirements()).ToList();
 			if (wanted.Count == 0) Check.Skip("progression stations and boss summons are protected");
 			RecipePlan plan = RecipePlanner.Get();
 			List<string> failures = new();
@@ -516,26 +518,184 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Upgrades");
 		}
 
-		// The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) and the
-		// items sorted with the summons (mirrors, phones) stay protected; with the default settings the crafted and dropped
-		// ones (Guide Voodoo Doll, Suspicious Looking Eye) are randomized. Life and mana upgrades: UpgradesOutOfPools
-		private static void WorldSummonsProtected()
+		// The protections the item pool no longer needs (default settings): the progression materials, mirrors, phones and
+		// conches are randomizable, the Shellphone's other modes and the Lihzahrd Altar banned; the summons found in the world,
+		// the Pwnhammer and the Temple Key are guaranteed and found at their tier; the lunar armor and Luminite Bar recipes are
+		// rebuilt with a key had from the Moon Lord's tier; no permutation of enemies or bosses (this seed and others) moves a
+		// hard gate below its true tier. Items the player listed in the protected items are not checked
+		private static void ProtectionsRemoved()
 		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			ProgressionConfig cfg = ProgressionConfig.Instance;
+			HashSet<int> listed = cfg.ProtectedItems.Where(d => d != null && !d.IsUnloaded).Select(d => d.Type).ToHashSet();
 			List<string> failures = new();
-			foreach (int item in Protection.WorldSummons.Concat(new int[] { ItemID.MagicMirror, ItemID.CellPhone }))
+			void Fail(string message)
 			{
-				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Protected) failures.Add($"{Name(item)} is not protected");
+				if (failures.Count < 30) failures.Add(message);
 			}
-			if (!Protection.IsBossSummon(ItemID.GuideVoodooDoll) || Protection.IsBossSummon(ItemID.LifeCrystal)) failures.Add("wrong boss summon set");
-			Check.All(failures, "World summons");
-			if (ProgressionConfig.Instance.AutoProtectBossSummons) Check.Skip("every boss summon is protected");
-			HashSet<int> listed = ProgressionConfig.Instance.ProtectedItems.Where(d => d != null && !d.IsUnloaded).Select(d => d.Type).ToHashSet();
-			foreach (int item in new[] { ItemID.GuideVoodooDoll, ItemID.SuspiciousLookingEye })
+			foreach (int item in new int[] { ItemID.ShellphoneDummy, ItemID.ShellphoneSpawn, ItemID.ShellphoneOcean, ItemID.ShellphoneHell, ItemID.LihzahrdAltar })
 			{
-				if (listed.Contains(item)) Check.Skip($"{Name(item)} is in the protected items (an old list: reset it)");
-				if (!ItemPool.IsRandomizable(item)) failures.Add($"{Name(item)} is protected");
+				if (ItemPool.IsValid(item) && !ItemPool.IsBanned(item)) Fail($"{Name(item)} is not banned");
 			}
-			Check.All(failures, "Crafted summons");
+			if (!Protection.IsBossSummon(ItemID.GuideVoodooDoll) || !Protection.IsBossSummon(ItemID.EmpressButterfly) || Protection.IsBossSummon(ItemID.LifeCrystal)
+				|| Protection.IsBossSummon(ItemID.MagicMirror)) Fail("wrong boss summon set");
+			List<int> randomizable = new() { ItemID.MagicMirror, ItemID.IceMirror, ItemID.CellPhone, ItemID.Shellphone, ItemID.MagicConch, ItemID.DemonConch };
+			if (!cfg.ProtectProgressionMaterials)
+			{
+				randomizable.AddRange(new int[]
+				{
+					ItemID.ShadowScale, ItemID.TissueSample, ItemID.HallowedBar, ItemID.SoulofMight, ItemID.SoulofSight, ItemID.SoulofFright, ItemID.FragmentSolar,
+					ItemID.LunarOre, ItemID.Ectoplasm, ItemID.JungleKey, ItemID.LightKey, ItemID.NightKey
+				});
+			}
+			foreach (int item in randomizable.Where(i => ItemPool.IsValid(i) && !listed.Contains(i)))
+			{
+				if (!ItemPool.IsRandomizable(item)) Fail($"{Name(item)} is protected");
+			}
+			// Guaranteed and found at their tier
+			List<(int item, int tier)> needed = Protection.ProgressionTools.Select(t => (t.item, (int)t.tier)).ToList();
+			if (!cfg.AutoProtectBossSummons) needed.AddRange(Protection.WorldSummons.Select(i => (i, Protection.SummonTier(i))));
+			int guaranteed = 0;
+			foreach ((int item, int tier) in needed.Where(n => ItemPool.IsValid(n.item) && !listed.Contains(n.item)))
+			{
+				if (!ItemPool.IsRandomizable(item))
+				{
+					Fail($"{Name(item)} is protected");
+					continue;
+				}
+				if (!GuaranteedSources.Requirements.Any(r => r.Item == item && r.Tier <= tier)) Fail($"{Name(item)} is not guaranteed at tier {tier}");
+				else guaranteed++;
+				if (!GuaranteedSources.HostsOf(item).Any()) Fail($"{Name(item)} has no guaranteed host");
+				if (Findability.Tier(item) > tier) Fail($"{Name(item)} found at tier {Findability.Tier(item)} > {tier}");
+			}
+			// Pure: a gate band of a single owner joins the band below, its gate staying in place; a gate on a place below its
+			// true tier stays; with two owners from the gate's tier on, the band stays apart
+			string Bands(int[] tiers, int[] gates, int[] owners) => string.Join(" ", DropPermutation.GateBands(Enumerable.Range(0, tiers.Length).ToList(), i => tiers[i], i => gates[i], i => owners[i])
+				.Select(b => "[" + string.Join(",", b) + "]"));
+			string alone = Bands(new[] { 8, 8, 8, 9, 9, 9 }, new[] { -1, -1, -1, 9, -1, -1 }, new[] { 1, 2, 3, 4, 4, 4 });
+			if (alone != "[3] [0,1,2,4,5]") Fail($"gate bands of a single owner: {alone}");
+			string apart = Bands(new[] { 8, 8, 8, 9, 9, 9 }, new[] { 9, -1, -1, 9, -1, -1 }, new[] { 1, 2, 3, 4, 5, 5 });
+			if (apart != "[0] [1,2] [3,4,5]") Fail($"gate bands of two owners: {apart}");
+			string none = Bands(new[] { 5, 5, 6 }, new[] { 5, -1, -1 }, new[] { 1, 2, 3 });
+			if (none != "[0,1,2]") Fail($"a gate at the group's lowest tier: {none}");
+			// Hard gates never move below their true tier
+			int gatesMoved = 0;
+			foreach (int seed in new[] { SeedSystem.WorldSeed, Seed(0), Seed(1) })
+			{
+				DropPermutation.WorldPlan enemies = DropPermutation.Build(seed, 0f);
+				BossPermutation.WorldPlan bosses = BossPermutation.Build(seed);
+				foreach ((string what, List<DropPermutation.Place> places, int[] contentOf) in new[] { ("enemy", enemies.Places, enemies.ContentOf), ("boss", bosses.Places, bosses.ContentOf) })
+				{
+					for (int p = 0; p < places.Count; p++)
+					{
+						DropPermutation.Place source = places[contentOf[p]];
+						int gate = DropPermutation.GateTier(source.Entry.itemId);
+						if (gate < 0 || contentOf[p] == p) continue;
+						gatesMoved++;
+						int placeTier = DropPermutation.PlaceTier(places[p]);
+						if (placeTier < gate)
+						{
+							Fail($"seed {seed}: {what} {Lang.GetNPCNameValue(places[p].Owner)} entry {places[p].Index} (tier {placeTier}) gets {Name(source.Entry.itemId)} (true tier {gate})");
+						}
+					}
+				}
+			}
+			// Lunar recipes: rebuilt for the Moon Lord's tier, with an ingredient had no earlier
+			int lunar = 0;
+			CraftingConfig crafting = CraftingConfig.Instance;
+			if (RecipeSystem.Applied && crafting.RandomizeRecipes && crafting.IngredientMode == IngredientMode.Randomized && !cfg.ProtectProgressionMaterials
+				&& cfg.TierGating && GeneralConfig.Instance.RandomizerMode == RandomizerMode.Coherent)
+			{
+				HashSet<int> lunarItems = new()
+				{
+					ItemID.LunarBar, ItemID.SolarFlareHelmet, ItemID.SolarFlareBreastplate, ItemID.SolarFlareLeggings, ItemID.VortexHelmet, ItemID.VortexBreastplate,
+					ItemID.VortexLeggings, ItemID.NebulaHelmet, ItemID.NebulaBreastplate, ItemID.NebulaLeggings, ItemID.StardustHelmet, ItemID.StardustBreastplate,
+					ItemID.StardustLeggings
+				};
+				RecipePlan plan = RecipePlanner.Get();
+				int count = Math.Min(RecipeSystem.RecipeCount, plan.Results.Length);
+				for (int i = 0; i < count; i++)
+				{
+					int result = plan.Results[i].type;
+					if (!lunarItems.Contains(result) || RecipeSystem.IsShell(i) || RecipeSystem.LeftAlone(i) || plan.Twin[i] || listed.Contains(result)) continue;
+					lunar++;
+					string where = $"{Name(result)} (recipe {i})";
+					if (plan.Ingredients[i] == null || plan.IngredientTiers[i] < 0 || plan.Repaired[i])
+					{
+						Fail($"{where} is not rebuilt");
+						continue;
+					}
+					if (plan.IngredientTiers[i] < (int)Core.Tier.PostMoonLord) Fail($"{where} rebuilt for tier {plan.IngredientTiers[i]}");
+					if (plan.PlannedKeys[i] == 0 && !plan.KeyIngredient[i]) Fail($"{where} has no key");
+					int highest = plan.Ingredients[i].Select(x => RecipeTests.IngredientAvail(plan, i, x.type)).DefaultIfEmpty(0).Max();
+					if (highest < (int)Core.Tier.PostMoonLord) Fail($"{where}: its ingredients are all had at tier {highest}");
+				}
+				if (lunar == 0) Fail("no lunar recipe found");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ProtectionsRemoved: {guaranteed} summons and tools guaranteed, {gatesMoved} hard gate contents moved, {lunar} lunar recipes checked");
+			Check.All(failures, "Protections removed");
+		}
+
+		// The evil boss a world lacks takes no part in the boss permutation (plans for a Crimson, a Corruption and a drunk
+		// world): none of its places is permuted, its table and bag hold no moved content, so nothing of the present evil boss
+		// goes where nobody can get it; in a drunk world both are permuted. In this world, Findability does not count the
+		// absent boss as a source: none of its vanilla items found through nothing else is found at its tier
+		private static void AbsentEvilBoss()
+		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			if (!BossPermutation.InStyle(NPCID.BrainofCthulhu) || !BossPermutation.InStyle(NPCID.EaterofWorldsHead)) Check.Skip("bosses don't use the permutation style");
+			List<string> failures = new();
+			int seed = SeedSystem.WorldSeed;
+			foreach (WorldEvil evil in new[] { WorldEvil.Crimson, WorldEvil.Corruption, WorldEvil.Both })
+			{
+				BossPermutation.WorldPlan plan = BossPermutation.Build(seed, evil);
+				foreach (int boss in new[] { NPCID.EaterofWorldsHead, NPCID.BrainofCthulhu })
+				{
+					int unit = BossPermutation.UnitOf(boss);
+					bool absent = BossPermutation.AbsentEvil(unit, evil);
+					bool expected = boss == NPCID.EaterofWorldsHead ? evil == WorldEvil.Crimson : evil == WorldEvil.Corruption;
+					if (absent != expected) failures.Add($"{evil}: {Lang.GetNPCNameValue(boss)} absent {absent}");
+					int places = plan.Places.Count(p => p.Owner == unit);
+					if (absent && places > 0) failures.Add($"{evil}: {Lang.GetNPCNameValue(boss)} (absent) has {places} permuted places");
+					if (!absent && places == 0) failures.Add($"{evil}: {Lang.GetNPCNameValue(boss)} has no permuted place");
+					if (absent && plan.ByUnit.TryGetValue(unit, out DropPermutation.Placed[] table) && table.Any(x => x.Permuted)) failures.Add($"{evil}: {Lang.GetNPCNameValue(boss)} (absent) holds moved contents");
+					int bag = BossPermutation.BagOf(unit);
+					if (absent && bag > 0 && plan.ByBag.TryGetValue(bag, out DropPermutation.Placed[] bagTable) && bagTable.Any(x => x.Permuted)) failures.Add($"{evil}: {Name(bag)} (absent boss) holds moved contents");
+				}
+			}
+			WorldEvil current = BiomeSlots.CurrentEvil;
+			if (current != WorldEvil.Both)
+			{
+				int absentBoss = current == WorldEvil.Crimson ? NPCID.EaterofWorldsHead : NPCID.BrainofCthulhu;
+				int absentUnit = BossPermutation.UnitOf(absentBoss);
+				int absentBag = BossPermutation.BagOf(absentUnit);
+				HashSet<int> elsewhere = NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, current))
+					.SelectMany(b => RandomNpcDropRule.Plan(b, Main.expertMode, lucky: true, guaranteed: false)).Select(d => d.Item).ToHashSet();
+				int checkedItems = 0;
+				foreach (int item in LootSnapshot.ForNpc(absentUnit).Select(d => d.itemId).Where(i => ItemPool.IsValid(i) && !elsewhere.Contains(i)).Distinct())
+				{
+					if (OtherSource(item, absentBag)) continue;
+					checkedItems++;
+					if (Findability.BaseTier(item) <= NpcTiers.BaseTier(absentBoss)) failures.Add($"{Name(item)} counted as found at tier {Findability.BaseTier(item)} through {Lang.GetNPCNameValue(absentBoss)}");
+				}
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"AbsentEvilBoss: {Lang.GetNPCNameValue(absentBoss)} absent in this world, {checkedItems} of its items found through nothing else");
+			}
+			Check.All(failures, "Absent evil boss");
+		}
+
+		// Another source than the bosses may give the item: a world material, ore or herb, a natural enemy's plan, a bag (not
+		// the absent evil boss's)
+		private static bool OtherSource(int item, int absentBag)
+		{
+			if (Findability.IsWorldMaterial(item) || OreMap.IsOre(item) || Findability.HerbPlants.Any(h => WorldSources.HerbTable(h).Contains(item))) return true;
+			for (int t = 0; t < Tiers.Count; t++)
+			{
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t))
+				{
+					if (RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false).Any(d => d.Item == item)) return true;
+				}
+			}
+			return LootSnapshot.Items.Keys.Any(bag => bag != absentBag && BagPlan.Plan(bag, lucky: true).Any(d => d.Item == item));
 		}
 
 		private static void BasicStationsFindable()

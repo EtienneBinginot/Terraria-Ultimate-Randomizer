@@ -36,7 +36,6 @@ namespace UltimateRandomizer.Common.Features
 	public static class RecipeStats
 	{
 		public const string Protected = "protected result";
-		public const string Mining = "mining";
 		public const string House = "house item";
 		public const string Unswappable = "no swap allowed";
 		public const string NotSwapped = "not swapped";
@@ -65,7 +64,6 @@ namespace UltimateRandomizer.Common.Features
 				if (resultChanged) continue;
 				string reason;
 				if (!ItemPool.IsRandomizable(original)) reason = Protected;
-				else if (RecipeSystem.KeptForMining(i)) reason = Mining;
 				else if (RecipeSystem.HouseRecipe(i)) reason = House;
 				else if (!RecipePlanner.Swappable(i, stationTiles)) reason = Unswappable;
 				else reason = NotSwapped;

@@ -153,7 +153,7 @@ Tests: {
 	EaterOfWorldsParts: Le corps et la queue du Dévoreur des mondes tirent dans la table de la tête, avec le plancher du boss
 	BossGroupsMerge: Les petits tiers de boss consécutifs se regroupent d'abord, et le butin du Seigneur de la Lune reste avec les derniers boss
 	CodexShowsLocked: Interface du codex : les butins verrouillés sont grisés avec le boss qui les débloque, sans chance
-	ProtectedDropsKept: Les drops de progression sont conservés
+	ProtectedDropsKept: Les drops protégés, pièces, sacs et améliorations sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés
 	SwapSurvivesVariantSetDefaults: Les variantes d'ennemis (Pinky, zombies) sont bien remplacées
@@ -199,7 +199,8 @@ Tests: {
 	BasicStationsUnprotected: Les stations de base (établi, fourneau, enclume...) sont confiées au randomizer
 	ProgressionStationsProtected: Les stations de progression et thématiques sont protégées, sauf si la protection des stations vaut Aucune
 	ProgressionStationsGuaranteed: Les stations de progression et les invocations de boss non protégées tombent d'ennemis fréquents de leur palier (1 % ou plus)
-	WorldSummonsProtected: Les invocations trouvées dans le monde restent protégées, celles qu'on fabrique sont randomisées
+	ProtectionsRemoved: Les matériaux de progression, miroirs, invocations et outils de progression sont randomisés, restent trouvables à leur palier, et aucune permutation ne place un verrou de progression avant son palier
+	AbsentEvilBoss: Le boss maléfique absent du monde ne participe pas à la permutation des boss et ne compte pas comme source
 	UpgradesOutOfPools: Les améliorations de vie et de mana ne sont jamais tirées au sort, garanties ni utilisées comme ingrédients, et les drops les gardent
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier, ou par les boss de progression de son tier
@@ -237,7 +238,7 @@ Tests: {
 	NoSelfIngredient: Aucune recette n'utilise son propre résultat
 	ResultNotInGroup: Aucune recette randomisée ne donne un objet accepté par son propre groupe d'ingrédients
 	IngredientValueCoherent: Les recettes reconstruites gardent à peu près la valeur des ingrédients vanilla
-	ProtectedIngredientsKept: Les ingrédients protégés (matériaux de progression...) ne sont jamais remplacés
+	ProtectedIngredientsKept: Les ingrédients protégés ne sont jamais remplacés
 	RecipeGroupsSane: Chaque groupe de recette (n'importe quel bois, lingot de fer...) garde son ingrédient
 	RecipePlanDeterminism: Ingrédients et stations identiques après reconstruction
 	UntouchedRecipesIntact: Les recettes protégées gardent leurs ingrédients et stations
@@ -307,7 +308,6 @@ Tests: {
 	WildTail: La queue de folie donne la part prévue au-delà de la limite, plus rare à chaque palier
 	PlansIgnoreWild: Les plans, la trouvabilité et les garanties ne dépendent pas de la queue de folie
 	RecipesSafe: Recettes : pas d'ingrédient identique au résultat, garde-fou respecté
-	MiningProtected: Les recettes de pioches et de lingots ne changent pas
 	DecraftSafe: Le décraft au Shimmer ne peut pas dupliquer d'objets
 	ShimmerCoherent: Les transformations du Shimmer gardent catégorie et valeur
 	ShopSimulation: Boutique simulée : pas de doublons, prix justes, cases spéciales intactes
@@ -1316,27 +1316,22 @@ Configs: {
 
 		ProtectedItems: {
 			Label: Objets protégés
-			Tooltip: Jamais remplacés (drops, recettes...) et jamais donnés comme objet aléatoire. Garantit que la progression reste possible. Les invocations de boss fabriquées ne sont plus dans la liste par défaut : des ennemis courants les lâchent à coup sûr (réinitialisez la liste pour avoir la nouvelle valeur par défaut).
+			Tooltip: Jamais remplacés (drops, recettes...) et jamais donnés comme objet aléatoire. Vide par défaut : les invocations de boss, le marteau qui brise les autels et la clé du temple lihzahrd sont randomisés, et des ennemis courants de leur palier les lâchent à la place (réinitialisez la liste pour avoir la nouvelle valeur par défaut).
 		}
 
 		ProtectProgressionMaterials: {
 			Label: Protéger les matériaux de progression
-			Tooltip: Écailles d'ombre, échantillons de tissu, lingots sacrés, âmes mécaniques, fragments lunaires, luminite, ectoplasme et clés de biome ne sont jamais randomisés.
+			Tooltip: Activé : écailles d'ombre, échantillons de tissu, lingots sacrés, âmes mécaniques, fragments lunaires, luminite, ectoplasme et clés de biome ne sont jamais randomisés. Désactivé (par défaut) : ils le sont ; les recettes demandent toujours une clé de leur palier, et la luminite, les âmes mécaniques ou l'ectoplasme ne tombent jamais avant leur palier.
 		}
 
 		AutoProtectBossSummons: {
 			Label: Protéger toutes les invocations de boss
-			Tooltip: Désactivé : les invocations de boss fabriquées ou lâchées (Œil à l'air suspect, Poupée vaudou du guide, invocations mécaniques...) sont randomisées, et des ennemis courants de leur palier les lâchent à la place. Les invocations trouvées dans le monde (Ver truffe, Capsule de pouvoir Lihzahrd, Cristal de gélatine, Chrysope prismatique) restent protégées, tout comme les invocations des autres mods. Activé : toutes les invocations de boss sont protégées.
+			Tooltip: Désactivé : les invocations de boss (fabriquées, lâchées ou trouvées dans le monde : Ver truffe, Capsule de pouvoir Lihzahrd, Cristal de gélatine, Chrysope prismatique) sont randomisées, et des ennemis courants de leur palier les lâchent à la place ; les bestioles s'attrapent toujours. Les invocations des autres mods restent protégées. Activé : toutes les invocations de boss sont protégées.
 		}
 
 		StationProtection: {
 			Label: Protection des stations de craft
 			Tooltip: Aucune : toutes les stations sont randomisées, y compris celles de progression (Forge d'enfer, enclumes et forges hardmode, Atelier de bricolage, Manipulateur antique...) ; des ennemis courants de leur palier lâchent chacune d'elles. Progression seulement : seules les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) sont randomisées ; on les trouve aussi dans les pots et les coffres en bois. Une station d'un autre mod dont beaucoup de recettes ont besoin reste protégée ; les autres sont traitées comme les stations thématiques (four à verre...).
-		}
-
-		ProtectPickaxeProgression: {
-			Label: Protéger la progression du minage
-			Tooltip: Activé : les recettes de pioches et de lingots ne sont jamais randomisées. Désactivé : elles le sont, et une pioche assez puissante pour chaque nouveau minerai est garantie sur des ennemis communs quand les recettes n'en donnent pas à temps. Les minerais minés ne deviennent que d'autres minerais du même tier.
 		}
 
 		GuaranteedDropMultiplier: {
