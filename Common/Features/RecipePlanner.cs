@@ -773,7 +773,14 @@ namespace UltimateRandomizer.Common.Features
 				}
 			}
 			Random raise = DetRandom.Get(RollKey.KeyIngredient, RecipeSystem.RecipeKey(i), RollKey.Fallback);
-			if (!RaiseValue(result, i, want, key, richer, raise)) result.ValueShort[i] = true;
+			// Still short with every free slot taken: a new ingredient while the recipe has room (its vanilla count plus the
+			// spread, plus the key), on a stream of its own
+			int room = RecipeSystem.OriginalIngredients(i).Length + CraftingConfig.Instance.IngredientCountSpread + 1;
+			if (!RaiseValue(result, i, want, key, richer, raise)
+				&& !RaiseValue(result, i, want, key, richer, DetRandom.Get(RollKey.KeyIngredient, RecipeSystem.RecipeKey(i), RollKey.Fallback, RollKey.Special), append: true, appendMax: room))
+			{
+				result.ValueShort[i] = true;
+			}
 			graph.AddRecipe(result.Ingredients[i], GroupsOf(result, i), results[i]);
 		}
 
@@ -864,8 +871,9 @@ namespace UltimateRandomizer.Common.Features
 		// 273 potions): the most valuable replaceable ingredients up to their cap first; then, while that is not enough, the
 		// least valuable replaceable one (never keep, the key, nor a group slot) gives way to a richer material (richer, in
 		// order: one of the cheapest that fill the gap within their cap, else the most valuable). Returns whether target was reached
-		// append: an upgrade's recipe may get a new ingredient when no slot is left (a rebuilt recipe keeps its count)
-		private static bool RaiseValue(RecipePlan result, int i, long target, int keep, IReadOnlyList<int> richer, Random rng, bool append = false)
+		// append: an upgrade's recipe may get a new ingredient when no slot is left (a rebuilt recipe keeps its count, or
+		// stays within appendMax ingredients when given)
+		private static bool RaiseValue(RecipePlan result, int i, long target, int keep, IReadOnlyList<int> richer, Random rng, bool append = false, int appendMax = 0)
 		{
 			(int type, int stack)[] current = ((int, int)[])(result.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).Clone();
 			long Value() => current.Sum(p => UnitValue(p.type) * p.stack);
@@ -886,7 +894,8 @@ namespace UltimateRandomizer.Common.Features
 			{
 				List<int> slots = Enumerable.Range(0, current.Length).Where(k => Free(k) && !replaced.Contains(k)).OrderBy(k => UnitValue(current[k].type) * current[k].stack).ThenBy(k => k).ToList();
 				// No slot left to give way (the key alone): a new ingredient while the recipe has room
-				if (slots.Count == 0 && (!append || current.Length >= Math.Max(1, CraftingConfig.Instance.IngredientMax))) break;
+				int most = Math.Max(1, appendMax > 0 ? Math.Min(appendMax, CraftingConfig.Instance.IngredientMax) : CraftingConfig.Instance.IngredientMax);
+				if (slots.Count == 0 && (!append || current.Length >= most)) break;
 				int slot = slots.Count > 0 ? slots[0] : current.Length;
 				bool appended = slot == current.Length;
 				if (appended) current = current.Append((0, 0)).ToArray();
@@ -2491,19 +2500,33 @@ namespace UltimateRandomizer.Common.Features
 			// caps and the recipe's value cap), and the uses follow the ingredients replaced
 			private void Raise(int i, long want, int key, int top, Func<int, bool> usable, Func<int, bool> fits, Func<int, bool> affordable)
 			{
-				List<int> richer = new();
-				for (int c = 0; c < ItemCategories.Count; c++)
+				List<int> Richer(bool capped)
 				{
-					if (!MaterialLike((ItemCategory)c)) continue;
-					for (int t = 0; t <= top; t++)
+					List<int> list = new();
+					for (int c = 0; c < ItemCategories.Count; c++)
 					{
-						richer.AddRange(pool[c, t].Where(x => usable(x) && fits(x) && affordable(x) && uses.GetValueOrDefault(x) < useCaps[t]));
+						if (!MaterialLike((ItemCategory)c)) continue;
+						for (int t = 0; t <= top; t++)
+						{
+							list.AddRange(pool[c, t].Where(x => usable(x) && fits(x) && affordable(x) && (!capped || uses.GetValueOrDefault(x) < useCaps[t])));
+						}
 					}
+					return list;
 				}
 				HashSet<int> before = result.Ingredients[i].Select(p => p.type).ToHashSet();
 				bool shellRecipe = RecipeSystem.IsShell(i);
-				Random rng = DetRandom.Get(shellRecipe ? RollKey.Uncraftable : RollKey.RecipeIngredient, shellRecipe ? DetRandom.ItemKey(results[i]) : RecipeSystem.RecipeKey(i), RollKey.Special);
-				if (!RaiseValue(result, i, want, key, richer, rng)) result.ValueShort[i] = true;
+				int stream = shellRecipe ? RollKey.Uncraftable : RollKey.RecipeIngredient;
+				int recipeKey = shellRecipe ? DetRandom.ItemKey(results[i]) : RecipeSystem.RecipeKey(i);
+				Random rng = DetRandom.Get(stream, recipeKey, RollKey.Special);
+				// Still short (every free slot taken by a richer material, the key alone, the use caps reached): past the use caps,
+				// and a new ingredient while the recipe has room (its vanilla count plus the spread). Only the recipes the first
+				// pass left short change, on their own stream
+				if (!RaiseValue(result, i, want, key, Richer(true), rng)
+					&& !RaiseValue(result, i, want, key, Richer(false), DetRandom.Get(stream, recipeKey, RollKey.Special, RollKey.Fallback),
+						append: true, appendMax: RecipeSystem.OriginalIngredients(i).Length + cfg.IngredientCountSpread))
+				{
+					result.ValueShort[i] = true;
+				}
 				HashSet<int> after = result.Ingredients[i].Select(p => p.type).ToHashSet();
 				foreach (int x in before.Except(after)) uses[x] = Math.Max(0, uses.GetValueOrDefault(x) - 1);
 				foreach (int x in after.Except(before)) uses[x] = uses.GetValueOrDefault(x) + 1;

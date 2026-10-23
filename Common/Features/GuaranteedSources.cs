@@ -957,10 +957,12 @@ namespace UltimateRandomizer.Common.Features
 		private static List<int> NaturalHosts(int tier) => HostTiers().Where(pair => pair.Value == Tiers.Clamp(tier)).Select(pair => pair.Key)
 			.Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n) && !NeverMet(n)).OrderBy(n => n).ToList();
 
-		// Common natural enemies of a tier (bestiary rarity 1, else 2, else any)
+		// Common natural enemies of a tier (bestiary rarity 1, else 2...). Never a rare enemy (NPC.rarity: the Rune Wizard, the
+		// biome mimics): met a few times per world at best. A tier with only rare natural enemies (a world whose tier 8 slots
+		// went to them) uses its progression bosses (Assign)
 		private static List<int> Hosts(int tier)
 		{
-			List<int> natural = NaturalHosts(tier);
+			List<int> natural = NaturalHosts(tier).Where(n => !ContentSamples.NpcsByNetId.TryGetValue(n, out NPC sample) || sample.rarity == 0).ToList();
 			for (int stars = 1; stars <= 5; stars++)
 			{
 				List<int> common = natural.Where(n => Stars(n) <= stars).OrderBy(DetRandom.NpcKey).ToList();

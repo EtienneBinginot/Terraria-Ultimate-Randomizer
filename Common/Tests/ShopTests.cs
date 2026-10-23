@@ -27,7 +27,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ShopOnlySlots", ShopOnlySlots);
 		}
 
-		private sealed class VanillaShop
+		internal sealed class VanillaShop
 		{
 			public AbstractNPCShop Shop;
 			public List<Item> Items = new();
@@ -40,7 +40,7 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Every vanilla NPC's shop (NPCShopDatabase.AllShops, keyed and passed to ModifyActiveShop by FullName), every entry
 		// not disabled whatever its conditions: in game only the entries whose conditions are met fill slots
-		private static List<VanillaShop> VanillaShops()
+		internal static List<VanillaShop> VanillaShops()
 		{
 			List<VanillaShop> shops = new();
 			foreach (AbstractNPCShop shop in NPCShopDatabase.AllShops)
@@ -75,10 +75,10 @@ namespace UltimateRandomizer.Common.Tests
 			return shops;
 		}
 
-		private static RecipePlan Recipes => RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null;
+		internal static RecipePlan Recipes => RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null;
 
 		// The shop-only plan of this world (the cached one, or built for the seed when the cache is not ready)
-		private static ShopPermutation.WorldPlan ShopOnlyPlan()
+		internal static ShopPermutation.WorldPlan ShopOnlyPlan()
 		{
 			if (!SeedSystem.WorldReady) Check.Skip("no world");
 			return ShopPermutation.Current ?? ShopPermutation.Build(SeedSystem.WorldSeed, Recipes);
@@ -88,7 +88,7 @@ namespace UltimateRandomizer.Common.Tests
 		private static int[] Guarantees(ShopPermutation.WorldPlan plan, VanillaShop shop) =>
 			shop.Indices.Select(i => i >= 0 ? ShopPermutation.GuaranteedAt(plan, shop.Shop.FullName, i) : 0).ToArray();
 
-		private static ShopSlot[] Plan(ShopPermutation.WorldPlan permutation, VanillaShop shop, int tier, bool noDuplicates)
+		internal static ShopSlot[] Plan(ShopPermutation.WorldPlan permutation, VanillaShop shop, int tier, bool noDuplicates)
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
 			return ShopPlanner.PlanShop(shop.Shop.NpcType, shop.Shop.FullName, shop.Originals, tier, tier >= (int)Tier.Hardmode, cfg.ShopsFollowProgression, noDuplicates,
@@ -96,7 +96,7 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Sold by a vanilla shop and by nothing else in the base game: no drop, bag, recipe, gathered material, ore nor critter
-		private static HashSet<int> VanillaShopOnly()
+		internal static HashSet<int> VanillaShopOnly()
 		{
 			HashSet<int> other = Obtainability.Collect(withRecipes: true, anyBlock: false, withShops: false);
 			return Obtainability.ShopItems.Where(i => ItemPool.IsValid(i) && !other.Contains(i)).ToHashSet();
@@ -158,7 +158,7 @@ namespace UltimateRandomizer.Common.Tests
 
 		// How a vanilla shop-only item stays obtainable once shops are randomized ("" when it doesn't): found, crafted, left in
 		// its shop (never rolled), or sold as a shop-only item at a reliable place
-		private static string KeptBy(int item, ShopPermutation.WorldPlan plan, RecipePlan recipes)
+		internal static string KeptBy(int item, ShopPermutation.WorldPlan plan, RecipePlan recipes)
 		{
 			if (Found(item)) return "found (tier " + Findability.Tier(item) + ")";
 			if (Crafted(item, recipes)) return "crafted (tier " + recipes.Availability[item] + ")";

@@ -535,7 +535,12 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			if (bagContents.TryGetValue(item, out List<(int bag, int tier, float chance)> holders))
 			{
-				foreach ((int bag, int tier, float chance) in holders) options.Add(new HintFact { Item = item, Kind = HintKind.Bag, Bag = bag, Tier = tier, Band = Band(tier), Chance = chance });
+				// Like a boss: a bag that seldom gives it (one in eight) is only better than a chest or a pot, never ahead of a
+				// guaranteed enemy of a later tier
+				foreach ((int bag, int tier, float chance) in holders)
+				{
+					(chance >= MinBossChance - 1e-6f ? options : weak).Add(new HintFact { Item = item, Kind = HintKind.Bag, Bag = bag, Tier = tier, Band = Band(tier), Chance = chance });
+				}
 			}
 			// Only the stations really hidden in chests of this world (saved, and sent with the world data)
 			if (ChestSystem.StationInChests(item))
