@@ -132,6 +132,21 @@ namespace UltimateRandomizer.Common.Features
 
 		private static bool Gated(int i) => Randomized(i) && ProgressionConfig.Instance.TierGating && GeneralConfig.Instance.RandomizerMode == RandomizerMode.Coherent;
 
+		// The tier a rebuilt recipe giving this item is never planned below (tier gating in Coherent mode): the item's own tier,
+		// its true tier when its vanilla progression has it later (a Pickaxe Axe needs Hallowed Bars). U alone lets it come a tier
+		// early (TierAllowance), and so does the vanilla doable tier T starts from: Findability counts gated drops from
+		// UnlockTier, so Chlorophyte Ore "found" in early hardmode gave the Chlorophyte Pickaxe a Cursed Flame key. Random drops
+		// keep that allowance; a recipe rebuilt for the item keeps its level. Only randomizable items: not an upgrade (its own
+		// tier: ResultTier), nor a protected result or an assignable station (the station plan and the guarantees count them
+		// from their vanilla level, RecipeTier)
+		public static int ResultFloor(int result)
+		{
+			if (!ProgressionConfig.Instance.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) return 0;
+			if (!ItemPool.IsRandomizable(result) || ItemPool.IsSpecial(result)) return 0;
+			if (Stations.PlacedTile(result, out int tile) && Assignable(tile)) return 0;
+			return Tiers.Clamp(Math.Max(ItemPool.TierOf(result), ItemPool.TrueTierOf(result)));
+		}
+
 		// Providers that can't read the plan (it depends on them) count a swapped result as made by nothing: its ingredients
 		// are rebuilt for it, and the host's original ones say nothing of when it is made (a spare guarantee is harmless)
 		private static void DropSwapped(int[] results)
@@ -1322,14 +1337,14 @@ namespace UltimateRandomizer.Common.Features
 			private int Proxy(int i) => result.SwapPartner[i] >= 0 ? result.SwapPartner[i] : i;
 
 			// T: the tier the recipe (its proxy) was doable at (never later: its level, RecipeTier), and never before the U of its
-			// result (the key ingredient then locks it). A house recipe is built at once
+			// result (the key ingredient then locks it) nor its ResultFloor. A house recipe is built at once
 			private int TargetTier(int i)
 			{
 				if (RecipeSystem.HouseRecipe(i)) return 0;
 				int proxy = Proxy(i);
 				int rt = RecipeTier(proxy);
 				int cap = recipeTiers[proxy] < Never ? Math.Min(rt, recipeTiers[proxy]) : rt;
-				return Tiers.Clamp(Math.Max(cap, result.ResultTiers[i]));
+				return Tiers.Clamp(Math.Max(Math.Max(cap, result.ResultTiers[i]), ResultFloor(results[i])));
 			}
 
 			// w / (1 + k * uses / tolerance): a material already in many recipes is picked less often (IngredientReusePenalty),
@@ -2318,7 +2333,8 @@ namespace UltimateRandomizer.Common.Features
 					return tier;
 				}
 				int[] avail = Availability(Found, results, resultTiers, ingredients, tiles, out _, null, OriginalGroups());
-				int best = pickaxes.Where(p => PickPower(p) >= level.pick).Select(p => p < avail.Length ? avail[p] : Never).DefaultIfEmpty(Never).Min();
+				// A crafted pickaxe no earlier than its ResultFloor: a rebuilt recipe keeps its level
+				int best = pickaxes.Where(p => PickPower(p) >= level.pick).Select(p => p < avail.Length ? Math.Min(Found(p), Math.Max(avail[p], ResultFloor(p))) : Never).DefaultIfEmpty(Never).Min();
 				if (best <= oreTier) continue;
 				// The weakest vanilla pickaxe of that level, then the cheapest
 				int chosen = pickaxes.Where(p => p < ItemID.Count && PickPower(p) >= level.pick)

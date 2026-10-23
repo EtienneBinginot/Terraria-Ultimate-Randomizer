@@ -63,6 +63,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("UncraftableNoSpecials", UncraftableNoSpecials);
 			TestRunner.Register("UncraftablePricedByIngredients", UncraftablePricedByIngredients);
 			TestRunner.Register("RecipePickaxeMineable", RecipePickaxeMineable);
+			TestRunner.Register("RecipeNotBeforeItsTier", RecipeNotBeforeItsTier);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -139,7 +140,8 @@ namespace UltimateRandomizer.Common.Tests
 				if (!RecipeSystem.Touchable(i)) continue;
 				touchable++;
 				Recipe recipe = Main.recipe[i];
-				int rt = Math.Max(RecipePlanner.RecipeTier(i), plan.ResultTiers[i]);
+				// A rebuilt recipe waits for its item's tier (ResultFloor), even above its vanilla level
+				int rt = Math.Max(Math.Max(RecipePlanner.RecipeTier(i), plan.ResultTiers[i]), plan.IngredientTiers[i] >= 0 ? RecipePlanner.ResultFloor(plan.Results[i].type) : 0);
 				bool ok = recipe.requiredItem.All(item => item.type < plan.Availability.Length && (plan.Availability[item.type] <= rt || GroupAvailable(recipe, item.type, plan, rt)))
 					&& recipe.requiredTile.All(tile => StationTier(tile, placers, plan.Availability) <= rt);
 				if (ok) doable++;
@@ -1641,6 +1643,44 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			if (tested == 0) Check.Skip("no rebuilt pickaxe recipe");
 			Check.All(failures, "Pickaxes made of blocks they can't mine");
+		}
+
+		// A rebuilt (or swapped) recipe is never doable before the tier of the item it gives: its own tier, or its true tier
+		// when that is later. U and the vanilla doable tier both come a tier early (TierAllowance, gated drops in Findability):
+		// a Chlorophyte Pickaxe (tier 5) was rebuilt for early hardmode with a Cursed Flame key. Not checked: tier 0 items,
+		// upgrades (UpgradeRecipes), protected results and stations (their vanilla level), houses, shells, recipes switched off,
+		// and repaired ones (vanilla ingredients: the item's own recipe, doable as early as its materials are found)
+		private static void RecipeNotBeforeItsTier()
+		{
+			RequireRandomIngredients();
+			if (!ProgressionConfig.Instance.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only with tier gating in Coherent mode");
+			RecipePlan plan = RecipePlanner.Get();
+			int[] results = plan.Results.Select(r => r.type).ToArray();
+			(int type, int stack)[][] ingredients = Enumerable.Range(0, Count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
+			int[][] tiles = Enumerable.Range(0, Count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
+			int[][] groups = Enumerable.Range(0, Count).Select(i => RecipePlanner.GroupsOf(plan, i)).ToArray();
+			RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doable, plan.Twin, groups);
+			List<string> failures = new();
+			List<string> named = new();
+			int checkedCount = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				int item = results[i];
+				if (plan.Ingredients[i] == null || plan.IngredientTiers[i] < 0 || plan.Repaired[i] || plan.Twin[i] || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i)) continue;
+				// Protected results, upgrades and stations keep their vanilla level (RecipePlanner.ResultFloor)
+				if (!ItemPool.IsRandomizable(item) || ItemPool.IsSpecial(item)) continue;
+				if (Stations.PlacedTile(item, out int tile) && Stations.Info(tile).Kind is StationKind.Basic or StationKind.Progression) continue;
+				int floor = Tiers.Clamp(Math.Max(ItemPool.Info[item].Tier, ItemPool.Info[item].TrueTier));
+				string where = $"{Name(RecipeSystem.OriginalResult(i))}{(plan.SwapPartner[i] >= 0 ? " -> " + Name(item) : "")} (tier {floor}, T {plan.IngredientTiers[i]}, " +
+					$"key {(plan.PlannedKeys[i] > 0 ? Name(plan.PlannedKeys[i]) : "none")}): doable at {Show(doable[i])} ({Ingredients(plan.Ingredients[i])})";
+				if (item == ItemID.ChlorophytePickaxe) named.Add(where);
+				if (floor == 0) continue;
+				checkedCount++;
+				if (doable[i] < floor) failures.Add(where);
+			}
+			if (checkedCount == 0) Check.Skip("no rebuilt recipe above tier 0");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNotBeforeItsTier: {checkedCount} rebuilt recipes checked; Chlorophyte Pickaxe: {(named.Count == 0 ? "not rebuilt" : string.Join("; ", named))}");
+			Check.All(failures, "Recipes doable before their item's tier");
 		}
 
 		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));
