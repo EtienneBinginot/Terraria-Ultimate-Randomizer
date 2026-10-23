@@ -129,7 +129,7 @@ Tests: {
 	DropPermutationAccess: Les drops réservés au mode expert, au mode maître ou à une graine spéciale ne vont qu'à des emplacements avec les mêmes restrictions
 	DropPermutationRuntime: Les règles de drop de chaque ennemi suivent vraiment la permutation : les drops vanilla réduits au silence tombent ailleurs, rien ne tombe en double, les variantes gardent leurs propres drops, les ennemis sans drop en reçoivent un
 	DropPermutationStable: Retirer un drop de la permutation ne change le contenu que de très peu d'autres drops
-	DropPermutationSurprise: Les surprises de la permutation remplacent à peu près la part réglée des drops mélangés, jamais un matériau ni le dernier exemplaire d'un objet sans autre source
+	DropPermutationSurprise: Les surprises de la permutation remplacent à peu près la part réglée des drops mélangés, jamais un matériau ni l'exemplaire que garde chaque objet (sauf blocs, créatures et minerais)
 	BossPermutationConserves: La permutation des boss ne perd et ne double rien : chaque drop de boss et contenu de sac mélangé est toujours dans un boss ou un sac
 	BossBagMatchesBoss: Chaque sac de trésor contient les drops mélangés du mode normal de son boss, avec leur chance et leur quantité dans le sac d'où ils viennent
 	BossPermutationTiers: Les drops de boss ne passent qu'entre boss du même groupe de tiers, avec les mêmes restrictions
@@ -1400,7 +1400,7 @@ Configs: {
 
 		PermutationSurpriseChance: {
 			Label: "Drops surprises (permutation, %)"
-			Tooltip: "Style permutation uniquement : part des drops mélangés (sauf matériaux, minerais et lingots) qui deviennent un objet aléatoire du niveau de l'ennemi, avec la même chance et les mêmes conditions. Un objet n'est remplacé que s'il reste trouvable ailleurs (un autre ennemi, une boutique, une recette, un sac...)."
+			Tooltip: "Style permutation uniquement : part des drops mélangés (sauf matériaux, minerais et lingots) qui deviennent un objet aléatoire du niveau de l'ennemi, avec les mêmes conditions et la même chance (plus faible pour un objet rare : un drop fréquent ne devient pas une arme fréquente). Chaque objet, sauf les blocs, les créatures et les minerais, garde un exemplaire qui n'est jamais remplacé : un objet lâché par un seul ennemi reste donc toujours là."
 		}
 
 		EnemiesWithoutDropsCanDrop: {

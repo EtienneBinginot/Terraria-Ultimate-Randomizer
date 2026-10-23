@@ -295,7 +295,8 @@ namespace UltimateRandomizer.Common.Features
 						foreach (PlannedDrop drop in plan)
 						{
 							// Entries this early hour can't drop (hardmode or later, another difficulty: a permuted content takes the
-							// conditions of its new place)
+							// conditions of its new place). Added in 1.5.0: it also lowers the vanilla-like hour (its hardmode and
+							// expert-only entries counted before), whose targets (PacingTests) were measured without it
 							if (drop.Conditions != null && (!Findability.WorldAllows(drop.Conditions) || Findability.ConditionTier(drop.Conditions, 0) > 0)) continue;
 							if (rng.NextDouble() >= drop.Chance) continue;
 							items++;

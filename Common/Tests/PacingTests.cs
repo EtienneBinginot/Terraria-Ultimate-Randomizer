@@ -20,7 +20,10 @@ namespace UltimateRandomizer.Common.Tests
 	// The spawn map of the world decides which enemies the early kills meet, and how many slots they drop: with the same
 	// settings, 1.3.2 measured 47.1 (seed 524614759) and 63.8 (seed 705676219, which gave 64.8 in 1.3.1 before the jackpots
 	// went back to 2 % / 5 % and the tiers from recipes): a spread of the seeds, not a regression. The bound allows it; the
-	// log gives the sources of each hour to tell a real change apart
+	// log gives the sources of each hour to tell a real change apart.
+	// 1.5.0: the model no longer counts the entries an early hour can't drop (hardmode, another difficulty: PacingModel's
+	// condition filter), which lowers the vanilla-like hour too. These bounds predate it: re-read the "Pacing:" and "Drops:"
+	// values of the next in-game run and re-derive them from the log, don't move them blindly
 	public static class PacingTests
 	{
 		public const double MinGearPerHour = 34;
@@ -90,7 +93,9 @@ namespace UltimateRandomizer.Common.Tests
 			}
 		}
 
-		// Both drop styles, whatever the configured one: each has its own targets
+		// Both drop styles, whatever the configured one: each has its own targets. Only the drop plans follow the style: the
+		// guaranteed sources (GuaranteedSources, cached per world) are the configured style's for both, close enough for an
+		// estimate (they are placed on the same common enemies, pots and chests in both styles)
 		private static (PacingResult vanilla, PacingResult permutation) SimulateBoth(int hours, int seed) =>
 			(PacingModel.Simulate(hours, seed, DropTableStyle.VanillaLike), PacingModel.Simulate(hours, seed, DropTableStyle.Permutation));
 

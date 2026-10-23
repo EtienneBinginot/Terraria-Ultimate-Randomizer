@@ -108,7 +108,8 @@ namespace UltimateRandomizer.Common.Configs
 		public PermutationExtraWeights PermutationExtraWeights = new();
 
 		// Permutation style: share (%) of the shuffled drops (not materials, ores or bars) that become a random item of the
-		// enemy's level, keeping the chance and conditions of the entry; never the last copy of an item without another source
+		// enemy's level, keeping the conditions of the entry and its chance (capped by a vanilla-like rate for the new item);
+		// never the keeper copy every item but blocks, critters and ores keeps (DropPermutation.SurpriseCandidates)
 		[Range(0f, 100f)]
 		[Increment(1f)]
 		[DefaultValue(10f)]

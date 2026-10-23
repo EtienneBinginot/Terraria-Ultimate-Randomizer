@@ -115,8 +115,8 @@ namespace UltimateRandomizer.Common.Tests
 				for (int p = 0; p < current.Places.Count; p++)
 				{
 					DropPermutation.Place place = current.Places[p];
-					// Surprises may take every copy of an item found elsewhere (DropPermutation.OtherSources), never the last one otherwise
-					if (!planned.Contains(place.Entry.itemId) && !current.OtherSources.Contains(place.Entry.itemId) && failures.Count < 20)
+					// Surprises may take every copy of a block, critter or ore, never the keeper copy of another item
+					if (!planned.Contains(place.Entry.itemId) && !DropPermutation.FoundInWorld(place.Entry.itemId) && failures.Count < 20)
 					{
 						failures.Add($"{Lang.GetItemNameValue(place.Entry.itemId)} (from {NpcName(place.Owner)}) is in no enemy's drops");
 					}
@@ -138,61 +138,68 @@ namespace UltimateRandomizer.Common.Tests
 		// What the kills really do, per net ID (variants such as Pinky have rules of their own): every registered wrapper
 		// belongs to its net ID; an entry is rolled by our rule exactly when its wrapped rule is silenced (nothing both rolled
 		// and left running); every item of a silenced rule is in the net ID's own table, or, permuted away, in some table;
-		// the items that did not move are the net ID's own; every eligible enemy without vanilla drops rolls something
+		// the items that did not move are the net ID's own; every eligible enemy without vanilla drops rolls something. Without
+		// surprises, and on the live plan (with them: only blocks, critters and ores may lose every copy)
 		private static void DropPermutationRuntime()
 		{
-			DropPermutation.WorldPlan plan = PermutationPlan(SeedSystem.WorldSeed);
-			HashSet<int> everywhere = plan.ByUnit.Values.SelectMany(t => t).Where(p => p.Rolled).Select(p => p.Entry.itemId).ToHashSet();
+			List<(string, DropPermutation.WorldPlan, bool)> plans = new() { ("without surprises", PermutationPlan(SeedSystem.WorldSeed), false) };
+			if (SeedSystem.WorldReady && DropPermutation.InStyle(NPCID.BlueSlime)) plans.Add(("live", DropPermutation.Current, true));
 			List<string> failures = new();
-			int netIds = 0, ownTables = 0, silencedEntries = 0, withoutDrops = 0;
-			void Fail(string message)
+			int silencedTotal = 0;
+			foreach ((string label, DropPermutation.WorldPlan plan, bool live) in plans)
 			{
-				if (failures.Count < 25) failures.Add(message);
+				int netIds = 0, ownTables = 0, silencedEntries = 0, withoutDrops = 0;
+				HashSet<int> everywhere = plan.ByUnit.Values.SelectMany(t => t).Where(p => p.Rolled).Select(p => p.Entry.itemId).ToHashSet();
+				void Fail(string message)
+				{
+					if (failures.Count < 25) failures.Add($"{label}: {message}");
+				}
+				foreach (int netId in ContentSamples.NpcsByNetId.Keys.OrderBy(k => k))
+				{
+					if (!DropPermutation.IsPermutable(netId)) continue;
+					netIds++;
+					int unit = DropPermutation.UnitOf(netId);
+					if (unit == netId && ContentSamples.NpcsByNetId[netId].type != netId) ownTables++;
+					if (!plan.ByUnit.TryGetValue(unit, out DropPermutation.Placed[] table))
+					{
+						Fail($"{NpcName(netId)} ({netId}): no table");
+						continue;
+					}
+					List<DropRateInfo> entries = LootSnapshot.ForNpc(netId);
+					int[] rules = LootSnapshot.RulesOf(netId);
+					if (table.Length != TableLength(plan, unit) || table.Length < entries.Count) Fail($"{NpcName(netId)} ({netId}): a table of {table.Length} entries for {entries.Count} vanilla entries");
+					Dictionary<int, PermutableRule> wrappers = new();
+					foreach (PermutableRule wrapper in Main.ItemDropsDB.GetRulesForNPCID(netId, false).OfType<PermutableRule>())
+					{
+						if (wrapper.NetId != netId) Fail($"{NpcName(netId)} ({netId}): a wrapper of net ID {wrapper.NetId}");
+						wrappers[wrapper.RuleIndex] = wrapper;
+					}
+					for (int i = 0; i < entries.Count; i++)
+					{
+						int item = entries[i].itemId;
+						int r = i < rules.Length ? rules[i] : -1;
+						if (r >= 0 && !wrappers.ContainsKey(r)) Fail($"{NpcName(netId)} ({netId}): the rule of {Lang.GetItemNameValue(item)} is not wrapped");
+						bool silenced = r >= 0 && wrappers.TryGetValue(r, out PermutableRule rule) && DropPermutation.Silences(rule.Items);
+						bool rolled = i < table.Length && table[i].Rolled;
+						if (rolled && !silenced) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} rolled by us and by its own rule");
+						if (silenced && !rolled) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} silenced, its place not rolled");
+						if (i < table.Length && !table[i].Permuted && table[i].Entry.itemId != item) Fail($"{NpcName(netId)} ({netId}): entry {i} is {Lang.GetItemNameValue(table[i].Entry.itemId)}, {Lang.GetItemNameValue(item)} originally");
+						if (!silenced) continue;
+						silencedEntries++;
+						bool here = i < table.Length && !table[i].Permuted && table[i].Entry.itemId == item;
+						if (!here && !everywhere.Contains(item) && !(live && DropPermutation.FoundInWorld(item))) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} silenced and rolled nowhere");
+					}
+					if (entries.Count == 0)
+					{
+						withoutDrops++;
+						if (!table.Any(p => p.Rolled && p.Entry.itemId > ItemID.None)) Fail($"{NpcName(netId)} ({netId}): no vanilla drop and no rolled entry");
+					}
+				}
+				silencedTotal += silencedEntries;
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation runtime ({label}): {netIds} net IDs, {ownTables} variants with their own table, {silencedEntries} silenced entries, {withoutDrops} enemies without vanilla drops");
 			}
-			foreach (int netId in ContentSamples.NpcsByNetId.Keys.OrderBy(k => k))
-			{
-				if (!DropPermutation.IsPermutable(netId)) continue;
-				netIds++;
-				int unit = DropPermutation.UnitOf(netId);
-				if (unit == netId && ContentSamples.NpcsByNetId[netId].type != netId) ownTables++;
-				if (!plan.ByUnit.TryGetValue(unit, out DropPermutation.Placed[] table))
-				{
-					Fail($"{NpcName(netId)} ({netId}): no table");
-					continue;
-				}
-				List<DropRateInfo> entries = LootSnapshot.ForNpc(netId);
-				int[] rules = LootSnapshot.RulesOf(netId);
-				if (table.Length != TableLength(plan, unit) || table.Length < entries.Count) Fail($"{NpcName(netId)} ({netId}): a table of {table.Length} entries for {entries.Count} vanilla entries");
-				Dictionary<int, PermutableRule> wrappers = new();
-				foreach (PermutableRule wrapper in Main.ItemDropsDB.GetRulesForNPCID(netId, false).OfType<PermutableRule>())
-				{
-					if (wrapper.NetId != netId) Fail($"{NpcName(netId)} ({netId}): a wrapper of net ID {wrapper.NetId}");
-					wrappers[wrapper.RuleIndex] = wrapper;
-				}
-				for (int i = 0; i < entries.Count; i++)
-				{
-					int item = entries[i].itemId;
-					int r = i < rules.Length ? rules[i] : -1;
-					if (r >= 0 && !wrappers.ContainsKey(r)) Fail($"{NpcName(netId)} ({netId}): the rule of {Lang.GetItemNameValue(item)} is not wrapped");
-					bool silenced = r >= 0 && wrappers.TryGetValue(r, out PermutableRule rule) && DropPermutation.Silences(rule.Items);
-					bool rolled = i < table.Length && table[i].Rolled;
-					if (rolled && !silenced) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} rolled by us and by its own rule");
-					if (silenced && !rolled) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} silenced, its place not rolled");
-					if (i < table.Length && !table[i].Permuted && table[i].Entry.itemId != item) Fail($"{NpcName(netId)} ({netId}): entry {i} is {Lang.GetItemNameValue(table[i].Entry.itemId)}, {Lang.GetItemNameValue(item)} originally");
-					if (!silenced) continue;
-					silencedEntries++;
-					bool here = i < table.Length && !table[i].Permuted && table[i].Entry.itemId == item;
-					if (!here && !everywhere.Contains(item)) Fail($"{NpcName(netId)} ({netId}): {Lang.GetItemNameValue(item)} silenced and rolled nowhere");
-				}
-				if (entries.Count == 0)
-				{
-					withoutDrops++;
-					if (!table.Any(p => p.Rolled && p.Entry.itemId > ItemID.None)) Fail($"{NpcName(netId)} ({netId}): no vanilla drop and no rolled entry");
-				}
-			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation runtime: {netIds} net IDs, {ownTables} variants with their own table, {silencedEntries} silenced entries, {withoutDrops} enemies without vanilla drops");
 			Check.All(failures, "Drop permutation runtime");
-			if (silencedEntries == 0) Check.Skip("no silenced drop entry to check");
+			if (silencedTotal == 0) Check.Skip("no silenced drop entry to check");
 		}
 
 		// The assignment is stable: removing one place from a group (a setting keeps one more item, say) changes the content of
@@ -232,8 +239,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// The surprises of the permutation, with explicit chances (not the config): about that share of the candidates becomes a
-		// random item with the content's chance and the place's conditions; never a material, ore, bar or synthetic content;
-		// an item without another source keeps a copy even when every candidate is surprised; a higher chance only adds
+		// random item with at most the content's chance and the place's conditions; never a material, ore, bar or synthetic content;
+		// every item but blocks, critters and ores keeps a copy even when every candidate is surprised; a higher chance only adds
 		// surprises (each place has its own roll), with the same items
 		private static void DropPermutationSurprise()
 		{
@@ -272,7 +279,8 @@ namespace UltimateRandomizer.Common.Tests
 						if (!plan.SurpriseCandidate[p]) Fail($"{where} surprised but not a candidate");
 						if (!DropPermutation.SurpriseKind(content.itemId)) Fail($"{where}: a material, ore or bar surprised");
 						if (source.Synthetic) Fail($"{where}: a synthetic content surprised");
-						if (!placed.Surprise || placed.Replaced != content.itemId || placed.Entry.dropRate != content.dropRate || placed.Entry.conditions != place.Entry.conditions)
+						// The chance is the content's, capped by a vanilla-like rate for the new item (DropRates.Denominator)
+						if (!placed.Surprise || placed.Replaced != content.itemId || placed.Entry.dropRate <= 0f || placed.Entry.dropRate > content.dropRate || placed.Entry.conditions != place.Entry.conditions)
 						{
 							Fail($"{where}: the surprise {Lang.GetItemNameValue(placed.Entry.itemId)} lost the content's chance or the place's conditions");
 						}
@@ -289,12 +297,13 @@ namespace UltimateRandomizer.Common.Tests
 					double tolerance = 4 * Math.Sqrt(chance * (1 - chance) / candidates) + 0.02;
 					if (Math.Abs(share - chance) > tolerance) Fail($"seed {seed}: {share:P1} of {candidates} candidates surprised at {chance:P0}");
 				}
-				// Every candidate surprised: an item without another source still drops somewhere
+				// Every candidate surprised: every item but blocks, critters and ores still drops somewhere (its keeper copy),
+				// whatever its other sources (randomized too)
 				HashSet<int> before = none.ByUnit.Values.SelectMany(t => t).Select(x => x.Entry.itemId).ToHashSet();
 				HashSet<int> after = all.ByUnit.Values.SelectMany(t => t).Select(x => x.Entry.itemId).ToHashSet();
-				foreach (int item in before.Where(i => !after.Contains(i) && !all.OtherSources.Contains(i)))
+				foreach (int item in before.Where(i => !after.Contains(i) && !DropPermutation.FoundInWorld(i)))
 				{
-					Fail($"seed {seed}: the surprises took every copy of {Lang.GetItemNameValue(item)}, found nowhere else");
+					Fail($"seed {seed}: the surprises took every copy of {Lang.GetItemNameValue(item)}");
 				}
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation surprises (surprised/candidates):{shares}");
@@ -1170,8 +1179,11 @@ namespace UltimateRandomizer.Common.Tests
 			if (cfg.RandomizeMobDrops && cfg.DropTableStyle == DropTableStyle.Permutation && GeneralConfig.Instance.RandomizerMode != RandomizerMode.Shuffle)
 			{
 				// Permutation: PermutationExtraSlots slots whatever the abundance, at vanilla-like rates (never above
-				// DropRateMultiplier / 1), no small frequent drops, and no materials, ores or bars when their weights are 0
+				// DropRateMultiplier / 1), no small frequent drops, and no materials, ores or bars when their weights are 0 (not
+				// in Chaos: ItemPool.Roll ignores the weights there). enemies only holds those that CanHaveExtraDrops (without
+				// vanilla drops: only with EnemiesWithoutDropsCanDrop)
 				int expectedSlots = Math.Clamp(cfg.PermutationExtraSlots, 0, 3);
+				bool weighted = GeneralConfig.Instance.RandomizerMode != RandomizerMode.Chaos;
 				foreach (int type in enemies.Where(DropPermutation.IsPermutable).Take(40))
 				{
 					List<PlannedDrop> extras = RandomNpcDropRule.ExtraDrops(type, type, Main.expertMode, 3f);
@@ -1184,7 +1196,7 @@ namespace UltimateRandomizer.Common.Tests
 					{
 						if (extra.Chance <= 0f || extra.Chance > Math.Min(1f, cfg.DropRateMultiplier) + 1e-4f) failures.Add($"{NpcName(type)}: extra drop at {extra.Chance:P1}, at most {Math.Min(1f, cfg.DropRateMultiplier):P0}");
 						ItemCategory category = ItemPool.IsValid(extra.Item) ? ItemPool.Info[extra.Item].Category : ItemCategory.Misc;
-						if (cfg.PermutationExtraWeights.Get(category) == 0 && category is ItemCategory.Material or ItemCategory.OreBar)
+						if (weighted && cfg.PermutationExtraWeights.Get(category) == 0 && category is ItemCategory.Material or ItemCategory.OreBar)
 						{
 							failures.Add($"{NpcName(type)}: {Lang.GetItemNameValue(extra.Item)} ({category}) as an extra drop, its weight is 0");
 						}
