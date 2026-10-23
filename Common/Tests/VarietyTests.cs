@@ -91,7 +91,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			RequireCoherent();
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			int limit = progression.TierGating ? Tiers.Clamp(ProgressionSystem.UnlockedTier + progression.TierAllowance) : Tiers.Max;
+			int limit = ItemPool.GatingLimit(0);
 			List<string> failures = new();
 			Random rng = new(3);
 			int i = 0;

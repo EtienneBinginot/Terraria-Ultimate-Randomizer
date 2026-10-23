@@ -221,7 +221,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			info.Height.Set(66, 0);
 			CodexLabel name = new(HintFacts.ItemName(type), 1.2f, sample != null && sample.rare != ItemRarityID.White ? ItemRarity.GetColor(sample.rare) : Color.White);
 			info.Append(name);
-			string details = ItemPool.IsValid(type) ? $"{CategoryName((int)ItemPool.Info[type].Category)}  -  {Tier(ItemPool.Info[type].Tier)}" : "";
+			string details = ItemPool.IsValid(type) ? $"{CategoryName((int)ItemPool.Info[type].Category)}  -  {Tier(ItemPool.TrueTierOf(type))}" : "";
 			CodexLabel sub = new(details, 0.85f, CodexDraw.Muted);
 			sub.Top.Set(36, 0);
 			info.Append(sub);

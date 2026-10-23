@@ -8,14 +8,15 @@ using UltimateRandomizer.Common.Features;
 
 namespace UltimateRandomizer.Common.Commands
 {
-	// /rchests: randomizes the natural chests of a world created without the mod (once, host only)
+	// /rchests: randomizes the natural chests of a world created without the mod (once, host only).
+	// /rchests tame: re-rolls again the items above their chest's cap in the chests nobody opened (done once on load)
 	public class ChestCommand : ModCommand
 	{
 		public override CommandType Type => CommandType.World | CommandType.Console;
 
 		public override string Command => "rchests";
 
-		public override string Usage => "/rchests [confirm]";
+		public override string Usage => "/rchests [confirm | tame]";
 
 		public override string Description => Language.GetTextValue("Mods.UltimateRandomizer.Commands.Chests.Description");
 
@@ -26,6 +27,18 @@ namespace UltimateRandomizer.Common.Commands
 			if (!isHost)
 			{
 				caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Seed.NotAllowed"), Color.OrangeRed);
+				return;
+			}
+			if (args.Length > 0 && args[0] == "tame")
+			{
+				if (!ChestSystem.ChestsRandomized)
+				{
+					caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Chests.NotRandomized"), Color.Yellow);
+					return;
+				}
+				(int chests, int items) = ChestSystem.TameChests();
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"/rchests tame: {items} items re-rolled in {chests} chests.");
+				caller.Reply(Language.GetTextValue("Mods.UltimateRandomizer.Commands.Chests.Tamed", items, chests), Color.LightGreen);
 				return;
 			}
 			if (ChestSystem.ChestsRandomized)

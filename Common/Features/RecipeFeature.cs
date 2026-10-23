@@ -313,9 +313,16 @@ namespace UltimateRandomizer.Common.Features
 			if (affordable.Count > 0)
 			{
 				(int type, int stack, _) = affordable[DetRandom.Get(RollKey.Recipe, recipeKeys[i], RollKey.Fallback).Next(affordable.Count)];
-				return (type, stack);
+				// A banned item is replaced by another allowed candidate, with its own rng: the other choices stay the same
+				if (!ItemPool.IsBanned(type) || ItemPool.RepickDisabled) return (type, stack);
+				List<(int type, int stack, long value)> allowed = affordable.Where(c => !ItemPool.IsBanned(c.type)).ToList();
+				if (allowed.Count > 0)
+				{
+					(type, stack, _) = allowed[DetRandom.Get(RollKey.Recipe, recipeKeys[i], RollKey.Fallback, RollKey.Repick).Next(allowed.Count)];
+					return (type, stack);
+				}
 			}
-			(int cheapest, int cheapestStack, _) = candidates.OrderBy(c => c.value).ThenBy(c => c.type).First();
+			(int cheapest, int cheapestStack, _) = candidates.OrderBy(c => ItemPool.IsBanned(c.type) && !ItemPool.RepickDisabled).ThenBy(c => c.value).ThenBy(c => c.type).First();
 			return (cheapest, cheapestStack);
 		}
 

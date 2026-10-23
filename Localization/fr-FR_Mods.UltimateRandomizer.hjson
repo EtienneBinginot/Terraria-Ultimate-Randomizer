@@ -108,7 +108,14 @@ Tests: {
 	SpawnedEnemyNoExtraDrops: Les ennemis engendrés par un autre ennemi ne donnent ni drop en plus, ni drop garanti, ni jackpot
 	CrittersNoJackpot: Les bestioles ne donnent jamais de jackpot
 	BagNeverJackpot: Les sacs et caisses ouverts ne donnent jamais de jackpot
-	JackpotCapAndRamp: Les jackpots sont plus rares au début, jamais trop au-delà de la limite, jamais du mode difficile avant celui-ci
+	JackpotTail: Chaque palier de plus d'un jackpot est bien plus rare, et seuls les jackpots dépassent la limite (mode difficile compris)
+	HardmodeWall: Rien du mode difficile avant celui-ci sauf les jackpots et les planchers des boss, indices cohérents avec la limite
+	RepickOnlyChangesFlagged: Le nouveau tirage ne remplace que les objets bannis ou trop avancés, tous les autres tirages sont inchangés
+	RaisedTiers: Les objets fabriqués avec des matériaux du mode difficile attendent celui-ci, rien n'est abaissé
+	BannedNeverRolled: Les objets créatifs et internes (Magic Storage, tModLoader) ne sont jamais donnés
+	ChestCap: Le contenu d'un coffre ne dépasse jamais son plafond, ni le mode difficile dans un coffre d'avant celui-ci
+	ChestTameKeepsOpened: L'ajustement des coffres d'un monde en cours ne touche jamais un coffre ouvert ou un coffre jackpot
+	JackpotChests: Les coffres jackpot sont choisis de la même façon à chaque fois parmi les coffres éligibles et contiennent des objets utiles au-dessus de leur plafond
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
@@ -272,6 +279,8 @@ Jackpot: {
 	PopupBig: JACKPOT !!! +{0}
 	Chat: Jackpot ! {0} : {1} palier(s) d'avance sur ta progression ({2})
 	Tooltip: Jackpot : {0} palier(s) d'avance sur ta progression ({1})
+	ChestPopup: COFFRE JACKPOT !
+	ChestChat: "{0} a ouvert un coffre jackpot !"
 }
 
 Codex: {
@@ -949,6 +958,8 @@ Commands: {
 		AlreadyDone: Les coffres sont déjà randomisés dans ce monde.
 		Warning: Ceci randomise une fois les coffres naturels de ce monde. Les coffres renommés, et ceux près du point d'apparition ou des maisons des PNJ (sûrement les tiens), sont ignorés. Tape /rchests confirm pour continuer.
 		Done: "{0} coffres randomisés."
+		NotRandomized: Les coffres de ce monde ne sont pas randomisés : rien à ajuster.
+		Tamed: "{0} objets au-dessus du niveau de leur coffre remplacés dans {1} coffres jamais ouverts."
 	}
 
 	DebugOff: Les outils de débogage sont désactivés : active-les dans les réglages du mod (réglages client d'Ultimate Randomizer > Outils de débogage).
@@ -1142,8 +1153,8 @@ Configs: {
 		}
 
 		TierAllowance: {
-			Label: Tiers autorisés au-dessus de ta progression
-			Tooltip: 0 = seulement les tiers déjà débloqués. 2 = deux tiers d'avance (par défaut), etc. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde.
+			Label: "Tiers autorisés au-dessus de ta progression"
+			Tooltip: "0 = seulement les tiers déjà débloqués. 1 = un tier d'avance (par défaut), etc. Avant le mode difficile, rien du mode difficile n'est donné, sauf les jackpots. La puissance adaptative renforce les ennemis si ton équipement prend de l'avance sur le monde."
 		}
 
 		JackpotTierChance: {
@@ -1162,18 +1173,8 @@ Configs: {
 		}
 
 		WildTierDecay: {
-			Label: Folie : rareté par palier en plus
-			Tooltip: À quel point chaque palier au-delà de la limite est plus rare pour les drops de folie : 4 (par défaut) = un palier au-dessus est 4 fois plus fréquent que deux paliers au-dessus. Plus haut = la folie reste plus près de la limite.
-		}
-
-		JackpotStartShare: {
-			Label: "Jackpots : part au début (%)"
-			Tooltip: "Part des deux chances de jackpot (drops chanceux et folie) avant le premier boss. Elle augmente à chaque boss vaincu, jusqu'aux chances complètes après Plantera. 100 = les chances complètes dès le début."
-		}
-
-		MaxJackpotTiers: {
-			Label: "Jackpots : paliers au-delà de la limite au plus"
-			Tooltip: "Un jackpot (drop chanceux ou folie) ne dépasse jamais la limite de progression de plus de ce nombre de paliers. Avant le mode difficile, un jackpot n'est jamais un objet du mode difficile."
+			Label: "Jackpots : rareté par palier en plus"
+			Tooltip: "À quel point chaque palier au-delà de la limite est plus rare pour les jackpots (folie et drops chanceux) : 3 (par défaut) = un palier au-dessus est 3 fois plus fréquent que deux paliers au-dessus. Il n'y a pas de plafond : un objet du mode difficile en début de partie est possible, mais rare. Plus haut = les jackpots restent plus près de la limite."
 		}
 
 		MechTierRequiresAllThree: {
@@ -1409,6 +1410,11 @@ Configs: {
 		ChestTierBonus: {
 			Label: Bonus de tier des coffres
 			Tooltip: Rend le contenu des coffres meilleur de ce nombre de tiers.
+		}
+
+		JackpotChestChance: {
+			Label: "Coffres jackpot (%)"
+			Tooltip: "Part des coffres naturels qui deviennent des coffres jackpot (au moins 2 par monde) : 2 à 4 objets utiles au-dessus du niveau du coffre (parfois du mode difficile), de l'or et des potions. Ils brillent d'un rayon de lumière jusqu'à ce que quelqu'un les ouvre. Placés avec les coffres, ou une fois dans un monde dont les coffres ont été randomisés avant. 0 = aucun."
 		}
 
 		RandomizeFishing: {

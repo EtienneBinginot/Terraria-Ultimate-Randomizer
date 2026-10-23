@@ -140,6 +140,13 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(1)]
 		public int ChestTierBonus;
 
+		// Share (%) of the natural chests that become jackpot chests (at least 2 per world): useful items above the chest's
+		// tier, glowing until opened. Placed at world creation, or once in a world randomized before them
+		[Range(0f, 10f)]
+		[Increment(0.5f)]
+		[DefaultValue(1.5f)]
+		public float JackpotChestChance;
+
 		[DefaultValue(true)]
 		public bool RandomizeFishing;
 

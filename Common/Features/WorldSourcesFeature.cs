@@ -84,10 +84,13 @@ namespace UltimateRandomizer.Common.Features
 			LootConfig cfg = LootConfig.Instance;
 			if (rng.NextDouble() * 100 < cfg.HerbKeepChance) return original;
 			int index = rng.Next(Math.Max(1, cfg.HerbVariety));
-			return ItemPool.RollReplacement(Request(RollKey.Herb, original, index), cfg.SurpriseChance, rng);
+			RollRequest request = Request(RollKey.Herb, original, index);
+			request.MaxTier = ItemPool.HardmodeWall;
+			return ItemPool.RollReplacement(request, cfg.SurpriseChance, rng);
 		}
 
-		// The fixed replacements of a herb (ignoring progression), for the findability of items
+		// The fixed replacements of a herb (ignoring progression and the hardmode wall of the runtime rolls), for the
+		// findability of items
 		public static List<int> HerbTable(int original)
 		{
 			List<int> table = new();
@@ -103,7 +106,9 @@ namespace UltimateRandomizer.Common.Features
 		public static int ExtractinatorReplacement(int original, Random surpriseRng)
 		{
 			if (OreMap.IsOre(original)) return OreMap.Get(original);
-			return ItemPool.RollReplacement(Request(RollKey.Extractinator, original, 0), LootConfig.Instance.SurpriseChance, surpriseRng);
+			RollRequest request = Request(RollKey.Extractinator, original, 0);
+			request.MaxTier = ItemPool.HardmodeWall;
+			return ItemPool.RollReplacement(request, LootConfig.Instance.SurpriseChance, surpriseRng);
 		}
 
 		public static void ReplaceAnglerRewards(List<Item> rewards, int questsFinished, Random surpriseRng)

@@ -41,12 +41,12 @@ namespace UltimateRandomizer.Common.Features
 			return ItemPool.RollReplacement(request, LootConfig.Instance.SurpriseChance, surpriseRng);
 		}
 
-		// worth: RandomNpcDropRule.JackpotWorth of the kill (0: never lucky). Scaled by the share of the current progression
+		// worth: RandomNpcDropRule.JackpotWorth of the kill (0: never lucky). The same chance at every tier
 		public static bool RollLucky(float worth = 1f) => worth > 0f && Main.rand.NextFloat() * 100 < LuckyChance(worth);
 
 		// The lucky chance (%) of a kill now (the pacing model uses it too)
 		public static float LuckyChance(float worth = 1f) =>
-			ProgressionConfig.Instance.RuntimeJackpotChance * worth * ItemPool.JackpotShare(ProgressionSystem.UnlockedTier);
+			ProgressionConfig.Instance.RuntimeJackpotChance * worth;
 
 		// Stack range of a replacement item, from the original range (keeps roughly the same value)
 		public static (int min, int max) ScaledRange(int originalItem, int stackMin, int stackMax, int newType)

@@ -180,13 +180,13 @@ namespace UltimateRandomizer.Common.Tests
 			ProgressionConfig cfg = ProgressionConfig.Instance;
 			if (!cfg.TierGating) Check.Skip("tier gating is off");
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only in Coherent mode");
-			int limit = Tiers.Clamp(ProgressionSystem.UnlockedTier + cfg.TierAllowance);
+			int limit = ItemPool.GatingLimit(0);
 			List<string> failures = new();
 			for (int i = 0; i < 2000; i++)
 			{
 				RollRequest request = new() { Keys = new[] { 777, i }, SourceTier = 9, OriginalItem = -1, Policy = CategoryPolicy.Weighted, TierJitterUp = 1, AllowJackpot = true };
 				int item = ItemPool.Roll(request, out int tier);
-				if (ItemPool.TierOf(item) > limit) failures.Add($"{Lang.GetItemNameValue(item)} tier {ItemPool.TierOf(item)} > {limit}");
+				if (ItemPool.TrueTierOf(item) > limit) failures.Add($"{Lang.GetItemNameValue(item)} true tier {ItemPool.TrueTierOf(item)} > {limit}");
 				if (tier != ItemPool.TierOf(item)) failures.Add($"reported tier {tier} != real {ItemPool.TierOf(item)}");
 			}
 			Check.All(failures, "Gating bypassed");

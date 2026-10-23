@@ -435,7 +435,7 @@ namespace UltimateRandomizer.Common.Tests
 			RequireApplied();
 			RecipePlan plan = RecipePlanner.Get();
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			int limit = progression.TierGating ? Tiers.Clamp(ProgressionSystem.UnlockedTier + progression.TierAllowance) : Tiers.Max;
+			int limit = ItemPool.GatingLimit(0);
 			List<string> failures = new();
 			int checkedCount = 0;
 			for (int i = 0; i < Count; i++)

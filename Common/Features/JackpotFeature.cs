@@ -10,6 +10,7 @@ using Terraria.GameContent;
 using Terraria.ID;
 using Terraria.Localization;
 using Terraria.ModLoader;
+using Terraria.ModLoader.IO;
 
 namespace UltimateRandomizer.Common.Features
 {
@@ -43,24 +44,39 @@ namespace UltimateRandomizer.Common.Features
 		public static int GapOf(Item item) => item != null && !item.IsAir && item.TryGetGlobalItem(out JackpotItem jackpot) ? jackpot.Gap : 0;
 
 		// Tiers of an item above the unlocked tier, for a jackpot of this gap (UnlockedTier follows the synced boss flags)
-		public static int AboveUnlocked(int type, int gap) => Math.Clamp(Math.Max(gap, Core.ItemPool.TierOf(type) - Core.ProgressionSystem.UnlockedTier), 0, 9);
+		public static int AboveUnlocked(int type, int gap) => Math.Clamp(Math.Max(gap, Core.ItemPool.TrueTierOf(type) - Core.ProgressionSystem.UnlockedTier), 0, 9);
 
 		// The name of an item's tier ("Hardmode"...)
-		public static string TierName(int type) => Language.GetTextValue($"Mods.UltimateRandomizer.Configs.Tier.{(Core.Tier)Core.Tiers.Clamp(Core.ItemPool.TierOf(type))}.Label");
+		public static string TierName(int type) => Language.GetTextValue($"Mods.UltimateRandomizer.Configs.Tier.{(Core.Tier)Core.Tiers.Clamp(Core.ItemPool.TrueTierOf(type))}.Label");
 
 		public override void OnSpawn(Item item, IEntitySource source)
 		{
 			if (Next > 0) Mark(item, Next);
 		}
 
-		// After the item got its final type (a type change recreates this global)
-		public static void Mark(Item item, int gap)
+		// After the item got its final type (a type change recreates this global). fresh: false for an item placed in a chest
+		// (no burst when it is later thrown on the ground)
+		public static void Mark(Item item, int gap, bool fresh = true)
 		{
 			if (gap <= 0 || item == null || item.IsAir || !item.TryGetGlobalItem(out JackpotItem jackpot)) return;
 			jackpot.Gap = (byte)Math.Min(gap, 9);
 			jackpot.Above = (byte)AboveUnlocked(item.type, gap);
-			jackpot.MarkedAt = Math.Max(1u, Main.GameUpdateCount);
-			jackpot.Pending = !Main.dedServ;
+			jackpot.MarkedAt = fresh ? Math.Max(1u, Main.GameUpdateCount) : 0;
+			jackpot.Pending = fresh && !Main.dedServ;
+		}
+
+		// Saved with the item (inventories and chests: jackpot chests are filled at world creation)
+		public override void SaveData(Item item, TagCompound tag)
+		{
+			if (Gap == 0) return;
+			tag["gap"] = Gap;
+			tag["above"] = Above;
+		}
+
+		public override void LoadData(Item item, TagCompound tag)
+		{
+			Gap = tag.GetByte("gap");
+			Above = tag.GetByte("above");
 		}
 
 		private bool Fresh => Gap > 0 && MarkedAt != 0 && Main.GameUpdateCount - MarkedAt < FreshTicks;
@@ -113,7 +129,7 @@ namespace UltimateRandomizer.Common.Features
 
 		public override void ModifyTooltips(Item item, List<TooltipLine> tooltips)
 		{
-			if (Gap > 0) tooltips.Add(new TooltipLine(Mod, "Jackpot", Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Tooltip", Math.Max(0, Core.ItemPool.TierOf(item.type) - Core.ProgressionSystem.UnlockedTier), TierName(item.type))) { OverrideColor = JackpotEffects.ColorOf(Gap) });
+			if (Gap > 0) tooltips.Add(new TooltipLine(Mod, "Jackpot", Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Tooltip", Math.Max(0, Core.ItemPool.TrueTierOf(item.type) - Core.ProgressionSystem.UnlockedTier), TierName(item.type))) { OverrideColor = JackpotEffects.ColorOf(Gap) });
 		}
 	}
 
@@ -182,9 +198,11 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// A column of light above the item, taller from 2 tiers, wider and brighter from 3
-		public static void Beam(Item item, SpriteBatch spriteBatch, int gap)
+		public static void Beam(Item item, SpriteBatch spriteBatch, int gap) => BeamAt(spriteBatch, item.Bottom - Main.screenPosition, gap);
+
+		// bottom: in screen coordinates (jackpot chests draw it too)
+		public static void BeamAt(SpriteBatch spriteBatch, Vector2 bottom, int gap)
 		{
-			Vector2 bottom = item.Bottom - Main.screenPosition;
 			int width = gap >= 3 ? 10 : gap == 2 ? 6 : 4;
 			int height = gap >= 3 ? 420 : gap == 2 ? 260 : 150;
 			float pulse = 0.75f + 0.25f * (float)Math.Sin(Main.GlobalTimeWrappedHourly * 4f);

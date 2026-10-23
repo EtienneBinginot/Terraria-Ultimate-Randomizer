@@ -57,12 +57,12 @@ namespace UltimateRandomizer.Common.Features
 
 		// The progression lock of a recipe's result (see ItemPool.Roll): the roll targets the original's tier and is
 		// replaced by a stand-in while that tier is out of reach; a result above that tier waits for its own tier too.
-		// Only the Coherent mode is gated.
+		// Only the Coherent mode is gated. The result waits for its true tier (a raised item is re-picked before it)
 		public static int ResultTier(int i, int result)
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			if (!Randomized(i) || !progression.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) return 0;
-			int tier = Math.Max(ItemPool.TierOf(RecipeSystem.OriginalResult(i)), ItemPool.TierOf(result));
+			int tier = Math.Max(ItemPool.TierOf(RecipeSystem.OriginalResult(i)), ItemPool.TrueTierOf(result));
 			return ItemPool.UnlockTier(tier);
 		}
 

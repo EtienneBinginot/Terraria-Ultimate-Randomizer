@@ -38,7 +38,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("SpawnedEnemyNoExtraDrops", SpawnedEnemyNoExtraDrops);
 			TestRunner.Register("CrittersNoJackpot", CrittersNoJackpot);
 			TestRunner.Register("BagNeverJackpot", BagNeverJackpot);
-			TestRunner.Register("JackpotCapAndRamp", JackpotCapAndRamp);
+			TestRunner.Register("JackpotTail", JackpotTail);
 			TestRunner.Register("GuaranteeScalesWithPlayers", GuaranteeScalesWithPlayers);
 		}
 
@@ -78,32 +78,23 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Bag jackpots");
 		}
 
-		// The jackpot share grows from JackpotStartShare before the first boss to everything after Plantera; with madness at
-		// 100 % (and lucky rolls), no jackpot goes more than MaxJackpotTiers above the limit, nor reaches hardmode before it
-		private static void JackpotCapAndRamp()
+		// With both jackpot chances forced (madness at 100 %, lucky rolls) and seeded rngs: the jackpot gaps fall off with each
+		// extra tier (WildTierDecay, no cap), the gap is the item's true tier above the limit, and nothing else goes above the
+		// progression limit (the hardmode wall included)
+		private static void JackpotTail()
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			List<string> failures = new();
-			float start = Math.Clamp(progression.JackpotStartShare / 100f, 0f, 1f);
-			if (Math.Abs(ItemPool.JackpotShare(0) - start) > 0.0001f) failures.Add($"share {ItemPool.JackpotShare(0):0.000} before the first boss, expected {start:0.000}");
-			if (Math.Abs(ItemPool.JackpotShare((int)Tier.PostPlantera) - 1f) > 0.0001f) failures.Add($"share {ItemPool.JackpotShare((int)Tier.PostPlantera):0.000} after Plantera, expected 1");
-			for (int t = 1; t < Tiers.Count; t++)
-			{
-				if (ItemPool.JackpotShare(t) < ItemPool.JackpotShare(t - 1) - 0.0001f) failures.Add($"share lower at tier {t} than at tier {t - 1}");
-				if (ItemPool.JackpotShare(t) > 1.0001f) failures.Add($"share above 1 at tier {t}");
-			}
-			Check.All(failures, "Jackpot share");
 			if (Main.hardMode) Check.Skip("the world is in hardmode");
 			if (!progression.TierGating) Check.Skip("no progression limit");
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only the coherent mode rolls jackpots");
 			int limit = ItemPool.GatingLimit(0);
-			int ceiling = ItemPool.JackpotCeiling(limit);
-			int maxGap = Math.Max(1, progression.MaxJackpotTiers);
-			int jackpots = 0;
+			if (limit >= Tiers.Max - 2) Check.Skip("not enough tiers above the limit");
+			List<string> failures = new();
+			int[] gaps = new int[Tiers.Count];
 			try
 			{
 				ItemPool.WildChanceOverride = 100f;
-				for (int i = 0; i < 3000; i++)
+				for (int i = 0; i < 6000; i++)
 				{
 					bool lucky = i % 2 == 1;
 					RollRequest request = new()
@@ -119,11 +110,14 @@ namespace UltimateRandomizer.Common.Tests
 					};
 					int item = ItemPool.Roll(request);
 					int gap = ItemPool.LastJackpotGap;
-					int tier = ItemPool.TierOf(item);
-					if (gap > 0) jackpots++;
-					if (gap > maxGap) failures.Add($"{Lang.GetItemNameValue(item)}: {gap} tiers above the limit, at most {maxGap}");
-					if (gap > 0 && tier >= (int)Tier.Hardmode) failures.Add($"{Lang.GetItemNameValue(item)} (tier {tier}) as a jackpot before hardmode");
-					if (tier > limit && tier > ceiling) failures.Add($"{Lang.GetItemNameValue(item)} (tier {tier}) above the limit {limit} and the jackpot ceiling {ceiling}");
+					int tier = ItemPool.TrueTierOf(item);
+					if (gap > 0)
+					{
+						gaps[Math.Min(gap, Tiers.Max)]++;
+						if (gap != tier - limit) failures.Add($"{Lang.GetItemNameValue(item)}: gap {gap}, true tier {tier}, limit {limit}");
+					}
+					else if (tier > limit) failures.Add($"{Lang.GetItemNameValue(item)} (true tier {tier}) above the limit {limit} without a jackpot");
+					else if (tier >= (int)Tier.Hardmode) failures.Add($"{Lang.GetItemNameValue(item)} (true tier {tier}): a hardmode item before hardmode without a jackpot");
 					if (failures.Count > 20) break;
 				}
 			}
@@ -132,9 +126,15 @@ namespace UltimateRandomizer.Common.Tests
 				ItemPool.WildChanceOverride = null;
 				ItemPool.ClearJackpot();
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Jackpot cap: limit {limit}, ceiling {ceiling}, {jackpots} jackpots in 3000 rolls");
-			if (ceiling > limit && jackpots == 0) failures.Add("no jackpot in 3000 rolls at 100 %");
-			Check.All(failures, "Jackpots above their cap");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Jackpot tail: limit {limit}, gaps 1-4: {gaps[1]} {gaps[2]} {gaps[3]} {gaps[4]}, beyond {gaps.Skip(5).Sum()}");
+			if (gaps[1] == 0) failures.Add("no jackpot one tier above the limit");
+			if (gaps[2] >= gaps[1]) failures.Add($"{gaps[2]} jackpots two tiers above, not fewer than one tier above ({gaps[1]})");
+			if (gaps[3] > gaps[2]) failures.Add($"{gaps[3]} jackpots three tiers above, more than two tiers above ({gaps[2]})");
+			// Loose (expected ratio: decay, 3 by default): the buckets and the usefulness filter bend the tail, but each step
+			// stays clearly rarer
+			float decay = Math.Max(1.01f, progression.WildTierDecay);
+			if (gaps[2] > 0 && gaps[1] < gaps[2] * decay / 2f) failures.Add($"one tier above only {gaps[1] / (float)gaps[2]:0.0} times as frequent as two tiers above (decay {decay})");
+			Check.All(failures, "Jackpot tail");
 		}
 
 		// Guaranteed stations, summons and tools are shared between the players of a kill; materials are not; random extra
@@ -401,7 +401,6 @@ namespace UltimateRandomizer.Common.Tests
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only the coherent mode rolls jackpots");
 			int limit = ItemPool.GatingLimit(0);
 			if (limit >= Tiers.Max) Check.Skip("the limit is already the last tier");
-			if (ItemPool.JackpotCeiling(limit) <= limit) Check.Skip("no jackpot above this limit before hardmode");
 			List<string> failures = new();
 			int jackpots = 0;
 			try
@@ -423,11 +422,11 @@ namespace UltimateRandomizer.Common.Tests
 					};
 					int item = ItemPool.Roll(request);
 					int gap = ItemPool.LastJackpotGap;
-					if (ItemPool.TierOf(item) > limit && gap == 0) failures.Add($"{Lang.GetItemNameValue(item)} above the limit without a jackpot mark");
+					if (ItemPool.TrueTierOf(item) > limit && gap == 0) failures.Add($"{Lang.GetItemNameValue(item)} above the limit without a jackpot mark");
 					if (gap == 0) continue;
 					jackpots++;
 					if (!ItemPool.IsJackpotWorthy(item)) failures.Add($"{Lang.GetItemNameValue(item)} ({ItemPool.Info[item].Category}) as a jackpot");
-					if (gap != ItemPool.TierOf(item) - limit) failures.Add($"{Lang.GetItemNameValue(item)}: gap {gap}, tier {ItemPool.TierOf(item)}, limit {limit}");
+					if (gap != ItemPool.TrueTierOf(item) - limit) failures.Add($"{Lang.GetItemNameValue(item)}: gap {gap}, true tier {ItemPool.TrueTierOf(item)}, limit {limit}");
 					if (failures.Count > 20) break;
 				}
 				// Plans never roll jackpots
@@ -484,7 +483,6 @@ namespace UltimateRandomizer.Common.Tests
 			if (!ProgressionConfig.Instance.TierGating) Check.Skip("no progression limit");
 			int limit = ItemPool.GatingLimit(0);
 			if (limit >= Tiers.Max) Check.Skip("the limit is already the last tier");
-			if (ItemPool.JackpotCeiling(limit) <= limit) Check.Skip("no jackpot above this limit before hardmode");
 			NPC npc = new();
 			npc.SetDefaults(NPCID.Zombie);
 			npc.Center = Main.LocalPlayer.Center;
@@ -510,7 +508,7 @@ namespace UltimateRandomizer.Common.Tests
 					if (gap == 0) continue;
 					marked++;
 					if (!ItemPool.IsJackpotWorthy(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} marked but not useful");
-					if (gap != ItemPool.TierOf(item.type) - limit) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, tier {ItemPool.TierOf(item.type)}, limit {limit}");
+					if (gap != ItemPool.TrueTierOf(item.type) - limit) failures.Add($"{Lang.GetItemNameValue(item.type)}: gap {gap}, true tier {ItemPool.TrueTierOf(item.type)}, limit {limit}");
 					if (CodexSystem.CountsAsDrop(item)) failures.Add($"{Lang.GetItemNameValue(item.type)} would be recorded as the zombie's drop");
 				}
 			}
@@ -546,7 +544,7 @@ namespace UltimateRandomizer.Common.Tests
 					int item = RandomNpcDropRule.GiantDrop(NPCID.Zombie, 5000 + i, false);
 					int gap = ItemPool.LastJackpotGap;
 					if (ItemPool.IsJackpotWorthy(item)) useful++;
-					if (gap == 0 && ProgressionConfig.Instance.TierGating && ItemPool.TierOf(item) > limit && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(item)} above the limit without a jackpot");
+					if (gap == 0 && ProgressionConfig.Instance.TierGating && ItemPool.TrueTierOf(item) > limit && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(item)} above the limit without a jackpot");
 				}
 				if (useful < Rolls * 0.98) failures.Add($"only {useful} useful items out of {Rolls}");
 				// The jackpot rate against the usual one, on the same rolls
@@ -619,17 +617,16 @@ namespace UltimateRandomizer.Common.Tests
 		// Jackpots rarer than in 1.2.0 (madness 12 %, luck 4 %) and 1.2.1 (9 %, 3 %, decay 3, allowance 3): items up to two
 		// tiers ahead already come normally. 1.3.0 raised 5 % / 2 % to 7 % / 3 % (weak enemies only get a share of them:
 		// JackpotWorth); 1.3.2 went back to 5 % / 2 %, the far jackpots were too many; after 1.3.4, 2 % / 1 %, a share of them
-		// early (JackpotStartShare 30 %) and at most one tier above the limit
+		// early (JackpotStartShare 30 %) and at most one tier above the limit; then back to 5 % / 2 % at every tier, no cap, each
+		// extra tier 3 times rarer, and an allowance of 1 (2 before)
 		private static void JackpotRatesLower()
 		{
 			float Default(string field) => Convert.ToSingle(typeof(ProgressionConfig).GetField(field).GetCustomAttributes(typeof(System.ComponentModel.DefaultValueAttribute), false)
 				.OfType<System.ComponentModel.DefaultValueAttribute>().First().Value);
-			Check.Equal(2f, Default("WildDropChance"), "default WildDropChance");
-			Check.Equal(1f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
-			Check.Equal(30f, Default("JackpotStartShare"), "default JackpotStartShare");
-			Check.Equal(1f, Default("MaxJackpotTiers"), "default MaxJackpotTiers");
-			Check.Equal(4f, Default("WildTierDecay"), "default WildTierDecay");
-			Check.Equal(2f, Default("TierAllowance"), "default TierAllowance");
+			Check.Equal(5f, Default("WildDropChance"), "default WildDropChance");
+			Check.Equal(2f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
+			Check.Equal(3f, Default("WildTierDecay"), "default WildTierDecay");
+			Check.Equal(1f, Default("TierAllowance"), "default TierAllowance");
 		}
 
 		// Plans, findability and guarantees never use the madness tail: identical at 0 % and 50 %

@@ -39,8 +39,9 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Jackpots of a simulated early hour before the first boss, at most this many with the default settings (a sanity
-		// bound, not a target: luck and madness of the kills, giants left out)
-		public const double MaxJackpotsPerHour = 6;
+		// bound, not a target: luck and madness of the kills, giants left out). 1.3.4 had 6 with about 0.9 % of jackpot chances
+		// early; back to 5 % / 2 % at every tier, 20 until the logged value is known
+		public const double MaxJackpotsPerHour = 20;
 
 		private static void Log(string text) => ModContent.GetInstance<UltimateRandomizer>().Logger.Info(text);
 
@@ -132,7 +133,7 @@ namespace UltimateRandomizer.Common.Tests
 			Log($"Jackpots: {perHour:0.00}/h at tier {tier} ({per100:0.00} per 100 kills, {PacingModel.KillsPerHour} kills per hour)");
 			RequireDefaults();
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			foreach (string field in new[] { "RuntimeJackpotChance", "WildDropChance", "WildTierDecay", "JackpotStartShare", "MaxJackpotTiers", "TierAllowance", "TierGating" })
+			foreach (string field in new[] { "RuntimeJackpotChance", "WildDropChance", "WildTierDecay", "TierAllowance", "TierGating" })
 			{
 				if (!IsDefault(progression, field)) Check.Skip($"{field} is not at its default value");
 			}

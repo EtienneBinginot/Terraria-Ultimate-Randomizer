@@ -68,8 +68,10 @@ namespace UltimateRandomizer.Common.Features
 					TierJitterDown = 0,
 					TierJitterUp = 0,
 					AllowJackpot = false,
-					// The player already holds an item of that tier: no progression to protect
-					IgnoreGating = true
+					// The player already holds an item of that tier: no progression to protect, but no hardmode item before
+					// hardmode (Refresh applies them again when the tier changes)
+					IgnoreGating = true,
+					MaxTier = ItemPool.HardmodeWall
 				};
 				int replacement = ItemPool.Roll(request);
 				if (replacement != type && StackRules.ValueOf(replacement) <= maxValue) return replacement;

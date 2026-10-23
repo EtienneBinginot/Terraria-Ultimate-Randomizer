@@ -107,6 +107,7 @@ namespace UltimateRandomizer.Common.Tests
 			CodexTests.Register();
 			CodexUiTests.Register();
 			HintTests.Register();
+			CapTests.Register();
 		}
 
 		public static List<TestResult> RunAll()

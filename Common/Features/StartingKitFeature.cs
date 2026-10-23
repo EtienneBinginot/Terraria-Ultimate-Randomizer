@@ -30,10 +30,12 @@ namespace UltimateRandomizer.Common.Features
 			int playerKey = DetRandom.StableHash(Player.name);
 			System.Random rng = DetRandom.Get(RollKey.StartingKit, playerKey);
 			List<int> kit = new();
-			for (int i = 0; i < cfg.KitWeapons; i++) kit.Add(ItemPool.PickFromBucket(WeaponCategories[rng.Next(WeaponCategories.Length)], 0, rng));
-			for (int i = 0; i < cfg.KitAccessories; i++) kit.Add(ItemPool.PickFromBucket(ItemCategory.Accessory, 0, rng));
-			for (int i = 0; i < cfg.KitTools; i++) kit.Add(ItemPool.PickFromBucket(ItemCategory.Tool, 0, rng));
-			for (int i = 0; i < cfg.KitPotions; i++) kit.Add(ItemPool.PickFromBucket(ItemCategory.Potion, 0, rng));
+			// A banned item is re-picked with its own rng (keyed by its place in the kit): the rest of the kit stays the same
+			int Pick(ItemCategory category) => ItemPool.PickAllowed(category, 0, rng, new[] { RollKey.StartingKit, playerKey, kit.Count });
+			for (int i = 0; i < cfg.KitWeapons; i++) kit.Add(Pick(WeaponCategories[rng.Next(WeaponCategories.Length)]));
+			for (int i = 0; i < cfg.KitAccessories; i++) kit.Add(Pick(ItemCategory.Accessory));
+			for (int i = 0; i < cfg.KitTools; i++) kit.Add(Pick(ItemCategory.Tool));
+			for (int i = 0; i < cfg.KitPotions; i++) kit.Add(Pick(ItemCategory.Potion));
 
 			foreach (int type in kit)
 			{

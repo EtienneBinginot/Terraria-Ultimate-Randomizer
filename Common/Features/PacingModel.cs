@@ -188,7 +188,7 @@ namespace UltimateRandomizer.Common.Features
 			float swapChance = SwapChance();
 			List<int> pool = EnemySwapPool.NaturalEnemies(0);
 			int totalKills = TotalKills;
-			// With the share of the current progression, as at kill time (DropHelper.LuckyChance; the madness share is in ItemPool.Roll)
+			// As at kill time (DropHelper.LuckyChance; the madness chance is in ItemPool.Roll)
 			float luckyChance = DropHelper.LuckyChance() / 100f;
 			double jackpots = 0;
 			for (int k = 0; k < kills; k++)

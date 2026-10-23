@@ -40,6 +40,11 @@ namespace UltimateRandomizer.Common.Core
 		public const int BiomeSlots = 32;
 		public const int BiomeExtras = 33;
 		public const int BiomeEvil = 34;
+		// Isolated re-pick of a banned or too advanced item (ItemPool.Repick)
+		public const int Repick = 35;
+		// Chests of an ongoing world brought under their cap (ChestSystem.TameChests)
+		public const int Tame = 36;
+		public const int JackpotChest = 37;
 		public const int Fallback = 0xFA11;
 	}
 

@@ -15,6 +15,12 @@ namespace UltimateRandomizer.Common.Core
 		public int Tier;
 		// The tier its rarity (or KnownTiers, an override) gives, before vanilla recipes lower it (ItemClassifier.LowerByRecipes)
 		public int RarityTier;
+		// The tier from which it may be given at random (>= Tier): raised for crafted items that no recipe makes before it
+		// (Pearlwood Sword: rarity 0, Pearlwood is hardmode). The buckets and the plans keep Tier; rolls re-pick an item
+		// whose TrueTier is above their ceiling (ItemClassifier.RaiseByRecipes, ItemPool.Repick)
+		public int TrueTier;
+		// Never given at random (Magic Storage creative and internal items, tModLoader's own items): re-picked
+		public bool Banned;
 		public bool Excluded;
 		public bool Protected;
 	}
@@ -50,6 +56,9 @@ namespace UltimateRandomizer.Common.Core
 		// Multiplies WildDropChance for this roll (0: 1), still with the runtime rng only (giant and mini bonus drops, weak
 		// enemies: RandomNpcDropRule.JackpotWorth). To disable the madness of a roll, leave Wild false
 		public float WildChanceMultiplier;
+		// An explicit ceiling (null: none), gated or not: nothing above it, by Tier or TrueTier, jackpots included (the
+		// hardmode wall of fishing and shimmer, chest caps)
+		public int? MaxTier;
 	}
 
 	// Every randomizable item sorted by category and tier. All features pick their items here.
@@ -100,6 +109,10 @@ namespace UltimateRandomizer.Common.Core
 			}
 			int[] tiers = (int[])rarityTiers.Clone();
 			int lowered = ItemClassifier.LowerByRecipes(tiers, overrides, out string loweredExamples);
+			// Then the true tiers: never below the final tiers, raised for crafted items without any loot source
+			int[] trueTiers = (int[])tiers.Clone();
+			int raised = ItemClassifier.RaiseByRecipes(trueTiers, overrides, LootSources(), out string raisedExamples);
+			int banned = 0;
 			for (int type = 1; type < count; type++)
 			{
 				hash = DetRandom.Hash(hash, DetRandom.ItemKey(type));
@@ -111,7 +124,10 @@ namespace UltimateRandomizer.Common.Core
 				ItemCategory category = ItemClassifier.Classify(type, item);
 				int tier = tiers[type];
 				bool isProtected = protectedItems.Contains(type);
-				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], Protected = isProtected };
+				// Banned items stay in their bucket (the buckets never change): rolls re-pick them
+				bool isBanned = ItemClassifier.IsBanned(item);
+				if (isBanned) banned++;
+				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = Math.Max(tier, trueTiers[type]), Banned = isBanned, Protected = isProtected };
 				if (!isProtected) lists[(int)category, tier].Add(type);
 			}
 
@@ -131,13 +147,47 @@ namespace UltimateRandomizer.Common.Core
 			ContentHash = hash;
 			shuffleMap = null;
 			progressionStations = null;
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Classified {count} items in {watch.ElapsedMilliseconds} ms ({protectedItems.Count} protected), "
-				+ $"tiers from recipes: {lowered} lowered ({loweredExamples}).");
+			log4net.ILog logger = ModContent.GetInstance<UltimateRandomizer>().Logger;
+			logger.Info($"Classified {count} items in {watch.ElapsedMilliseconds} ms ({protectedItems.Count} protected, {banned} banned), "
+				+ $"tiers from recipes: {lowered} lowered ({loweredExamples}), {raised} raised ({raisedExamples}).");
+			LogSuspicious(logger);
+		}
+
+		// Items something drops, a bag holds or a shop sells in the base game (captured at load, before recipes are set up)
+		private static HashSet<int> LootSources()
+		{
+			HashSet<int> set = new(Obtainability.ShopItems);
+			foreach (List<Terraria.GameContent.ItemDropRules.DropRateInfo> drops in LootSnapshot.Npcs.Values) set.UnionWith(drops.Select(d => d.itemId));
+			foreach (List<Terraria.GameContent.ItemDropRules.DropRateInfo> drops in LootSnapshot.Items.Values) set.UnionWith(drops.Select(d => d.itemId));
+			return set;
+		}
+
+		// Pooled items that nothing gives (no drop, bag, shop, recipe, nor gathered) and that can't be researched: often
+		// internal or creative items of a mod. Logged only, to ban them by name later if they show up in game
+		private static void LogSuspicious(log4net.ILog logger)
+		{
+			HashSet<int> sources = LootSources();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				if (Main.recipe[i]?.createItem != null && !Main.recipe[i].Disabled) sources.Add(Main.recipe[i].createItem.type);
+			}
+			List<string> suspicious = new();
+			for (int type = 1; type < Info.Length; type++)
+			{
+				ItemInfo info = Info[type];
+				if (info.Excluded || info.Protected || info.Banned || sources.Contains(type)) continue;
+				if (info.Category is ItemCategory.Block or ItemCategory.Critter) continue;
+				if (!ContentSamples.ItemsByType.TryGetValue(type, out Item item) || item.ResearchUnlockCount != 0) continue;
+				if (item.createTile >= TileID.Dirt && TileID.Sets.Ore[item.createTile]) continue;
+				suspicious.Add(DetRandom.ItemName(type));
+			}
+			if (suspicious.Count > 0) logger.Info($"{suspicious.Count} suspicious items (no source, not researchable): {string.Join(", ", suspicious.Take(40))}");
 		}
 
 		public static void Unload()
 		{
 			WildChanceOverride = null;
+			RepickDisabled = false;
 			Info = Array.Empty<ItemInfo>();
 			AllTiers = Array.Empty<int>();
 			buckets = null;
@@ -164,26 +214,14 @@ namespace UltimateRandomizer.Common.Core
 		// The items of a category and tier, in the same order on every machine (do not modify)
 		public static int[] Bucket(ItemCategory category, int tier) => buckets == null ? Array.Empty<int>() : buckets[(int)category][Tiers.Clamp(tier)];
 
-		// Tests only (restored in finally): replaces WildDropChance and its progression share (JackpotShare), to check that
+		// Tests only (restored in finally): replaces WildDropChance, to check that
 		// plans don't depend on it and to force madness
 		public static float? WildChanceOverride;
 
-		// The share of both jackpot chances (luck: DropHelper.RollLucky, madness: Roll) at an unlocked tier: JackpotStartShare
-		// before the first boss, rising linearly to all of them at Tier.PostPlantera. Runtime rolls only
-		public static float JackpotShare(int unlockedTier)
-		{
-			float start = Math.Clamp(ProgressionConfig.Instance.JackpotStartShare / 100f, 0f, 1f);
-			const int full = (int)Tier.PostPlantera;
-			return unlockedTier >= full ? 1f : start + (1f - start) * Math.Max(0, unlockedTier) / full;
-		}
-
-		// The highest tier a jackpot may reach with this progression limit: MaxJackpotTiers above it, and never a hardmode
-		// item before hardmode (may be below the limit: then no jackpot at all)
-		public static int JackpotCeiling(int gatingLimit)
-		{
-			int ceiling = Tiers.Clamp(gatingLimit + Math.Max(1, ProgressionConfig.Instance.MaxJackpotTiers));
-			return Main.hardMode ? ceiling : Math.Min(ceiling, (int)Tier.PostSkeletron);
-		}
+		// Chance (0-1) that a lucky item `gap` tiers above the limit stays a jackpot: 1 for one tier, then WildTierDecay times
+		// rarer for each more, as the madness tail (WildTier). No cap: a jackpot is the only way to get a hardmode item before
+		// the Wall of Flesh (GatingLimit and the runtime caps stop everything else there)
+		public static double LuckyKeepChance(int gap) => gap <= 1 ? 1.0 : Math.Pow(Math.Max(1.01, ProgressionConfig.Instance.WildTierDecay), -(gap - 1));
 
 		// Jackpots: a runtime roll (WildRng set: at kill or bag opening, never in plans) whose item is above the progression
 		// limit, by madness (WildDropChance) or luck (RuntimeJackpotChance, IgnoreGating), and useful (equipment or a
@@ -210,7 +248,7 @@ namespace UltimateRandomizer.Common.Core
 		// Worth a jackpot: equipment that does something (weapons, armor with defense, accessories, tools, mounts) or a
 		// progression station; never a music box (an accessory), vanity, a pet or light pet, nor a dye
 		public static bool IsJackpotWorthy(int type) =>
-			IsValid(type) && (ItemCategories.IsGear(Info[type].Category) && UsefulGear(type) || Array.IndexOf(ProgressionStations(), type) >= 0);
+			IsValid(type) && !Info[type].Banned && (ItemCategories.IsGear(Info[type].Category) && UsefulGear(type) || Array.IndexOf(ProgressionStations(), type) >= 0);
 
 		private static bool UsefulGear(int type)
 		{
@@ -227,17 +265,34 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		// The limit progression sets for a roll, whether or not this one ignores it
-		public static int GatingLimit(int minLimit)
+		public static int GatingLimit(int minLimit) => GatingLimit(ProgressionSystem.UnlockedTier, Main.hardMode, minLimit);
+
+		// TierAllowance tiers above the unlocked tier, but no hardmode item before hardmode (only a jackpot goes there), except
+		// for a source whose floor is higher: the Wall of Flesh drops its loot before Main.hardMode is set (NPC.NPCLoot calls
+		// NPCLoot_DropItems, then DoDeathEvents, which calls WorldGen.StartHardmode), its MinLimit keeps them
+		public static int GatingLimit(int unlockedTier, bool hardMode, int minLimit)
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			return progression.TierGating ? Tiers.Clamp(Math.Max(ProgressionSystem.UnlockedTier + progression.TierAllowance, minLimit)) : Tiers.Max;
+			if (!progression.TierGating) return Tiers.Max;
+			int limit = unlockedTier + progression.TierAllowance;
+			if (!hardMode) limit = Math.Min(limit, PreHardmodeCap);
+			return Tiers.Clamp(Math.Max(limit, minLimit));
 		}
 
-		// The inverse of GatingLimit: the unlocked tier from which gated rolls may give an item of this tier
+		// The highest tier given before hardmode (except jackpots and boss floors)
+		public const int PreHardmodeCap = (int)Tier.PostSkeletron;
+
+		// The ceiling of runtime rolls that ignore progression (fishing, Extractinator, herbs, shimmer): the hardmode wall
+		public static int HardmodeWall => Main.hardMode ? Tiers.Max : PreHardmodeCap;
+
+		// The inverse of GatingLimit: the unlocked tier from which gated rolls may give an item of this tier (a hardmode item
+		// waits for hardmode, whatever the allowance)
 		public static int UnlockTier(int tier)
 		{
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			return progression.TierGating ? Math.Max(0, tier - progression.TierAllowance) : 0;
+			if (!progression.TierGating) return 0;
+			int unlock = Math.Max(0, tier - progression.TierAllowance);
+			return tier >= (int)Tier.Hardmode ? Math.Max((int)Tier.Hardmode, unlock) : unlock;
 		}
 
 		public static int Roll(in RollRequest request) => Roll(request, out _);
@@ -252,13 +307,16 @@ namespace UltimateRandomizer.Common.Core
 			if (mode == RandomizerMode.Shuffle && hasOriginal)
 			{
 				rolledTier = Info[request.OriginalItem].Tier;
-				return Shuffled(request.OriginalItem);
+				// Banned items only (the permutation stays as it is)
+				return Checked(Shuffled(request.OriginalItem), rolledTier, Tiers.Max, new[] { RollKey.Shuffle, DetRandom.ItemKey(request.OriginalItem) }, RepickStage.Shuffle);
 			}
 
 			Random rng = DetRandom.Get(request.Keys);
 			if (mode == RandomizerMode.Chaos)
 			{
-				int picked = PickFromBucket(AnyCategory(rng), rng.Next(Tiers.Count), rng);
+				ItemCategory anyCategory = AnyCategory(rng);
+				int tier = rng.Next(Tiers.Count);
+				int picked = Checked(PickFromBucket(anyCategory, tier, rng), tier, Tiers.Max, request.Keys, RepickStage.Chaos);
 				rolledTier = TierOf(picked);
 				return picked;
 			}
@@ -280,20 +338,26 @@ namespace UltimateRandomizer.Common.Core
 			// Some categories have nothing in the early tiers (dyes, summon weapons...): rather than changing the category,
 			// a replacement may go up to the original item's own tier, which this source already gives in vanilla
 			int categoryLimit = hasOriginal && category == Info[request.OriginalItem].Category ? Math.Max(limit, Info[request.OriginalItem].Tier) : limit;
+			int maxTier = request.MaxTier.HasValue ? Tiers.Clamp(request.MaxTier.Value) : Tiers.Max;
+			limit = Math.Min(limit, maxTier);
+			categoryLimit = Math.Min(categoryLimit, maxTier);
+			// The highest true tier this roll may give (re-picked above it): its limit when gated, else the explicit ceiling only
+			int ceiling = request.IgnoreGating ? maxTier : categoryLimit;
 			// Bags and summons stay at the limit: a wild boss bag would hand out its whole tier (Hallowed Bars before hardmode...)
 			if (request.Wild && request.WildRng != null && limit < Tiers.Max && category is not (ItemCategory.Bag or ItemCategory.BossSummon))
 			{
 				// Only the runtime rng is used here: without a wild roll, the result is the same as without the flag
-				float baseChance = WildChanceOverride ?? progression.WildDropChance * JackpotShare(ProgressionSystem.UnlockedTier);
+				float baseChance = WildChanceOverride ?? progression.WildDropChance;
 				float wildChance = Math.Min(100f, baseChance * (request.WildChanceMultiplier > 0 ? request.WildChanceMultiplier : 1f));
-				int wildTier = WildTier(limit, wildChance, progression.WildTierDecay, request.WildRng, JackpotCeiling(limit));
+				int wildCeiling = maxTier;
+				int wildTier = WildTier(limit, wildChance, progression.WildTierDecay, request.WildRng, wildCeiling);
 				if (wildTier > limit)
 				{
 					// Only something useful is a jackpot: a wild ore or block is no jackpot, the normal roll stands
-					int wild = PickFromBucket(category, wildTier, request.WildRng, wildTier);
-					if (TierOf(wild) > limit && IsJackpotWorthy(wild))
+					int wild = Checked(PickFromBucket(category, wildTier, request.WildRng, wildTier), wildTier, wildCeiling, request.Keys, RepickStage.Wild);
+					if (TrueTierOf(wild) > limit && IsJackpotWorthy(wild))
 					{
-						LastJackpotGap = TierOf(wild) - limit;
+						LastJackpotGap = TrueTierOf(wild) - limit;
 						rolledTier = TierOf(wild);
 						return wild;
 					}
@@ -301,16 +365,18 @@ namespace UltimateRandomizer.Common.Core
 			}
 			if (target <= limit)
 			{
-				int intended = PickFromBucket(category, target, rng, categoryLimit, window);
+				int intended = Checked(PickFromBucket(category, target, rng, categoryLimit, window), target, ceiling, request.Keys, RepickStage.Intended, window);
 				// A lucky runtime roll above the limit it ignores is a jackpot when useful; otherwise it is no jackpot, and the
 				// item is the one the limit allows
 				if (request.IgnoreGating && request.WildRng != null)
 				{
-					int gatingLimit = GatingLimit(request.MinLimit);
-					if (TierOf(intended) > gatingLimit)
+					int gatingLimit = Math.Min(GatingLimit(request.MinLimit), maxTier);
+					if (TrueTierOf(intended) > gatingLimit)
 					{
-						// Too far above the limit (MaxJackpotTiers, the hardmode wall) counts as not useful: rolled within the limit
-						if (IsJackpotWorthy(intended) && TierOf(intended) <= JackpotCeiling(gatingLimit)) LastJackpotGap = TierOf(intended) - gatingLimit;
+						// The planned item stays; far above the limit it is kept as rarely as the madness tail (runtime rng only),
+						// otherwise (or when not useful) rolled within the limit
+						int gap = TrueTierOf(intended) - gatingLimit;
+						if (IsJackpotWorthy(intended) && (gap <= 1 || request.WildRng.NextDouble() < LuckyKeepChance(gap))) LastJackpotGap = gap;
 						else
 						{
 							RollRequest normal = request;
@@ -329,12 +395,88 @@ namespace UltimateRandomizer.Common.Core
 			request.Keys.CopyTo(fallbackKeys, 0);
 			fallbackKeys[^2] = RollKey.Fallback;
 			fallbackKeys[^1] = limit;
-			int fallback = PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), categoryLimit, window);
+			int fallback = Checked(PickFromBucket(category, limit, DetRandom.Get(fallbackKeys), categoryLimit, window), limit, ceiling, fallbackKeys, RepickStage.Fallback, window);
 			rolledTier = TierOf(fallback);
 			return fallback;
 		}
 
+		// Tests only (restored in finally): rolls keep what they picked, to check the re-pick changes nothing else
+		public static bool RepickDisabled;
+
+		private static class RepickStage
+		{
+			public const int Intended = 0;
+			public const int Fallback = 1;
+			public const int Wild = 2;
+			public const int Chaos = 3;
+			public const int Shuffle = 4;
+			public const int Pick = 5;
+		}
+
+		// May a roll whose true-tier ceiling is this give the item?
+		public static bool Allowed(int type, int ceiling) => !IsBanned(type) && TrueTierOf(type) <= ceiling;
+
+		public static bool IsBanned(int type) => IsValid(type) && Info[type].Banned;
+
+		private static int Checked(int picked, int tier, int ceiling, int[] keys, int stage, int window = 0) =>
+			RepickDisabled || Allowed(picked, ceiling) ? picked : Repick(picked, tier, ceiling, keys, stage, window);
+
+		// Isolated re-pick of a banned item, or of one whose true tier is above the ceiling: the buckets, the keys and the
+		// roll's own rng stay as they are, so every other roll gives what it gave before. Same category, from the wanted tier
+		// down, with an rng of its own (the roll's keys + RollKey.Repick + stage + attempt); then a scan downward; then any
+		// allowed material; Gel last
+		public static int Repick(int picked, int tier, int ceiling, int[] keys, int stage, int window = 0)
+		{
+			if (buckets == null) return picked;
+			ItemCategory category = IsValid(picked) ? Info[picked].Category : ItemCategory.Material;
+			int top = Math.Min(Tiers.Clamp(Math.Max(tier, TierOf(picked))), Tiers.Clamp(ceiling));
+			int[] repickKeys = new int[keys.Length + 3];
+			keys.CopyTo(repickKeys, 0);
+			repickKeys[^3] = RollKey.Repick;
+			repickKeys[^2] = stage;
+			for (int attempt = 0; attempt < 4; attempt++)
+			{
+				repickKeys[^1] = attempt;
+				int candidate = PickFromBucket(category, top, DetRandom.Get(repickKeys), top, window);
+				if (Allowed(candidate, ceiling)) return candidate;
+			}
+			repickKeys[^1] = 4;
+			Random rng = DetRandom.Get(repickKeys);
+			int found = ScanAllowed(category, top, ceiling, rng);
+			if (found <= 0 && category != ItemCategory.Material) found = ScanAllowed(ItemCategory.Material, top, ceiling, rng);
+			return found > 0 ? found : ItemID.Gel;
+		}
+
+		// The first allowed item from the tier down, each bucket read from a random start
+		private static int ScanAllowed(ItemCategory category, int top, int ceiling, Random rng)
+		{
+			for (int t = top; t >= 0; t--)
+			{
+				int[] bucket = buckets[(int)category][t];
+				if (bucket.Length == 0) continue;
+				int start = rng.Next(bucket.Length);
+				for (int i = 0; i < bucket.Length; i++)
+				{
+					int item = bucket[(start + i) % bucket.Length];
+					if (Allowed(item, ceiling)) return item;
+				}
+			}
+			return 0;
+		}
+
+		// PickFromBucket for features that pick without a roll (starting kit, jackpot chest potions): a banned item, or one
+		// above the ceiling, is re-picked in isolation (keys: what the caller would use for a roll)
+		public static int PickAllowed(ItemCategory category, int tier, Random rng, int[] keys, int ceiling = Tiers.Max)
+		{
+			int picked = PickFromBucket(category, tier, rng);
+			return RepickDisabled || Allowed(picked, ceiling) ? picked : Repick(picked, tier, ceiling, keys, RepickStage.Pick);
+		}
+
+		// The tier the plans work with (rolls aim at it, findability, guaranteed sources, recipe availability)
 		public static int TierOf(int type) => IsValid(type) ? Info[type].Tier : 0;
+
+		// The tier from which the item may be given (>= TierOf): progression checks, jackpot gaps, what the codex shows
+		public static int TrueTierOf(int type) => IsValid(type) ? Info[type].TrueTier : 0;
 
 		// The wild tier tail: with chance (%), limit + k where P(k) is proportional to decay^-k, up to maxTier (the
 		// weights are renormalized over the tiers allowed, so each step stays `decay` times rarer). Else the limit.

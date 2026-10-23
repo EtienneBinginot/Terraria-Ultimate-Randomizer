@@ -77,6 +77,21 @@ namespace UltimateRandomizer.Common.Core
 
 		public static bool HasKnownTier(int type) => KnownTiers.ContainsKey(type);
 
+		// Magic Storage items that are creative tools or internal parts, never meant to be found
+		private static readonly string[] BannedMagicStorage = { "CreativeStorageUnit", "StorageDeactivator", "StorageUnitEmpty", "BiomeGlobeThrown" };
+
+		// Never given at random (they stay replaceable when something gives them): tModLoader's own items (start bag...),
+		// Recipe Browser's, and Magic Storage's creative and internal items
+		public static bool IsBanned(Item item)
+		{
+			string mod = item?.ModItem?.Mod?.Name;
+			if (mod == null) return false;
+			if (mod is "ModLoader" or "RecipeBrowser") return true;
+			if (mod != "MagicStorage") return false;
+			string name = item.ModItem.Name;
+			return name.StartsWith("StorageCore") || System.Array.IndexOf(BannedMagicStorage, name) >= 0;
+		}
+
 		public static bool IsExcluded(int type, Item item, HashSet<int> excludedItems, HashSet<string> excludedMods)
 		{
 			if (item == null || item.IsAir || item.type != type) return true;
@@ -172,6 +187,64 @@ namespace UltimateRandomizer.Common.Core
 			int count = Enumerable.Range(1, tiers.Length - 1).Count(t => tiers[t] < before[t]);
 			examples = string.Join(", ", new[] { ItemID.YellowHorseshoeBalloon, ItemID.BundleofBalloons, ItemID.FrostsparkBoots }.Where(t => t < tiers.Length)
 				.Select(t => $"{Lang.GetItemNameValue(t)} {before[t]} > {tiers[t]}"));
+			return count;
+		}
+
+		// Crafted items that no vanilla recipe makes before a tier above theirs (Pearlwood Sword: rarity 0, but Pearlwood is a
+		// hardmode block): their true tier is raised to the earliest of their recipes (the highest tier among its ingredients,
+		// a group by its earliest item, and stations), repeated until nothing changes. Only items nothing drops, holds in a bag
+		// or sells (lootSources), without a modded recipe, and not set by KnownTiers or the config; never lowers. trueTiers
+		// holds the final tiers (after LowerByRecipes) and is raised in place. Returns how many items it raised, and examples
+		public static int RaiseByRecipes(int[] trueTiers, Dictionary<int, Tier> overrides, HashSet<int> lootSources, out string examples)
+		{
+			HashSet<int> moddedResults = new();
+			List<(int result, List<int[]> parts, List<int> tiles)> recipes = new();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe == null || recipe.Disabled || recipe.createItem == null || recipe.createItem.type <= 0) continue;
+				int result = recipe.createItem.type;
+				if (!IsVanillaRecipe(recipe))
+				{
+					moddedResults.Add(result);
+					continue;
+				}
+				if (!SetsTier(recipe, recipe.requiredItem.Select(i => i.type).ToList())) continue;
+				if (result >= trueTiers.Length || overrides.ContainsKey(result) || KnownTiers.ContainsKey(result) || lootSources.Contains(result)) continue;
+				List<int[]> parts = new();
+				foreach (Item ingredient in recipe.requiredItem)
+				{
+					if (ingredient == null || ingredient.type <= 0 || ingredient.type >= trueTiers.Length) continue;
+					parts.Add(IngredientChoices(recipe, ingredient.type).Where(t => t > 0 && t < trueTiers.Length).ToArray());
+				}
+				recipes.Add((result, parts, recipe.requiredTile.Where(t => t >= 0).Distinct().ToList()));
+			}
+			recipes.RemoveAll(r => moddedResults.Contains(r.result));
+			Dictionary<int, List<int>> placers = Stations.PlacersByTile();
+			int[] before = (int[])trueTiers.Clone();
+			bool changed = true;
+			for (int pass = 0; pass < 32 && changed; pass++)
+			{
+				changed = false;
+				// The earliest recipe of each result, with the tiers of this pass
+				Dictionary<int, int> earliest = new();
+				foreach ((int result, List<int[]> parts, List<int> tiles) in recipes)
+				{
+					int tier = 0;
+					foreach (int[] part in parts) tier = System.Math.Max(tier, part.Length == 0 ? Tiers.Max : part.Min(t => trueTiers[t]));
+					foreach (int tile in tiles) tier = System.Math.Max(tier, StationTier(tile, placers, t => t < trueTiers.Length ? trueTiers[t] : Tiers.Max));
+					earliest[result] = earliest.TryGetValue(result, out int other) ? System.Math.Min(other, tier) : tier;
+				}
+				foreach ((int result, int tier) in earliest)
+				{
+					if (tier <= trueTiers[result]) continue;
+					trueTiers[result] = tier;
+					changed = true;
+				}
+			}
+			int count = Enumerable.Range(1, trueTiers.Length - 1).Count(t => trueTiers[t] > before[t]);
+			examples = string.Join(", ", new int[] { ItemID.PearlwoodSword, ItemID.PearlwoodWorkBench }.Concat(Enumerable.Range(1, trueTiers.Length - 1).Where(t => trueTiers[t] > before[t]).Take(6))
+				.Distinct().Where(t => t < trueTiers.Length).Select(t => $"{Lang.GetItemNameValue(t)} {before[t]} > {trueTiers[t]}"));
 			return count;
 		}
 

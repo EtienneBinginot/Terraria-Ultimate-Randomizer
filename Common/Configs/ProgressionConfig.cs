@@ -44,8 +44,10 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool TierGating;
 
+		// 1 since 1.3.5 (2 before): items two tiers ahead came too early. Before hardmode, the limit never goes past
+		// PostSkeletron whatever the allowance (ItemPool.GatingLimit): only a jackpot gives a hardmode item there
 		[Range(0, 9)]
-		[DefaultValue(2)]
+		[DefaultValue(1)]
 		[Slider]
 		public int TierAllowance;
 
@@ -56,36 +58,26 @@ namespace UltimateRandomizer.Common.Configs
 
 		[Range(0f, 100f)]
 		[Increment(0.1f)]
-		[DefaultValue(1f)]
+		[DefaultValue(2f)]
 		public float RuntimeJackpotChance;
 
 		// Madness: share of the random drops (at kill or bag opening) that go above the progression limit, each extra
-		// tier WildTierDecay times rarer. Never used by plans, findability or guarantees. Both jackpot chances are scaled by
-		// RandomNpcDropRule.JackpotWorth (weak swarms less). 1.3.0 raised the defaults to 7 % / 3 %: too many far jackpots, back
-		// to 5 % / 2 % in 1.3.2; still too many early ones (and in every bag): 2 % / 1 % after 1.3.4, scaled by JackpotStartShare
+		// tier WildTierDecay times rarer (lucky drops too). Never used by plans, findability or guarantees. Both jackpot chances
+		// are scaled by RandomNpcDropRule.JackpotWorth (weak swarms less). 1.3.0 raised the defaults to 7 % / 3 %: too many far
+		// jackpots, back to 5 % / 2 % in 1.3.2; 2 % / 1 % in 1.3.4 with a share early on and at most one tier above the limit;
+		// after 1.3.4 back to 5 % / 2 % at every tier, with no cap: each extra tier WildTierDecay (3) times rarer. A jackpot is
+		// the only way to get a hardmode item before hardmode
 		[Range(0f, 50f)]
 		[Increment(0.5f)]
-		[DefaultValue(2f)]
+		[DefaultValue(5f)]
 		public float WildDropChance;
 
+		// At tier 0 (limit 1), decay 3: of the madness jackpots, about 67 % are one tier above, 22 % two, 7.4 % three (the
+		// first hardmode tier), 2.5 % four, 1.2 % more. Lucky items are kept 3^-(gap-1) of the time (ItemPool.LuckyKeepChance)
 		[Range(1.5f, 10f)]
 		[Increment(0.5f)]
-		[DefaultValue(4f)]
+		[DefaultValue(3f)]
 		public float WildTierDecay;
-
-		// Share (%) of both jackpot chances before the first boss, rising linearly to all of them after Plantera
-		// (ItemPool.JackpotShare): jackpots are rare at the start and come more often as the world progresses
-		[Range(0f, 100f)]
-		[Increment(5f)]
-		[DefaultValue(30f)]
-		public float JackpotStartShare;
-
-		// A jackpot is never more than this many tiers above the progression limit (and never a hardmode item before
-		// hardmode: ItemPool.JackpotCeiling)
-		[Range(1, 9)]
-		[DefaultValue(1)]
-		[Slider]
-		public int MaxJackpotTiers;
 
 		[DefaultValue(false)]
 		public bool MechTierRequiresAllThree;

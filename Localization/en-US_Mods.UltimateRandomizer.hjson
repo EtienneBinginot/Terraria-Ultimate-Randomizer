@@ -108,7 +108,14 @@ Tests: {
 	SpawnedEnemyNoExtraDrops: Enemies spawned by another enemy give no extra drop, guaranteed drop or jackpot
 	CrittersNoJackpot: Critters never give a jackpot
 	BagNeverJackpot: Opened bags and crates never give a jackpot
-	JackpotCapAndRamp: Jackpots are rarer early, never too far above the limit, never hardmode items before hardmode
+	JackpotTail: Each extra tier of a jackpot is much rarer, and only jackpots go above the limit (hardmode included)
+	HardmodeWall: Nothing from hardmode before hardmode except jackpots and boss floors, hints consistent with the limit
+	RepickOnlyChangesFlagged: The re-pick only replaces banned or too advanced items, every other roll is unchanged
+	RaisedTiers: Crafted items that need hardmode materials wait for hardmode, nothing is lowered
+	BannedNeverRolled: Creative and internal items (Magic Storage, tModLoader) are never given
+	ChestCap: Chest content never goes above the chest's cap, nor reaches hardmode in a pre-hardmode chest
+	ChestTameKeepsOpened: Taming the chests of an ongoing world never touches an opened or jackpot chest
+	JackpotChests: Jackpot chests are chosen the same way every time among eligible chests and hold useful items above their cap
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
@@ -272,6 +279,8 @@ Jackpot: {
 	PopupBig: JACKPOT!!! +{0}
 	Chat: Jackpot! {0}: {1} tier(s) ahead of your progression ({2})
 	Tooltip: Jackpot: {0} tier(s) ahead of your progression ({1})
+	ChestPopup: JACKPOT CHEST!
+	ChestChat: "{0} opened a jackpot chest!"
 }
 
 Codex: {
@@ -949,6 +958,8 @@ Commands: {
 		AlreadyDone: Chests are already randomized in this world.
 		Warning: This randomizes once the natural chests of this world. Chests with a name, and chests near the spawn point or town NPC houses (probably yours) are skipped. Type /rchests confirm to proceed.
 		Done: "{0} chests randomized."
+		NotRandomized: The chests of this world are not randomized: nothing to tame.
+		Tamed: "{0} items above their chest's level replaced in {1} unopened chests."
 	}
 
 	DebugOff: Debug tools are off: enable them in the mod settings (Ultimate Randomizer client settings > Debug tools).
@@ -1142,8 +1153,8 @@ Configs: {
 		}
 
 		TierAllowance: {
-			Label: Tiers allowed above your progression
-			Tooltip: 0 = only tiers already unlocked. 2 = two tiers ahead (default), and so on. Adaptive power makes enemies stronger if your equipment gets ahead of the world.
+			Label: "Tiers allowed above your progression"
+			Tooltip: "0 = only tiers already unlocked. 1 = one tier ahead (default), and so on. Before hardmode, nothing from hardmode is given except jackpots. Adaptive power makes enemies stronger if your equipment gets ahead of the world."
 		}
 
 		JackpotTierChance: {
@@ -1162,18 +1173,8 @@ Configs: {
 		}
 
 		WildTierDecay: {
-			Label: Madness: rarity per extra tier
-			Tooltip: How much rarer each tier above the limit is for madness drops: 4 (default) = one tier above is 4 times more frequent than two tiers above. Higher = madness stays closer to the limit.
-		}
-
-		JackpotStartShare: {
-			Label: "Jackpots: share at the start (%)"
-			Tooltip: "Share of both jackpot chances (lucky drops and madness) before the first boss. It rises with each boss defeated, up to the full chances after Plantera. 100 = the full chances from the start."
-		}
-
-		MaxJackpotTiers: {
-			Label: "Jackpots: tiers above the limit at most"
-			Tooltip: "A jackpot (lucky drop or madness) is never more than this many tiers above the progression limit. Before hardmode, a jackpot is never a hardmode item."
+			Label: "Jackpots: rarity per extra tier"
+			Tooltip: "How much rarer each tier above the limit is for jackpots (madness and lucky drops): 3 (default) = one tier above is 3 times more frequent than two tiers above. There is no cap: an early hardmode item is possible, but rare. Higher = jackpots stay closer to the limit."
 		}
 
 		MechTierRequiresAllThree: {
@@ -1409,6 +1410,11 @@ Configs: {
 		ChestTierBonus: {
 			Label: Chest tier bonus
 			Tooltip: Makes chest content this many tiers better.
+		}
+
+		JackpotChestChance: {
+			Label: "Jackpot chests (%)"
+			Tooltip: "Share of the natural chests that become jackpot chests (at least 2 per world): 2 to 4 useful items above the chest's level (sometimes from hardmode), gold and potions. They shine with a beam of light until someone opens them. Placed with the chests, or once in a world whose chests were randomized before. 0 = none."
 		}
 
 		RandomizeFishing: {

@@ -26,7 +26,9 @@ namespace UltimateRandomizer.Common.Features
 				Policy = CategoryPolicy.SameAsOriginal,
 				TierJitterDown = 0,
 				TierJitterUp = 1,
-				AllowJackpot = true
+				AllowJackpot = true,
+				// No hardmode catch before hardmode: categoryLimit lets a replacement reach the fish's own tier
+				MaxTier = ItemPool.HardmodeWall
 			};
 			itemDrop = ItemPool.RollReplacement(request, cfg.SurpriseChance, new System.Random(Main.rand.Next()));
 		}
