@@ -124,10 +124,30 @@ namespace UltimateRandomizer.Common.Features
 		public static IEnumerable<int> HostsOf(int item)
 		{
 			Build();
-			Dictionary<int, List<PlannedDrop>> drops = byNpc;
+			Dictionary<int, List<int>> index = HostIndex();
 			List<int> order = placements.TryGetValue(item, out Placement p) ? p.Hosts : null;
-			return drops.Where(pair => pair.Value.Any(d => d.Item == item)).Select(pair => pair.Key)
-				.OrderBy(n => order?.IndexOf(n) ?? 0).ThenBy(n => n).ToList();
+			return index.TryGetValue(item, out List<int> hosts) ? hosts.OrderBy(n => order?.IndexOf(n) ?? 0).ThenBy(n => n).ToList() : new List<int>();
+		}
+
+		// The hosts of each item, for the drops it was built from (rebuilt with them)
+		private static Dictionary<int, List<int>> hostIndex;
+		private static Dictionary<int, List<PlannedDrop>> hostIndexFor;
+
+		private static Dictionary<int, List<int>> HostIndex()
+		{
+			Dictionary<int, List<PlannedDrop>> drops = byNpc;
+			if (hostIndexFor == drops) return hostIndex;
+			Dictionary<int, List<int>> index = new();
+			foreach ((int npc, List<PlannedDrop> list) in drops)
+			{
+				foreach (int item in list.Select(d => d.Item).Distinct())
+				{
+					if (!index.TryGetValue(item, out List<int> hosts)) index[item] = hosts = new List<int>();
+					hosts.Add(npc);
+				}
+			}
+			hostIndexFor = drops;
+			return hostIndex = index;
 		}
 
 		public struct Placement
@@ -246,11 +266,22 @@ namespace UltimateRandomizer.Common.Features
 
 		// Items a pot may also give, among those already unlocked: basic stations, tools and early materials (not the
 		// progression stations nor the summons: they would dilute the work bench, see PacingModel)
+		// Read per pot broken: cached per tier for the requirements it was built from. Do not modify the list
 		public static List<int> PotItems(int unlockedTier)
 		{
+			List<Requirement> all = Requirements;
+			if (potItemsFor != all)
+			{
+				potItems.Clear();
+				potItemsFor = all;
+			}
+			if (potItems.TryGetValue(unlockedTier, out List<int> cached)) return cached;
 			HashSet<int> basic = Stations.Basic().Select(s => s.info.Item).ToHashSet();
-			return Requirements.Where(r => r.Tier <= unlockedTier && (r.Tool || basic.Contains(r.Item) || r.Tier == 0 && !r.Station)).Select(r => r.Item).ToList();
+			return potItems[unlockedTier] = all.Where(r => r.Tier <= unlockedTier && (r.Tool || basic.Contains(r.Item) || r.Tier == 0 && !r.Station)).Select(r => r.Item).ToList();
 		}
+
+		private static readonly Dictionary<int, List<int>> potItems = new();
+		private static List<Requirement> potItemsFor;
 
 		private static void Build()
 		{
@@ -1063,30 +1094,32 @@ namespace UltimateRandomizer.Common.Features
 			if (conditions == null) return true;
 			foreach (IItemDropRuleCondition condition in conditions)
 			{
-				bool allowed = condition switch
-				{
-					Conditions.IsExpert => Main.expertMode,
-					Conditions.NotExpert => !Main.expertMode,
-					Conditions.IsMasterMode => Main.masterMode,
-					Conditions.NotMasterMode => !Main.masterMode,
-					Conditions.IsCrimson => HasEvil(true),
-					Conditions.IsCorruption => HasEvil(false),
-					Conditions.IsCrimsonAndNotExpert => HasEvil(true) && !Main.expertMode,
-					Conditions.IsCorruptionAndNotExpert => HasEvil(false) && !Main.expertMode,
-					Conditions.LegacyHack_IsBossAndExpert => Main.expertMode,
-					Conditions.LegacyHack_IsBossAndNotExpert => !Main.expertMode,
-					Conditions.TenthAnniversaryIsUp => Main.tenthAnniversaryWorld,
-					Conditions.TenthAnniversaryIsNotUp => !Main.tenthAnniversaryWorld,
-					Conditions.DontStarveIsUp => Main.dontStarveWorld,
-					Conditions.DontStarveIsNotUp => !Main.dontStarveWorld,
-					Conditions.RemixSeed or Conditions.RemixSeedEasymode or Conditions.RemixSeedHardmode => Main.remixWorld,
-					Conditions.NotRemixSeed => !Main.remixWorld,
-					_ => true
-				};
-				if (!allowed) return false;
+				if (WorldVerdict(condition) == false) return false;
 			}
 			return true;
 		}
+
+		// What the world (difficulty, evil, secret seeds) decides about a drop condition; null when it does not decide it
+		public static bool? WorldVerdict(IItemDropRuleCondition condition) => condition switch
+		{
+			Conditions.IsExpert => Main.expertMode,
+			Conditions.NotExpert => !Main.expertMode,
+			Conditions.IsMasterMode => Main.masterMode,
+			Conditions.NotMasterMode => !Main.masterMode,
+			Conditions.IsCrimson => HasEvil(true),
+			Conditions.IsCorruption => HasEvil(false),
+			Conditions.IsCrimsonAndNotExpert => HasEvil(true) && !Main.expertMode,
+			Conditions.IsCorruptionAndNotExpert => HasEvil(false) && !Main.expertMode,
+			Conditions.LegacyHack_IsBossAndExpert => Main.expertMode,
+			Conditions.LegacyHack_IsBossAndNotExpert => !Main.expertMode,
+			Conditions.TenthAnniversaryIsUp => Main.tenthAnniversaryWorld,
+			Conditions.TenthAnniversaryIsNotUp => !Main.tenthAnniversaryWorld,
+			Conditions.DontStarveIsUp => Main.dontStarveWorld,
+			Conditions.DontStarveIsNotUp => !Main.dontStarveWorld,
+			Conditions.RemixSeed or Conditions.RemixSeedEasymode or Conditions.RemixSeedHardmode => Main.remixWorld,
+			Conditions.NotRemixSeed => !Main.remixWorld,
+			_ => null
+		};
 
 		// Only given during seasonal events: never counted as a source
 		public static readonly HashSet<int> SeasonalBags = new() { ItemID.Present, ItemID.GoodieBag };

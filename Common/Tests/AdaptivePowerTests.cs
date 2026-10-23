@@ -102,18 +102,13 @@ namespace UltimateRandomizer.Common.Tests
 
 		private static NPC Spawn(int type)
 		{
-			Player player = Main.LocalPlayer;
-			int index = NPC.NewNPC(new EntitySource_SpawnNPC(), (int)player.Center.X + 1200, (int)player.Center.Y - 200, type);
-			Check.That(index >= 0 && index < Main.maxNPCs, $"could not spawn {Lang.GetNPCNameValue(type)}");
-			EnemySwapSystem.Pending[index] = false;
-			return Main.npc[index];
+			NPC npc = TestRunner.SpawnNear(type);
+			Check.That(npc != null, $"could not spawn {Lang.GetNPCNameValue(type)}");
+			EnemySwapSystem.Pending[npc.whoAmI] = false;
+			return npc;
 		}
 
-		private static void Despawn(NPC npc)
-		{
-			EnemySwapSystem.Pending[npc.whoAmI] = false;
-			npc.active = false;
-		}
+		private static void Despawn(NPC npc) => TestRunner.RemoveNpc(npc);
 
 		private static int BaseLife(int type)
 		{

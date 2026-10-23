@@ -591,7 +591,7 @@ namespace UltimateRandomizer.Common.Codex
 			if (conditions == null) return texts;
 			foreach (IItemDropRuleCondition condition in conditions)
 			{
-				if (condition == null || WorldFixed(condition) && Findability.WorldAllows(new List<IItemDropRuleCondition> { condition })) continue;
+				if (condition == null || WorldFixed(condition) && Findability.WorldVerdict(condition) == true) continue;
 				string text;
 				try
 				{
@@ -609,11 +609,9 @@ namespace UltimateRandomizer.Common.Codex
 
 		// Conditions Findability.WorldAllows decides from the world alone (difficulty, world evil, special seeds; the remix
 		// seed's easy and hard mode ones keep their text: they also depend on hardmode)
-		private static bool WorldFixed(IItemDropRuleCondition condition) => condition is DropRuleConditions.IsExpert or DropRuleConditions.NotExpert
-			or DropRuleConditions.IsMasterMode or DropRuleConditions.NotMasterMode or DropRuleConditions.IsCrimson or DropRuleConditions.IsCorruption
-			or DropRuleConditions.IsCrimsonAndNotExpert or DropRuleConditions.IsCorruptionAndNotExpert or DropRuleConditions.LegacyHack_IsBossAndExpert
-			or DropRuleConditions.LegacyHack_IsBossAndNotExpert or DropRuleConditions.TenthAnniversaryIsUp or DropRuleConditions.TenthAnniversaryIsNotUp
-			or DropRuleConditions.DontStarveIsUp or DropRuleConditions.DontStarveIsNotUp or DropRuleConditions.RemixSeed or DropRuleConditions.NotRemixSeed;
+		// The remix easy/hard mode conditions keep their text: the world doesn't fix the mode
+		private static bool WorldFixed(IItemDropRuleCondition condition) =>
+			condition is not (DropRuleConditions.RemixSeedEasymode or DropRuleConditions.RemixSeedHardmode) && Findability.WorldVerdict(condition) != null;
 
 		private static HintFact Best(List<HintFact> options) => options.OrderBy(o => o.Tier).ThenBy(o => KindClass(o.Kind)).ThenByDescending(Ease)
 			.ThenBy(StableKey, StringComparer.Ordinal).ThenBy(o => (int)o.Kind).FirstOrDefault();

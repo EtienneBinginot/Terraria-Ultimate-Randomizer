@@ -262,12 +262,11 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
 			if (!EnemiesConfig.Instance.RandomizeEnemySpawns) Check.Skip("enemy spawns are not randomized");
-			Player player = Main.LocalPlayer;
 			for (int attempt = 0; attempt < 10; attempt++)
 			{
-				int index = NPC.NewNPC(new EntitySource_SpawnNPC(), (int)player.Center.X + 1200, (int)player.Center.Y - 200, NPCID.BlueSlime);
-				Check.That(index >= 0 && index < Main.maxNPCs, "could not spawn a slime");
-				NPC npc = Main.npc[index];
+				NPC npc = TestRunner.SpawnNear(NPCID.BlueSlime);
+				Check.That(npc != null, "could not spawn a slime");
+				int index = npc.whoAmI;
 				try
 				{
 					if (EnemiesConfig.Instance.EnemySwapMode == EnemySwapMode.ByBiome && BiomeSlots.TypeOf(EnemySwapPool.BiomeTarget(npc)) == NPCID.BlueSlime)
@@ -281,8 +280,7 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				finally
 				{
-					EnemySwapSystem.Pending[index] = false;
-					npc.active = false;
+					TestRunner.RemoveNpc(npc);
 				}
 			}
 			Check.That(false, "the slime was never swapped");
@@ -292,11 +290,9 @@ namespace UltimateRandomizer.Common.Tests
 		private static NPC SpawnRolled(int type, out EnemyIndividualNPC rolled)
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
-			Player player = Main.LocalPlayer;
-			int index = NPC.NewNPC(new EntitySource_SpawnNPC(), (int)player.Center.X + 1200, (int)player.Center.Y - 200, type);
-			Check.That(index >= 0 && index < Main.maxNPCs, $"could not spawn {Lang.GetNPCNameValue(type)}");
-			NPC npc = Main.npc[index];
-			EnemySwapSystem.Pending[index] = false;
+			NPC npc = TestRunner.SpawnNear(type);
+			Check.That(npc != null, $"could not spawn {Lang.GetNPCNameValue(type)}");
+			EnemySwapSystem.Pending[npc.whoAmI] = false;
 			// Fresh globals and base stats, then a roll found by seed
 			npc.SetDefaults(type);
 			EnemyIndividualNPC probe = new();
@@ -307,7 +303,7 @@ namespace UltimateRandomizer.Common.Tests
 			});
 			if (seed == 0)
 			{
-				npc.active = false;
+				TestRunner.RemoveNpc(npc);
 				Check.Skip("no individual variation, giants or minis with these settings");
 			}
 			EnemyIndividualNPC.RollAndApply(npc, new Random(seed));
@@ -341,8 +337,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			finally
 			{
-				EnemySwapSystem.Pending[npc.whoAmI] = false;
-				npc.active = false;
+				TestRunner.RemoveNpc(npc);
 			}
 		}
 

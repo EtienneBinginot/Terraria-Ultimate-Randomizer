@@ -291,10 +291,9 @@ namespace UltimateRandomizer.Common.Tests
 		private static void NegativeNetIdSwap()
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
-			Player player = Main.LocalPlayer;
-			int index = NPC.NewNPC(new Terraria.DataStructures.EntitySource_SpawnNPC(), (int)player.Center.X + 1200, (int)player.Center.Y - 200, NPCID.Zombie);
-			Check.That(index >= 0 && index < Main.maxNPCs, "could not spawn a zombie");
-			NPC npc = Main.npc[index];
+			NPC npc = TestRunner.SpawnNear(NPCID.Zombie);
+			Check.That(npc != null, "could not spawn a zombie");
+			int index = npc.whoAmI;
 			try
 			{
 				EnemySwapSystem.Pending[index] = false;
@@ -324,8 +323,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			finally
 			{
-				EnemySwapSystem.Pending[index] = false;
-				npc.active = false;
+				TestRunner.RemoveNpc(npc);
 			}
 		}
 	}

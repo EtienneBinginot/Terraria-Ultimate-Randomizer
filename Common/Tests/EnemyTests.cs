@@ -20,21 +20,6 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("SwapStatsCount", SwapStatsCount);
 		}
 
-		// Spawns an NPC as a natural spawn would, off screen next to the player; the caller removes it
-		private static NPC SpawnNatural(int type, IEntitySource source = null)
-		{
-			Player player = Main.LocalPlayer;
-			int index = NPC.NewNPC(source ?? new EntitySource_SpawnNPC(), (int)player.Center.X + 1200, (int)player.Center.Y - 200, type);
-			return index >= 0 && index < Main.maxNPCs ? Main.npc[index] : null;
-		}
-
-		private static void Remove(NPC npc)
-		{
-			if (npc == null) return;
-			EnemySwapSystem.Pending[npc.whoAmI] = false;
-			npc.active = false;
-		}
-
 		private static bool BiomeMode => EnemiesConfig.Instance.EnemySwapMode == EnemySwapMode.ByBiome;
 
 		private static void RequireLiveSpawns()
@@ -54,7 +39,7 @@ namespace UltimateRandomizer.Common.Tests
 			bool swapped = false;
 			for (int attempt = 0; attempt < 10 && !swapped; attempt++)
 			{
-				NPC npc = SpawnNatural(NPCID.BlueSlime);
+				NPC npc = TestRunner.SpawnNear(NPCID.BlueSlime);
 				Check.That(npc != null, "could not spawn a slime");
 				try
 				{
@@ -67,7 +52,7 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				finally
 				{
-					Remove(npc);
+					TestRunner.RemoveNpc(npc);
 				}
 			}
 			Check.That(swapped, "the slime was never swapped in 10 tries");
@@ -81,7 +66,7 @@ namespace UltimateRandomizer.Common.Tests
 			int changed = 0;
 			for (int i = 0; i < 20; i++)
 			{
-				NPC npc = SpawnNatural(NPCID.Bunny);
+				NPC npc = TestRunner.SpawnNear(NPCID.Bunny);
 				Check.That(npc != null, "could not spawn a bunny");
 				try
 				{
@@ -95,7 +80,7 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				finally
 				{
-					Remove(npc);
+					TestRunner.RemoveNpc(npc);
 				}
 			}
 			Check.That(changed >= 10, $"only {changed}/20 bunnies were swapped");
@@ -132,11 +117,11 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			RequireLiveSpawns();
 			int before = EnemySwapSystem.Stats.Flagged;
-			NPC npc = SpawnNatural(NPCID.Zombie);
-			Remove(npc);
+			NPC npc = TestRunner.SpawnNear(NPCID.Zombie);
+			TestRunner.RemoveNpc(npc);
 			Check.That(EnemySwapSystem.Stats.Flagged == before + 1, "the spawn was not counted");
-			NPC statue = SpawnNatural(NPCID.Zombie, new EntitySource_Wiring(0, 0));
-			Remove(statue);
+			NPC statue = TestRunner.SpawnNear(NPCID.Zombie, new EntitySource_Wiring(0, 0));
+			TestRunner.RemoveNpc(statue);
 			Check.That(EnemySwapSystem.Stats.Flagged == before + 1, "a statue spawn was flagged for a swap");
 		}
 	}

@@ -145,10 +145,11 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			return player != null && player.talkNPC >= 0 && player.talkNPC < Main.maxNPCs && Main.npc[player.talkNPC].active && Main.npc[player.talkNPC].type == NPCID.Guide;
 		}
 
-		// A second after the world loads or the hint caches are forgotten (tier change...), their work is spread over frames
+		// A second after the world loads or the hint caches are forgotten (tier change...), their work is spread over frames.
+		// Multiplayer clients only: the server and single player warm them in CodexSystem.ProcessReveals
 		public override void PostUpdateEverything()
 		{
-			if (Main.dedServ || !HintFacts.Ready || HintFacts.Warmed) return;
+			if (Main.netMode != NetmodeID.MultiplayerClient || !HintFacts.Ready || HintFacts.Warmed) return;
 			if (warmVersion != HintFacts.CacheVersion)
 			{
 				warmVersion = HintFacts.CacheVersion;

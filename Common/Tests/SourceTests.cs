@@ -107,12 +107,10 @@ namespace UltimateRandomizer.Common.Tests
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
 			EnemiesConfig cfg = EnemiesConfig.Instance;
 			if (!cfg.RandomizeEnemySpawns || !cfg.SwapCritters) Check.Skip("critters are not swapped");
-			Player player = Main.LocalPlayer;
-			int index = NPC.NewNPC(new EntitySource_ShakeTree(0, 0), (int)player.Center.X + 1200, (int)player.Center.Y - 200, NPCID.Bird);
-			Check.That(index >= 0 && index < Main.maxNPCs, "could not spawn a bird");
-			bool pending = EnemySwapSystem.Pending[index];
-			EnemySwapSystem.Pending[index] = false;
-			Main.npc[index].active = false;
+			NPC bird = TestRunner.SpawnNear(NPCID.Bird, new EntitySource_ShakeTree(0, 0));
+			Check.That(bird != null, "could not spawn a bird");
+			bool pending = EnemySwapSystem.Pending[bird.whoAmI];
+			TestRunner.RemoveNpc(bird);
 			Check.That(pending, "a bird from a tree is not swapped");
 		}
 	}

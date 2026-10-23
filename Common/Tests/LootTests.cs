@@ -129,13 +129,8 @@ namespace UltimateRandomizer.Common.Tests
 					Main.item[slot].TurnToAir();
 					Main.item[slot].active = false;
 				}
-				foreach (NPC npc in new[] { child, parent })
-				{
-					if (npc == null) continue;
-					EnemySwapSystem.Pending[npc.whoAmI] = false;
-					MobLootSystem.SpawnedByNpc[npc.whoAmI] = false;
-					npc.active = false;
-				}
+				TestRunner.RemoveNpc(child);
+				TestRunner.RemoveNpc(parent);
 			}
 			Check.All(failures, "Enemies spawned by another enemy");
 		}

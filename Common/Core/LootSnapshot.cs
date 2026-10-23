@@ -32,9 +32,12 @@ namespace UltimateRandomizer.Common.Core
 			return drops;
 		}
 
-		public static List<DropRateInfo> ForNpc(int npcType) => Npcs.TryGetValue(npcType, out List<DropRateInfo> drops) ? drops : new List<DropRateInfo>();
+		// Shared, do not modify (read per kill)
+		private static readonly List<DropRateInfo> None = new();
 
-		public static List<DropRateInfo> ForItem(int itemType) => Items.TryGetValue(itemType, out List<DropRateInfo> drops) ? drops : new List<DropRateInfo>();
+		public static List<DropRateInfo> ForNpc(int npcType) => Npcs.TryGetValue(npcType, out List<DropRateInfo> drops) ? drops : None;
+
+		public static List<DropRateInfo> ForItem(int itemType) => Items.TryGetValue(itemType, out List<DropRateInfo> drops) ? drops : None;
 
 		// A boss bag is as advanced as the weakest boss dropping it
 		public static int BagTier(int bagType)

@@ -64,8 +64,6 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			return -1;
 		}
 
-		private static int TypeOf(int netId) => ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId;
-
 		// The slots an enemy type spawns through (the vanilla ones mixed in by biome too), in one biome or all (-1)
 		private static List<BiomeSlot> SlotsOf(int type, int biome)
 		{
@@ -102,7 +100,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (!BiomeSlots.SpawnsPlanned) return CodexNote.None;
 			int key = BiomeKey(biome);
 			if (key < 0) return CodexNote.None;
-			(SlotTime time, bool conditional) = TimeOf(SlotsOf(TypeOf(netId), key));
+			(SlotTime time, bool conditional) = TimeOf(SlotsOf(BiomeSlots.TypeOf(netId), key));
 			return TimeNote(time, conditional);
 		}
 
@@ -110,7 +108,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		public static CodexNote Enemy(int netId)
 		{
 			if (!BiomeSlots.SpawnsPlanned) return CodexNote.None;
-			(SlotTime time, bool conditional) = TimeOf(SlotsOf(TypeOf(netId), -1));
+			(SlotTime time, bool conditional) = TimeOf(SlotsOf(BiomeSlots.TypeOf(netId), -1));
 			return TimeNote(time, conditional);
 		}
 

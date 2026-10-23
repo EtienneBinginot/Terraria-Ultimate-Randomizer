@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using Terraria;
+using Terraria.DataStructures;
 using Terraria.Localization;
 using Terraria.ModLoader;
+using UltimateRandomizer.Common.Codex;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
 
@@ -58,6 +61,25 @@ namespace UltimateRandomizer.Common.Tests
 	// In-game automated tests: run from the debug panel (Tests tab) or with /rtest, in a loaded world
 	public static class TestRunner
 	{
+		// Spawns an NPC off screen next to the player, as a natural spawn would (or from another source); null when no slot
+		// is free. The caller removes it (RemoveNpc)
+		public static NPC SpawnNear(int type, IEntitySource source = null)
+		{
+			Player player = Main.LocalPlayer;
+			int index = NPC.NewNPC(source ?? new EntitySource_SpawnNPC(), (int)player.Center.X + 1200, (int)player.Center.Y - 200, type);
+			return index >= 0 && index < Main.maxNPCs ? Main.npc[index] : null;
+		}
+
+		// Removes a test NPC with the state kept per slot (pending swap, spawned-by-NPC flag, codex sighting)
+		public static void RemoveNpc(NPC npc)
+		{
+			if (npc == null) return;
+			EnemySwapSystem.Pending[npc.whoAmI] = false;
+			MobLootSystem.SpawnedByNpc[npc.whoAmI] = false;
+			CodexSystem.ClearSighting(npc.whoAmI);
+			npc.active = false;
+		}
+
 		private static readonly List<(string id, Action run)> tests = new();
 
 		public static List<TestResult> LastResults { get; private set; } = new();

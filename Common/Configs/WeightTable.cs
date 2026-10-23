@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Reflection;
 using UltimateRandomizer.Common.Core;
 
@@ -9,27 +10,30 @@ namespace UltimateRandomizer.Common.Configs
 	// a category without a field (boss summons) is never picked.
 	public abstract class WeightTable
 	{
-		private static readonly Dictionary<Type, FieldInfo[]> fieldsByType = new();
+		// Compiled field readers (read on every weighted roll: reflection would be slow), still reading the live values
+		private static readonly Dictionary<Type, Func<WeightTable, int>[]> gettersByType = new();
 
 		public int Get(ItemCategory category)
 		{
-			FieldInfo field = Fields(GetType())[(int)category];
-			return field == null ? 0 : Math.Max(0, (int)field.GetValue(this));
+			Func<WeightTable, int> getter = Getters(GetType())[(int)category];
+			return getter == null ? 0 : Math.Max(0, getter(this));
 		}
 
-		private static FieldInfo[] Fields(Type type)
+		private static Func<WeightTable, int>[] Getters(Type type)
 		{
-			lock (fieldsByType)
+			lock (gettersByType)
 			{
-				if (fieldsByType.TryGetValue(type, out FieldInfo[] fields)) return fields;
-				fields = new FieldInfo[ItemCategories.Count];
+				if (gettersByType.TryGetValue(type, out Func<WeightTable, int>[] getters)) return getters;
+				getters = new Func<WeightTable, int>[ItemCategories.Count];
 				for (int c = 0; c < ItemCategories.Count; c++)
 				{
 					FieldInfo field = type.GetField(((ItemCategory)c).ToString(), BindingFlags.Public | BindingFlags.Instance);
-					if (field != null && field.FieldType == typeof(int)) fields[c] = field;
+					if (field == null || field.FieldType != typeof(int)) continue;
+					ParameterExpression table = Expression.Parameter(typeof(WeightTable));
+					getters[c] = Expression.Lambda<Func<WeightTable, int>>(Expression.Field(Expression.Convert(table, type), field), table).Compile();
 				}
-				fieldsByType[type] = fields;
-				return fields;
+				gettersByType[type] = getters;
+				return getters;
 			}
 		}
 
