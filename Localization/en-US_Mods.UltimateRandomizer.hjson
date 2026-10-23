@@ -126,6 +126,7 @@ Tests: {
 	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter
 	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world: found, crafted, or sold at a reliable place within one tier of the item
 	ShopOnlyPlacement: Every shop-only item of this world is sold at least once, at a reliable place (known arrival, not Santa, the Princess or a visitor, no situational condition) within one tier of the item, never twice in a shop
+	ShopOnlySlots: Each shop selling a shop-only item, filled as the game fills it right now, shows every placed item whose entry is open, at the right slot
 	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
 	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer

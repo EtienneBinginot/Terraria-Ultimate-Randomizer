@@ -897,6 +897,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				byNpc = null;
 				placements = null;
+				// The shop-only places too (Findability.Reset)
 				Findability.Reset();
 			}
 			hostTiers = null;
@@ -1089,6 +1090,8 @@ namespace UltimateRandomizer.Common.Features
 		{
 			baseTiers = null;
 			tiers = null;
+			// The shop-only items are the ones not found in time
+			ShopPermutation.Reset();
 		}
 
 		private static int[] BaseTiers()

@@ -24,6 +24,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ShopOnlyItemsKept", ShopOnlyItemsKept);
 			TestRunner.Register("ShopNoDuplicates", ShopNoDuplicates);
 			TestRunner.Register("ShopOnlyPlacement", ShopOnlyPlacement);
+			TestRunner.Register("ShopOnlySlots", ShopOnlySlots);
 		}
 
 		private sealed class VanillaShop
@@ -101,24 +102,27 @@ namespace UltimateRandomizer.Common.Tests
 			return Obtainability.ShopItems.Where(i => ItemPool.IsValid(i) && !other.Contains(i)).ToHashSet();
 		}
 
-		private static bool Found(int item) => Findability.Tier(item) != Findability.Never;
+		// Found or crafted by the item's tier + 1 (a later source leaves the item to the shops)
+		private static bool Found(int item) => Findability.Tier(item) <= ItemPool.TierOf(item) + 1;
 
 		private static bool Crafted(int item, RecipePlan recipes) =>
-			recipes?.Availability != null && item < recipes.Availability.Length && recipes.Availability[item] != Findability.Never;
+			recipes?.Availability != null && item < recipes.Availability.Length && recipes.Availability[item] <= ItemPool.TierOf(item) + 1;
 
 		// Conditions a reliable place never has, whatever ShopPermutation.Classify says (a wrong classification fails here)
 		private static readonly Condition[] NeverReliable =
 		{
 			Condition.Christmas, Condition.Halloween, Condition.BloodMoon, Condition.Eclipse, Condition.EclipseOrBloodMoon, Condition.Thunderstorm, Condition.BirthdayParty,
 			Condition.LanternNight, Condition.HappyWindyDay, Condition.InGraveyard, Condition.InSpace, Condition.InUnderworld, Condition.InUnderworldHeight,
-			Condition.PreHardmode, Condition.InRain, Condition.InSandstorm, Condition.InOldOneArmy, Condition.IsNpcShimmered
+			Condition.PreHardmode, Condition.InRain, Condition.InSandstorm, Condition.InOldOneArmy, Condition.IsNpcShimmered, Condition.Multiplayer,
+			Condition.DownedClown, Condition.DownedFrostLegion
 		};
 
 		private static readonly int[] NeverReliableMerchants = { NPCID.SantaClaus, NPCID.Princess, NPCID.SkeletonMerchant, NPCID.TravellingMerchant };
 
 		// Why a place can't hold a shop-only item, read again from the live shop database (null: it can): an entry that is a
 		// roll, of a merchant with a known arrival, without situational condition, its world-wide conditions met, and its tier
-		// (arrival, conditions) within one tier of the item's
+		// (arrival, conditions) within one tier of the item's, never before hardmode for a hardmode item nor before the item's
+		// tier for a hard gate
 		private static string PlaceProblem(ShopPermutation.Place place, int item)
 		{
 			if (!NPCShopDatabase.TryGetNPCShop(place.Shop, out AbstractNPCShop found) || found is not NPCShop shop || place.Index >= shop.Entries.Count) return "entry not found";
@@ -141,6 +145,8 @@ namespace UltimateRandomizer.Common.Tests
 			if (tier != place.Tier) return $"place tier {place.Tier} planned, {tier} read";
 			if (itemTier > tier + 1) return $"sold too early (place tier {tier}, item tier {itemTier})";
 			if (tier > itemTier + 1) return $"sold too late (place tier {tier}, item tier {itemTier})";
+			if (itemTier >= (int)Tier.Hardmode && tier < (int)Tier.Hardmode) return $"hardmode item sold before hardmode (place tier {tier})";
+			if (ItemPool.IsHardGate(item) && tier < itemTier) return $"hard gate sold before its tier (place tier {tier}, item tier {itemTier})";
 			return null;
 		}
 
@@ -306,7 +312,7 @@ namespace UltimateRandomizer.Common.Tests
 			HashSet<int> shopOnly = VanillaShopOnly();
 			RecipePlan recipes = Recipes;
 			// Sold in this world by a vanilla entry (its world-wide conditions hold)
-			HashSet<int> soldHere = plan.Places.Where(p => p.Possible).Select(p => p.Original).ToHashSet();
+			HashSet<int> soldHere = plan.Places.Where(p => p.Possible && !p.Conditions.Contains(Condition.Multiplayer)).Select(p => p.Original).ToHashSet();
 			List<string> failures = new();
 			foreach (int item in shopOnly.Where(soldHere.Contains).OrderBy(i => i))
 			{
@@ -342,18 +348,27 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Duplicates in a shop");
 		}
 
-		// This world's shop-only items, computed again from the shop database, Findability and the recipe plan, are exactly the
-		// plan's; each is sold (at least once) at a reliable place within one tier of the item, at most one shop-only item per
-		// place, no roll of its shop gives it again, and the same seed gives the same places
+		// This world's shop-only items, computed again from the shop database, Findability and the recipe plan (sources by the
+		// item's tier + 1), are exactly the plan's, and include every vanilla shop-only item a rolled entry sells here with no
+		// such source; each is sold (at least once) at a reliable place within one tier of the item, at most one shop-only item
+		// per place, no roll of its shop gives it again, and the same seed gives the same places. None in Shuffle mode
 		private static void ShopOnlyPlacement()
 		{
 			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (!EconomyConfig.Instance.RandomizeShops) Check.Skip("shops not randomized");
 			ShopPermutation.WorldPlan plan = ShopOnlyPlan();
 			if (plan.Places.Count == 0) Check.Skip("no vanilla shop registered");
 			RecipePlan recipes = Recipes;
 			List<string> failures = new();
+			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle)
+			{
+				foreach (int item in plan.ShopOnly) failures.Add($"{Name(item)}: placed in Shuffle mode");
+				Check.All(failures, "Shop-only items");
+				return;
+			}
 
 			HashSet<int> expected = new();
+			HashSet<int> soldByRoll = new();
 			foreach (NPCShop shop in ShopPermutation.Shops())
 			{
 				foreach (NPCShop.Entry entry in shop.Entries)
@@ -362,11 +377,18 @@ namespace UltimateRandomizer.Common.Tests
 					int item = entry.Item.type;
 					if (entry.Item.shopSpecialCurrency != -1 || !ItemPool.IsRandomizable(item) || Found(item) || Crafted(item, recipes)) continue;
 					if (entry.Conditions.Any(c => c != null && ShopPermutation.Classify(c) == ShopPermutation.ConditionKind.World && !c.IsMet())) continue;
+					// Same plan solo and hosted
+					if (entry.Conditions.Contains(Condition.Multiplayer)) continue;
+					soldByRoll.Add(item);
 					expected.Add(item);
 				}
 			}
 			foreach (int item in expected.Where(i => !plan.ShopOnly.Contains(i))) failures.Add($"{Name(item)}: shop-only, not in the plan");
 			foreach (int item in plan.ShopOnly.Where(i => !expected.Contains(i))) failures.Add($"{Name(item)}: in the plan, but not shop-only");
+			foreach (int item in VanillaShopOnly().Where(i => soldByRoll.Contains(i) && !Found(i) && !Crafted(i, recipes) && !plan.ShopOnly.Contains(i)).OrderBy(i => i))
+			{
+				failures.Add($"{Name(item)}: vanilla shop-only, no source in time, not in the plan");
+			}
 
 			int[] copies = new int[ItemPool.Info.Length];
 			for (int p = 0; p < plan.Places.Count; p++)
@@ -411,6 +433,60 @@ namespace UltimateRandomizer.Common.Tests
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ShopOnlyPlacement: {plan.ShopOnly.Count} shop-only items, {plan.Places.Count(p => p.Reliable)} reliable places of "
 				+ $"{plan.Places.Count}: " + string.Join(", ", plan.ShopOnly.Select(i => plan.SellerOf.TryGetValue(i, out int p) ? $"{Name(i)} -> {Lang.GetNPCNameValue(plan.Places[p].Npc)}" : Name(i) + " -> ?")));
 			Check.All(failures, "Shop-only items");
+		}
+
+		// Each shop selling a shop-only item, filled as the game fills it (NPCShop.FillShop: the entries whose conditions are met
+		// right now, no NPC spawned, no ModifyActiveShop): SlotItems finds every placed item whose entry is open now, at a slot
+		// holding that entry's vanilla item, and nothing else
+		private static void ShopOnlySlots()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (!EconomyConfig.Instance.RandomizeShops) Check.Skip("shops not randomized");
+			ShopPermutation.WorldPlan plan = ShopOnlyPlan();
+			if (plan.ShopOnly.Count == 0) Check.Skip("no shop-only item in this world");
+			List<string> failures = new();
+			int open = 0;
+			foreach (string shopName in plan.ShopItems.Keys.OrderBy(n => n, StringComparer.Ordinal))
+			{
+				if (!NPCShopDatabase.TryGetNPCShop(shopName, out AbstractNPCShop found) || found is not NPCShop shop)
+				{
+					failures.Add($"{shopName}: shop not found");
+					continue;
+				}
+				Item[] items = new Item[Chest.maxItems];
+				bool overflow;
+				try
+				{
+					shop.FillShop(items, new NPC(), out overflow);
+				}
+				catch (Exception e)
+				{
+					failures.Add($"{shopName}: FillShop failed ({e.Message})");
+					continue;
+				}
+				int[] slots = ShopPermutation.SlotItems(plan, shopName, items);
+				for (int p = 0; p < plan.Places.Count; p++)
+				{
+					ShopPermutation.Place place = plan.Places[p];
+					int item = plan.Guaranteed[p];
+					if (item <= 0 || place.Shop != shopName || place.Index >= shop.Entries.Count || !shop.Entries[place.Index].ConditionsMet()) continue;
+					open++;
+					int s = Array.IndexOf(slots, item);
+					if (s < 0)
+					{
+						// A full shop drops its last entries
+						if (!overflow) failures.Add($"{Name(item)} at {Where(place)}: entry open, no slot sells it");
+						continue;
+					}
+					if (items[s]?.type != place.Original) failures.Add($"{Name(item)} at {Where(place)}: slot {s} holds {(items[s] == null ? "nothing" : Name(items[s].type))}");
+				}
+				for (int s = 0; s < slots.Length; s++)
+				{
+					if (slots[s] > 0 && (!plan.SellerOf.TryGetValue(slots[s], out int p) || plan.Places[p].Shop != shopName)) failures.Add($"{shopName} slot {s}: {Name(slots[s])} is not placed in this shop");
+				}
+			}
+			Check.All(failures, "Shop-only slots");
+			if (open == 0) Check.Skip("no shop-only place is open right now");
 		}
 	}
 }

@@ -126,6 +126,7 @@ Tests: {
 	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques
 	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde : trouvés, fabriqués, ou vendus à un emplacement fiable à un palier près de celui de l'objet
 	ShopOnlyPlacement: Chaque objet exclusif aux boutiques de ce monde est vendu au moins une fois, à un emplacement fiable (arrivée connue, ni le Père Noël, ni la Princesse, ni un marchand de passage, aucune condition ponctuelle) à un palier près de celui de l'objet, jamais deux fois dans une même boutique
+	ShopOnlySlots: Chaque boutique qui vend un objet exclusif, remplie comme le jeu la remplit en ce moment, propose chaque objet placé dont l'emplacement est ouvert, au bon endroit
 	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant
 	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
