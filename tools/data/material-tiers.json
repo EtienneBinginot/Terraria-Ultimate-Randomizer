@@ -444,11 +444,11 @@
 "n": "Bloc de pierre d'ébène",
 "c": "Block",
 "oc": 0,
-"t": 0,
+"t": 2,
 "s": "gathered",
 "cm": "common",
 "cf": "high",
-"no": "Gathered in the world"
+"no": "Needs pick power 65 (Player.GetPickaxeDamage): an evil-boss pickaxe"
 },
 {
 "k": "SandBlock",
@@ -1786,11 +1786,11 @@
 "n": "Échantillon de tissu",
 "c": "Material",
 "oc": 1,
-"t": 1,
+"t": 2,
 "s": "drop: Suiveur",
 "cm": "uncommon",
 "cf": "high",
-"no": "drop: Suiveur, keeps computed tier"
+"no": "Brain of Cthulhu and its Creepers only, like Shadow Scale (audit 01: the Creeper counts as its boss)"
 },
 {
 "k": "FallenStar",
@@ -2809,22 +2809,22 @@
 "n": "Lingot de pierre infernale",
 "c": "OreBar",
 "oc": 3,
-"t": 3,
+"t": 2,
 "s": "recipe",
 "cm": "uncommon",
-"cf": "medium",
-"no": "Smelted Hellstone"
+"cf": "high",
+"no": "Hellstone (2) at a Hellforge (user decision)"
 },
 {
 "k": "Hellstone",
 "n": "Pierre infernale",
 "c": "OreBar",
 "oc": 3,
-"t": 3,
+"t": 2,
 "s": "gathered",
 "cm": "common",
-"cf": "medium",
-"no": "Underworld, mined after Skeletron"
+"cf": "high",
+"no": "Pick power 65: Nightmare / Deathbringer Pickaxe, after the evil boss (user decision)"
 },
 {
 "k": "Actuator",
@@ -3887,11 +3887,11 @@
 "n": "Aile abîmée d'abeille",
 "c": "Material",
 "oc": 5,
-"t": 4,
+"t": 5,
 "s": "drop: Frelon de mousse",
 "cm": "uncommon",
-"cf": "medium",
-"no": "Moss Hornet, hardmode jungle"
+"cf": "high",
+"no": "Moss Hornet after a mechanical boss (wiki Tattered Bee Wing)"
 },
 {
 "k": "BrokenBatWing",
@@ -3986,11 +3986,11 @@
 "n": "Plume de feu",
 "c": "Material",
 "oc": 5,
-"t": 4,
+"t": 5,
 "s": "drop: Diable rouge",
 "cm": "uncommon",
-"cf": "medium",
-"no": "Red Devil, hardmode underworld"
+"cf": "high",
+"no": "Red Devil, hardmode after a mechanical boss (wiki Fire Feather)"
 },
 {
 "k": "IceFeather",
@@ -4327,22 +4327,22 @@
 "n": "Épée de héros cassée",
 "c": "Material",
 "oc": 7,
-"t": 7,
+"t": 6,
 "s": "drop: Mothron",
 "cm": "rare",
 "cf": "high",
-"no": "drop: Mothron"
+"no": "Mothron, solar eclipse after Plantera (wiki Mothron)"
 },
 {
 "k": "LunarTabletFragment",
 "n": "Fragment de tablette solaire",
 "c": "Material",
 "oc": 7,
-"t": 7,
+"t": 6,
 "s": "drop: Lihzahrd",
 "cm": "uncommon",
 "cf": "high",
-"no": "drop: Lihzahrd"
+"no": "Lihzahrds and Flying Snakes in the Jungle Temple, after Plantera (wiki Solar Tablet)"
 },
 {
 "k": "KiteCrawltipede",
@@ -4415,66 +4415,66 @@
 "n": "Mur de briques astras",
 "c": "Block",
 "oc": 8,
-"t": 8,
+"t": 9,
 "s": "recipe",
 "cm": "common",
 "cf": "high",
-"no": "recipe"
+"no": "Made from its celestial brick, itself shimmered from Luminite Brick (Moon Lord)"
 },
 {
 "k": "CryocoreBrickWall",
 "n": "Mur de briques Cryocores",
 "c": "Block",
 "oc": 8,
-"t": 8,
+"t": 9,
 "s": "recipe",
 "cm": "common",
 "cf": "high",
-"no": "recipe"
+"no": "Made from its celestial brick, itself shimmered from Luminite Brick (Moon Lord)"
 },
 {
 "k": "CosmicEmberBrickWall",
 "n": "Mur de briques en braise cosmique",
 "c": "Block",
 "oc": 8,
-"t": 8,
+"t": 9,
 "s": "recipe",
 "cm": "common",
 "cf": "high",
-"no": "recipe"
+"no": "Made from its celestial brick, itself shimmered from Luminite Brick (Moon Lord)"
 },
 {
 "k": "MercuryBrickWall",
 "n": "Mur de briques en mercure",
 "c": "Block",
 "oc": 8,
-"t": 8,
+"t": 9,
 "s": "recipe",
 "cm": "common",
 "cf": "high",
-"no": "recipe"
+"no": "Made from its celestial brick, itself shimmered from Luminite Brick (Moon Lord)"
 },
 {
 "k": "LunarRustBrickWall",
 "n": "Mur de briques en rouille lunaire",
 "c": "Block",
 "oc": 8,
-"t": 8,
+"t": 9,
 "s": "recipe",
 "cm": "common",
 "cf": "high",
-"no": "recipe"
+"no": "Made from its celestial brick, itself shimmered from Luminite Brick (Moon Lord)"
 },
 {
 "k": "StarRoyaleBrickWall",
 "n": "Mur de briques royales étoilées",
 "c": "Block",
 "oc": 8,
-"t": 8,
+"t": 9,
 "s": "recipe",
 "cm": "common",
 "cf": "high",
-"no": "recipe"
+"no": "Made from its celestial brick, itself shimmered from Luminite Brick (Moon Lord)"
 },
 {
 "k": "FragmentStardust",
@@ -4629,5 +4629,82 @@
 "cm": "common",
 "cf": "high",
 "no": "recipe"
+},
+{
+"k": "CrimstoneBlock",
+"n": "Bloc de carmeren",
+"c": "Block",
+"oc": 2,
+"t": 2,
+"s": "gathered",
+"cm": "common",
+"cf": "high",
+"no": "Needs pick power 65 (Player.GetPickaxeDamage): an evil-boss pickaxe"
+},
+{
+"k": "DarkCelestialBrickWall",
+"n": "Mur en briques célestes sombres",
+"c": "Block",
+"oc": 9,
+"t": 9,
+"s": "recipe",
+"cm": "common",
+"cf": "high",
+"no": "Made from its celestial brick, itself shimmered from Luminite Brick (Moon Lord)"
+},
+{
+"k": "HeavenforgeBrickWall",
+"n": "Mur en briques de forge céleste",
+"c": "Block",
+"oc": 9,
+"t": 9,
+"s": "recipe",
+"cm": "common",
+"cf": "high",
+"no": "Made from its celestial brick, itself shimmered from Luminite Brick (Moon Lord)"
+},
+{
+"k": "LunarRustBrick",
+"n": "Briques de rouille lunaire",
+"c": "Block",
+"oc": 9,
+"t": 9,
+"s": "none",
+"cm": "common",
+"cf": "high",
+"no": "Shimmered from Luminite Brick (Moon Lord)"
+},
+{
+"k": "DarkCelestialBrick",
+"n": "Briques célestes sombres",
+"c": "Block",
+"oc": 9,
+"t": 9,
+"s": "none",
+"cm": "common",
+"cf": "high",
+"no": "Shimmered from Luminite Brick (Moon Lord)"
+},
+{
+"k": "AstraBrick",
+"n": "Briques astrales",
+"c": "Block",
+"oc": 9,
+"t": 9,
+"s": "none",
+"cm": "common",
+"cf": "high",
+"no": "Shimmered from Luminite Brick (Moon Lord)"
+},
+{
+"k": "CosmicEmberBrick",
+"n": "Briques de braise cosmique",
+"c": "Block",
+"oc": 9,
+"t": 9,
+"s": "none",
+"cm": "common",
+"cf": "high",
+"no": "Shimmered from Luminite Brick (Moon Lord)"
 }
 ]

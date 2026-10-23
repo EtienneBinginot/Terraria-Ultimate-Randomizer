@@ -127,7 +127,7 @@ namespace UltimateRandomizer.Common.Features
 			if (!Gated(i)) return 0;
 			// An upgrade waits for its own tier (the Life Fruit for a mechanical boss), not for the unlock of its rarity
 			if (ItemPool.IsSpecial(result)) return Protection.UpgradeTier(result);
-			return Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(result)));
+			return Tiers.Clamp(ItemPool.UnlockTierOf(result));
 		}
 
 		private static bool Gated(int i) => Randomized(i) && ProgressionConfig.Instance.TierGating && GeneralConfig.Instance.RandomizerMode == RandomizerMode.Coherent;
@@ -655,7 +655,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			int found = Findability.Tier(item);
 			int tier = found < Never ? found : ItemPool.TierOf(item);
-			return Tiers.Clamp(Math.Max(tier, ItemPool.UnlockTier(ItemPool.TrueTierOf(item))));
+			return Tiers.Clamp(Math.Max(tier, ItemPool.UnlockTierOf(item)));
 		}
 
 		// ---------------------------------------------------------------- Key ingredients

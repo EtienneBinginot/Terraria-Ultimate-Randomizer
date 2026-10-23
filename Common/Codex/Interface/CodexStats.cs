@@ -49,7 +49,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 					if (!result.ContainsKey(drop.Item)) result[drop.Item] = CombinedChance(unlocked, drop.Item);
 					continue;
 				}
-				int unlock = ItemPool.UnlockTier(ItemPool.TrueTierOf(drop.Item));
+				int unlock = ItemPool.UnlockTierOf(drop.Item);
 				locked[drop.Item] = locked.TryGetValue(drop.Item, out int known) ? Math.Min(known, unlock) : unlock;
 			}
 			// An item also planned unlocked (another entry) drops now

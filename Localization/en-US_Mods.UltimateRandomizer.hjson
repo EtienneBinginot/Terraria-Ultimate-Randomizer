@@ -126,6 +126,7 @@ Tests: {
 	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter
 	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world
 	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
+	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
 	LockedVanillaDropRemoved: A replaced original drop still locked by progression does not drop; an unlocked one drops as planned

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Terraria;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -18,6 +20,17 @@ namespace UltimateRandomizer.Common.Core
 		public static readonly Dictionary<int, int[]> ItemRules = new();
 
 		private static readonly Dictionary<int, int> bagTiers = new();
+
+		private static List<DropRateInfo> globalDrops;
+
+		// The global drop rules (any enemy: Pirate Map, biome keys, souls of light and night...), flattened once: what
+		// GetRulesForNPCID adds with its global drops (ItemDropDatabase._globalEntries). Our own rules are never global
+		public static List<DropRateInfo> GlobalDrops()
+		{
+			if (globalDrops != null) return globalDrops;
+			List<IItemDropRule> local = Main.ItemDropsDB.GetRulesForNPCID(0, false);
+			return globalDrops = Capture(Main.ItemDropsDB.GetRulesForNPCID(0, true).Where(r => !local.Contains(r)).ToList());
+		}
 
 		public static List<DropRateInfo> Capture(List<IItemDropRule> rules)
 		{
@@ -78,6 +91,7 @@ namespace UltimateRandomizer.Common.Core
 			Items.Clear();
 			ItemRules.Clear();
 			bagTiers.Clear();
+			globalDrops = null;
 		}
 	}
 }

@@ -1105,7 +1105,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (!RecipeSystem.Touchable(i) || Main.recipe[i].Disabled) continue;
 				int u = plan.ResultTiers[i];
-				int expectedU = ItemPool.IsSpecial(results[i]) ? Protection.UpgradeTier(results[i]) : Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(results[i])));
+				int expectedU = ItemPool.IsSpecial(results[i]) ? Protection.UpgradeTier(results[i]) : Tiers.Clamp(ItemPool.UnlockTierOf(results[i]));
 				if (u != expectedU) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: result tier {u}, {expectedU} expected for {Name(results[i])}");
 				if (plan.KeyIngredient[i]) keys++;
 				if (plan.SwapPartner[i] >= 0) swapped++;
@@ -1499,7 +1499,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (recipe.requiredItem.Any(x => x.type == item)) failures.Add($"{where}: uses its own item");
 				if (tier < 0) failures.Add($"{where}: planned but not eligible");
 				int found = Findability.Tier(item);
-				int unlock = ItemPool.UnlockTier(ItemPool.TrueTierOf(item));
+				int unlock = ItemPool.UnlockTierOf(item);
 				bool upgrade = ItemPool.IsSpecial(item);
 				if (upgrade && tier != Protection.UpgradeTier(item)) failures.Add($"{where}: tier {tier}, the upgrade's tier is {Protection.UpgradeTier(item)}");
 				if (!upgrade && (found < Findability.Never && tier < Math.Min(found, Tiers.Max) || tier < Math.Min(unlock, Tiers.Max))) failures.Add($"{where}: tier {tier}, found at {Show(found)}, unlocked at {unlock}");
