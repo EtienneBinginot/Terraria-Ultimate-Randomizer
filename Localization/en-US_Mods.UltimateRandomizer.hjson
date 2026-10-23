@@ -264,6 +264,9 @@ Tests: {
 	UncraftablePricedByIngredients: Live shell recipes count as randomized: what they make sells for its ingredients' value, not its vanilla price
 	RecipePickaxeMineable: No rebuilt pickaxe or drill recipe gets a new ingredient that needs at least that pick power to be mined
 	RecipeNotBeforeItsTier: No rebuilt or swapped recipe is doable before the tier of the item it gives (its own tier, or its true tier when later): no Chlorophyte Pickaxe in early hardmode
+	RecipeValueSane: Planned recipes ask for sane stacks (the stack cap, or three times a vanilla stack) and rebuilt ones are worth half to twice their vanilla recipe (value-0 items count their own recipe): no 9999 Ruby Walls for a Mana Crystal, no Nebula Fragment kept for a cheap swapped item
+	ProtectedRecipesGated: A protected result whose ingredients are rebuilt waits for the unlocked tier of its true tier like any other: no Key of Night or Key of Light before hardmode
+	PickaxeIngredientsBelowLevel: A pickaxe or drill recipe never gets an ore or bar (or anything made of one) that needs its own pick power or more to be mined: no Orichalcum Pickaxe made of Chlorophyte Bars
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
