@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Reflection;
 using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
+using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
 
 namespace UltimateRandomizer.Common.Tests
@@ -34,12 +35,17 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("PacingVariety", PacingVariety);
 			TestRunner.Register("DropFrequency", DropFrequency);
 			TestRunner.Register("WorkBenchPacing", WorkBenchPacing);
+			TestRunner.Register("JackpotPacing", JackpotPacing);
 		}
+
+		// Jackpots of a simulated early hour before the first boss, at most this many with the default settings (a sanity
+		// bound, not a target: luck and madness of the kills, giants left out)
+		public const double MaxJackpotsPerHour = 6;
 
 		private static void Log(string text) => ModContent.GetInstance<UltimateRandomizer>().Logger.Info(text);
 
 		// The target only holds for the default settings: compares the fields that change the pace
-		private static bool IsDefault(object config, string field)
+		public static bool IsDefault(object config, string field)
 		{
 			FieldInfo info = config.GetType().GetField(field);
 			DefaultValueAttribute attribute = info.GetCustomAttribute<DefaultValueAttribute>();
@@ -92,7 +98,6 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			PacingResult result = PacingModel.Simulate(5, 44);
 			Log($"Drops: {result.ItemsPerKill:0.00} items per kill");
-			Log($"Jackpots: {PacingModel.JackpotsPer100Kills(2000, 46):0.00} per 100 kills");
 			RequireDefaults();
 			if (!IsDefault(LootConfig.Instance, "CommonDropChance")) Check.Skip("CommonDropChance is not at its default value");
 			Check.That(result.ItemsPerKill >= MinItemsPerKill, $"only {result.ItemsPerKill:0.00} items per kill, expected at least {MinItemsPerKill} (about 3.2 with LootAbundance 3)");
@@ -115,6 +120,24 @@ namespace UltimateRandomizer.Common.Tests
 			if (!IsDefault(progression, "GuaranteedDropMultiplier") || !IsDefault(progression, "PotGuaranteeChance")) Check.Skip("guarantee settings are not the default ones");
 			RequireDefaults();
 			Check.That(minutes >= 15 && minutes <= 30, $"first work bench after {minutes:0} minutes on average, expected 15 to 30");
+		}
+
+		// Jackpots per early hour (luck and madness of the kills, with their share of the progression), logged; bounded before
+		// the first boss with the default settings
+		private static void JackpotPacing()
+		{
+			int tier = ProgressionSystem.UnlockedTier;
+			double per100 = PacingModel.JackpotsPer100Kills(3000, 46);
+			double perHour = per100 * PacingModel.KillsPerHour / 100;
+			Log($"Jackpots: {perHour:0.00}/h at tier {tier} ({per100:0.00} per 100 kills, {PacingModel.KillsPerHour} kills per hour)");
+			RequireDefaults();
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			foreach (string field in new[] { "RuntimeJackpotChance", "WildDropChance", "WildTierDecay", "JackpotStartShare", "MaxJackpotTiers", "TierAllowance", "TierGating" })
+			{
+				if (!IsDefault(progression, field)) Check.Skip($"{field} is not at its default value");
+			}
+			if (tier != 0) Check.Skip($"the world is at tier {tier}, the bound is for the start");
+			Check.That(perHour <= MaxJackpotsPerHour, $"{perHour:0.00} jackpots per early hour, at most {MaxJackpotsPerHour}");
 		}
 
 		private static void PacingVariety()

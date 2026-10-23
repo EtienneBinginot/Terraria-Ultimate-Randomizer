@@ -138,6 +138,7 @@ namespace UltimateRandomizer.Common.Features
 				benchChance[npc] = chance;
 				return chance;
 			}
+			// At the start nothing is found yet: every pot item may come (TileDropItem.Unfound)
 			int potItems = GuaranteedSources.PotItems(0).Count;
 			float potChance = potItems == 0 ? 0 : ProgressionConfig.Instance.PotGuaranteeChance / 100f / potItems;
 			(int benches, int wooden) = WoodenChestsWithWorkBench();
@@ -187,7 +188,8 @@ namespace UltimateRandomizer.Common.Features
 			float swapChance = SwapChance();
 			List<int> pool = EnemySwapPool.NaturalEnemies(0);
 			int totalKills = TotalKills;
-			float luckyChance = ProgressionConfig.Instance.RuntimeJackpotChance / 100f;
+			// With the share of the current progression, as at kill time (DropHelper.LuckyChance; the madness share is in ItemPool.Roll)
+			float luckyChance = DropHelper.LuckyChance() / 100f;
 			double jackpots = 0;
 			for (int k = 0; k < kills; k++)
 			{
@@ -220,6 +222,9 @@ namespace UltimateRandomizer.Common.Features
 			ItemPool.ClearJackpot();
 			return jackpots * 100 / kills;
 		}
+
+		// Kills of a simulated early hour (Simulate): JackpotsPer100Kills per hour
+		public static int KillsPerHour => TotalKills;
 
 		// In this world (single player: chests are only known there)
 		private static (int benches, int wooden) WoodenChestsWithWorkBench()

@@ -37,6 +37,131 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("JackpotWorthScales", JackpotWorthScales);
 			TestRunner.Register("SpawnedEnemyNoExtraDrops", SpawnedEnemyNoExtraDrops);
 			TestRunner.Register("CrittersNoJackpot", CrittersNoJackpot);
+			TestRunner.Register("BagNeverJackpot", BagNeverJackpot);
+			TestRunner.Register("JackpotCapAndRamp", JackpotCapAndRamp);
+			TestRunner.Register("GuaranteeScalesWithPlayers", GuaranteeScalesWithPlayers);
+		}
+
+		// Opened bags never give a jackpot, even with both jackpot chances at 100 %: their items go through the real
+		// replacement of an opened bag (LootSubstitutionItem.BagReplacement), surprises included
+		private static void BagNeverJackpot()
+		{
+			int[] bags = { ItemID.KingSlimeBossBag, ItemID.EyeOfCthulhuBossBag, ItemID.SkeletronBossBag, ItemID.WoodenCrate, ItemID.IronCrate, ItemID.GoldenCrate };
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			float savedLuck = progression.RuntimeJackpotChance;
+			List<string> failures = new();
+			int rolls = 0;
+			try
+			{
+				ItemPool.WildChanceOverride = 100f;
+				progression.RuntimeJackpotChance = 100f;
+				foreach (int bag in bags)
+				{
+					foreach (DropRateInfo entry in LootSnapshot.ForItem(bag))
+					{
+						for (int i = 0; i < 20; i++)
+						{
+							int item = LootSubstitutionItem.BagReplacement(bag, entry.itemId, new Random(bag * 1000 + i));
+							rolls++;
+							if (ItemPool.LastJackpotGap != 0 && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(bag)}: {Lang.GetItemNameValue(item)} is a jackpot (gap {ItemPool.LastJackpotGap})");
+						}
+					}
+				}
+			}
+			finally
+			{
+				progression.RuntimeJackpotChance = savedLuck;
+				ItemPool.WildChanceOverride = null;
+				ItemPool.ClearJackpot();
+			}
+			if (rolls == 0) Check.Skip("no bag content captured");
+			Check.All(failures, "Bag jackpots");
+		}
+
+		// The jackpot share grows from JackpotStartShare before the first boss to everything after Plantera; with madness at
+		// 100 % (and lucky rolls), no jackpot goes more than MaxJackpotTiers above the limit, nor reaches hardmode before it
+		private static void JackpotCapAndRamp()
+		{
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			List<string> failures = new();
+			float start = Math.Clamp(progression.JackpotStartShare / 100f, 0f, 1f);
+			if (Math.Abs(ItemPool.JackpotShare(0) - start) > 0.0001f) failures.Add($"share {ItemPool.JackpotShare(0):0.000} before the first boss, expected {start:0.000}");
+			if (Math.Abs(ItemPool.JackpotShare((int)Tier.PostPlantera) - 1f) > 0.0001f) failures.Add($"share {ItemPool.JackpotShare((int)Tier.PostPlantera):0.000} after Plantera, expected 1");
+			for (int t = 1; t < Tiers.Count; t++)
+			{
+				if (ItemPool.JackpotShare(t) < ItemPool.JackpotShare(t - 1) - 0.0001f) failures.Add($"share lower at tier {t} than at tier {t - 1}");
+				if (ItemPool.JackpotShare(t) > 1.0001f) failures.Add($"share above 1 at tier {t}");
+			}
+			Check.All(failures, "Jackpot share");
+			if (Main.hardMode) Check.Skip("the world is in hardmode");
+			if (!progression.TierGating) Check.Skip("no progression limit");
+			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only the coherent mode rolls jackpots");
+			int limit = ItemPool.GatingLimit(0);
+			int ceiling = ItemPool.JackpotCeiling(limit);
+			int maxGap = Math.Max(1, progression.MaxJackpotTiers);
+			int jackpots = 0;
+			try
+			{
+				ItemPool.WildChanceOverride = 100f;
+				for (int i = 0; i < 3000; i++)
+				{
+					bool lucky = i % 2 == 1;
+					RollRequest request = new()
+					{
+						Keys = new[] { 4343, i },
+						SourceTier = lucky ? Tiers.Max : 0,
+						OriginalItem = -1,
+						Policy = CategoryPolicy.Weighted,
+						TierJitterDown = 1,
+						IgnoreGating = lucky,
+						Wild = !lucky,
+						WildRng = new Random(i)
+					};
+					int item = ItemPool.Roll(request);
+					int gap = ItemPool.LastJackpotGap;
+					int tier = ItemPool.TierOf(item);
+					if (gap > 0) jackpots++;
+					if (gap > maxGap) failures.Add($"{Lang.GetItemNameValue(item)}: {gap} tiers above the limit, at most {maxGap}");
+					if (gap > 0 && tier >= (int)Tier.Hardmode) failures.Add($"{Lang.GetItemNameValue(item)} (tier {tier}) as a jackpot before hardmode");
+					if (tier > limit && tier > ceiling) failures.Add($"{Lang.GetItemNameValue(item)} (tier {tier}) above the limit {limit} and the jackpot ceiling {ceiling}");
+					if (failures.Count > 20) break;
+				}
+			}
+			finally
+			{
+				ItemPool.WildChanceOverride = null;
+				ItemPool.ClearJackpot();
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Jackpot cap: limit {limit}, ceiling {ceiling}, {jackpots} jackpots in 3000 rolls");
+			if (ceiling > limit && jackpots == 0) failures.Add("no jackpot in 3000 rolls at 100 %");
+			Check.All(failures, "Jackpots above their cap");
+		}
+
+		// Guaranteed stations, summons and tools are shared between the players of a kill; materials are not; random extra
+		// drops placing a basic station come RandomStationChanceFactor as often; other drops keep their chance
+		private static void GuaranteeScalesWithPlayers()
+		{
+			List<string> failures = new();
+			void Expect(float expected, float actual, string what)
+			{
+				if (Math.Abs(expected - actual) > 0.0001f) failures.Add($"{what}: {actual:0.0000}, expected {expected:0.0000}");
+			}
+			Expect(0.2f, RandomNpcDropRule.GuaranteeChance(0.2f, 1, true), "one player");
+			Expect(0.2f, RandomNpcDropRule.GuaranteeChance(0.2f, 0, true), "no player counted");
+			Expect(0.05f, RandomNpcDropRule.GuaranteeChance(0.2f, 4, true), "four players");
+			Expect(0.2f, RandomNpcDropRule.GuaranteeChance(0.2f, 4, false), "four players, setting off");
+			PlannedDrop station = new() { Item = ItemID.Furnace, Chance = 0.3f, Extra = true, Guaranteed = true, Single = true };
+			PlannedDrop material = new() { Item = ItemID.Gel, Chance = 0.3f, Extra = true, Guaranteed = true };
+			PlannedDrop randomBench = new() { Item = ItemID.WorkBench, Chance = 0.4f, Extra = true };
+			PlannedDrop randomTable = new() { Item = ItemID.WoodenTable, Chance = 0.4f, Extra = true };
+			PlannedDrop randomGear = new() { Item = ItemID.Minishark, Chance = 0.4f, Extra = true };
+			Expect(0.1f, RandomNpcDropRule.KillChance(station, 1f, 3, true), "guaranteed furnace, three players");
+			Expect(0.5f, RandomNpcDropRule.KillChance(station with { Chance = 0.8f }, 2f, 2, true), "guaranteed furnace with a bonus, capped at 1 then shared");
+			Expect(0.3f, RandomNpcDropRule.KillChance(material, 1f, 3, true), "guaranteed material, three players");
+			Expect(0.4f * RandomNpcDropRule.RandomStationChanceFactor, RandomNpcDropRule.KillChance(randomBench, 1f, 1, true), "random work bench");
+			Expect(0.4f * RandomNpcDropRule.RandomStationChanceFactor, RandomNpcDropRule.KillChance(randomTable, 1f, 1, true), "random table");
+			Expect(0.4f, RandomNpcDropRule.KillChance(randomGear, 1f, 3, true), "random Minishark");
+			Check.All(failures, "Kill chances");
 		}
 
 		// The share of the jackpot chances follows the base life against the median of the tier, in [0.1, 1]: 1 for a typical
@@ -276,6 +401,7 @@ namespace UltimateRandomizer.Common.Tests
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only the coherent mode rolls jackpots");
 			int limit = ItemPool.GatingLimit(0);
 			if (limit >= Tiers.Max) Check.Skip("the limit is already the last tier");
+			if (ItemPool.JackpotCeiling(limit) <= limit) Check.Skip("no jackpot above this limit before hardmode");
 			List<string> failures = new();
 			int jackpots = 0;
 			try
@@ -358,6 +484,7 @@ namespace UltimateRandomizer.Common.Tests
 			if (!ProgressionConfig.Instance.TierGating) Check.Skip("no progression limit");
 			int limit = ItemPool.GatingLimit(0);
 			if (limit >= Tiers.Max) Check.Skip("the limit is already the last tier");
+			if (ItemPool.JackpotCeiling(limit) <= limit) Check.Skip("no jackpot above this limit before hardmode");
 			NPC npc = new();
 			npc.SetDefaults(NPCID.Zombie);
 			npc.Center = Main.LocalPlayer.Center;
@@ -491,13 +618,16 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Jackpots rarer than in 1.2.0 (madness 12 %, luck 4 %) and 1.2.1 (9 %, 3 %, decay 3, allowance 3): items up to two
 		// tiers ahead already come normally. 1.3.0 raised 5 % / 2 % to 7 % / 3 % (weak enemies only get a share of them:
-		// JackpotWorth); 1.3.2 went back to 5 % / 2 %, the far jackpots were too many
+		// JackpotWorth); 1.3.2 went back to 5 % / 2 %, the far jackpots were too many; after 1.3.4, 2 % / 1 %, a share of them
+		// early (JackpotStartShare 30 %) and at most one tier above the limit
 		private static void JackpotRatesLower()
 		{
 			float Default(string field) => Convert.ToSingle(typeof(ProgressionConfig).GetField(field).GetCustomAttributes(typeof(System.ComponentModel.DefaultValueAttribute), false)
 				.OfType<System.ComponentModel.DefaultValueAttribute>().First().Value);
-			Check.Equal(5f, Default("WildDropChance"), "default WildDropChance");
-			Check.Equal(2f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
+			Check.Equal(2f, Default("WildDropChance"), "default WildDropChance");
+			Check.Equal(1f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
+			Check.Equal(30f, Default("JackpotStartShare"), "default JackpotStartShare");
+			Check.Equal(1f, Default("MaxJackpotTiers"), "default MaxJackpotTiers");
 			Check.Equal(4f, Default("WildTierDecay"), "default WildTierDecay");
 			Check.Equal(2f, Default("TierAllowance"), "default TierAllowance");
 		}

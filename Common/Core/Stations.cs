@@ -122,6 +122,9 @@ namespace UltimateRandomizer.Common.Core
 
 		public static List<int> Placers(int tile) => PlacersByTile().TryGetValue(tile, out List<int> list) ? list : new List<int>();
 
+		// Places a basic station (any work bench, table, chair...)
+		public static bool IsBasicPlacer(int item) => PlacedTile(item, out int tile) && Known.TryGetValue(tile, out StationInfo info) && info.Kind == StationKind.Basic;
+
 		// The tile an item places, if any
 		public static bool PlacedTile(int item, out int tile)
 		{

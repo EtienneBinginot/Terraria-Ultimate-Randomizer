@@ -33,15 +33,18 @@ namespace UltimateRandomizer.Common.Features
 					break;
 
 				case EntitySource_ItemOpen open when IsBag(open.ItemType) && BagEnabled(open.ItemType, cfg):
-					int bagTier = LootSnapshot.BagTier(open.ItemType);
-					System.Random bagRng = new(Main.rand.Next());
-					int bagReplacement = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(open.ItemType), item.type,
-						bagTier, ItemID.Sets.BossBag[open.ItemType] ? bagTier : 0, DropHelper.RollLucky(), bagRng, bagRng);
-					int bagGap = ItemPool.LastJackpotGap;
+					int bagReplacement = BagReplacement(open.ItemType, item.type, new System.Random(Main.rand.Next()));
 					DropHelper.ChangeSpawnedItem(item, bagReplacement, StackRules.Scaled(item.type, item.stack, bagReplacement));
-					JackpotItem.Mark(item, bagGap);
 					break;
 			}
+		}
+
+		// The item replacing one of an opened bag's: the planned one, or a surprise (bagRng). Never a jackpot (no luck, no
+		// madness): a boss bag already holds its whole tier, and crates are opened by the dozen
+		public static int BagReplacement(int bagType, int itemType, System.Random bagRng)
+		{
+			int bagTier = LootSnapshot.BagTier(bagType);
+			return DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), itemType, bagTier, ItemID.Sets.BossBag[bagType] ? bagTier : 0, false, bagRng);
 		}
 
 		// The loot source is also used for things that are not drop tables: banners, the Big Mimic's item bursts (it is

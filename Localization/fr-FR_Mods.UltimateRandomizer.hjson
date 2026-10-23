@@ -107,6 +107,9 @@ Tests: {
 	JackpotWorthScales: Les ennemis faibles ont une part des chances de jackpot qui suit leur vie (0,1 à 1)
 	SpawnedEnemyNoExtraDrops: Les ennemis engendrés par un autre ennemi ne donnent ni drop en plus, ni drop garanti, ni jackpot
 	CrittersNoJackpot: Les bestioles ne donnent jamais de jackpot
+	BagNeverJackpot: Les sacs et caisses ouverts ne donnent jamais de jackpot
+	JackpotCapAndRamp: Les jackpots sont plus rares au début, jamais trop au-delà de la limite, jamais du mode difficile avant celui-ci
+	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	ProtectedDropsKept: Les drops de progression sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés
@@ -147,6 +150,7 @@ Tests: {
 	PacingExpected: 15 à 25 pièces d'équipement aléatoires par heure en début de partie (réglages par défaut ; valeur écrite dans client.log)
 	PacingSimulation: La simulation du rythme est stable et régulière
 	PacingVariety: Au moins 10 pièces d'équipement différentes par heure en début de partie
+	JackpotPacing: Peu de jackpots dans une heure de début de partie (nombre par heure dans le journal)
 	DropFrequency: La plupart des kills donnent quelque chose (au moins 0,6 objet par kill ; valeur écrite dans client.log)
 	WorkBenchPacing: Le premier établi arrive après 15 à 30 minutes en moyenne (valeur écrite dans client.log)
 	BasicStationsUnprotected: Les stations de base (établi, fourneau, enclume...) sont confiées au randomizer
@@ -181,6 +185,7 @@ Tests: {
 	CrateAccessWorld: Les caisses que le monde ne peut pas donner (autre mal, caisse sacrée avant le hardmode) ne comptent pas comme source
 	HardmodeOresOfWorld: Les minerais des paires hardmode comptent toujours comme trouvables et ne deviennent jamais de nouveaux ingrédients
 	AltarDecisionKeepsCaches: Le choix d'un minerai hardmode par un autel ne change ni les sources garanties ni la trouvabilité
+	PotOnlyUnfound: Les pots ne donnent que des objets garantis que personne n'a encore trouvés
 	IngredientReplacementsFindable: Les ingrédients remplacés se trouvent (sans craft) au niveau de la recette
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
 	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
@@ -1161,6 +1166,16 @@ Configs: {
 			Tooltip: À quel point chaque palier au-delà de la limite est plus rare pour les drops de folie : 4 (par défaut) = un palier au-dessus est 4 fois plus fréquent que deux paliers au-dessus. Plus haut = la folie reste plus près de la limite.
 		}
 
+		JackpotStartShare: {
+			Label: "Jackpots : part au début (%)"
+			Tooltip: "Part des deux chances de jackpot (drops chanceux et folie) avant le premier boss. Elle augmente à chaque boss vaincu, jusqu'aux chances complètes après Plantera. 100 = les chances complètes dès le début."
+		}
+
+		MaxJackpotTiers: {
+			Label: "Jackpots : paliers au-delà de la limite au plus"
+			Tooltip: "Un jackpot (drop chanceux ou folie) ne dépasse jamais la limite de progression de plus de ce nombre de paliers. Avant le mode difficile, un jackpot n'est jamais un objet du mode difficile."
+		}
+
 		MechTierRequiresAllThree: {
 			Label: Le tier mécanique demande les trois boss mécaniques
 			Tooltip: Désactivé : un seul boss mécanique suffit pour débloquer le tier.
@@ -1252,8 +1267,13 @@ Configs: {
 		}
 
 		PotGuaranteeChance: {
-			Label: Objets garantis dans les pots (%)
-			Tooltip: Chance qu'un pot donne aussi un des objets garantis déjà débloqués.
+			Label: "Objets garantis dans les pots (%)"
+			Tooltip: "Chance qu'un pot donne aussi un des objets garantis déjà débloqués que personne n'a encore trouvé dans ce monde."
+		}
+
+		ScaleGuaranteesWithPlayers: {
+			Label: "Drops garantis partagés entre joueurs"
+			Tooltip: "En multijoueur, la chance d'une station, d'une invocation de boss ou d'une pioche garantie à chaque ennemi tué est divisée par le nombre de joueurs : l'équipe la trouve à peu près aussi vite qu'un joueur seul, sans en obtenir plusieurs exemplaires."
 		}
 
 		ChestStationGuarantee: {

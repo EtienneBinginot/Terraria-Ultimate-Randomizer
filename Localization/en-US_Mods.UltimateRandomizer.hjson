@@ -107,6 +107,9 @@ Tests: {
 	JackpotWorthScales: Weak enemies get a share of the jackpot chances that follows their health (0.1 to 1)
 	SpawnedEnemyNoExtraDrops: Enemies spawned by another enemy give no extra drop, guaranteed drop or jackpot
 	CrittersNoJackpot: Critters never give a jackpot
+	BagNeverJackpot: Opened bags and crates never give a jackpot
+	JackpotCapAndRamp: Jackpots are rarer early, never too far above the limit, never hardmode items before hardmode
+	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled
@@ -147,6 +150,7 @@ Tests: {
 	PacingExpected: 15 to 25 pieces of random equipment per early hour (default settings; the value is written to client.log)
 	PacingSimulation: The pacing simulation is stable and regular
 	PacingVariety: At least 10 different pieces of equipment per early hour
+	JackpotPacing: Few jackpots in an early hour (logged per hour)
 	DropFrequency: Most kills give something (at least 0.6 items per kill; the value is written to client.log)
 	WorkBenchPacing: The first work bench comes after 15 to 30 minutes on average (written to client.log)
 	BasicStationsUnprotected: Basic stations (work bench, furnace, anvil...) are left to the randomizer
@@ -181,6 +185,7 @@ Tests: {
 	CrateAccessWorld: Crates the world cannot give (other evil, pre-hardmode Hallowed crate) are no source
 	HardmodeOresOfWorld: Hardmode pair ores always count as findable and are never new ingredients
 	AltarDecisionKeepsCaches: An altar choosing a hardmode ore changes neither the guaranteed sources nor findability
+	PotOnlyUnfound: Pots only give guaranteed items nobody has found yet
 	IngredientReplacementsFindable: Replaced ingredients are found (not crafted) by the recipe's level
 	RecipesDoable: At least 85% of the randomized recipes can be made at their level
 	AvailabilityConsistent: The planned item availability matches an independent recomputation over the applied recipes
@@ -1161,6 +1166,16 @@ Configs: {
 			Tooltip: How much rarer each tier above the limit is for madness drops: 4 (default) = one tier above is 4 times more frequent than two tiers above. Higher = madness stays closer to the limit.
 		}
 
+		JackpotStartShare: {
+			Label: "Jackpots: share at the start (%)"
+			Tooltip: "Share of both jackpot chances (lucky drops and madness) before the first boss. It rises with each boss defeated, up to the full chances after Plantera. 100 = the full chances from the start."
+		}
+
+		MaxJackpotTiers: {
+			Label: "Jackpots: tiers above the limit at most"
+			Tooltip: "A jackpot (lucky drop or madness) is never more than this many tiers above the progression limit. Before hardmode, a jackpot is never a hardmode item."
+		}
+
 		MechTierRequiresAllThree: {
 			Label: Mechanical tier needs the three mechanical bosses
 			Tooltip: Off: one mechanical boss is enough to unlock the tier.
@@ -1252,8 +1267,13 @@ Configs: {
 		}
 
 		PotGuaranteeChance: {
-			Label: Guaranteed items in pots (%)
-			Tooltip: Chance that a pot also gives one of the guaranteed items already unlocked.
+			Label: "Guaranteed items in pots (%)"
+			Tooltip: "Chance that a pot also gives one of the guaranteed items already unlocked that nobody has found yet in this world."
+		}
+
+		ScaleGuaranteesWithPlayers: {
+			Label: "Guaranteed drops shared between players"
+			Tooltip: "In multiplayer, the chance of a guaranteed station, boss summon or pickaxe on each kill is divided by the number of players: the team finds it about as fast as one player alone, not several copies of it."
 		}
 
 		ChestStationGuarantee: {

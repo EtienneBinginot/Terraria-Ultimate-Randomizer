@@ -4,6 +4,7 @@ using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
 using Terraria.ModLoader;
+using UltimateRandomizer.Common.Codex;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 
@@ -42,7 +43,9 @@ namespace UltimateRandomizer.Common.Features
 				if (SeedSystem.WorldReady && ItemPool.Ready && Main.netMode != NetmodeID.MultiplayerClient
 					&& Main.rand.NextFloat() * 100 < ProgressionConfig.Instance.PotGuaranteeChance)
 				{
-					List<int> items = GuaranteedSources.PotItems(ProgressionSystem.UnlockedTier);
+					// Only what nobody has found yet in this world (the codex of the server, or single player): pots help find
+					// a missing station, they don't hand out copies of the work bench
+					List<int> items = Unfound(GuaranteedSources.PotItems(ProgressionSystem.UnlockedTier), CodexSystem.HasObtained);
 					if (items.Count > 0) Item.NewItem(new EntitySource_TileBreak(i, j), i * 16, j * 16, 16, 16, items[Main.rand.Next(items.Count)]);
 				}
 			}
@@ -51,6 +54,9 @@ namespace UltimateRandomizer.Common.Features
 				potLoot = false;
 			}
 		}
+
+		// The pot items not obtained yet (a new list: the cached one is never modified)
+		public static List<int> Unfound(List<int> items, Func<int, bool> obtained) => items.FindAll(item => !obtained(item));
 
 		public override void OnSpawn(Item item, IEntitySource source)
 		{

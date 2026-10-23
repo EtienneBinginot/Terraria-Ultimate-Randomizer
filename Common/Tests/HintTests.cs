@@ -546,6 +546,8 @@ namespace UltimateRandomizer.Common.Tests
 		private static void HintLockedShown()
 		{
 			if (!HintFacts.Ready) Check.Skip("no world");
+			// Joining a server: the shop answers NotSynced for everything
+			if (!CodexSystem.CanBuyHints) Check.Skip("the codex is not synced yet");
 			List<HintTarget> locked = HintFacts.LockedTargets();
 			if (locked.Count == 0) Check.Skip("nothing is more than one tier ahead");
 			List<string> failures = new();
@@ -567,7 +569,8 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (HintTarget target in locked)
 			{
 				string name = HintFacts.ItemName(target.Item);
-				if (HintShop.Check(target, CodexSystem.HintLevel(target.Item) + 1) == HintPurchase.Bought) failures.Add($"{name}: the shop would sell it");
+				HintPurchase purchase = HintShop.Check(target, CodexSystem.HintLevel(target.Item) + 1);
+				if (purchase != HintPurchase.Locked) failures.Add($"{name}: the shop answers {purchase}, not Locked");
 				CodexEntry entry = CodexEntry.Hint(CodexNames.Item(target.Item), CodexSystem.Data.HintLevel(CodexNames.Item(target.Item)) + 1);
 				if (CodexSystem.AcceptHint(entry, CodexSystem.Data, unlocked)) failures.Add($"{name}: the server would accept it");
 				if (!Language.Exists(CodexText.Prefix + "Hint.Unlock." + (Tier)Tiers.Clamp(target.Tier - 1))) failures.Add($"{name}: no text for when it comes");

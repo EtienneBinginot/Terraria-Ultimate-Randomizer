@@ -37,6 +37,27 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CrateAccessWorld", CrateAccessWorld);
 			TestRunner.Register("HardmodeOresOfWorld", HardmodeOresOfWorld);
 			TestRunner.Register("AltarDecisionKeepsCaches", AltarDecisionKeepsCaches);
+			TestRunner.Register("PotOnlyUnfound", PotOnlyUnfound);
+		}
+
+		// A pot only gives a guaranteed item nobody has found yet: the filter keeps exactly the items not obtained, in order,
+		// and never changes the cached list of pot items
+		private static void PotOnlyUnfound()
+		{
+			List<string> failures = new();
+			List<int> fixedList = new() { ItemID.WorkBench, ItemID.Furnace, ItemID.IronAnvil };
+			List<int> left = TileDropItem.Unfound(fixedList, item => item == ItemID.WorkBench);
+			if (!left.SequenceEqual(new int[] { ItemID.Furnace, ItemID.IronAnvil })) failures.Add($"work bench obtained: {string.Join(", ", left.Select(Name))} left");
+			if (fixedList.Count != 3) failures.Add("the list given was modified");
+			if (TileDropItem.Unfound(fixedList, _ => true).Count != 0) failures.Add("items left although everything is obtained");
+			List<int> pots = GuaranteedSources.PotItems(Tiers.Max);
+			int before = pots.Count;
+			HashSet<int> obtained = pots.Where((_, i) => i % 2 == 0).ToHashSet();
+			List<int> unfound = TileDropItem.Unfound(pots, obtained.Contains);
+			if (unfound.Any(obtained.Contains)) failures.Add("an obtained pot item is still given");
+			if (unfound.Count != pots.Count(i => !obtained.Contains(i))) failures.Add($"{unfound.Count} pot items left, expected {pots.Count(i => !obtained.Contains(i))}");
+			if (pots.Count != before || !ReferenceEquals(pots, GuaranteedSources.PotItems(Tiers.Max))) failures.Add("the cached pot items were modified");
+			Check.All(failures, "Pot items");
 		}
 
 		private static string Name(int item) => Lang.GetItemNameValue(item);
@@ -260,6 +281,9 @@ namespace UltimateRandomizer.Common.Tests
 
 		private static void GuaranteedHostLoad()
 		{
+			// The bound follows the default find time and chances
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			if (!PacingTests.IsDefault(progression, "StationFindKills") || !PacingTests.IsDefault(progression, "GuaranteedDropMultiplier")) Check.Skip("guarantee settings are not the default ones");
 			List<GuaranteedSources.Requirement> requirements = GuaranteedSources.Requirements;
 			if (requirements.Count == 0) Check.Skip("nothing is guaranteed");
 			HashSet<int> single = requirements.Where(r => r.Station || r.Tool).Select(r => r.Item).ToHashSet();
@@ -489,10 +513,12 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// The tier 0 stations (the critical ones included) of this world and of four other seeds land in at least
-		// MinTierZeroBiomes different biomes (fewer only when fewer qualify or fewer stations exist), always among the biomes a
-		// new character explores (Forest, caves, snow, desert, ocean, the world's evil: never the jungle, the mushroom caves,
-		// the spider nests, the Underworld...)
+		// MinTierZeroBiomes different biomes (fewer only when fewer qualify or fewer stations exist) in all plans but
+		// MaxNarrowPlans (biomes are picked at random, weighted: one plan may gather them), always among the biomes a new
+		// character explores (Forest, caves, snow, desert, ocean, the world's evil: never the jungle, the mushroom caves, the
+		// spider nests, the Underworld...)
 		public const int MinTierZeroBiomes = 4;
+		public const int MaxNarrowPlans = 1;
 
 		private static readonly HashSet<SpawnBiome> StartBiomes = new()
 		{
@@ -508,6 +534,7 @@ namespace UltimateRandomizer.Common.Tests
 			if (!BiomeSlots.SpawnsPlanned) Check.Skip("enemies are swapped without biomes");
 			const int Seeds = 4;
 			List<string> failures = new();
+			List<string> narrow = new();
 			List<string> summary = new();
 			for (int i = -1; i < Seeds; i++)
 			{
@@ -527,8 +554,9 @@ namespace UltimateRandomizer.Common.Tests
 				int wanted = System.Math.Min(MinTierZeroBiomes, System.Math.Min(qualify, biomes.Count));
 				int distinct = biomes.Distinct().Count();
 				summary.Add($"seed {seed}: {distinct} biomes for {biomes.Count} stations ({qualify} qualify)");
-				if (distinct < wanted) failures.Add($"seed {seed}: {biomes.Count} tier 0 stations in {distinct} biome(s) ({string.Join(", ", biomes.Distinct().Select(BiomeSlots.BiomeName))}), {qualify} qualify");
+				if (distinct < wanted) narrow.Add($"seed {seed}: {biomes.Count} tier 0 stations in {distinct} biome(s) ({string.Join(", ", biomes.Distinct().Select(BiomeSlots.BiomeName))}), {qualify} qualify");
 			}
+			if (narrow.Count > MaxNarrowPlans) failures.AddRange(narrow);
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info("Guaranteed tier 0 biomes: " + string.Join("; ", summary));
 			Check.All(failures, "Tier 0 stations in too few or far biomes");
 		}

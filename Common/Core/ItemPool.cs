@@ -164,8 +164,26 @@ namespace UltimateRandomizer.Common.Core
 		// The items of a category and tier, in the same order on every machine (do not modify)
 		public static int[] Bucket(ItemCategory category, int tier) => buckets == null ? Array.Empty<int>() : buckets[(int)category][Tiers.Clamp(tier)];
 
-		// Tests only (restored in finally): replaces WildDropChance, to check that plans don't depend on it
+		// Tests only (restored in finally): replaces WildDropChance and its progression share (JackpotShare), to check that
+		// plans don't depend on it and to force madness
 		public static float? WildChanceOverride;
+
+		// The share of both jackpot chances (luck: DropHelper.RollLucky, madness: Roll) at an unlocked tier: JackpotStartShare
+		// before the first boss, rising linearly to all of them at Tier.PostPlantera. Runtime rolls only
+		public static float JackpotShare(int unlockedTier)
+		{
+			float start = Math.Clamp(ProgressionConfig.Instance.JackpotStartShare / 100f, 0f, 1f);
+			const int full = (int)Tier.PostPlantera;
+			return unlockedTier >= full ? 1f : start + (1f - start) * Math.Max(0, unlockedTier) / full;
+		}
+
+		// The highest tier a jackpot may reach with this progression limit: MaxJackpotTiers above it, and never a hardmode
+		// item before hardmode (may be below the limit: then no jackpot at all)
+		public static int JackpotCeiling(int gatingLimit)
+		{
+			int ceiling = Tiers.Clamp(gatingLimit + Math.Max(1, ProgressionConfig.Instance.MaxJackpotTiers));
+			return Main.hardMode ? ceiling : Math.Min(ceiling, (int)Tier.PostSkeletron);
+		}
 
 		// Jackpots: a runtime roll (WildRng set: at kill or bag opening, never in plans) whose item is above the progression
 		// limit, by madness (WildDropChance) or luck (RuntimeJackpotChance, IgnoreGating), and useful (equipment or a
@@ -266,8 +284,9 @@ namespace UltimateRandomizer.Common.Core
 			if (request.Wild && request.WildRng != null && limit < Tiers.Max && category is not (ItemCategory.Bag or ItemCategory.BossSummon))
 			{
 				// Only the runtime rng is used here: without a wild roll, the result is the same as without the flag
-				float wildChance = Math.Min(100f, (WildChanceOverride ?? progression.WildDropChance) * (request.WildChanceMultiplier > 0 ? request.WildChanceMultiplier : 1f));
-				int wildTier = WildTier(limit, wildChance, progression.WildTierDecay, request.WildRng);
+				float baseChance = WildChanceOverride ?? progression.WildDropChance * JackpotShare(ProgressionSystem.UnlockedTier);
+				float wildChance = Math.Min(100f, baseChance * (request.WildChanceMultiplier > 0 ? request.WildChanceMultiplier : 1f));
+				int wildTier = WildTier(limit, wildChance, progression.WildTierDecay, request.WildRng, JackpotCeiling(limit));
 				if (wildTier > limit)
 				{
 					// Only something useful is a jackpot: a wild ore or block is no jackpot, the normal roll stands
@@ -290,7 +309,8 @@ namespace UltimateRandomizer.Common.Core
 					int gatingLimit = GatingLimit(request.MinLimit);
 					if (TierOf(intended) > gatingLimit)
 					{
-						if (IsJackpotWorthy(intended)) LastJackpotGap = TierOf(intended) - gatingLimit;
+						// Too far above the limit (MaxJackpotTiers, the hardmode wall) counts as not useful: rolled within the limit
+						if (IsJackpotWorthy(intended) && TierOf(intended) <= JackpotCeiling(gatingLimit)) LastJackpotGap = TierOf(intended) - gatingLimit;
 						else
 						{
 							RollRequest normal = request;
@@ -316,11 +336,12 @@ namespace UltimateRandomizer.Common.Core
 
 		public static int TierOf(int type) => IsValid(type) ? Info[type].Tier : 0;
 
-		// The wild tier tail: with chance (%), limit + k where P(k) is proportional to decay^-k, up to tier 9 (the
-		// weights are renormalized over the tiers that exist, so each step stays `decay` times rarer). Else the limit.
-		public static int WildTier(int limit, float chance, float decay, Random rng)
+		// The wild tier tail: with chance (%), limit + k where P(k) is proportional to decay^-k, up to maxTier (the
+		// weights are renormalized over the tiers allowed, so each step stays `decay` times rarer). Else the limit.
+		public static int WildTier(int limit, float chance, float decay, Random rng, int maxTier = Tiers.Max)
 		{
-			int steps = Tiers.Max - limit;
+			maxTier = Math.Min(maxTier, Tiers.Max);
+			int steps = maxTier - limit;
 			if (steps <= 0 || chance <= 0 || rng.NextDouble() * 100 >= chance) return Math.Min(limit, Tiers.Max);
 			double ratio = 1.0 / Math.Max(1.01, decay);
 			double total = 0, weight = 1;
@@ -333,7 +354,7 @@ namespace UltimateRandomizer.Common.Core
 				if (roll < weight) return limit + k;
 				roll -= weight;
 			}
-			return Tiers.Max;
+			return maxTier;
 		}
 
 		// Rolls the replacement of an existing item. With surpriseChance (%), the category is not kept: the item is

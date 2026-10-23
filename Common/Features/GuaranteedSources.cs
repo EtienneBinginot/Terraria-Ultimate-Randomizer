@@ -497,7 +497,7 @@ namespace UltimateRandomizer.Common.Features
 					float chance = Math.Min(1f, baseChance * multiplier);
 					if (single) chance = Math.Max(MinStationChance, chance);
 					if (!result.TryGetValue(host, out List<PlannedDrop> drops)) result[host] = drops = new List<PlannedDrop>();
-					drops.Add(new PlannedDrop { Item = requirement.Item, StackMin = min, StackMax = Math.Max(min, max), Chance = chance, Extra = true, Guaranteed = true });
+					drops.Add(new PlannedDrop { Item = requirement.Item, StackMin = min, StackMax = Math.Max(min, max), Chance = chance, Extra = true, Guaranteed = true, Single = single });
 					load.Add(host, single, baseChance);
 				}
 				load.Forced.UnionWith(place.Forced);

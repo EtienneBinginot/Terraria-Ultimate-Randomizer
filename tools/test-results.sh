@@ -8,7 +8,7 @@ LOG="$TML/tModLoader-Logs/client.log"
 echo "Mod version loaded: $(grep -o 'UltimateRandomizer (Ultimate Randomizer) v[0-9.]*' "$LOG" | tail -1)"
 start=$(grep -n "\[UltimateRandomizer\]: Test results:" "$LOG" | tail -1 | cut -d: -f1)
 [ -n "$start" ] || { echo "No test run in this log."; exit 1; }
-grep -n "\[UltimateRandomizer\]: \(Pacing\|Drops\|First work bench\):" "$LOG" | tail -5
+grep -n "\[UltimateRandomizer\]: \(Pacing\|Drops\|Jackpots\|First work bench\):" "$LOG" | tail -6
 sed -n "${start}p" "$LOG"
 sed -n "$((start + 1)),\$p" "$LOG" | awk '/^  \[/{print; next} {exit}' | grep -v "^  \[Passed\]"
 echo "--- errors logged by the mod since the last load:"

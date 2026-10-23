@@ -93,6 +93,8 @@ namespace UltimateRandomizer.Common.Features
 		public bool Extra;
 		// Placed so that an item is findable (basic stations, vanilla ingredients)
 		public bool Guaranteed;
+		// A guaranteed station, summon or tool, dropped one at a time (shared between players at kill time)
+		public bool Single;
 		// Kill time only: a jackpot, this many tiers above the progression limit (JackpotItem)
 		public int JackpotGap;
 	}
@@ -139,9 +141,11 @@ namespace UltimateRandomizer.Common.Features
 			// out, so that how fast they are found does not depend on the player's equipment
 			float bonus = EnemyIndividualNPC.LootBonus(npc);
 			float guaranteedBonus = EnemyIndividualNPC.LootBonus(npc, false);
+			int players = Main.netMode == NetmodeID.Server ? Main.CurrentFrameFlags.ActivePlayersCount : 1;
+			bool shared = ProgressionConfig.Instance.ScaleGuaranteesWithPlayers;
 			foreach (PlannedDrop drop in drops)
 			{
-				if (info.rng.NextFloat() >= Math.Min(1f, drop.Chance * (drop.Guaranteed ? guaranteedBonus : bonus))) continue;
+				if (info.rng.NextFloat() >= KillChance(drop, drop.Guaranteed ? guaranteedBonus : bonus, players, shared)) continue;
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
 				DropMarked(npc, drop.Item, stack, drop.JackpotGap);
 			}
@@ -151,6 +155,23 @@ namespace UltimateRandomizer.Common.Features
 			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
 		}
+
+		// A random extra drop placing a basic station (a table, a chair, a work bench...) comes this much less often than planned:
+		// these are already guaranteed (GuaranteedSources), and a pile of random tables is no reward
+		public const float RandomStationChanceFactor = 0.25f;
+
+		// The chance of a planned drop at this kill. Plans, findability and the journal keep the planned chance: only the roll
+		// changes. Guaranteed single drops (stations, summons, tools) are shared between the players (ScaleGuaranteesWithPlayers)
+		public static float KillChance(PlannedDrop drop, float bonus, int players, bool sharedGuarantees)
+		{
+			float chance = Math.Min(1f, drop.Chance * bonus);
+			if (drop.Guaranteed && drop.Single) chance = GuaranteeChance(chance, players, sharedGuarantees);
+			else if (drop.Extra && !drop.Guaranteed && Stations.IsBasicPlacer(drop.Item)) chance *= RandomStationChanceFactor;
+			return chance;
+		}
+
+		// A guaranteed single drop's chance with this many active players: divided between them when shared
+		public static float GuaranteeChance(float chance, int players, bool shared) => shared && players > 1 ? chance / players : chance;
 
 		// Share of the jackpot chances (RuntimeJackpotChance, WildDropChance) a kill gets: its base life against the median of
 		// the natural enemies of its tier, in [0.1, 1], so that farming a swarm of weak enemies pays no more than ordinary
@@ -173,11 +194,11 @@ namespace UltimateRandomizer.Common.Features
 		public static float WorthOf(float life, float medianLife) =>
 			medianLife <= 0f || life <= 0f ? 1f : Math.Clamp(life / medianLife, MinJackpotWorth, 1f);
 
-		// Giants: one more useful item a tier above their level, five times as likely to be a jackpot. Minis (small, agile and
-		// dangerous): one more item of their level, twice as likely. Never for boss minions and parts (GiantBonusAllowed).
-		// Rolled where the loot drops (server), with the runtime rng
-		public const float GiantWildMultiplier = 5f;
-		public const float MiniWildMultiplier = 2f;
+		// Giants: one more useful item a tier above their level, three times as likely to be a jackpot. Minis (small, agile and
+		// dangerous): one more item of their level, one and a half times as likely (5 and 2 until 1.3.4: too many jackpots).
+		// Never for boss minions and parts (GiantBonusAllowed). Rolled where the loot drops (server), with the runtime rng
+		public const float GiantWildMultiplier = 3f;
+		public const float MiniWildMultiplier = 1.5f;
 
 		// worth: JackpotWorth, multiplies the madness chance on top of the giant or mini multiplier (0: no madness)
 		public static List<(int item, int stack, int gap)> BonusDrops(NPC npc, int netId, int key, bool lucky, float worth = 1f)
