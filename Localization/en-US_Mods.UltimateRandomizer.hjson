@@ -117,6 +117,7 @@ Tests: {
 	ChestTameKeepsOpened: Taming the chests of an ongoing world never touches an opened or jackpot chest
 	JackpotChests: Jackpot chests are chosen the same way every time among eligible chests and hold useful items above their cap
 	PlanDiff: Measures how much of this world's plan (recipes, findability, guaranteed drops, mob drops) the hardmode wall changes, compared with the older rules (logged)
+	TierCoherence: Measures, for the recipe redesign, the materials of each tier, the progression stations, the recipes lacking an ingredient of their result's tier, the raised tiers and the jackpot chest tail (logged)
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops

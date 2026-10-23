@@ -11,6 +11,9 @@ start=$(grep -n "\[UltimateRandomizer\]: Test results:" "$LOG" | tail -1 | cut -
 grep -n "\[UltimateRandomizer\]: \(Pacing\|Drops\|Jackpots\|First work bench\):" "$LOG" | tail -6
 # PlanDiff (legacy vs current planning rules): the summary and its examples of the last run
 grep -n "\[UltimateRandomizer\]: PlanDiff" "$LOG" | tail -13
+# TierCoherence (measurements for the recipe redesign): every line of its last run
+tc=$(grep -n "\[UltimateRandomizer\]: TierCoherence: begin" "$LOG" | tail -1 | cut -d: -f1)
+[ -n "$tc" ] && sed -n "${tc},\$p" "$LOG" | grep "\[UltimateRandomizer\]: TierCoherence:" | sed 's/^.*\]: TierCoherence:/TierCoherence:/'
 sed -n "${start}p" "$LOG"
 sed -n "$((start + 1)),\$p" "$LOG" | awk '/^  \[/{print; next} {exit}' | grep -v "^  \[Passed\]"
 echo "--- errors logged by the mod since the last load:"
