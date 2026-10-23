@@ -90,17 +90,10 @@ namespace UltimateRandomizer.Common.Core
 			ItemID.CultistBossBag
 		};
 
-		// Items of storage mods other than Magic Storage (its own are all banned by mod name): storage units, hearts, cores,
-		// upgrades, access points and remotes, matched by their ModItem name
-		private static readonly string[] StorageItemNames =
-		{
-			"StorageUnit", "StorageHeart", "StorageCore", "StorageUpgrade", "StorageAccess", "StorageConnector", "StorageComponent",
-			"CraftingAccess", "RemoteAccess", "PortableRemote", "PortableAccess"
-		};
-
-		// Never given at random (they stay replaceable when something gives them): tModLoader's own items (start bag...),
-		// Recipe Browser's, every item of a storage mod (Magic Storage and the like: a kit gives them, a random unit or
-		// upgrade breaks storage progression), and unobtainable vanilla items
+		// Never given at random (they stay replaceable when something gives them): the items of pure utility mods (tModLoader's
+		// own start bag..., Recipe Browser's), other mods' creative items (Magic Storage's Creative Storage Unit holds every
+		// item) and unobtainable vanilla items. Storage mods' items are allowed like any other (user decision: a random Storage
+		// Heart, unit or upgrade is fine; the starter kit still gives Magic Storage's). Internal items: IsInternal
 		public static bool IsBanned(Item item)
 		{
 			if (item == null) return false;
@@ -108,11 +101,16 @@ namespace UltimateRandomizer.Common.Core
 			string mod = item.ModItem?.Mod?.Name;
 			if (mod == null) return false;
 			if (mod is "ModLoader" or "RecipeBrowser") return true;
-			// MagicStorage, MagicStorageExtra...
-			if (mod.Contains("Storage")) return true;
-			string name = item.ModItem.Name ?? "";
-			return StorageItemNames.Any(name.Contains);
+			return (item.ModItem.Name ?? "").StartsWith("Creative", System.StringComparison.Ordinal);
 		}
+
+		// Another mod's internal item (displays, placeholders, data holders: Magic Storage's storage cores, its shimmer, error
+		// and config displays): nothing makes, drops, holds or sells it (sourced: the items with a source), and it can't be
+		// researched or its mod adds it by hand (Autoload(false): instances made at load). Banned like IsBanned. Not a critter,
+		// block or ore (caught or found in the world)
+		public static bool IsInternal(Item item, ISet<int> sourced) =>
+			item?.ModItem != null && !sourced.Contains(item.type) && (item.ResearchUnlockCount == 0 || !AutoloadAttribute.GetValue(item.ModItem.GetType()).Value) && item.makeNPC <= 0 && item.createWall <= WallID.None
+			&& !(item.createTile >= TileID.Dirt && (TileID.Sets.Ore[item.createTile] || !Main.tileFrameImportant[item.createTile]));
 
 		public static bool IsExcluded(int type, Item item, HashSet<int> excludedItems, HashSet<string> excludedMods)
 		{
@@ -169,8 +167,8 @@ namespace UltimateRandomizer.Common.Core
 		// ingredients (a recipe group: its earliest item) and stations (a progression station at its tier, a basic one at 0,
 		// any other at the earliest item placing it), repeated until nothing changes (ingredients may be crafted). Rarity
 		// misleads for crafted items: a Yellow Horseshoe Balloon (rarity 4, hardmode) is made from pre-hardmode parts at the
-		// Tinkerer's Workshop. Only lowers; KnownTiers and the config overrides keep theirs; modded recipes are left out (their
-		// mod chose the rarities). Run when recipes are set up (ItemPool.Build in PostSetupRecipes), before RecipeSystem
+		// Tinkerer's Workshop. Only lowers; KnownTiers and the config overrides keep theirs; a modded recipe counts only for a modded item
+		// (IsTierRecipe). Run when recipes are set up (ItemPool.Build in PostSetupRecipes), before RecipeSystem
 		// randomizes them on world load: the live recipes are the vanilla ones then, the same on every machine. Returns how
 		// many items it lowered, and a few of them for the log
 		public static int LowerByRecipes(int[] tiers, Dictionary<int, Tier> overrides, out string examples)
@@ -215,7 +213,7 @@ namespace UltimateRandomizer.Common.Core
 		// Crafted items that no vanilla recipe makes before a tier above theirs (Pearlwood Sword: rarity 0, but Pearlwood is a
 		// hardmode block): their true tier is raised to the earliest of their recipes (the highest tier among its ingredients,
 		// a group by its earliest item, and stations), repeated until nothing changes. Only items nothing drops, holds in a bag
-		// or sells (lootSources), without a modded recipe, and not set by KnownTiers or the config; never lowers. A thematic
+		// or sells (lootSources), without a modded recipe of a vanilla item (IsTierRecipe), and not set by KnownTiers or the config; never lowers. A thematic
 		// station (Solidifier, Living Loom...) raises nothing (RaisingStationTier), and furniture that world generation places
 		// (dungeon and Lihzahrd furniture, Water Candle, books) keeps its tier. trueTiers holds the final tiers (after
 		// LowerByRecipes) and is raised in place. Returns how many items it raised, and examples
@@ -228,7 +226,7 @@ namespace UltimateRandomizer.Common.Core
 				Recipe recipe = Main.recipe[i];
 				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i) || recipe.createItem == null || recipe.createItem.type <= 0) continue;
 				int result = recipe.createItem.type;
-				if (!IsVanillaRecipe(recipe))
+				if (!IsTierRecipe(recipe))
 				{
 					moddedResults.Add(result);
 					continue;
@@ -292,7 +290,7 @@ namespace UltimateRandomizer.Common.Core
 		//   plants, Extractinator outputs) or placed by world generation (dungeon furniture): their own tier, so these are
 		//   never raised.
 		// The true tier is raised to that source tier, never lowered; items without any source, set by KnownTiers or the
-		// config, or with a modded recipe (their mod chose the rarity) keep theirs. Repeated until nothing changes (a bag or
+		// config, or a vanilla item with a modded recipe (IsTierRecipe) keep theirs. Repeated until nothing changes (a bag or
 		// an ingredient raised raises what comes from it). sourceTiers / sources (filled, per item): the earliest source and
 		// its description, -1 / null without one. reliableTiers (filled, per item): the earliest reliable source (ReliableDrop: a
 		// boss drop or boss bag item, a fair enemy drop; a shop entry whose conditions are all known), int.MaxValue without one:
@@ -367,7 +365,8 @@ namespace UltimateRandomizer.Common.Core
 				if (!UnknownArrival.Contains(npc) && conditions.All(shopConditions.ContainsKey)) Reliable(item, tier);
 			}
 
-			// Vanilla recipes (every one of them is a source); a modded recipe makes its result keep its tier
+			// Vanilla recipes and modded ones of modded items (IsTierRecipe: every one of them is a source); another modded recipe
+			// makes its (vanilla) result keep its tier
 			HashSet<int> keep = new(overrides.Keys.Concat(KnownTiers.Keys));
 			List<(int result, List<int[]> parts, List<int> tiles)> recipes = new();
 			for (int i = 0; i < Recipe.numRecipes; i++)
@@ -375,7 +374,7 @@ namespace UltimateRandomizer.Common.Core
 				Recipe recipe = Main.recipe[i];
 				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i) || recipe.createItem == null || recipe.createItem.type <= 0) continue;
 				int result = recipe.createItem.type;
-				if (!IsVanillaRecipe(recipe))
+				if (!IsTierRecipe(recipe))
 				{
 					keep.Add(result);
 					continue;
@@ -447,8 +446,8 @@ namespace UltimateRandomizer.Common.Core
 		};
 
 		// The tier of an NPC as a drop source: a boss (its parts and minions too: the Creeper's Tissue Samples are the Brain's) at
-		// its tier, an enemy that only spawns later at its spawn tier (NpcTiers.SpawnTier), any other enemy at 0 (see
-		// RaiseBySources)
+		// its tier, an enemy that only spawns later at its spawn tier (NpcTiers.SpawnTier), another mod's enemy at its estimated
+		// tier (NpcTiers.ModdedTier: nothing else says when it spawns), any other enemy at 0 (see RaiseBySources)
 		public static int NpcSourceTier(int netId)
 		{
 			int type = BossParts.Leader(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
@@ -456,7 +455,7 @@ namespace UltimateRandomizer.Common.Core
 			if (type == NPCID.DungeonGuardian) return (int)Tier.PostSkeletron;
 			int spawn = NpcTiers.SpawnTier(type);
 			if (spawn >= 0) return spawn;
-			return IsBossSource(type) ? NpcTiers.BaseTier(type) : 0;
+			return IsBossSource(type) || type >= NPCID.Count ? NpcTiers.BaseTier(type) : 0;
 		}
 
 		private static bool IsBossSource(int type) => type == NPCID.DungeonGuardian || NpcTiers.HasBossTier(type) || NpcTiers.IsBoss(type);
@@ -468,12 +467,14 @@ namespace UltimateRandomizer.Common.Core
 
 		// A drop that may lower its item's true tier to its source's: a boss's (parts, minions) or an enemy's of known spawn tier
 		// with a fair chance, never a rare enemy (Nymph, Tim...) nor an unlisted enemy whose stats look like hardmode (its
-		// spawn tier is unknown: it stays a source, not a reliable one)
+		// spawn tier is unknown: it stays a source, not a reliable one), nor another mod's enemy (its tier is a guess; a modded
+		// boss's estimate is trusted)
 		private static bool ReliableDrop(int netId, float chance)
 		{
 			if (!ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample)) return false;
 			int type = BossParts.Leader(sample.type);
 			if (IsBossSource(type)) return chance >= ReliableBossChance;
+			if (type >= NPCID.Count) return false;
 			if (sample.rarity > 0 || NPCID.Sets.CountsAsCritter[sample.type] || sample.friendly) return false;
 			int spawn = NpcTiers.SpawnTier(type);
 			if (spawn >= (int)Tier.Hardmode) return chance >= ReliableLateEnemyChance;
@@ -755,7 +756,7 @@ namespace UltimateRandomizer.Common.Core
 			return floor;
 		}
 
-		// The vanilla recipes that set tiers (SetsTier, as LowerByRecipes), and the results some modded recipe makes
+		// The recipes that set tiers (SetsTier, as LowerByRecipes), and the vanilla results some modded recipe makes
 		private static List<(int result, List<int[]> parts, List<int> tiles)> TierRecipes(int count, out HashSet<int> moddedResults)
 		{
 			moddedResults = new HashSet<int>();
@@ -765,7 +766,7 @@ namespace UltimateRandomizer.Common.Core
 				Recipe recipe = Main.recipe[i];
 				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i) || recipe.createItem == null || recipe.createItem.type <= 0) continue;
 				int result = recipe.createItem.type;
-				if (!IsVanillaRecipe(recipe))
+				if (!IsTierRecipe(recipe))
 				{
 					moddedResults.Add(result);
 					continue;
@@ -783,7 +784,7 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		// Items whose true tier the recipes may raise in SettleByRecipes: no other source (as RaiseByRecipes: no drop, bag nor
-		// shop, nothing the world places or gives, no world chest), no modded recipe
+		// shop, nothing the world places or gives, no world chest), no modded recipe of a vanilla item
 		private static bool RaisableByRecipes(int type, HashSet<int> lootSources, bool[] fromChest, HashSet<int> moddedResults) =>
 			!lootSources.Contains(type) && !fromChest[type] && !moddedResults.Contains(type) && !PlacedByWorldGen(type) && !WorldSourced.Contains(type)
 			&& !Features.Findability.GatheredMaterials.Contains(type);
@@ -913,7 +914,7 @@ namespace UltimateRandomizer.Common.Core
 		// RecipeSystem.OriginalIngredients)
 		public static bool SetsTier(Recipe recipe, IReadOnlyList<int> ingredients)
 		{
-			if (!IsVanillaRecipe(recipe) || recipe.Conditions.Any(c => WorldConditions.Contains(c))) return false;
+			if (!IsTierRecipe(recipe) || recipe.Conditions.Any(c => WorldConditions.Contains(c))) return false;
 			if (ingredients.Count == 1 && ContentSamples.ItemsByType.TryGetValue(ingredients[0], out Item part))
 			{
 				if (part.createWall > 0 || part.createTile >= TileID.Dirt && TileID.Sets.Platforms[part.createTile]) return false;
@@ -925,6 +926,14 @@ namespace UltimateRandomizer.Common.Core
 		// set up, not live: twin copies are switched off while the plan is applied
 		public static bool IsVanillaRecipe(Recipe recipe) => recipe != null && !Features.RecipeSystem.VanillaDisabled(recipe.RecipeIndex) && (recipe.Mod == null || recipe.Mod.Name == "ModLoader")
 			&& recipe.createItem != null && recipe.createItem.type > 0;
+
+		// A recipe whose ingredients and stations set its result's tier: a vanilla one, or another mod's making a modded item (a
+		// mod's items follow their ingredients: Magic Storage's upgrades end up at their bars' tiers). A modded recipe of a
+		// vanilla item is a shortcut the tiers ignore (that item keeps what vanilla gives it). Read at load, whatever
+		// RandomizeModdedRecipes says: the tiers never depend on a world's settings. Best effort: a modded recipe condition
+		// (a modded boss beaten...) is not read
+		public static bool IsTierRecipe(Recipe recipe) => IsVanillaRecipe(recipe)
+			|| recipe != null && !Features.RecipeSystem.VanillaDisabled(recipe.RecipeIndex) && recipe.createItem != null && recipe.createItem.type >= ItemID.Count;
 
 		// The items an ingredient of a recipe accepts: every item of its recipe group, else itself
 		public static IEnumerable<int> IngredientChoices(Recipe recipe, int ingredient) => IngredientChoices(recipe.acceptedGroups, ingredient);
@@ -938,11 +947,11 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		// The tier from which a station is had, for the tiers from recipes: a progression station at its tier, a basic one at
-		// 0, any other at the earliest item placing it (never, without one)
+		// 0, any other (and any modded one: its tier is not known yet) at the earliest item placing it (never, without one)
 		public static int StationTier(int tile, Dictionary<int, List<int>> placers, System.Func<int, int> tierOf)
 		{
 			Stations.StationInfo info = Stations.Info(tile);
-			if (info.Kind == StationKind.Progression) return info.Tier;
+			if (info.Kind == StationKind.Progression && !info.Modded) return info.Tier;
 			if (info.Kind == StationKind.Basic) return 0;
 			return placers.TryGetValue(tile, out List<int> list) && list.Count > 0 ? list.Min(tierOf) : Tiers.Max;
 		}

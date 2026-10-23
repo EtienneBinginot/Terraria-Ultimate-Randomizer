@@ -42,7 +42,7 @@ namespace UltimateRandomizer.Common.Features
 					npcLoot.Add(wrapped);
 					continue;
 				}
-				bool wrap = wrappable && DropPermutation.Permutable(rule, part, npc.type, NPCID.Count);
+				bool wrap = wrappable && DropPermutation.Permutable(rule, part, npc.type);
 				ruleOf.AddRange(Enumerable.Repeat(wrap ? r : -1, part.Count));
 				if (!wrap) continue;
 				// Registered once per net ID: never mutate the rule itself, shared with other net IDs

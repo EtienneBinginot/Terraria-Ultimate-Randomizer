@@ -51,7 +51,8 @@ namespace UltimateRandomizer.Common.Features
 			{
 				// A shell is a new recipe, not a vanilla one (its item no recipe made)
 				if (Main.recipe[i].Disabled || RecipeSystem.IsShell(i)) continue;
-				if (RecipeSystem.IsModded(i))
+				// Other mods' recipes left as they are (RandomizeModdedRecipes off); randomized ones count like the vanilla ones
+				if (RecipeSystem.LeftAlone(i))
 				{
 					share.Modded++;
 					continue;

@@ -113,7 +113,7 @@ Tests: {
 	HardmodeWall: Rien du mode difficile avant celui-ci sauf les jackpots et les planchers des boss, indices cohérents avec la limite
 	RepickOnlyChangesFlagged: Le nouveau tirage ne remplace que les objets bannis ou trop avancés, tous les autres tirages sont inchangés
 	RaisedTiers: Les objets fabriqués avec des matériaux du mode difficile attendent celui-ci, rien n'est abaissé
-	BannedNeverRolled: Les objets créatifs et internes (Magic Storage, tModLoader) ne sont jamais donnés
+	BannedNeverRolled: Les objets créatifs et internes (tModLoader, Recipe Browser, objets créatifs des autres mods) ne sont jamais donnés
 	ChestCap: Le contenu d'un coffre ne dépasse jamais son plafond, ni le mode difficile dans un coffre d'avant celui-ci
 	ChestTameKeepsOpened: L'ajustement des coffres d'un monde en cours ne touche jamais un coffre ouvert ou un coffre jackpot
 	JackpotChests: Les coffres jackpot sont choisis de la même façon à chaque fois parmi les coffres éligibles et contiennent des objets utiles au-dessus de leur plafond
@@ -126,6 +126,10 @@ Tests: {
 	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques
 	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde
 	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant
+	ModdedRecipesRandomized: Avec Magic Storage, ses recettes sont reconstruites avec un ingrédient clé de leur palier, et les paliers de ses améliorations de stockage suivent leurs lingots dans l'ordre
+	ModdedItemsInPool: Les objets de Magic Storage peuvent être donnés au hasard ; ceux des mods utilitaires (tModLoader, Recipe Browser) et les objets créatifs jamais
+	ModdedDropsPermuted: Les butins des ennemis et boss des autres mods sont permutés avec ceux de tout le monde, à leur palier estimé
+	ModdedStationsTiered: Les stations des autres mods prennent le palier de leur objet, ne sont données qu'aux recettes de leur palier, et les thématiques sont garanties quand elles ne sont pas protégées
 	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
@@ -1324,7 +1328,7 @@ Configs: {
 
 		StationProtection: {
 			Label: Protection des stations de craft
-			Tooltip: Aucune : toutes les stations sont randomisées, y compris celles de progression (Forge d'enfer, enclumes et forges hardmode, Atelier de bricolage, Manipulateur antique...) ; des ennemis courants de leur palier lâchent chacune d'elles. Progression seulement : seules les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) sont randomisées ; on les trouve aussi dans les pots et les coffres en bois. Les stations des autres mods restent protégées.
+			Tooltip: Aucune : toutes les stations sont randomisées, y compris celles de progression (Forge d'enfer, enclumes et forges hardmode, Atelier de bricolage, Manipulateur antique...) ; des ennemis courants de leur palier lâchent chacune d'elles. Progression seulement : seules les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) sont randomisées ; on les trouve aussi dans les pots et les coffres en bois. Une station d'un autre mod dont beaucoup de recettes ont besoin reste protégée ; les autres sont traitées comme les stations thématiques (four à verre...).
 		}
 
 		ProtectPickaxeProgression: {
@@ -1981,6 +1985,11 @@ Configs: {
 		RandomizeRecipes: {
 			Label: Randomiser les recettes
 			Tooltip: Reconstruit les recettes selon la graine : chacune garde son objet (quelques-unes l'échangent, voir plus bas) mais reçoit de nouveaux ingrédients et de nouvelles stations, faisables à son niveau. Les recettes redeviennent normales quand tu quittes le monde.
+		}
+
+		RandomizeModdedRecipes: {
+			Label: "Randomiser les recettes des autres mods"
+			Tooltip: "Les recettes ajoutées par d'autres mods (Magic Storage...) sont randomisées comme celles du jeu : nouveaux ingrédients et stations, et parfois un résultat échangé. Chacune garde un ingrédient clé du niveau de son objet : une amélioration de stockage attend toujours ses lingots. Désactivé : elles restent telles que leur mod les a faites."
 		}
 
 		LimitRecipeValue: {

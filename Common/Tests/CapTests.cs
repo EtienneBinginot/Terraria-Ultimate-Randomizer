@@ -340,7 +340,7 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "True tiers");
 		}
 
-		// Magic Storage's items, the inactive vanilla guides and tModLoader's own items are banned, and no roll gives a banned item
+		// The inactive vanilla guides and tModLoader's own items are banned, and no roll gives a banned item
 		private static void BannedNeverRolled()
 		{
 			List<string> failures = new();
@@ -374,16 +374,8 @@ namespace UltimateRandomizer.Common.Tests
 				int repicked = ItemPool.Repick(type, ItemPool.TierOf(type), Tiers.Max, new[] { 6162, type }, 0);
 				if (ItemPool.IsBanned(repicked) && failures.Count < 10) failures.Add($"{Name(type)} re-picked into {Name(repicked)}");
 			}
+			// Magic Storage's own items are allowed now: ModTests.ModdedItemsInPool
 			Check.All(failures, "Banned items");
-			if (!ModLoader.HasMod("MagicStorage")) Check.Skip("Magic Storage is not loaded");
-			foreach (string name in new[] { "CreativeStorageUnit", "StorageDeactivator", "StorageCoreAdamantite", "StorageHeart", "StorageUnit", "UpgradeHallowed" })
-			{
-				if (ModContent.TryFind("MagicStorage", name, out ModItem item) && ItemPool.IsValid(item.Type) && !ItemPool.Info[item.Type].Excluded && !ItemPool.IsBanned(item.Type))
-				{
-					failures.Add($"Magic Storage's {name} is not banned");
-				}
-			}
-			Check.All(failures, "Magic Storage items");
 		}
 
 		// Chest slots (world creation and taming) never go above the chest's cap, nor reach hardmode in a pre-hardmode chest; a

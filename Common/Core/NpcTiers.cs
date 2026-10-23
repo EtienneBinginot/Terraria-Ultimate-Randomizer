@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Terraria;
 using Terraria.DataStructures;
@@ -8,7 +9,8 @@ using UltimateRandomizer.Common.Configs;
 
 namespace UltimateRandomizer.Common.Core
 {
-	// How far in the game an enemy is: bosses from a table, other enemies estimated from their base stats
+	// How far in the game an enemy is: bosses from a table, other enemies estimated from their base stats (other mods' NPCs
+	// against the vanilla ones: ModdedTier)
 	public static class NpcTiers
 	{
 		// A boss by its type (net IDs too): its sample is a boss, or it counts as one (Eater of Worlds segments...)
@@ -137,7 +139,11 @@ namespace UltimateRandomizer.Common.Core
 			{
 				tier = (int)boss;
 			}
-			else if (ContentSamples.NpcsByNetId.TryGetValue(npcType, out NPC sample))
+			else if (ContentSamples.NpcsByNetId.TryGetValue(npcType, out NPC sample) && sample.type >= NPCID.Count)
+			{
+				tier = ModdedTier(npcType);
+			}
+			else if (sample != null)
 			{
 				(int life, int damage) = NormalStats(npcType);
 				tier = Math.Max(LifeTier(life), DamageTier(damage));
@@ -163,6 +169,124 @@ namespace UltimateRandomizer.Common.Core
 			return Tiers.Clamp(tier);
 		}
 
+		// Vanilla bosses a modded boss is compared with: the boss, the parts its fight adds to its life (Skeletron's hands, the
+		// other twin, Prime's limbs, Golem's head and fists, the Moon Lord's head and hands), and the tier it opens. Not the
+		// worms (the Eater of Worlds' segments, the Destroyer's shared 80,000 life would pull a late modded boss down to the
+		// mechanical bosses) nor the event bosses
+		private static readonly (int boss, int[] parts, Tier tier)[] ReferenceBosses =
+		{
+			(NPCID.KingSlime, Array.Empty<int>(), Tier.PostEyeOfCthulhu),
+			(NPCID.EyeofCthulhu, Array.Empty<int>(), Tier.PostEyeOfCthulhu),
+			(NPCID.BrainofCthulhu, Array.Empty<int>(), Tier.PostEvilBoss),
+			(NPCID.QueenBee, Array.Empty<int>(), Tier.PostEvilBoss),
+			(NPCID.Deerclops, Array.Empty<int>(), Tier.PostEvilBoss),
+			(NPCID.SkeletronHead, new int[] { NPCID.SkeletronHand, NPCID.SkeletronHand }, Tier.PostSkeletron),
+			(NPCID.WallofFlesh, Array.Empty<int>(), Tier.Hardmode),
+			(NPCID.QueenSlimeBoss, Array.Empty<int>(), Tier.PostMechBoss),
+			(NPCID.Retinazer, new int[] { NPCID.Spazmatism }, Tier.PostMechBoss),
+			(NPCID.SkeletronPrime, new int[] { NPCID.PrimeCannon, NPCID.PrimeSaw, NPCID.PrimeVice, NPCID.PrimeLaser }, Tier.PostMechBoss),
+			(NPCID.Plantera, Array.Empty<int>(), Tier.PostPlantera),
+			(NPCID.Golem, new int[] { NPCID.GolemHead, NPCID.GolemFistLeft, NPCID.GolemFistRight }, Tier.PostGolem),
+			(NPCID.DukeFishron, Array.Empty<int>(), Tier.PostGolem),
+			(NPCID.HallowBoss, Array.Empty<int>(), Tier.PostGolem),
+			(NPCID.CultistBoss, Array.Empty<int>(), Tier.PostCultist),
+			(NPCID.MoonLordCore, new int[] { NPCID.MoonLordHead, NPCID.MoonLordHand, NPCID.MoonLordHand }, Tier.PostMoonLord)
+		};
+
+		// Reference stats (log of life, damage, defense) of the vanilla bosses, and of the natural enemies of each known spawn
+		// tier (-1: the pre-hardmode enemies of no listed stage), built once
+		private static List<(double life, double damage, double defense, int tier)> bossReferences;
+		private static List<(double life, double damage, int tier)> enemyReferences;
+
+		private static double Log(int value) => Math.Log(Math.Max(1, value));
+
+		// The stats of a boss fight: its life with its parts', its (or its strongest part's) contact damage, its defense
+		private static (int life, int damage, int defense) FightStats(int boss, int[] parts)
+		{
+			(int life, int damage, int defense) = SampleStats(boss);
+			foreach (int part in parts)
+			{
+				(int l, int d, _) = SampleStats(part);
+				life += l;
+				damage = Math.Max(damage, d);
+			}
+			return (life, damage, defense);
+		}
+
+		private static void BuildReferences()
+		{
+			if (bossReferences != null) return;
+			bossReferences = new List<(double, double, double, int)>();
+			foreach ((int boss, int[] parts, Tier tier) in ReferenceBosses)
+			{
+				(int life, int damage, int defense) = FightStats(boss, parts);
+				bossReferences.Add((Log(life), Log(damage), Log(defense + 1), (int)tier));
+			}
+			// Natural vanilla enemies (no boss, part, minion, town NPC, critter or harmless NPC), by the stage they spawn from
+			Dictionary<int, List<(double life, double damage)>> byTier = new();
+			for (int type = 1; type < NPCID.Count; type++)
+			{
+				if (!ContentSamples.NpcsByNetId.TryGetValue(type, out NPC sample) || sample.boss || IsBoss(type) || BossParts.IsPart(type) || BossParts.IsMinion(type)
+					|| sample.townNPC || sample.friendly || NPCID.Sets.CountsAsCritter[type] || NPCID.Sets.ProjectileNPC[type] || sample.lifeMax <= 5 || sample.damage <= 0) continue;
+				(int life, int damage, _) = SampleStats(type);
+				int tier = SpawnTier(type);
+				if (!byTier.TryGetValue(tier, out List<(double, double)> list)) byTier[tier] = list = new List<(double, double)>();
+				list.Add((Log(life), Log(damage)));
+			}
+			enemyReferences = new List<(double, double, int)>();
+			foreach ((int tier, List<(double life, double damage)> list) in byTier.OrderBy(p => p.Key))
+			{
+				// A stage with too few enemies says little (the Old One's Army's first wave)
+				if (list.Count < 5) continue;
+				enemyReferences.Add((Median(list.Select(s => s.life)), Median(list.Select(s => s.damage)), tier));
+			}
+		}
+
+		private static double Median(IEnumerable<double> values)
+		{
+			List<double> sorted = values.OrderBy(v => v).ToList();
+			return sorted.Count == 0 ? 0 : sorted.Count % 2 == 1 ? sorted[sorted.Count / 2] : (sorted[sorted.Count / 2 - 1] + sorted[sorted.Count / 2]) / 2;
+		}
+
+		// An estimate for another mod's NPC (no table knows it, and no generic flag says when it spawns or which boss opens it;
+		// its spawn chance can't be evaluated outside a world): from its normal-mode stats only. A boss: the tier of the vanilla
+		// boss fight whose life (weighted most), damage and defense are closest on a log scale, at least after the Eye. Another
+		// NPC: the stage of the vanilla natural enemies whose median life and damage are closest; when that is the pre-hardmode
+		// group, the life and damage thresholds of the vanilla estimate split it (never above Skeletron's tier)
+		public static int ModdedTier(int netId)
+		{
+			BuildReferences();
+			(int life, int damage, int defense) = SampleStats(netId);
+			double l = Log(life), d = Log(damage), f = Log(defense + 1);
+			if (IsBoss(netId))
+			{
+				int best = (int)Tier.PostEyeOfCthulhu;
+				double bestDistance = double.MaxValue;
+				foreach ((double rl, double rd, double rf, int tier) in bossReferences)
+				{
+					double distance = 2 * (l - rl) * (l - rl) + (damage > 0 && rd > 0 ? (d - rd) * (d - rd) : 0) + 0.5 * (f - rf) * (f - rf);
+					if (distance < bestDistance)
+					{
+						bestDistance = distance;
+						best = tier;
+					}
+				}
+				return Math.Max(best, (int)Tier.PostEyeOfCthulhu);
+			}
+			int stage = -1;
+			double closest = double.MaxValue;
+			foreach ((double rl, double rd, int tier) in enemyReferences)
+			{
+				double distance = (l - rl) * (l - rl) + (damage > 0 ? (d - rd) * (d - rd) : 0);
+				if (distance < closest)
+				{
+					closest = distance;
+					stage = tier;
+				}
+			}
+			return stage >= 0 ? stage : Math.Min(Math.Max(LifeTier(life), DamageTier(damage)), (int)Tier.PostSkeletron);
+		}
+
 		// Set while NormalStats builds its NPC: EnemyStatsNPC leaves the world's multipliers out
 		public static bool Sampling;
 
@@ -174,6 +298,13 @@ namespace UltimateRandomizer.Common.Core
 		// look stronger, which changed the tiers, the enemy swaps and the drops of a world from one session to the next
 		public static (int life, int damage) NormalStats(int netId)
 		{
+			(int life, int damage, _) = SampleStats(netId);
+			return (life, damage);
+		}
+
+		// NormalStats with the defense
+		private static (int life, int damage, int defense) SampleStats(int netId)
+		{
 			bool goodWorld = Main.getGoodWorld, remix = Main.remixWorld, zenith = Main.zenithWorld, tenth = Main.tenthAnniversaryWorld, hardMode = Main.hardMode;
 			object expert = ExpertOverride?.GetValue(null), master = MasterOverride?.GetValue(null);
 			try
@@ -184,7 +315,7 @@ namespace UltimateRandomizer.Common.Core
 				Sampling = true;
 				NPC npc = new();
 				npc.SetDefaults(netId, new NPCSpawnParams { gameModeData = GameModeData.NormalMode, strengthMultiplierOverride = 1f, playerCountForMultiplayerDifficultyOverride = 1 });
-				return (npc.lifeMax, npc.damage);
+				return (npc.lifeMax, npc.damage, npc.defense);
 			}
 			finally
 			{
@@ -225,6 +356,11 @@ namespace UltimateRandomizer.Common.Core
 			_ => 8
 		};
 
-		public static void Unload() => cache.Clear();
+		public static void Unload()
+		{
+			cache.Clear();
+			bossReferences = null;
+			enemyReferences = null;
+		}
 	}
 }

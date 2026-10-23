@@ -230,16 +230,17 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// The vanilla item guaranteed for a progression or themed station tile (one per tile: the Mythril Anvil stands for the
+		// The item guaranteed for a progression or themed station tile (one per tile: the Mythril Anvil stands for the
 		// Orichalcum Anvil), 0 when none is needed: a protected placer keeps its vanilla sources (recipe, shop, drop). Chosen
-		// by a fixed rule (lowest tier, then lowest ID): the recipe plan can't be read here, it depends on these guarantees
+		// by a fixed rule (vanilla first, then lowest tier, then lowest ID: a modded station has modded placers only): the
+		// recipe plan can't be read here, it depends on these guarantees
 		public static int StationItem(int tile)
 		{
 			Stations.StationInfo info = Stations.Info(tile);
 			if (info.World || info.Kind is not (StationKind.Progression or StationKind.Thematic)) return 0;
 			List<int> placers = Stations.Placers(tile);
 			if (placers.Any(p => ItemPool.IsValid(p) && ItemPool.Info[p].Protected)) return 0;
-			return placers.Where(p => p < ItemID.Count && ItemPool.IsRandomizable(p)).OrderBy(ItemPool.TierOf).ThenBy(p => p).FirstOrDefault();
+			return placers.Where(p => ItemPool.IsRandomizable(p) && !ItemPool.IsBanned(p)).OrderBy(p => p < ItemID.Count ? 0 : 1).ThenBy(ItemPool.TierOf).ThenBy(p => p).FirstOrDefault();
 		}
 
 		// Progression stations (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...) at their

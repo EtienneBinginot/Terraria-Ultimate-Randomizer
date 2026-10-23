@@ -142,7 +142,7 @@ namespace UltimateRandomizer.Common.Tests
 		private static string StationName(int tile)
 		{
 			List<int> placers = Stations.Placers(tile);
-			return placers.Count > 0 ? Name(placers.Min()) : TileID.Search.GetName(tile);
+			return placers.Count > 0 ? Name(placers.Min()) : Stations.Name(tile);
 		}
 
 		private static void TierCoherence()

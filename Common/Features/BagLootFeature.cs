@@ -27,9 +27,9 @@ namespace UltimateRandomizer.Common.Features
 			{
 				IItemDropRule rule = rules[r];
 				List<DropRateInfo> part = LootSnapshot.Capture(new List<IItemDropRule> { rule });
-				// Vanilla bags only; a rule holding an item its boss's own rules still drop as vanilla (Deerclops' weapons)
-				// keeps running too, so that normal and expert mode give the same
-				bool wrap = bossBag && DropPermutation.Permutable(rule, part, item.type, ItemID.Count, true) && !part.Any(d => running.Contains(d.itemId));
+				// Boss bags only, vanilla or modded (their vanilla rule types); a rule holding an item its boss's own rules still
+				// drop as vanilla (Deerclops' weapons) keeps running too, so that normal and expert mode give the same
+				bool wrap = bossBag && DropPermutation.Permutable(rule, part, item.type, true) && !part.Any(d => running.Contains(d.itemId));
 				drops.AddRange(part);
 				ruleOf.AddRange(Enumerable.Repeat(wrap ? r : -1, part.Count));
 				if (!wrap) continue;

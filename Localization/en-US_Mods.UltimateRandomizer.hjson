@@ -113,7 +113,7 @@ Tests: {
 	HardmodeWall: Nothing from hardmode before hardmode except jackpots and boss floors, hints consistent with the limit
 	RepickOnlyChangesFlagged: The re-pick only replaces banned or too advanced items, every other roll is unchanged
 	RaisedTiers: Crafted items that need hardmode materials wait for hardmode, nothing is lowered
-	BannedNeverRolled: Creative and internal items (Magic Storage, tModLoader) are never given
+	BannedNeverRolled: Creative and internal items (tModLoader, Recipe Browser, creative items of other mods) are never given
 	ChestCap: Chest content never goes above the chest's cap, nor reaches hardmode in a pre-hardmode chest
 	ChestTameKeepsOpened: Taming the chests of an ongoing world never touches an opened or jackpot chest
 	JackpotChests: Jackpot chests are chosen the same way every time among eligible chests and hold useful items above their cap
@@ -126,6 +126,10 @@ Tests: {
 	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter
 	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world
 	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
+	ModdedRecipesRandomized: With Magic Storage, its recipes are rebuilt with a key of their tier, and its storage upgrades' tiers follow their bars in order
+	ModdedItemsInPool: Magic Storage's items may be given at random; the items of utility mods (tModLoader, Recipe Browser) and creative items never are
+	ModdedDropsPermuted: The drops of other mods' enemies and bosses are permuted with everyone's, at their estimated tier
+	ModdedStationsTiered: Other mods' stations get the tier of their item, are only given to recipes of their tier, and the themed ones are guaranteed when unprotected
 	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
@@ -1324,7 +1328,7 @@ Configs: {
 
 		StationProtection: {
 			Label: Crafting station protection
-			Tooltip: None: every station is randomized, progression ones too (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...); each one is dropped by common enemies of its tier. Progression only: only basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are randomized; they are also found in pots and wooden chests. Stations from other mods stay protected.
+			Tooltip: None: every station is randomized, progression ones too (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...); each one is dropped by common enemies of its tier. Progression only: only basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are randomized; they are also found in pots and wooden chests. A station of another mod that many recipes need stays protected; the others are treated like the themed stations (Glass Kiln, Bone Welder...).
 		}
 
 		ProtectPickaxeProgression: {
@@ -1981,6 +1985,11 @@ Configs: {
 		RandomizeRecipes: {
 			Label: Randomize recipes
 			Tooltip: Rebuilds the recipes from the seed: each one keeps its item (a few swap theirs, see below) but gets new ingredients and stations, doable at its level. Recipes go back to normal when you leave the world.
+		}
+
+		RandomizeModdedRecipes: {
+			Label: "Randomize other mods' recipes"
+			Tooltip: "Recipes added by other mods (Magic Storage...) are randomized like the vanilla ones: new ingredients and stations, and the odd swapped result. Each one keeps a key ingredient of its item's level, so a storage upgrade still waits for its bars. Off: they stay as their mod made them."
 		}
 
 		LimitRecipeValue: {

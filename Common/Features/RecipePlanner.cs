@@ -368,7 +368,7 @@ namespace UltimateRandomizer.Common.Features
 			int[] pairs = Enumerable.Repeat(-1, count).ToArray();
 			VanillaLoops loops = new();
 			IEnumerable<IGrouping<int, int>> byTier = Enumerable.Range(0, count)
-				.Where(i => !RecipeSystem.IsShell(i) && !RecipeSystem.VanillaDisabled(i) && !RecipeSystem.IsModded(i) && ItemPool.IsValid(RecipeSystem.OriginalResult(i)))
+				.Where(i => !RecipeSystem.IsShell(i) && !RecipeSystem.VanillaDisabled(i) && !RecipeSystem.LeftAlone(i) && ItemPool.IsValid(RecipeSystem.OriginalResult(i)))
 				.GroupBy(i => anyTier ? 0 : ItemPool.TierOf(RecipeSystem.OriginalResult(i))).OrderBy(g => g.Key);
 			foreach (IGrouping<int, int> group in byTier)
 			{
@@ -505,7 +505,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (RecipeSystem.OriginalResult(i) != item) continue;
 				if (RecipeSystem.IsShell(i)) shellRecipe = i;
-				else if (!RecipeSystem.VanillaDisabled(i) && !RecipeSystem.IsModded(i)) return i;
+				else if (!RecipeSystem.VanillaDisabled(i) && !RecipeSystem.LeftAlone(i)) return i;
 			}
 			return shellRecipe;
 		}
@@ -977,7 +977,7 @@ namespace UltimateRandomizer.Common.Features
 				mineRequirements = null;
 				for (int r = 0; r < RecipeSystem.RecipeCount; r++)
 				{
-					if (RecipeSystem.IsShell(r) || RecipeSystem.VanillaDisabled(r) || RecipeSystem.IsModded(r)) continue;
+					if (RecipeSystem.IsShell(r) || RecipeSystem.VanillaDisabled(r) || RecipeSystem.LeftAlone(r)) continue;
 					int made = RecipeSystem.OriginalResult(r);
 					if (!vanillaRecipes.TryGetValue(made, out List<int> list)) vanillaRecipes[made] = list = new List<int>();
 					list.Add(r);
@@ -1299,7 +1299,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 			int groupsShared = 0, twins = 0;
 			List<string> examples = new();
-			IEnumerable<List<int>> groupsFound = Enumerable.Range(0, Count).Where(i => !RecipeSystem.IsModded(i) && !RecipeSystem.VanillaDisabled(i) && !result.Twin[i])
+			IEnumerable<List<int>> groupsFound = Enumerable.Range(0, Count).Where(i => !RecipeSystem.IsShell(i) && !RecipeSystem.LeftAlone(i) && !RecipeSystem.VanillaDisabled(i) && !result.Twin[i])
 				.GroupBy(Key).Select(g => g.ToList()).Where(g => g.Count > 1);
 			foreach (List<int> members in groupsFound)
 			{
@@ -1361,7 +1361,8 @@ namespace UltimateRandomizer.Common.Features
 			return info.Kind == StationKind.Progression ? info.Tier : Never;
 		}
 
-		// Stations a recipe may be given: basic and progression ones (not the Demon Altar, not themed or modded ones)
+		// Stations a recipe may be given: basic and progression ones (not the Demon Altar, not themed ones). A modded progression
+		// station (Stations.ModdedInfo) only to recipes of its tier or above, like the vanilla ones (orderTier, RecipeTier)
 		private static bool Assignable(int tile)
 		{
 			StationKind kind = Stations.Info(tile).Kind;
@@ -1382,7 +1383,7 @@ namespace UltimateRandomizer.Common.Features
 			// so no station can end up needing itself
 			// From the original stations: the live ones are already randomized (the plan would depend on the previous one)
 			List<int> order = Stations.RequiredTiles().Where(Assignable)
-				.OrderBy(TileAvail).ThenBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(TileID.Search.GetName(t)))
+				.OrderBy(TileAvail).ThenBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(Stations.Name(t)))
 				.ToList();
 			Dictionary<int, int> position = order.Select((tile, index) => (tile, index)).ToDictionary(x => x.tile, x => x.index);
 			int[] orderAvail = order.Select(TileAvail).ToArray();
@@ -1658,7 +1659,7 @@ namespace UltimateRandomizer.Common.Features
 				SortedSet<int> used = new();
 				for (int i = 0; i < Count; i++)
 				{
-					if (!RecipeSystem.IsModded(i)) used.UnionWith(RecipeSystem.OriginalGroups(i));
+					if (!RecipeSystem.LeftAlone(i)) used.UnionWith(RecipeSystem.OriginalGroups(i));
 				}
 				foreach (int id in used)
 				{
@@ -2089,7 +2090,7 @@ namespace UltimateRandomizer.Common.Features
 			private void PlanShells(List<int> shellList, bool special)
 			{
 				List<int> stations = Stations.RequiredTiles().Where(Assignable)
-					.OrderBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(TileID.Search.GetName(t))).ToList();
+					.OrderBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(Stations.Name(t))).ToList();
 				Dictionary<ItemCategory, (int eligible, int planned)> byCategory = new();
 				int planned = 0, noStation = 0;
 				foreach (int i in shellList.OrderBy(i => targets[i]).ThenBy(i => (uint)DetRandom.ItemKey(results[i])).ThenBy(i => i))
@@ -2738,9 +2739,9 @@ namespace UltimateRandomizer.Common.Features
 				// A crafted pickaxe no earlier than its ResultFloor: a rebuilt recipe keeps its level
 				int best = pickaxes.Where(p => PickPower(p) >= level.pick).Select(p => p < avail.Length ? Math.Min(Found(p), Math.Max(avail[p], ResultFloor(p))) : Never).DefaultIfEmpty(Never).Min();
 				if (best <= oreTier) continue;
-				// The weakest vanilla pickaxe of that level, then the cheapest
-				int chosen = pickaxes.Where(p => p < ItemID.Count && PickPower(p) >= level.pick)
-					.OrderBy(PickPower).ThenBy(StackRules.ValueOf).ThenBy(p => p).DefaultIfEmpty(0).First();
+				// The weakest vanilla pickaxe of that level, then the cheapest (a modded one only when no vanilla one is left)
+				int chosen = pickaxes.Where(p => PickPower(p) >= level.pick && !ItemPool.IsBanned(p))
+					.OrderBy(p => p < ItemID.Count ? 0 : 1).ThenBy(PickPower).ThenBy(StackRules.ValueOf).ThenBy(p => p).DefaultIfEmpty(0).First();
 				if (chosen <= 0) continue;
 				guaranteed[chosen] = oreTier;
 				yield return new GuaranteedSources.Requirement { Item = chosen, Tier = oreTier, Tool = true };

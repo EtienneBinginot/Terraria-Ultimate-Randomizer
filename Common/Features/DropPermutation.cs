@@ -10,7 +10,8 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// DropTableStyle.Permutation: the original drop entries of the ordinary enemies are shuffled between them. Each entry of
+	// DropTableStyle.Permutation: the original drop entries of the ordinary enemies, vanilla and modded (their tier: NpcTiers'
+	// estimate), are shuffled between them. Each entry of
 	// an enemy's flattened drop table (LootSnapshot) is a place; its content (item, stack range, own chance) moves to another
 	// place of the same tier and access class, and takes that place's conditions. Every enemy keeps its number of entries,
 	// and every item of a permuted vanilla entry still drops somewhere. An eligible enemy without any vanilla entry gets one
@@ -82,10 +83,11 @@ namespace UltimateRandomizer.Common.Features
 		// An entry left to its vanilla rule (Seasonal conditions)
 		public static bool KeptVanilla(List<IItemDropRuleCondition> conditions) => Has(conditions, ConditionClass.Seasonal);
 
-		// Load time: a rule whose report is complete (Wrappable), of a vanilla NPC or bag (owner type below the vanilla
-		// count: a modded NPC's rules are left alone), and without any entry kept vanilla. part: the rule's capture
-		public static bool Permutable(IItemDropRule rule, List<DropRateInfo> part, int ownerType, int vanillaCount, bool forBosses = false) =>
-			ownerType > 0 && ownerType < vanillaCount && part.Count > 0 && !part.Any(d => KeptVanilla(d.conditions)) && Wrappable(rule, forBosses: forBosses);
+		// Load time: a rule whose report is complete (Wrappable: only the vanilla rule types, so another mod's own rule classes
+		// keep running as they are), of any NPC or bag, vanilla or modded, and without any entry kept vanilla. part: the rule's
+		// capture
+		public static bool Permutable(IItemDropRule rule, List<DropRateInfo> part, int ownerType, bool forBosses = false) =>
+			ownerType > 0 && part.Count > 0 && !part.Any(d => KeptVanilla(d.conditions)) && Wrappable(rule, forBosses: forBosses);
 
 		// The vanilla rule types whose ReportDroprates lists everything they can drop, with its chance and conditions: only
 		// these are wrapped (and their entries permuted). Exact types: a subclass (modded) may drop differently. Anything else
@@ -225,8 +227,9 @@ namespace UltimateRandomizer.Common.Features
 
 		// Can this net ID's drops be permuted (whatever the style)? Settings play no part, so that a config change does not
 		// move the places of the world: ordinary enemies with drops, or without drops but with a coin value (the synthetic
-		// place). Vanilla NPCs only (modded enemies keep their own rules, no synthetic place). Not critters, harmless or
-		// projectile NPCs, town NPCs, bosses, their parts and minions
+		// place). Vanilla and modded NPCs alike (a modded enemy's vanilla-typed rules are wrapped, its own rule classes keep
+		// running; its tier is NpcTiers' estimate). Not critters, harmless or projectile NPCs, town NPCs, bosses, their parts
+		// and minions
 		public static bool IsPermutable(int netId)
 		{
 			if (eligible.TryGetValue(netId, out bool known)) return known;
@@ -234,7 +237,7 @@ namespace UltimateRandomizer.Common.Features
 			if (ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample))
 			{
 				int type = sample.type;
-				result = type > 0 && type < NPCID.Count && !sample.boss && !BossParts.IsPart(type) && !BossParts.IsMinion(type) && !NpcTiers.IsBoss(type)
+				result = type > 0 && !sample.boss && !BossParts.IsPart(type) && !BossParts.IsMinion(type) && !NpcTiers.IsBoss(type)
 					&& !sample.townNPC && !NPCID.Sets.ActsLikeTownNPC[type] && !NPCID.Sets.IsTownPet[type] && type != NPCID.TorchGod
 					&& !NPCID.Sets.CountsAsCritter[type] && !NPCID.Sets.ProjectileNPC[type] && sample.lifeMax > 5 && !sample.friendly
 					&& (LootSnapshot.ForNpc(netId).Count > 0 || sample.value > 0);
@@ -553,7 +556,8 @@ namespace UltimateRandomizer.Common.Features
 	// otherwise it resolves the original rule as if it were registered (ItemDropResolver.ResolveRule calls CanDrop, then
 	// TryDroppingItem with the resolve action for a nested rule, then the registered rule's chains: none here, the inner
 	// rule's own chains are resolved by the action). Runs where the loot rolls (server, single player).
-	// Only vanilla NPCs and bags are wrapped (DropPermutation.Permutable). Accepted limitation: another mod's ModifyNPCLoot
+	// Only the vanilla rule types are wrapped, of vanilla and modded NPCs and boss bags (DropPermutation.Permutable): another
+	// mod's own rule classes keep running as they are. Accepted limitation: another mod's ModifyNPCLoot
 	// (or ModifyItemLoot) running after ours no longer finds the wrapped vanilla rules (to remove or change them, a "rule is
 	// CommonDrop" check fails), and a vanilla-typed rule another mod added before ours to a vanilla NPC is wrapped like the
 	// vanilla ones; rules of other types are left alone

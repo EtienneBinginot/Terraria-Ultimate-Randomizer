@@ -211,12 +211,16 @@ namespace UltimateRandomizer.Common.Features
 				if (Main.recipe[i]?.createItem != null) made.Add(Main.recipe[i].createItem.type);
 			}
 			HashSet<int> materials = UsedAsIngredient();
+			// Another mod's internal items get no shell (ItemClassifier.IsInternal: what drops or a bag holds has a source; the shops
+			// are only read after the recipes, so a shop-only item without research gets no shell either, which is harmless)
+			HashSet<int> sourced = ItemPool.LootSources();
+			sourced.UnionWith(made);
 			Dictionary<ItemCategory, int> counts = new();
 			for (int type = 1; type < ItemLoader.ItemCount; type++)
 			{
 				if (made.Contains(type) || !ContentSamples.ItemsByType.TryGetValue(type, out Item item) || item.IsAir || item.type != type) continue;
 				if (ItemID.Sets.Deprecated[type] || ItemID.Sets.ItemsThatShouldNotBeInInventory[type] || ItemID.Sets.IsAPickup[type] || ItemID.Sets.CommonCoin[type] || item.questItem) continue;
-				if (ItemClassifier.IsBanned(item)) continue;
+				if (ItemClassifier.IsBanned(item) || ItemClassifier.IsInternal(item, sourced)) continue;
 				ItemCategory category = ItemClassifier.Classify(type, item);
 				if (category == ItemCategory.Misc && materials.Contains(type)) category = ItemCategory.Material;
 				// The life and mana upgrades get theirs whatever their category: it is their recipe (RecipePlanner.SpecialRecipe)
@@ -338,32 +342,40 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// Recipes whose result, ingredients and station may change: vanilla recipes of randomizable items, except the mining chain.
-		// A house recipe (HouseRecipe) is touchable but keeps its result (RecipePlanner)
-		public static bool Touchable(int i) => !modded[i] && !shell[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+		// Recipes whose result, ingredients and station may change: vanilla recipes (and other mods' ones unless LeftAlone) of
+		// randomizable items, except the mining chain. A house recipe (HouseRecipe) is touchable but keeps its result (RecipePlanner)
+		public static bool Touchable(int i) => !LeftAlone(i) && !shell[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
 
 		// What a house needs besides the table and the chair (basic stations, guaranteed in the world): hint targets. Their
 		// recipes keep their result but get random ingredients found at tier 0 and a basic station (RecipePlanner), so a
 		// house can always be built at once
 		public static readonly int[] HouseItems = { ItemID.WoodenDoor, ItemID.WoodPlatform, ItemID.Torch };
 
-		public static bool HouseRecipe(int i) => originalTypes != null && i >= 0 && i < originalTypes.Length && !modded[i] && !shell[i]
+		public static bool HouseRecipe(int i) => originalTypes != null && i >= 0 && i < originalTypes.Length && !LeftAlone(i) && !shell[i]
 			&& Array.IndexOf(HouseItems, originalTypes[i]) >= 0 && ItemPool.IsRandomizable(originalTypes[i]);
 
 		// Recipes whose ingredients may change: protected results (boss summons, progression stations...) keep their result
 		// and stations, but an ingredient that can't be found in time is replaced like in any recipe (protected ingredients
-		// stay); modded recipes and excluded results stay as they are
-		public static bool IngredientsTouchable(int i) => !modded[i] && !shell[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded;
+		// stay); modded recipes left alone (LeftAlone) and excluded results stay as they are
+		public static bool IngredientsTouchable(int i) => !LeftAlone(i) && !shell[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded;
 
+		// A recipe of a mod (this one's shells too; tModLoader's own count as vanilla): the stats and logs tell them apart
 		public static bool IsModded(int i) => modded != null && i >= 0 && i < modded.Length && modded[i];
 
+		// Another mod's recipe that stays exactly as its mod made it (RandomizeModdedRecipes off; never a shell). On, other mods'
+		// recipes are planned like the vanilla ones everywhere (results, swaps, ingredients, groups, stations, twins, house
+		// rules): their items' tiers come from these recipes too (ItemClassifier.IsTierRecipe), so each keeps a key of its
+		// result's tier. Accepted limitation: a mod's own recipe callbacks (OnCraft, consume hooks) still run for its recipe,
+		// whatever it makes now
+		public static bool LeftAlone(int i) => IsModded(i) && !shell[i] && !CraftingConfig.Instance.RandomizeModdedRecipes;
+
 		// A recipe kept only because the mining chain is protected
-		public static bool KeptForMining(int i) => !modded[i] && !shell[i] && ItemPool.IsRandomizable(originalTypes[i]) && KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+		public static bool KeptForMining(int i) => !LeftAlone(i) && !shell[i] && ItemPool.IsRandomizable(originalTypes[i]) && KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
 
 		// The live recipe differs from the vanilla one (result or ingredients): what it makes sells for its ingredients
 		public static bool IsRandomized(int i)
 		{
-			if (!applied || originalTypes == null || i < 0 || i >= originalTypes.Length || i >= Recipe.numRecipes || (modded[i] && !shell[i])) return false;
+			if (!applied || originalTypes == null || i < 0 || i >= originalTypes.Length || i >= Recipe.numRecipes || LeftAlone(i)) return false;
 			Recipe recipe = Main.recipe[i];
 			// A shell switched on is a random recipe of its own
 			if (shell[i]) return !recipe.Disabled;
