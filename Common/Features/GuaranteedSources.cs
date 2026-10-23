@@ -1051,8 +1051,9 @@ namespace UltimateRandomizer.Common.Features
 				foreach (PlannedDrop drop in plan)
 				{
 					if (drop.Chance < minChance || !WorldAllows(drop.Conditions)) continue;
-					// Remix worlds: the pre-hardmode Mimic gives these only in hardmode
-					int from = drop.Conditions != null && drop.Conditions.Any(c => c is Conditions.RemixSeedHardmode) ? Math.Max(sourceTier, (int)Core.Tier.Hardmode) : sourceTier;
+					// The conditions of the place (permuted drops take the receiving enemy's: hardmode, Plantera...)
+					int from = ConditionTier(drop.Conditions, sourceTier);
+					if (from == Never) continue;
 					Add(drop.Item, Math.Max(from, Gated(drop.Item)));
 				}
 			}
@@ -1076,7 +1077,9 @@ namespace UltimateRandomizer.Common.Features
 					foreach (PlannedDrop drop in plan)
 					{
 						if (drop.Chance < minChance || drop.Item <= 0 || drop.Item >= result.Length || !WorldAllows(drop.Conditions)) continue;
-						int dropTier = Math.Max(tier, Gated(drop.Item));
+						int from = ConditionTier(drop.Conditions, tier);
+						if (from == Never) continue;
+						int dropTier = Math.Max(from, Gated(drop.Item));
 						if (dropTier < result[drop.Item])
 						{
 							result[drop.Item] = dropTier;
@@ -1087,6 +1090,30 @@ namespace UltimateRandomizer.Common.Features
 			}
 			baseTiers = result;
 			return result;
+		}
+
+		// The tier from which a drop of a source of this tier can happen, given the progression conditions of the entry
+		// (hardmode, mechanical bosses, Plantera; the remix seed's hardmode drops, such as the pre-hardmode Mimic's). Never:
+		// a pre-hardmode only drop of a hardmode source. Other conditions (events, biomes...) are left to the drop chance; so is
+		// a boss fight condition kept on a permuted place (a genuinely enraged Empress: reachable at the boss's tier). Seasonal
+		// conditions never move (DropPermutation.KeptVanilla), the first-Plantera-kill one is dropped by the boss permutation
+		public static int ConditionTier(List<IItemDropRuleCondition> conditions, int sourceTier)
+		{
+			int tier = sourceTier;
+			if (conditions == null) return tier;
+			foreach (IItemDropRuleCondition condition in conditions)
+			{
+				if (condition is Conditions.IsPreHardmode && sourceTier >= (int)Core.Tier.Hardmode) return Never;
+				Core.Tier? needed = condition switch
+				{
+					Conditions.IsHardmode or Conditions.RemixSeedHardmode => Core.Tier.Hardmode,
+					Conditions.BeatAnyMechBoss or Conditions.DownedAllMechBosses => Core.Tier.PostMechBoss,
+					Conditions.DownedPlantera or Conditions.FirstTimeKillingPlantera => Core.Tier.PostPlantera,
+					_ => null
+				};
+				if (needed != null) tier = Math.Max(tier, (int)needed.Value);
+			}
+			return tier;
 		}
 
 		// Drop conditions fixed by the world (difficulty, world evil, special seeds): an expert-only treasure bag is no source

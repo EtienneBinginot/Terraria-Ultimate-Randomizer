@@ -19,6 +19,8 @@ namespace UltimateRandomizer.Common.Features
 			{
 				case EntitySource_Loot loot when loot.Context != DropHelper.ExtraDropContext && loot.Entity is NPC npc:
 					if (!cfg.RandomizeMobDrops || !IsDeathLoot(npc, item.type)) return;
+					// Permutation: the rules still dropping on their own (per-player drops, kept items) stay as they are
+					if (DropPermutation.Active(npc.netID) || BossPermutation.Active(npc.netID)) return;
 					int owner = BossParts.Owner(npc.type);
 					bool isBoss = NpcTiers.IsBoss(owner);
 					System.Random dropRng = new(Main.rand.Next());
@@ -35,7 +37,8 @@ namespace UltimateRandomizer.Common.Features
 					}
 					break;
 
-				case EntitySource_ItemOpen open when IsBag(open.ItemType) && BagEnabled(open.ItemType, cfg):
+				// Permuted boss bags: BossBagRule rolls their plan, the rules left running give their items as they are
+				case EntitySource_ItemOpen open when IsBag(open.ItemType) && BagEnabled(open.ItemType, cfg) && !BossPermutation.BagActive(open.ItemType):
 					int bagReplacement = BagReplacement(open.ItemType, item.type, new System.Random(Main.rand.Next()));
 					if (bagReplacement <= ItemID.None) Vanish(item);
 					else DropHelper.ChangeSpawnedItem(item, bagReplacement, StackRules.Scaled(item.type, item.stack, bagReplacement));

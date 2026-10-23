@@ -20,13 +20,28 @@ namespace UltimateRandomizer.Common.Tests
 	// The spawn map of the world decides which enemies the early kills meet, and how many slots they drop: with the same
 	// settings, 1.3.2 measured 47.1 (seed 524614759) and 63.8 (seed 705676219, which gave 64.8 in 1.3.1 before the jackpots
 	// went back to 2 % / 5 % and the tiers from recipes): a spread of the seeds, not a regression. The bound allows it; the
-	// log gives the sources of each hour to tell a real change apart
+	// log gives the sources of each hour to tell a real change apart.
+	// 1.5.0: the model no longer counts the entries an early hour can't drop (hardmode, another difficulty: PacingModel's
+	// condition filter), which lowers the vanilla-like hour too. These bounds predate it: re-read the "Pacing:" and "Drops:"
+	// values of the next in-game run and re-derive them from the log, don't move them blindly
 	public static class PacingTests
 	{
 		public const double MinGearPerHour = 34;
 		public const double MaxGearPerHour = 68;
 		// Half the expected 3.2 items per kill
 		public const double MinItemsPerKill = 1.6;
+		public const double MinDistinctPerHour = 10;
+
+		// Permutation style (1.5.0 defaults: 2 extra slots at vanilla-like rates without materials, 10 % surprises), estimated
+		// from the model's parts before the first in-game run: about 11 pieces per hour from chests and the surprises of pots,
+		// trees, herbs and chests, 6 to 8 from the extra slots (150 kills x 2 slots x about 2 % of equipment), 1 to 2 from the
+		// moved original drops and their surprises, about 1 guaranteed: about 20 pieces per hour (the vanilla-like style, about
+		// 46, has 3 to 7 extra slots scaled by abundance). Items per kill: about 0.4 from the moved original drops (2 entries
+		// per early kill) and 0.2 from the extra slots, about 0.6. The bounds are wide until the logged values are known
+		public const double MinPermutationGearPerHour = 12;
+		public const double MaxPermutationGearPerHour = 40;
+		public const double MinPermutationItemsPerKill = 0.3;
+		public const double MinPermutationDistinctPerHour = 6;
 
 		public static void Register()
 		{
@@ -57,16 +72,20 @@ namespace UltimateRandomizer.Common.Tests
 			return Equals(expected, info.GetValue(config));
 		}
 
-		private static void RequireDefaults()
+		// anyStyle: the test simulates both drop styles itself (PacingModel.Simulate with an explicit style)
+		private static void RequireDefaults(bool anyStyle = false)
 		{
 			LootConfig loot = LootConfig.Instance;
 			EnemiesConfig enemies = EnemiesConfig.Instance;
-			string[] lootFields = { "SurpriseChance", "DropRateMultiplier", "LootAbundance", "DropSlotsMin", "DropSlotsMax", "DropTableStyle", "RandomizeMobDrops", "RandomizePotDrops", "RandomizeChests", "TierWindow" };
+			string[] lootFields = { "SurpriseChance", "DropRateMultiplier", "LootAbundance", "DropSlotsMin", "DropSlotsMax", "RandomizeMobDrops", "RandomizePotDrops", "RandomizeChests", "TierWindow",
+				"PermutationExtraSlots", "PermutationSurpriseChance" };
 			foreach (string field in lootFields)
 			{
 				if (!IsDefault(loot, field)) Check.Skip($"{field} is not at its default value");
 			}
+			if (!anyStyle && !IsDefault(loot, "DropTableStyle")) Check.Skip("DropTableStyle is not at its default value");
 			if (!loot.DropCategoryWeights.Equals(new CategoryWeights())) Check.Skip("the loot weights are not the default ones");
+			if (!loot.PermutationExtraWeights.Equals(new PermutationExtraWeights())) Check.Skip("the permutation extra drop weights are not the default ones");
 			if (!IsDefault(enemies, "EnemySwapChance") || !IsDefault(enemies, "EnemySwapMode") || !IsDefault(enemies, "BiomeVanillaChance") || !IsDefault(enemies, "BiomeExtraEnemies")
 				|| !IsDefault(GeneralConfig.Instance, "RandomizerMode"))
 			{
@@ -74,15 +93,32 @@ namespace UltimateRandomizer.Common.Tests
 			}
 		}
 
+		// Both drop styles, whatever the configured one: each has its own targets. Only the drop plans follow the style: the
+		// guaranteed sources (GuaranteedSources, cached per world) are the configured style's for both, close enough for an
+		// estimate (they are placed on the same common enemies, pots and chests in both styles)
+		private static (PacingResult vanilla, PacingResult permutation) SimulateBoth(int hours, int seed) =>
+			(PacingModel.Simulate(hours, seed, DropTableStyle.VanillaLike), PacingModel.Simulate(hours, seed, DropTableStyle.Permutation));
+
 		private static void PacingExpected()
 		{
-			PacingResult result = PacingModel.Simulate(10, 42);
-			Log($"Pacing: {result.GearPerHour:0.0} pieces of equipment per hour (deviation {result.StandardDeviation:0.0}), {result.DistinctPerHour:0.0} different; "
-				+ $"from replaced drops {result.FromOriginal:0.0}, extra drops {result.FromExtra:0.0}, guaranteed {result.FromGuaranteed:0.0}, surprises {result.FromSurprise:0.0}, "
-				+ $"chests {result.FromChests:0.0}; by tier {string.Join(" / ", result.ByTier.Select(t => t.ToString("0.0")))}");
-			RequireDefaults();
-			Check.That(result.GearPerHour >= MinGearPerHour && result.GearPerHour <= MaxGearPerHour,
-				$"{result.GearPerHour:0.0} pieces of equipment per hour, expected {MinGearPerHour} to {MaxGearPerHour} (about 46 with LootAbundance 3)");
+			(PacingResult vanilla, PacingResult permutation) = SimulateBoth(10, 42);
+			foreach ((string style, PacingResult result) in new[] { ("vanilla-like", vanilla), ("permutation", permutation) })
+			{
+				Log($"Pacing: {style} {result.GearPerHour:0.0} pieces of equipment per hour (deviation {result.StandardDeviation:0.0}), {result.DistinctPerHour:0.0} different; "
+					+ $"from original drops {result.FromOriginal:0.0}, extra drops {result.FromExtra:0.0}, guaranteed {result.FromGuaranteed:0.0}, surprises {result.FromSurprise:0.0}, "
+					+ $"chests {result.FromChests:0.0}; by tier {string.Join(" / ", result.ByTier.Select(t => t.ToString("0.0")))}");
+			}
+			RequireDefaults(anyStyle: true);
+			List<string> failures = new();
+			if (vanilla.GearPerHour < MinGearPerHour || vanilla.GearPerHour > MaxGearPerHour)
+			{
+				failures.Add($"vanilla-like: {vanilla.GearPerHour:0.0} pieces of equipment per hour, expected {MinGearPerHour} to {MaxGearPerHour} (about 46 with LootAbundance 3)");
+			}
+			if (permutation.GearPerHour < MinPermutationGearPerHour || permutation.GearPerHour > MaxPermutationGearPerHour)
+			{
+				failures.Add($"permutation: {permutation.GearPerHour:0.0} pieces of equipment per hour, expected {MinPermutationGearPerHour} to {MaxPermutationGearPerHour} (about 20)");
+			}
+			Check.All(failures, "Equipment per early hour");
 		}
 
 		private static void PacingSimulation()
@@ -97,11 +133,14 @@ namespace UltimateRandomizer.Common.Tests
 		// Most kills give something (with the default settings)
 		private static void DropFrequency()
 		{
-			PacingResult result = PacingModel.Simulate(5, 44);
-			Log($"Drops: {result.ItemsPerKill:0.00} items per kill");
-			RequireDefaults();
+			(PacingResult vanilla, PacingResult permutation) = SimulateBoth(5, 44);
+			Log($"Drops: {vanilla.ItemsPerKill:0.00} items per kill vanilla-like, {permutation.ItemsPerKill:0.00} permutation");
+			RequireDefaults(anyStyle: true);
 			if (!IsDefault(LootConfig.Instance, "CommonDropChance")) Check.Skip("CommonDropChance is not at its default value");
-			Check.That(result.ItemsPerKill >= MinItemsPerKill, $"only {result.ItemsPerKill:0.00} items per kill, expected at least {MinItemsPerKill} (about 3.2 with LootAbundance 3)");
+			List<string> failures = new();
+			if (vanilla.ItemsPerKill < MinItemsPerKill) failures.Add($"vanilla-like: only {vanilla.ItemsPerKill:0.00} items per kill, expected at least {MinItemsPerKill} (about 3.2 with LootAbundance 3)");
+			if (permutation.ItemsPerKill < MinPermutationItemsPerKill) failures.Add($"permutation: only {permutation.ItemsPerKill:0.00} items per kill, expected at least {MinPermutationItemsPerKill} (about 0.6)");
+			Check.All(failures, "Items per kill");
 		}
 
 		// The first work bench is a small quest: 15 to 30 minutes on average (guaranteed drops: LootAbundance does not change it)
@@ -143,9 +182,12 @@ namespace UltimateRandomizer.Common.Tests
 
 		private static void PacingVariety()
 		{
-			RequireDefaults();
-			PacingResult result = PacingModel.Simulate(10, 43);
-			Check.That(result.DistinctPerHour >= 10, $"only {result.DistinctPerHour:0.0} different pieces of equipment per hour");
+			RequireDefaults(anyStyle: true);
+			(PacingResult vanilla, PacingResult permutation) = SimulateBoth(10, 43);
+			List<string> failures = new();
+			if (vanilla.DistinctPerHour < MinDistinctPerHour) failures.Add($"vanilla-like: only {vanilla.DistinctPerHour:0.0} different pieces of equipment per hour, expected at least {MinDistinctPerHour}");
+			if (permutation.DistinctPerHour < MinPermutationDistinctPerHour) failures.Add($"permutation: only {permutation.DistinctPerHour:0.0} different pieces of equipment per hour, expected at least {MinPermutationDistinctPerHour}");
+			Check.All(failures, "Equipment variety");
 		}
 	}
 }

@@ -51,6 +51,12 @@ namespace UltimateRandomizer.Common.Core
 		public const int Special = 39;
 		// The recipe given to an item no recipe makes (RecipePlanner, shell recipes), keyed by that item
 		public const int Uncraftable = 40;
+		// The permutation of the enemies' original drops (DropPermutation), keyed by group
+		public const int DropPermutation = 41;
+		// The surprises of the drop permutation (DropPermutation.Surprises), keyed by place
+		public const int DropSurprise = 42;
+		// The permutation of the bosses' original drops and bag contents (BossPermutation), keyed by place
+		public const int BossPermutation = 43;
 		public const int Fallback = 0xFA11;
 	}
 

@@ -31,6 +31,33 @@ namespace UltimateRandomizer.Common.Configs
 		[Range(0, 100)] [DefaultValue(1)] public int Misc = 1;
 	}
 
+	// Weights of the random extra drops of the permutation style: the loot weights without materials, ores and bars (the
+	// shuffled original drops already bring plenty of them)
+	public class PermutationExtraWeights : WeightTable
+	{
+		[Range(0, 100)] [DefaultValue(0)] public int Material = 0;
+		[Range(0, 100)] [DefaultValue(0)] public int OreBar = 0;
+		[Range(0, 100)] [DefaultValue(8)] public int Potion = 8;
+		[Range(0, 100)] [DefaultValue(2)] public int Food = 2;
+		[Range(0, 100)] [DefaultValue(3)] public int Ammo = 3;
+		[Range(0, 100)] [DefaultValue(10)] public int WeaponMelee = 10;
+		[Range(0, 100)] [DefaultValue(10)] public int WeaponRanged = 10;
+		[Range(0, 100)] [DefaultValue(10)] public int WeaponMagic = 10;
+		[Range(0, 100)] [DefaultValue(8)] public int WeaponSummon = 8;
+		[Range(0, 100)] [DefaultValue(3)] public int WeaponOther = 3;
+		[Range(0, 100)] [DefaultValue(10)] public int Armor = 10;
+		[Range(0, 100)] [DefaultValue(14)] public int Accessory = 14;
+		[Range(0, 100)] [DefaultValue(6)] public int Tool = 6;
+		[Range(0, 100)] [DefaultValue(1)] public int Block = 1;
+		[Range(0, 100)] [DefaultValue(3)] public int Furniture = 3;
+		[Range(0, 100)] [DefaultValue(4)] public int MountPet = 4;
+		[Range(0, 100)] [DefaultValue(3)] public int Vanity = 3;
+		[Range(0, 100)] [DefaultValue(1)] public int Dye = 1;
+		[Range(0, 100)] [DefaultValue(1)] public int Critter = 1;
+		[Range(0, 100)] [DefaultValue(2)] public int Bag = 2;
+		[Range(0, 100)] [DefaultValue(1)] public int Misc = 1;
+	}
+
 	public enum DropTableStyle
 	{
 		// Random number of drops per enemy (usually few, sometimes many) with vanilla-like rates (1/1, 1/3, 1/10, 1/50...)
@@ -38,7 +65,11 @@ namespace UltimateRandomizer.Common.Configs
 		// Same number of drops and same rates as the original enemy, each item replaced by one of the same category
 		MirrorOriginal,
 		// Fixed chance for every slot
-		Simple
+		Simple,
+		// The original drops of the enemies are shuffled between enemies of the same tier (each keeps its own chance and
+		// stack, the conditions are the receiving enemy's), a few of them turned into surprises (PermutationSurpriseChance),
+		// plus random extra drops at vanilla-like rates (PermutationExtraSlots)
+		Permutation
 	}
 
 	public class LootConfig : RandomizerConfig
@@ -64,9 +95,25 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool RandomizeMobDrops;
 
-		[DefaultValue(DropTableStyle.VanillaLike)]
+		[DefaultValue(DropTableStyle.Permutation)]
 		[DrawTicks]
 		public DropTableStyle DropTableStyle;
+
+		// Permutation style: random extra drops of each enemy, at vanilla-like rates (DropRates x DropRateMultiplier, not
+		// scaled by loot abundance), rolled with PermutationExtraWeights
+		[Range(0, 3)]
+		[DefaultValue(2)]
+		public int PermutationExtraSlots;
+
+		public PermutationExtraWeights PermutationExtraWeights = new();
+
+		// Permutation style: share (%) of the shuffled drops (not materials, ores or bars) that become a random item of the
+		// enemy's level, keeping the conditions of the entry and its chance (capped by a vanilla-like rate for the new item);
+		// never the keeper copy every item but blocks, critters and ores keeps (DropPermutation.SurpriseCandidates)
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(10f)]
+		public float PermutationSurpriseChance;
 
 		[DefaultValue(true)]
 		public bool EnemiesWithoutDropsCanDrop;

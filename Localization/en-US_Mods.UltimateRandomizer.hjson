@@ -125,6 +125,21 @@ Tests: {
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
 	LockedVanillaDropRemoved: A replaced original drop still locked by progression does not drop; an unlocked one drops as planned
+	DropPermutationConserves: The drop permutation loses and duplicates nothing: every permuted vanilla drop is still dropped by some enemy
+	DropPermutationMoves: Permuted drops stay within their tier group and most of them move to another enemy
+	DropPermutationAccess: Expert-only, master-only and special-seed drops only move to places with the same restrictions
+	DropPermutationRuntime: Each enemy's drop rules really follow the permutation: silenced vanilla drops are rolled somewhere, nothing drops twice, variants keep their own drops, enemies without drops get one
+	DropPermutationStable: Removing one drop entry from the permutation only changes the content of very few other entries
+	DropPermutationSurprise: Permutation surprises replace about the set share of the shuffled drops, never a material nor the copy every item but blocks, critters and ores keeps
+	BossPermutationConserves: The boss permutation loses and duplicates nothing: every shuffled boss drop and treasure bag content is still in some boss or bag
+	BossBagMatchesBoss: Each treasure bag holds the shuffled normal-mode drops of its boss, with their chance and stack in the bag they come from
+	BossPermutationTiers: Boss drops only move between bosses of the same group of tiers, with the same restrictions
+	WorldDropsReported: With the permutation, the bestiary and the drop reports show the world's drops: the plan of an enemy, not its silenced vanilla rules
+	BossRuntime: The bosses' and bags' drop rules really follow the permutation: silenced drops are rolled somewhere, nothing drops twice
+	PermutationConservation: Every vanilla drop entry of the enemies, bosses and boss bags is somewhere exactly once, at its place or moved
+	PermutedConditions: Moved drops only carry conditions they can meet: no seasonal or first-kill condition, item conditions stay with their item
+	EaterOfWorldsParts: The Eater of Worlds' body and tail segments drop from the head's table, with the boss floor
+	BossGroupsMerge: Small consecutive boss tiers group together first, and the Moon Lord's loot stays with the late bosses
 	CodexShowsLocked: Codex interface: locked drops are greyed with the boss that unlocks them, with no chance
 	ProtectedDropsKept: Progression drops are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
@@ -1125,6 +1140,11 @@ Configs: {
 			Label: Simple
 			Tooltip: ""
 		}
+
+		Permutation: {
+			Label: "Permutation"
+			Tooltip: ""
+		}
 	}
 
 	GeneralConfig: {
@@ -1368,13 +1388,28 @@ Configs: {
 		}
 
 		RandomizeMobDrops: {
-			Label: Randomize enemy and boss drops
-			Tooltip: Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions. Progression items, coins and treasure bags are kept.
+			Label: "Randomize enemy and boss drops"
+			Tooltip: "Each item an enemy drops is replaced by an item of the same category, with the original chance and conditions (or, in the permutation style, moved to another enemy of the same level). Progression items, coins and treasure bags are kept."
 		}
 
 		DropTableStyle: {
-			Label: Extra drops
-			Tooltip: On top of the replaced original drops. Vanilla-like: each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced).
+			Label: "Enemy drop style"
+			Tooltip: "Permutation (default): the original drops of the enemies are shuffled between enemies of the same level; each item keeps its own chance and stack, and takes the conditions of the enemy receiving it. A few of them become surprises (see below). Enemies without any drop get one random drop of their level, shuffled with the others. Every enemy also gets a few random extra drops with vanilla-like rates (see below). Vanilla-like: the original drops are replaced, and each enemy type gets a random number of extra drops (usually few, sometimes many) with vanilla-like rates (1/1 for materials, 1/50 for equipment...). Simple: replaced drops, and every extra slot has the fixed chance below. Mirror of the original: no extra drops, only the original drops (replaced). Bosses of the same level also shuffle their drops between them (treasure bags follow their boss), with the same few extra drops, the first one always dropped."
+		}
+
+		PermutationExtraSlots: {
+			Label: "Extra drops per enemy (permutation)"
+			Tooltip: "Permutation style only: number of random extra drops every enemy gets on top of its shuffled original drops, with vanilla-like rates (1/1 to 1/10 for potions and ammo, 1/15 to 1/150 for equipment...) multiplied by the drop rate multiplier, and higher while some of the enemy's drops are still locked by progression. Loot abundance does not change them. 0 = none."
+		}
+
+		PermutationExtraWeights: {
+			Label: "Extra drop weights (permutation)"
+			Tooltip: "Permutation style only: relative chance of each kind of item for the random extra drops. 0 = never. By default no materials, ores or bars: the shuffled original drops already give plenty."
+		}
+
+		PermutationSurpriseChance: {
+			Label: "Surprise drops (permutation, %)"
+			Tooltip: "Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays."
 		}
 
 		EnemiesWithoutDropsCanDrop: {
@@ -1439,7 +1474,7 @@ Configs: {
 
 		RandomizeBossBags: {
 			Label: Randomize treasure bags
-			Tooltip: Each item in the bag is replaced by an item of the same category and tier.
+			Tooltip: Each item in the bag is replaced by an item of the same category and tier. With the permutation drop style, a boss bag holds the shuffled drops of its boss instead (and its extra drops).
 		}
 
 		RandomizeCrates: {
@@ -1534,6 +1569,115 @@ Configs: {
 	}
 
 	CategoryWeights: {
+		Tooltip: ""
+
+		Material: {
+			Label: Materials
+			Tooltip: ""
+		}
+
+		OreBar: {
+			Label: Ores and bars
+			Tooltip: ""
+		}
+
+		Potion: {
+			Label: Potions
+			Tooltip: ""
+		}
+
+		Food: {
+			Label: Food
+			Tooltip: ""
+		}
+
+		Ammo: {
+			Label: Ammo
+			Tooltip: ""
+		}
+
+		WeaponMelee: {
+			Label: Melee weapons
+			Tooltip: ""
+		}
+
+		WeaponRanged: {
+			Label: Ranged weapons
+			Tooltip: ""
+		}
+
+		WeaponMagic: {
+			Label: Magic weapons
+			Tooltip: ""
+		}
+
+		WeaponSummon: {
+			Label: Summon weapons
+			Tooltip: ""
+		}
+
+		WeaponOther: {
+			Label: Other weapons
+			Tooltip: ""
+		}
+
+		Armor: {
+			Label: Armor
+			Tooltip: ""
+		}
+
+		Accessory: {
+			Label: Accessories
+			Tooltip: ""
+		}
+
+		Tool: {
+			Label: Tools
+			Tooltip: ""
+		}
+
+		Block: {
+			Label: Blocks and walls
+			Tooltip: ""
+		}
+
+		Furniture: {
+			Label: Furniture
+			Tooltip: ""
+		}
+
+		MountPet: {
+			Label: Mounts and pets
+			Tooltip: ""
+		}
+
+		Vanity: {
+			Label: Vanity
+			Tooltip: ""
+		}
+
+		Dye: {
+			Label: Dyes
+			Tooltip: ""
+		}
+
+		Critter: {
+			Label: Critters
+			Tooltip: ""
+		}
+
+		Bag: {
+			Label: Bags and crates
+			Tooltip: ""
+		}
+
+		Misc: {
+			Label: Miscellaneous
+			Tooltip: ""
+		}
+	}
+
+	PermutationExtraWeights: {
 		Tooltip: ""
 
 		Material: {
@@ -2203,6 +2347,7 @@ Configs: {
 		Headers: {
 			Debug: Debug tools
 			Messages: Messages
+			Display: "Display"
 		}
 
 		DebugTools: {
@@ -2213,6 +2358,11 @@ Configs: {
 		AdaptiveMessages: {
 			Label: Adaptive power messages
 			Tooltip: Tells you in the chat when your equipment makes enemies stronger, or when the world caught up with it.
+		}
+
+		ShowWorldDrops: {
+			Label: "Show this world's drops"
+			Tooltip: "With the Permutation enemy drop style: the bestiary and Recipe Browser show what enemies, bosses and treasure bags drop in this world (shuffled drops, extra and guaranteed drops) instead of the vanilla drops. Off: they show the vanilla drops."
 		}
 	}
 
