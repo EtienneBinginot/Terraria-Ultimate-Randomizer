@@ -242,6 +242,8 @@ Tests: {
 	UncraftableRecipesValid: Les objets qu'aucune recette ne fabrique reçoivent une recette active, faisable à partir de leur palier et jamais avant, qui ne se décompose jamais au miroitement ; journalise des exemples
 	UncraftableRecipesOff: Réglage désactivé (planificateur appelé avec des paramètres explicites) : aucune recette coquille n'est planifiée et les autres recettes sont planifiées à l'identique
 	UncraftableNoSpecials: Les recettes coquilles ne donnent jamais d'amélioration de vie ou de mana, gardent leur objet et ne sont jamais désactivées comme copies
+	UncraftablePricedByIngredients: Les recettes coquilles actives comptent comme randomisées : ce qu'elles fabriquent se vend au prix de ses ingrédients, pas à son prix d'origine
+	RecipePickaxeMineable: Aucune recette reconstruite de pioche ou de foreuse ne reçoit un nouvel ingrédient dont le minage exige une puissance de pioche au moins égale à la sienne
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares

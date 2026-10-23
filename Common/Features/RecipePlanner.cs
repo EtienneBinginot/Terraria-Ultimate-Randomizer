@@ -165,14 +165,20 @@ namespace UltimateRandomizer.Common.Features
 			int count = Count;
 			recipeTiers = new int[count];
 			Array.Fill(recipeTiers, Never);
+			// The recipes that count, listed once (the shells left off are not looked at in every pass): a shell once it has
+			// ingredients (planned, or live once switched on), other recipes as set up
+			List<int> live = new(count);
+			for (int i = 0; i < count; i++)
+			{
+				if ((RecipeSystem.IsShell(i) ? ingredients[i].Length == 0 : RecipeSystem.VanillaDisabled(i)) || (skip != null && i < skip.Length && skip[i])) continue;
+				live.Add(i);
+			}
 			bool changed = true;
 			for (int pass = 0; pass < 40 && changed; pass++)
 			{
 				changed = false;
-				for (int i = 0; i < count; i++)
+				foreach (int i in live)
 				{
-					// A shell counts once it has ingredients (planned, or live once switched on); other recipes as set up
-					if ((RecipeSystem.IsShell(i) ? ingredients[i].Length == 0 : RecipeSystem.VanillaDisabled(i)) || (skip != null && i < skip.Length && skip[i])) continue;
 					IEnumerable<int> recipeGroups = groups != null ? groups[i] : Main.recipe[i].acceptedGroups;
 					int tier = 0;
 					foreach ((int type, _) in ingredients[i])
@@ -328,20 +334,40 @@ namespace UltimateRandomizer.Common.Features
 			if (cfg.RandomizeRecipes) ShareTwinStations(result, ingredients, tiles, avail);
 			// The live recipes give their result at once: no result tier any more; the copies are switched off. A shell doable
 			// before its tier once everything is planned (a re-pick made its key earlier), or never, is switched off again
-			for (int round = 0; ; round++)
+			int[] FinalAvailability()
 			{
 				(int, int)[][] planned = Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
 				result.Availability = Availability(Findability.Tier, results, new int[count], planned,
 					Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray(), out int[] doable, result.Twin, PlannedGroups(result));
+				return doable;
+			}
+			// Each round drops at least one shell; dropping one only delays the others (one of them may become never doable)
+			for (int round = 0; ; round++)
+			{
+				int[] doable = FinalAvailability();
 				List<int> early = Enumerable.Range(0, count).Where(i => ShellActive(result, i) && (doable[i] < result.ShellTiers[i] || doable[i] >= Never)).ToList();
-				if (early.Count == 0 || round >= 4) break;
+				if (early.Count == 0) break;
 				foreach (int i in early) DropShell(result, i);
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {early.Count} shell recipes doable before their tier (or never) switched off");
+				// Bounded: the availability is computed once more for what was dropped
+				if (round >= 4)
+				{
+					FinalAvailability();
+					break;
+				}
 			}
 			return result;
 		}
 
 		// ---------------------------------------------------------------- Shells
+
+		// A skip mask for Availability: these recipes and every shell (the planning of the other recipes never depends on them)
+		private static bool[] ShellMask(bool[] skip)
+		{
+			bool[] mask = new bool[Count];
+			for (int i = 0; i < mask.Length; i++) mask[i] = RecipeSystem.IsShell(i) || (skip != null && i < skip.Length && skip[i]);
+			return mask;
+		}
 
 		// Is this recipe a shell this plan switches on (it got ingredients)?
 		public static bool ShellActive(RecipePlan plan, int i) => RecipeSystem.IsShell(i) && i < plan.Ingredients.Length && plan.Ingredients[i] != null;
@@ -392,13 +418,15 @@ namespace UltimateRandomizer.Common.Features
 			int count = Count;
 			(int, int)[][] Planned() => Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
 			int[][] plannedTiles = Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray();
-			int[] avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out int[] doable, null, PlannedGroups(result));
+			// The shells are left out: the locks are the same with the setting on or off
+			bool[] noShells = ShellMask(null);
+			int[] avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out int[] doable, noShells, PlannedGroups(result));
 			int repicked = 0;
 			for (int i = 0; i < count; i++)
 			{
 				if (NeedsLock(result, i, doable) && !HasKeySlot(i) && !ItemPool.IsSpecial(results[i]) && RepickResult(result, results, i, doable[i])) repicked++;
 			}
-			if (repicked > 0) avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out doable, null, PlannedGroups(result));
+			if (repicked > 0) avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out doable, noShells, PlannedGroups(result));
 			List<int>[,] buckets = FindableBuckets();
 			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
 			Dictionary<int, int> uses = new();
@@ -428,7 +456,7 @@ namespace UltimateRandomizer.Common.Features
 			int rekeyed = 0;
 			for (int round = 0; round < 2; round++)
 			{
-				avail = Availability(Findability.Tier, results, new int[count], Planned(), plannedTiles, out doable, null, PlannedGroups(result));
+				avail = Availability(Findability.Tier, results, new int[count], Planned(), plannedTiles, out doable, noShells, PlannedGroups(result));
 				int again = 0;
 				for (int i = 0; i < count; i++)
 				{
@@ -454,7 +482,7 @@ namespace UltimateRandomizer.Common.Features
 			int count = Count;
 			(int, int)[][] planned = Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
 			int[][] plannedTiles = Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray();
-			int[] avail = Availability(Findability.Tier, results, new int[count], planned, plannedTiles, out _, result.Twin, PlannedGroups(result));
+			int[] avail = Availability(Findability.Tier, results, new int[count], planned, plannedTiles, out _, ShellMask(result.Twin), PlannedGroups(result));
 			List<int>[,] buckets = FindableBuckets();
 			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
 			Dictionary<int, int> uses = new();
@@ -804,9 +832,10 @@ namespace UltimateRandomizer.Common.Features
 		private static bool Eligible(int item, HashSet<int> stationItems) =>
 			item > 0 && item < ItemPool.Info.Length && IngredientReplaceable(item) && !ItemPool.IsBanned(item) && !stationItems.Contains(item);
 
-		// Hardmode pair ores (present or not depending on the altars: the plan must not depend on them), ores that need a strong
-		// pickaxe and Obsidian (a pickaxe chain could otherwise need its own ore): never a new ingredient, nor anything made of them
-		private static bool Tainted(int item) => OreMap.IsHardmodePairOre(item) || MiningOres.Contains(item);
+		// Hardmode pair ores (present or not depending on the altars: the plan must not depend on them), ores and blocks that need
+		// a strong pickaxe (Obsidian, Ebonstone, dungeon bricks...: a pickaxe chain could otherwise need its own block): never a
+		// new ingredient, nor anything made of them
+		private static bool Tainted(int item) => OreMap.IsHardmodePairOre(item) || MiningOres.Contains(item) || PickToMine(item) >= MiningLevels[0].pick;
 
 		// Guaranteed stations (basic ones, and progression or themed ones when unprotected) are never new ingredients
 		private static HashSet<int> GuaranteedStationItems()
@@ -1114,8 +1143,9 @@ namespace UltimateRandomizer.Common.Features
 				int locked = VanillaSource(result, i) ? 0 : result.ResultTiers[i];
 				int r = IngredientTier(ingredients, recipeGroups, real);
 				if (r < Never) real[item] = Math.Min(real[item], Math.Max(Math.Max(r, station), locked));
+				// A result LockResults may still re-pick is no candidate: a consumer would be left without a source
 				int c = IngredientTier(ingredients, recipeGroups, clean);
-				if (c >= Never || Tainted(item)) return;
+				if (c >= Never || Tainted(item) || MayBeRepicked(i)) return;
 				int tier = Math.Max(Math.Max(c, station), locked);
 				if (tier >= clean[item]) return;
 				int old = clean[item];
@@ -1126,6 +1156,12 @@ namespace UltimateRandomizer.Common.Features
 				if (old < Tiers.Count) pool[category, old].Remove(item);
 				if (tier < Tiers.Count) pool[category, tier].Add(item);
 			}
+
+			// The recipes whose result LockResults may re-pick (RepickResult): gated, not an upgrade, not a vanilla source, with a
+			// lock tier, and either no slot for a key (as DropRepickable) or no key planned here (LockResults then looks for one,
+			// and re-picks the result when it finds none)
+			private bool MayBeRepicked(int i) => Gated(i) && !ItemPool.IsSpecial(results[i]) && result.ResultTiers[i] > 0 && !VanillaSource(result, i)
+				&& (!HasKeySlot(i) || result.PlannedKeys[i] == 0);
 
 			private int GroupTier(RecipeGroup group)
 			{
@@ -1229,6 +1265,11 @@ namespace UltimateRandomizer.Common.Features
 					{
 						if (RecipeGroup.recipeGroups.TryGetValue(other, out RecipeGroup o) && o.ValidItems.Overlaps(group.ValidItems)) return false;
 					}
+					// Like a single item: no crafted member may be made by a recipe using this result (a loop)
+					foreach (int v in group.ValidItems)
+					{
+						if (v > 0 && v < source.Length && source[v] >= 0 && Uses(source[v], result0)) return false;
+					}
 					return true;
 				}
 
@@ -1329,6 +1370,12 @@ namespace UltimateRandomizer.Common.Features
 				result.IngredientTiers[i] = top;
 				// With the value cap, the result was rolled against the vanilla ingredients' value: the new ones are worth at least that
 				if (cfg.LimitRecipeValue && !house && !isShell && (long)StackRules.ValueOf(result.Results[i].type) * result.Results[i].stack > RecipeSystem.MaxResultValue(i, result.IngredientValues[i], cfg.RecipeValueGuard))
+				{
+					RaiseValue(result, i, vanillaValue);
+				}
+				// A shell's item is worth vanillaValue: its ingredients are worth at least that within the guard (the item still
+				// sells for its ingredients only, CraftedValueFeature)
+				if (cfg.LimitRecipeValue && isShell && vanillaValue > (long)(result.IngredientValues[i] * cfg.RecipeValueGuard) + Item.silver)
 				{
 					RaiseValue(result, i, vanillaValue);
 				}
@@ -1436,6 +1483,33 @@ namespace UltimateRandomizer.Common.Features
 		};
 
 		public static int PickPower(int item) => ContentSamples.ItemsByType.TryGetValue(item, out Item sample) ? sample.pick : 0;
+
+		// Minimum pick power of the vanilla tiles that have one (Player.GetPickaxeDamage; some only below the surface, in the
+		// underworld or outside the world's center: counted everywhere, conservative)
+		private static readonly Dictionary<int, int> VanillaTilePick = new()
+		{
+			[TileID.Meteorite] = 50,
+			[TileID.Demonite] = 55, [TileID.Crimtane] = 55, [TileID.Obsidian] = 55,
+			[TileID.Ebonstone] = 65, [TileID.Crimstone] = 65, [TileID.Pearlstone] = 65, [TileID.Hellstone] = 65, [TileID.Hellforge] = 65,
+			[TileID.Cobalt] = 100, [TileID.Palladium] = 100,
+			[TileID.Mythril] = 110, [TileID.Orichalcum] = 110,
+			[TileID.Adamantite] = 150, [TileID.Titanium] = 150,
+			[TileID.Chlorophyte] = 200,
+			[TileID.LihzahrdBrick] = 210, [TileID.LihzahrdAltar] = 210
+		};
+
+		// Pick power needed to mine the tile an item places (0: none, or it places nothing): vanilla checks, dungeon bricks
+		// (100), a modded tile's MinPick
+		public static int PickToMine(int item)
+		{
+			if (!ContentSamples.ItemsByType.TryGetValue(item, out Item sample) || sample.createTile < TileID.Dirt) return 0;
+			int tile = sample.createTile;
+			if (VanillaTilePick.TryGetValue(tile, out int pick)) return pick;
+			// The temple traps (styles 1 to 4), not the dart trap
+			if (tile == TileID.Traps) return sample.placeStyle is >= 1 and <= 4 ? 210 : 0;
+			if (tile < Main.tileDungeon.Length && Main.tileDungeon[tile]) return 100;
+			return TileLoader.GetTile(tile)?.MinPick ?? 0;
+		}
 
 		// The tier at which the ores of a level are mined (-1: none of them in this world)
 		public static int MiningTier((int pick, int[] ores) level)

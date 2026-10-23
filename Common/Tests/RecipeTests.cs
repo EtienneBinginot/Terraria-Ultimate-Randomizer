@@ -57,6 +57,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("UncraftableRecipesValid", UncraftableRecipesValid);
 			TestRunner.Register("UncraftableRecipesOff", UncraftableRecipesOff);
 			TestRunner.Register("UncraftableNoSpecials", UncraftableNoSpecials);
+			TestRunner.Register("UncraftablePricedByIngredients", UncraftablePricedByIngredients);
+			TestRunner.Register("RecipePickaxeMineable", RecipePickaxeMineable);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -1275,6 +1277,64 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			if (shells == 0) Check.Skip("no shell recipe registered");
 			Check.All(failures, "Shells and special recipes");
+		}
+
+		// A live shell counts as a randomized recipe: what it makes sells for its ingredients (no money loop). How many stay
+		// below their soft value target (stacks capped) is logged
+		private static void UncraftablePricedByIngredients()
+		{
+			RequireApplied();
+			if (!CraftingConfig.Instance.RecipesForUncraftable) Check.Skip("no recipes for uncraftable items");
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			int active = 0, priced = 0, cheap = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (!RecipeSystem.IsShell(i) || recipe.Disabled) continue;
+				active++;
+				string name = Name(recipe.createItem.type);
+				if (!RecipeSystem.IsRandomized(i)) failures.Add($"{name}: shell not counted as randomized");
+				long value = recipe.requiredItem.Sum(item => (long)Math.Max(item.value, 0) * item.stack);
+				long worth = (long)CraftedValueItem.VanillaValue(recipe.createItem.type) * recipe.createItem.stack;
+				if (CraftingConfig.Instance.LimitRecipeValue && (long)(plan.IngredientValues[i] * CraftingConfig.Instance.RecipeValueGuard) + Item.silver < worth)
+				{
+					cheap++;
+				}
+				if (!CraftingConfig.Instance.CraftedValueFromIngredients || value <= 0 || worth <= value || priced >= 5) continue;
+				priced++;
+				List<Item> consumed = recipe.requiredItem.Select(item => new Item(item.type, item.stack)).ToList();
+				Item made = recipe.createItem.Clone();
+				made.OnCreated(new RecipeItemCreationContext(recipe, consumed, new Item()));
+				if ((long)made.value * made.stack > value) failures.Add($"{name} x{made.stack} sells for {(long)made.value * made.stack} > ingredients {value}");
+			}
+			if (active == 0) Check.Skip("no shell recipe switched on");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"UncraftablePricedByIngredients: {active} live shells, {priced} worth more than their ingredients checked, {cheap} below their value target");
+			Check.All(failures, "Shell prices");
+		}
+
+		// No rebuilt recipe making a pickaxe (or drill) gets a new ingredient that needs at least that pick power to be mined
+		// (Ebonstone for a Nightmare Pickaxe): taint follows the pick power of the tile an item places
+		private static void RecipePickaxeMineable()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			int tested = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				int pick = RecipePlanner.PickPower(plan.Results[i].type);
+				if (pick <= 0 || plan.Ingredients[i] == null) continue;
+				tested++;
+				HashSet<int> original = RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
+				foreach ((int type, _) in plan.Ingredients[i])
+				{
+					int needed = RecipePlanner.PickToMine(type);
+					if (!original.Contains(type) && needed >= pick) failures.Add($"{Name(plan.Results[i].type)} (pick {pick}): {Name(type)} needs {needed}");
+				}
+			}
+			if (tested == 0) Check.Skip("no rebuilt pickaxe recipe");
+			Check.All(failures, "Pickaxes made of blocks they can't mine");
 		}
 
 		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));

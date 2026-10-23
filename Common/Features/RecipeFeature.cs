@@ -64,11 +64,32 @@ namespace UltimateRandomizer.Common.Features
 		public static bool IsShell(int i) => shell != null && i >= 0 && i < shell.Length && shell[i];
 
 		// Items a shell may be registered for: not gear, ammo, potions, critters, bags or summons (ItemClassifier.Classify;
-		// Item.material is not set yet, so a material may still read as Misc: RecipePlanner.ShellEligible decides per world)
+		// RecipePlanner.ShellEligible decides per world). Item.material is not set yet: a Misc item is registered only when
+		// a recipe already uses it (what Recipe.UpdateWhichItemsAreMaterials will make a material), never otherwise (a Misc
+		// shell is never planned)
 		private static readonly ItemCategory[] ShellRegistered =
 		{
-			ItemCategory.Block, ItemCategory.Furniture, ItemCategory.Material, ItemCategory.Vanity, ItemCategory.Dye, ItemCategory.Food, ItemCategory.Misc
+			ItemCategory.Block, ItemCategory.Furniture, ItemCategory.Material, ItemCategory.Vanity, ItemCategory.Dye, ItemCategory.Food
 		};
+
+		// Items the enabled recipes registered so far use, directly or through one of their groups
+		private static HashSet<int> UsedAsIngredient()
+		{
+			HashSet<int> used = new();
+			HashSet<int> groups = new();
+			for (int i = 0; i < Recipe.numRecipes; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe == null || recipe.Disabled) continue;
+				foreach (Item ingredient in recipe.requiredItem) used.Add(ingredient.type);
+				groups.UnionWith(recipe.acceptedGroups);
+			}
+			foreach (int id in groups)
+			{
+				if (RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group)) used.UnionWith(group.ValidItems);
+			}
+			return used;
+		}
 
 		// Walls come by four, like the vanilla wall recipes; anything else by one
 		private static int ShellStack(Item item) => item.createWall > WallID.None && item.maxStack >= 4 ? 4 : 1;
@@ -82,6 +103,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (Main.recipe[i]?.createItem != null) made.Add(Main.recipe[i].createItem.type);
 			}
+			HashSet<int> materials = UsedAsIngredient();
 			Dictionary<ItemCategory, int> counts = new();
 			for (int type = 1; type < ItemLoader.ItemCount; type++)
 			{
@@ -89,6 +111,7 @@ namespace UltimateRandomizer.Common.Features
 				if (ItemID.Sets.Deprecated[type] || ItemID.Sets.ItemsThatShouldNotBeInInventory[type] || ItemID.Sets.IsAPickup[type] || ItemID.Sets.CommonCoin[type] || item.questItem) continue;
 				if (ItemClassifier.IsBanned(item)) continue;
 				ItemCategory category = ItemClassifier.Classify(type, item);
+				if (category == ItemCategory.Misc && materials.Contains(type)) category = ItemCategory.Material;
 				if (Array.IndexOf(ShellRegistered, category) < 0) continue;
 				Recipe recipe = Recipe.Create(type, ShellStack(item));
 				// Never shimmered back into its (random) ingredients
@@ -228,7 +251,7 @@ namespace UltimateRandomizer.Common.Features
 		// The live recipe differs from the vanilla one (result or ingredients): what it makes sells for its ingredients
 		public static bool IsRandomized(int i)
 		{
-			if (!applied || originalTypes == null || i < 0 || i >= originalTypes.Length || i >= Recipe.numRecipes || modded[i]) return false;
+			if (!applied || originalTypes == null || i < 0 || i >= originalTypes.Length || i >= Recipe.numRecipes || (modded[i] && !shell[i])) return false;
 			Recipe recipe = Main.recipe[i];
 			// A shell switched on is a random recipe of its own
 			if (shell[i]) return !recipe.Disabled;
