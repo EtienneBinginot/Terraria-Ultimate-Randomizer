@@ -94,6 +94,7 @@ Tests: {
 	PriceFloor: Shop prices are never below the item value
 	DropRates: Drop rates are valid
 	TierFromRecipes: Crafted items take the tier of their vanilla recipe when it is earlier than their rarity (Tinkerer combinations)
+	StorageKitOnce: The Magic Storage kit is given once per world, and again in another world
 	SnapshotsCaptured: Original drop tables were read
 	MobPlansValid: Every enemy drop table is valid
 	LootAbundanceScales: Loot abundance scales enemy drops, not guaranteed ones
@@ -172,6 +173,7 @@ Tests: {
 	ProgressionStationsProtected: Progression and themed stations are protected unless station protection is None
 	ProgressionStationsGuaranteed: Unprotected progression stations and boss summons drop from frequent enemies of their tier (1 % or more)
 	WorldSummonsProtected: The summons found in the world stay protected, crafted ones are randomized
+	UpgradesOutOfPools: Life and mana upgrades are never rolled, guaranteed or used as ingredients, and drops keep them
 	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier
 	GuaranteedBiomeHosts: Each guaranteed item is carried by 3 or more enemies of one biome, with the same chance on each
@@ -229,6 +231,8 @@ Tests: {
 	RecipeAlwaysFinalResult: Recipes always give their final result, with no stand-in before its tier
 	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
 	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
+	UpgradeRecipes: Each life or mana upgrade is the result of one random recipe, doable from its tier
+	HouseItemsObtainable: Door, platform and torch are hint targets and stay obtainable (found in the world or by their vanilla recipe)
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
@@ -545,7 +549,10 @@ Codex: {
 
 		TabCrafting: Crafting
 		TabBosses: Bosses
-		NothingHere: Nothing in this tab for now: look in the other one.
+		TabUpgrades: Upgrades
+		GhostButton: The Guide's ghost
+		GhostIntro: Whooo... Even from beyond, I can still tell you where things come from. For a few coins, of course.
+		NothingHere: Nothing in this tab for now: look in the other ones.
 		LockedTitle: Later on
 		LockedSay: "{0}? Not yet: ask me again {1}."
 		LockedWhen: Comes {0}; the Guide talks about it {1}.
@@ -951,6 +958,7 @@ Chat: {
 	ResetNeedsReload: Some settings need a reload and were not reset.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer is enabled too: loot is randomized twice. Enable only one of the two randomizers in Manage Mods."
 	StartingKit: Ultimate Randomizer: you received a random starting kit for this world!
+	StorageKit: Ultimate Randomizer: you received a Magic Storage kit for this world!
 	PowerUp: Your equipment is ahead of the world: new enemies get x{0} health and x{1} damage.
 	PowerDown: The world is catching up with your equipment: new enemies get x{0} health and x{1} damage.
 	PowerCaughtUp: The world has caught up with your equipment: new enemies are back to normal.
@@ -2141,6 +2149,11 @@ Configs: {
 		KitTools: {
 			Label: Tools
 			Tooltip: ""
+		}
+
+		MagicStorageKit: {
+			Label: "Magic Storage kit"
+			Tooltip: "With Magic Storage loaded: gives each character, once per world, a Storage Heart, 4 Storage Units, a Crafting Access and the basic Portable Access and Portable Crafting Access."
 		}
 
 		RandomizeTownNpcOrder: {

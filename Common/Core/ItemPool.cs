@@ -32,6 +32,9 @@ namespace UltimateRandomizer.Common.Core
 		public bool FromWorldChest;
 		public bool Excluded;
 		public bool Protected;
+		// A life or mana upgrade (Protection.Upgrades): replaceable, Misc, but in no bucket (never rolled, never a new
+		// ingredient), kept where vanilla drops it; its source is one random recipe (RecipePlanner.SpecialRecipe)
+		public bool Special;
 	}
 
 	public enum CategoryPolicy
@@ -156,9 +159,10 @@ namespace UltimateRandomizer.Common.Core
 					info[type] = new ItemInfo { Excluded = true };
 					continue;
 				}
-				ItemCategory category = ItemClassifier.Classify(type, item);
-				int tier = tiers[type];
 				bool isProtected = protectedItems.Contains(type);
+				bool special = !isProtected && Protection.IsUpgrade(type);
+				ItemCategory category = special ? ItemCategory.Misc : ItemClassifier.Classify(type, item);
+				int tier = tiers[type];
 				// Banned items stay in their bucket (the buckets never change): rolls re-pick them
 				bool isBanned = ItemClassifier.IsBanned(item) || tableBanned[type];
 				if (isBanned) banned++;
@@ -166,8 +170,9 @@ namespace UltimateRandomizer.Common.Core
 				int trueTier = fromTable[type] || fromChest[type] ? trueTiers[type] : Math.Max(tier, trueTiers[type]);
 				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = trueTier, Banned = isBanned, Protected = isProtected,
 					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fromTable[type] && trueTiers[type] > Math.Max(tier, beforeSources[type]),
-					FromTable = fromTable[type], FromWorldChest = fromChest[type] };
-				if (!isProtected) lists[(int)category, tier].Add(type);
+					FromTable = fromTable[type], FromWorldChest = fromChest[type], Special = special };
+				// Upgrades stay out of the buckets: the buckets (and every plan rolled from them) are the same as when they were protected
+				if (!isProtected && !special) lists[(int)category, tier].Add(type);
 			}
 
 			buckets = new int[ItemCategories.Count][][];
@@ -250,6 +255,8 @@ namespace UltimateRandomizer.Common.Core
 
 		// Can this item be replaced by another one?
 		public static bool IsRandomizable(int type) => IsValid(type) && !Info[type].Excluded && !Info[type].Protected;
+
+		public static bool IsSpecial(int type) => IsValid(type) && Info[type].Special;
 
 		public static int BucketSize(ItemCategory category, int tier) => buckets == null ? 0 : buckets[(int)category][tier].Length;
 

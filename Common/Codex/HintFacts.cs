@@ -17,7 +17,8 @@ namespace UltimateRandomizer.Common.Codex
 	// Where a hint says the item comes from. The order is the preference between sources of the same tier.
 	public enum HintKind : byte { Creature, Recipe, Boss, Bag, Chest, Pot, Shop, World }
 
-	public enum HintTargetKind : byte { Station, Summon, Pickaxe }
+	// House: what a house needs besides its table and chair (door, platform, torch); Upgrade: life and mana upgrades
+	public enum HintTargetKind : byte { Station, Summon, Pickaxe, House, Upgrade }
 
 	// How a part of a recipe hint's tree is obtained: crafted (its parts follow), from the source the Guide would name for
 	// it, gathered or mined in the world, already explained above, or nothing known
@@ -203,6 +204,9 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			// The pickaxes placed on enemies for a mining level: cheap ones only
 			foreach (GuaranteedSources.Requirement r in GuaranteedSources.Requirements.Where(r => r.Tool)) Add(r.Item, r.Tier, HintTargetKind.Pickaxe);
+			foreach (int item in RecipeSystem.HouseItems) Add(item, 0, HintTargetKind.House);
+			// Life and mana upgrades, at the tier their recipe waits for
+			foreach (int item in Protection.Upgrades) Add(item, Protection.UpgradeTier(item), HintTargetKind.Upgrade);
 			rawTargets = byItem;
 			return byItem;
 		}

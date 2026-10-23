@@ -47,6 +47,8 @@ namespace UltimateRandomizer.Common.Core
 		public const int JackpotChest = 37;
 		// Key ingredient of a recipe's tier, and the re-pick of a result that can't have one (RecipePlanner.LockResults)
 		public const int KeyIngredient = 38;
+		// The recipe each life or mana upgrade is the result of (RecipePlanner.AssignSpecials)
+		public const int Special = 39;
 		public const int Fallback = 0xFA11;
 	}
 

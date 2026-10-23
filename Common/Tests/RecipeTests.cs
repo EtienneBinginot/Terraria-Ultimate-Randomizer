@@ -46,6 +46,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("RecipeAlwaysFinalResult", RecipeAlwaysFinalResult);
 			TestRunner.Register("RecipeKeyIngredient", RecipeKeyIngredient);
 			TestRunner.Register("RecipeNoStationTwins", RecipeNoStationTwins);
+			TestRunner.Register("UpgradeRecipes", UpgradeRecipes);
+			TestRunner.Register("HouseItemsObtainable", HouseItemsObtainable);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -789,7 +791,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (!RecipeSystem.Touchable(i) || Main.recipe[i].Disabled) continue;
 				int u = plan.ResultTiers[i];
-				int expectedU = Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(results[i])));
+				int expectedU = ItemPool.IsSpecial(results[i]) ? Protection.UpgradeTier(results[i]) : Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(results[i])));
 				if (u != expectedU) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: result tier {u}, {expectedU} expected for {Name(results[i])}");
 				if (plan.KeyIngredient[i]) keys++;
 				if (plan.ResultRepicked[i]) repicked++;
@@ -860,6 +862,69 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeNoStationTwins: {copies} identical copies switched off; e.g. {(examples.Count == 0 ? "none" : string.Join("; ", examples))}");
 			Check.All(failures, "Same recipe on different stations");
+		}
+
+		// Each life or mana upgrade is the result of exactly one live recipe (its vanilla recipe, kept or re-picked back, aside),
+		// chosen by the plan; with tier gating, that recipe is doable from the upgrade's tier (a key ingredient), not before,
+		// and at most one tier later
+		private static void UpgradeRecipes()
+		{
+			RequireApplied();
+			int[] upgrades = Protection.Upgrades.Where(ItemPool.IsSpecial).ToArray();
+			if (upgrades.Length == 0) Check.Skip("the upgrades are protected");
+			RecipePlan plan = RecipePlanner.Get();
+			int[] results = plan.Results.Select(r => r.type).ToArray();
+			(int type, int stack)[][] ingredients = Enumerable.Range(0, Count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
+			int[][] tiles = Enumerable.Range(0, Count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
+			RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doable, plan.Twin);
+			bool gated = ProgressionConfig.Instance.TierGating && GeneralConfig.Instance.RandomizerMode == RandomizerMode.Coherent;
+			List<string> failures = new();
+			foreach (int item in upgrades)
+			{
+				int chosen = RecipePlanner.SpecialRecipe(item);
+				if (chosen < 0)
+				{
+					failures.Add($"{Name(item)}: no recipe gives it");
+					continue;
+				}
+				// The live recipes, as the crafting menu reads them
+				List<int> giving = Enumerable.Range(0, Count).Where(i => !Main.recipe[i].Disabled && Main.recipe[i].createItem.type == item
+					&& !(RecipeSystem.OriginalResult(i) == item && RecipePlanner.VanillaSource(plan, i))).ToList();
+				string host = Name(RecipeSystem.OriginalResult(chosen));
+				if (giving.Count != 1 || giving[0] != chosen)
+				{
+					failures.Add($"{Name(item)}: given by {giving.Count} recipes ({string.Join(", ", giving.Select(i => Name(RecipeSystem.OriginalResult(i))))}), planned in the recipe of {host}");
+				}
+				int u = Protection.UpgradeTier(item);
+				string where = $"{Name(item)} in the recipe of {host} ({Ingredients(ingredients[chosen])})";
+				if (doable[chosen] >= Findability.Never) failures.Add($"{where}: never doable");
+				else if (gated && (doable[chosen] < u || doable[chosen] > Math.Min(u + 1, Tiers.Max))) failures.Add($"{where}: doable at {doable[chosen]}, tier {u}");
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"UpgradeRecipes: {where}, doable at {doable[chosen]}, key ingredient {plan.KeyIngredient[chosen]}");
+			}
+			Check.All(failures, "Upgrade recipes");
+		}
+
+		// The door, platform and torch: a hint target each, and found in the world or still made by their vanilla recipe
+		private static void HouseItemsObtainable()
+		{
+			RequireApplied();
+			List<string> failures = new();
+			foreach (int item in RecipeSystem.HouseItems)
+			{
+				if (!ItemPool.IsRandomizable(item)) continue;
+				if (Codex.HintFacts.RawTarget(item) == null) failures.Add($"{Name(item)} is no hint target");
+				if (!RecipeSystem.KeptForHouse(item))
+				{
+					if (Findability.BaseTier(item) >= Findability.Never) failures.Add($"{Name(item)}: recipe randomized but found nowhere");
+					continue;
+				}
+				// Its vanilla recipe, live: same result, ingredients and stations
+				bool vanilla = Enumerable.Range(0, Count).Any(i => RecipeSystem.OriginalResult(i) == item && !Main.recipe[i].Disabled && Main.recipe[i].createItem.type == item
+					&& Main.recipe[i].requiredItem.Select(x => (x.type, x.stack)).SequenceEqual(RecipeSystem.OriginalIngredients(i))
+					&& Main.recipe[i].requiredTile.SequenceEqual(RecipeSystem.OriginalTiles(i)));
+				if (!vanilla) failures.Add($"{Name(item)}: found nowhere and its vanilla recipe changed");
+			}
+			Check.All(failures, "House items");
 		}
 
 		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));

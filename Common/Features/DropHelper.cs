@@ -11,9 +11,10 @@ namespace UltimateRandomizer.Common.Features
 		// Context of the items dropped by our own extra-drop rule, so they are not replaced a second time
 		public const string ExtraDropContext = "UltimateRandomizer_ExtraDrop";
 
-		// Items kept as they are: progression items, excluded items (coins, hearts...) and bags (their content is replaced instead)
+		// Items kept as they are: progression items, excluded items (coins, hearts...), bags (their content is replaced instead)
+		// and the life and mana upgrades (a crate's Life Crystal stays one)
 		public static bool KeepOriginal(int itemType) =>
-			!ItemPool.IsRandomizable(itemType) || ItemPool.Info[itemType].Category == ItemCategory.Bag;
+			!ItemPool.IsRandomizable(itemType) || ItemPool.Info[itemType].Category == ItemCategory.Bag || ItemPool.IsSpecial(itemType);
 
 		// The item replacing an original drop of a source (enemy or bag): the same every time in a world, unless a
 		// surprise happens (surpriseRng null = never, for the journal and the tests). wildRng: runtime drops only (madness)

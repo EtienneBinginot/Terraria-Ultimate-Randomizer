@@ -44,6 +44,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// Results rolled from the original recipes, shared by the plan and the requirement providers
 		private static (int type, int stack)[] originalResults;
+		// The recipe giving each life or mana upgrade (set with originalResults)
+		private static Dictionary<int, int> specialRecipes = new();
 
 		static RecipePlanner()
 		{
@@ -56,6 +58,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			plan = null;
 			originalResults = null;
+			specialRecipes = new Dictionary<int, int>();
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -68,6 +71,8 @@ namespace UltimateRandomizer.Common.Features
 		public static int ResultTier(int i, int result)
 		{
 			if (!Gated(i)) return 0;
+			// An upgrade waits for its own tier (the Life Fruit for a mechanical boss), not for the unlock of its rarity
+			if (ItemPool.IsSpecial(result)) return Protection.UpgradeTier(result);
 			return Tiers.Clamp(ItemPool.UnlockTier(ItemPool.TrueTierOf(result)));
 		}
 
@@ -185,7 +190,59 @@ namespace UltimateRandomizer.Common.Features
 			int count = Count;
 			(int, int)[] results = new (int, int)[count];
 			for (int i = 0; i < count; i++) results[i] = ResultFor(i, ingredients[i], lucky: true);
+			AssignSpecials(results, ingredients);
 			return results;
+		}
+
+		// ---------------------------------------------------------------- Upgrades
+
+		// The recipe whose result is this life or mana upgrade in this world, -1 when none
+		public static int SpecialRecipe(int item)
+		{
+			UnlockedResults();
+			return specialRecipes.TryGetValue(item, out int i) ? i : -1;
+		}
+
+		// Results a special recipe may take the place of: nothing progression relies on (tools, bars, materials, stations,
+		// summons, gear), so the guaranteed pickaxes and vanilla ingredients computed from the results stay the same
+		private static readonly ItemCategory[] SpecialHosts = { ItemCategory.Furniture, ItemCategory.Block, ItemCategory.Vanity, ItemCategory.Dye, ItemCategory.Misc, ItemCategory.Food };
+
+		private static bool SpecialCandidate(int i, int item, int u, (int type, int stack)[] results, (int type, int stack)[] ingredients, HashSet<int> stationTiles)
+		{
+			if (!Randomized(i) || RecipeSystem.VanillaDisabled(i) || specialRecipes.ContainsValue(i)) return false;
+			int result = results[i].type;
+			if (!ItemPool.IsValid(result) || ItemPool.IsSpecial(result) || ItemPool.IsSpecial(RecipeSystem.OriginalResult(i))) return false;
+			if (!SpecialHosts.Contains(ItemPool.Info[result].Category) || (Stations.PlacedTile(result, out int tile) && stationTiles.Contains(tile))) return false;
+			if (ingredients.Any(x => x.type == item) || RecipeSystem.InAcceptedGroup(i, item)) return false;
+			// Doable by its tier: a key ingredient of that tier then makes it wait for it (it needs a slot for one)
+			if (RecipeTier(i) > u) return false;
+			return u == 0 || !Gated(i) || HasKeySlot(i);
+		}
+
+		// Each life or mana upgrade becomes the result of one randomized recipe (deterministic, RollKey.Special), preferably one
+		// of its tier or the one before; the key ingredient of LockResults then makes it doable from the upgrade's tier
+		private static void AssignSpecials((int type, int stack)[] results, (int type, int stack)[][] ingredients)
+		{
+			specialRecipes = new Dictionary<int, int>();
+			if (!CraftingConfig.Instance.RandomizeRecipes || !ItemPool.Ready) return;
+			HashSet<int> stationTiles = Stations.RequiredTiles();
+			foreach (int item in Protection.Upgrades)
+			{
+				if (!ItemPool.IsSpecial(item)) continue;
+				int u = Protection.UpgradeTier(item);
+				List<int> candidates = Enumerable.Range(0, results.Length).Where(i => SpecialCandidate(i, item, u, results, ingredients[i], stationTiles))
+					.OrderBy(i => (uint)RecipeSystem.RecipeKey(i)).ThenBy(i => i).ToList();
+				List<int> close = candidates.Where(i => RecipeTier(i) >= u - 1).ToList();
+				if (close.Count > 0) candidates = close;
+				if (candidates.Count == 0)
+				{
+					ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"No recipe may give {DetRandom.ItemName(item)}: it keeps its vanilla sources only");
+					continue;
+				}
+				int chosen = candidates[DetRandom.Get(RollKey.Special, DetRandom.ItemKey(item)).Next(candidates.Count)];
+				results[chosen] = (item, 1);
+				specialRecipes[item] = chosen;
+			}
 		}
 
 		// lucky: false rolls within the current progression (no longer used by Apply: recipes always give their planned result)
@@ -256,7 +313,7 @@ namespace UltimateRandomizer.Common.Features
 			int repicked = 0;
 			for (int i = 0; i < count; i++)
 			{
-				if (NeedsLock(result, i, doable) && !HasKeySlot(i) && RepickResult(result, results, i, doable[i])) repicked++;
+				if (NeedsLock(result, i, doable) && !HasKeySlot(i) && !ItemPool.IsSpecial(results[i]) && RepickResult(result, results, i, doable[i])) repicked++;
 			}
 			if (repicked > 0) avail = Availability(Findability.Tier, results, LockTiers(result), Planned(), plannedTiles, out doable);
 			List<int>[,] buckets = FindableBuckets();
@@ -279,6 +336,8 @@ namespace UltimateRandomizer.Common.Features
 					continue;
 				}
 				if (HasKeySlot(i)) noMaterial.Add(u);
+				// An upgrade stays the result of its recipe, even without a key (it is then doable a little early)
+				if (ItemPool.IsSpecial(results[i])) continue;
 				if (RepickResult(result, results, i, doable[i])) repicked++;
 			}
 			// Checked against the availability of the live recipes (results at once): a key chosen before a later re-pick or
@@ -578,7 +637,7 @@ namespace UltimateRandomizer.Common.Features
 
 		// May the planner replace this ingredient of a recipe at all (not a recipe group, randomizable, not a bag or a summon)?
 		public static bool IngredientReplaceable(Recipe recipe, int item) =>
-			!InGroup(recipe, item, out _) && ItemPool.IsRandomizable(item) && !Unusable.Contains(ItemPool.Info[item].Category);
+			!InGroup(recipe, item, out _) && ItemPool.IsRandomizable(item) && !ItemPool.IsSpecial(item) && !Unusable.Contains(ItemPool.Info[item].Category);
 
 		// Materials found at each tier (by category), never crafted: a replaced ingredient only relies on raw sources
 		private static List<int>[,] FindableBuckets()
@@ -595,7 +654,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				// Hardmode pair ores: present or not depending on the altars, the ingredient plan must not depend on them. Ores
 				// that need a strong pickaxe (and Obsidian): a pickaxe chain could otherwise need its own ore
-				if (!ItemPool.IsRandomizable(item) || ItemPool.IsBanned(item) || stationItems.Contains(item) || OreMap.IsHardmodePairOre(item) || MiningOres.Contains(item)) continue;
+				if (!ItemPool.IsRandomizable(item) || ItemPool.IsSpecial(item) || ItemPool.IsBanned(item) || stationItems.Contains(item) || OreMap.IsHardmodePairOre(item) || MiningOres.Contains(item)) continue;
 				ItemCategory category = ItemPool.Info[item].Category;
 				if (Unusable.Contains(category)) continue;
 				int tier = Findability.Tier(item);
@@ -674,7 +733,7 @@ namespace UltimateRandomizer.Common.Features
 				{
 					(int g, int n) = original[k];
 					bool variety = rng.NextDouble() * 100 < cfg.IngredientVarietyChance;
-					bool keep = InGroup(recipe, g, out _) || !ItemPool.IsRandomizable(g) || Unusable.Contains(ItemPool.Info[g].Category)
+					bool keep = InGroup(recipe, g, out _) || !ItemPool.IsRandomizable(g) || ItemPool.IsSpecial(g) || Unusable.Contains(ItemPool.Info[g].Category)
 						|| (g < avail.Length && avail[g] <= cap && (worldMaterials.Contains(g) || !variety));
 					long value = (long)Math.Max(StackRules.ValueOf(g), 1) * n;
 					// With the value cap, the result was rolled against the original ingredients' value: a replacement held by
@@ -814,7 +873,7 @@ namespace UltimateRandomizer.Common.Features
 				int rt = RecipeTier(i);
 				foreach ((int g, _) in RecipeSystem.OriginalIngredients(i))
 				{
-					if (InGroup(recipe, g, out _) || !ItemPool.IsRandomizable(g) || Unusable.Contains(ItemPool.Info[g].Category)) continue;
+					if (InGroup(recipe, g, out _) || !ItemPool.IsRandomizable(g) || ItemPool.IsSpecial(g) || Unusable.Contains(ItemPool.Info[g].Category)) continue;
 					// The bar of a hardmode ore the altars did not choose needs no source of that ore
 					if (OreMap.IsHardmodePairOre(g) || (g < avail.Length && avail[g] <= rt)) continue;
 					needed[g] = Math.Min(needed.GetValueOrDefault(g, rt), rt);

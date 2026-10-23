@@ -19,6 +19,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ProgressionStationsProtected", ProgressionStationsProtected);
 			TestRunner.Register("ProgressionStationsGuaranteed", ProgressionStationsGuaranteed);
 			TestRunner.Register("WorldSummonsProtected", WorldSummonsProtected);
+			TestRunner.Register("UpgradesOutOfPools", UpgradesOutOfPools);
 			TestRunner.Register("BasicStationsFindable", BasicStationsFindable);
 			TestRunner.Register("GuaranteedReachability", GuaranteedReachability);
 			TestRunner.Register("GuaranteedBiomeHosts", GuaranteedBiomeHosts);
@@ -389,13 +390,42 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Guaranteed items in biomes out of reach");
 		}
 
+		// Life and mana upgrades are replaceable (Misc) but never rolled: in no bucket, no ingredient candidate, no guaranteed
+		// source; drops and bags keep them (unless the player protected them)
+		private static void UpgradesOutOfPools()
+		{
+			if (!ItemPool.Ready) Check.Skip("no item pool");
+			HashSet<int> listed = ProgressionConfig.Instance.ProtectedItems.Where(d => d != null && !d.IsUnloaded).Select(d => d.Type).ToHashSet();
+			List<string> failures = new();
+			List<int>[,] candidates = RecipePlanner.IngredientCandidates();
+			HashSet<int> guaranteed = GuaranteedSources.Requirements.Select(r => r.Item).ToHashSet();
+			foreach (int item in Protection.Upgrades)
+			{
+				if (!ItemPool.IsValid(item) || listed.Contains(item)) continue;
+				ItemInfo info = ItemPool.Info[item];
+				if (info.Protected || !info.Special || !ItemPool.IsRandomizable(item)) failures.Add($"{Name(item)}: protected {info.Protected}, special {info.Special}");
+				if (info.Category != ItemCategory.Misc) failures.Add($"{Name(item)} in {info.Category}");
+				if (!DropHelper.KeepOriginal(item)) failures.Add($"{Name(item)} would be replaced in drops");
+				if (guaranteed.Contains(item)) failures.Add($"{Name(item)} is guaranteed on enemies");
+				for (int c = 0; c < ItemCategories.Count; c++)
+				{
+					for (int t = 0; t < Tiers.Count; t++)
+					{
+						if (ItemPool.Bucket((ItemCategory)c, t).Contains(item)) failures.Add($"{Name(item)} in the {(ItemCategory)c} bucket of tier {t}");
+						if (candidates[c, t].Contains(item)) failures.Add($"{Name(item)} is an ingredient candidate");
+					}
+				}
+			}
+			Check.All(failures, "Upgrades");
+		}
+
 		// The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) and the
-		// items sorted with the summons (life and mana crystals, mirrors) stay protected; with the default settings the crafted
-		// and dropped ones (Guide Voodoo Doll, Suspicious Looking Eye) are randomized
+		// items sorted with the summons (mirrors, phones) stay protected; with the default settings the crafted and dropped
+		// ones (Guide Voodoo Doll, Suspicious Looking Eye) are randomized. Life and mana upgrades: UpgradesOutOfPools
 		private static void WorldSummonsProtected()
 		{
 			List<string> failures = new();
-			foreach (int item in Protection.WorldSummons.Concat(new int[] { ItemID.LifeCrystal, ItemID.ManaCrystal, ItemID.LifeFruit, ItemID.MagicMirror }))
+			foreach (int item in Protection.WorldSummons.Concat(new int[] { ItemID.MagicMirror, ItemID.CellPhone }))
 			{
 				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Protected) failures.Add($"{Name(item)} is not protected");
 			}

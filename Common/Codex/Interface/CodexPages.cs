@@ -507,6 +507,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			CodexRow tabs = new(40);
 			tabs.Add(new CodexButton(CodexText.Get("Hint.TabToBuy"), 220, () => ShowHintTab(false), 0.8f) { Active = !hintsKnownTab });
 			tabs.Add(new CodexButton(CodexText.Get("Hint.TabKnown"), 220, () => ShowHintTab(true), 0.8f) { Active = hintsKnownTab });
+			// No Guide to talk to (dead, or not moved in yet): his ghost sells the hints from here
+			if (!HintSystem.GuideAlive) tabs.Add(new CodexButton(CodexText.Get("Hint.GhostButton"), 260, OpenGuideGhost, 0.8f));
 			Add(tabs);
 			List<HintTarget> shown = HintPanelState.TabTargets(hintsKnownTab).Where(t => Matches(HintFacts.ItemName(t.Item))).ToList();
 			List<HintTarget> bought = shown.Where(t => CodexSystem.ShownHintLevel(t.Item) > 0).ToList();
@@ -530,6 +532,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 				Grid(waiting, t => new CodexItemIcon(t.Item, 0, Icon) { Silhouette = !CodexSystem.HasSeen(t.Item), HoverText = HintFacts.ItemName(t.Item) }, Icon, Icon);
 			}
 			if (bought.Count == 0 && waiting.Count == 0) Empty(HintFacts.Targets().Count == 0);
+		}
+
+		private void OpenGuideGhost()
+		{
+			CloseRequested = true;
+			HintSystem.OpenGhost();
 		}
 
 		private void ShowHintTab(bool known)

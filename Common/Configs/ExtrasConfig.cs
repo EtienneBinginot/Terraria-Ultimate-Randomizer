@@ -28,6 +28,11 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(1)]
 		public int KitTools;
 
+		// Magic Storage starter kit (heart, units, crafting and portable accesses), once per character and world, when that
+		// mod is loaded
+		[DefaultValue(true)]
+		public bool MagicStorageKit;
+
 		[Header("TownNpcs")]
 		[DefaultValue(true)]
 		public bool RandomizeTownNpcOrder;

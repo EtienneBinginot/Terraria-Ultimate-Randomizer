@@ -24,12 +24,23 @@ namespace UltimateRandomizer.Common.Core
 		public static readonly int[] WorldSummons = { ItemID.TruffleWorm, ItemID.EmpressButterfly, ItemID.LihzahrdPowerCell, ItemID.QueenSlimeCrystal };
 
 		// Sorted with the boss summons (SortingPriorityBossSpawns) without summoning anything: life and mana crystals,
-		// mirrors, phones, conches. They stay protected like before, whatever AutoProtectBossSummons says
+		// mirrors, phones, conches. They stay protected like before, whatever AutoProtectBossSummons says (except the
+		// upgrades below)
 		private static readonly HashSet<int> SortedAsSummons = new()
 		{
 			ItemID.LifeCrystal, ItemID.LifeFruit, ItemID.ManaCrystal, ItemID.MagicMirror, ItemID.IceMirror, ItemID.CellPhone, ItemID.Shellphone,
 			ItemID.ShellphoneDummy, ItemID.ShellphoneSpawn, ItemID.ShellphoneOcean, ItemID.ShellphoneHell, ItemID.MagicConch, ItemID.DemonConch
 		};
+
+		// Life and mana upgrades: replaceable (the Mana Crystal's vanilla recipe is randomized) but never in a roll's buckets,
+		// never guaranteed on enemies; each one is the result of one random recipe (RecipePlanner.SpecialRecipe), and the
+		// drops and bags that give them keep them (ItemPool.IsSpecial)
+		public static readonly int[] Upgrades = { ItemID.LifeCrystal, ItemID.ManaCrystal, ItemID.LifeFruit };
+
+		public static bool IsUpgrade(int type) => Array.IndexOf(Upgrades, type) >= 0;
+
+		// The tier an upgrade's recipe is doable from: the Life Fruit after a mechanical boss, like its vanilla jungle plants
+		public static int UpgradeTier(int type) => type == ItemID.LifeFruit ? (int)Tier.PostMechBoss : (int)Tier.PreBoss;
 
 		// Items that summon a boss or an event (the Guide Voodoo Doll is not in the vanilla set)
 		public static bool IsBossSummon(int type) => type == ItemID.GuideVoodooDoll
@@ -80,7 +91,10 @@ namespace UltimateRandomizer.Common.Core
 			// Off: crafted and dropped vanilla summons are randomized, with guaranteed drops (GuaranteedSources.SummonRequirements);
 			// modded ones keep their own sources (their recipes and drops may hold rules the planners don't know)
 			set.UnionWith(WorldSummons);
-			set.UnionWith(SortedAsSummons);
+			foreach (int type in SortedAsSummons)
+			{
+				if (!IsUpgrade(type)) set.Add(type);
+			}
 			for (int type = 1; type < count; type++)
 			{
 				if (IsBossSummon(type) && (cfg.AutoProtectBossSummons || type >= ItemID.Count)) set.Add(type);

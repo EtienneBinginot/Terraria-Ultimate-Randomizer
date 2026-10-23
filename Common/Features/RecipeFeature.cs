@@ -93,11 +93,14 @@ namespace UltimateRandomizer.Common.Features
 			GuaranteedSources.ExtraRequirements.Add(RecipePlanner.MiningRequirements);
 			SeedSystem.OnSeedChanged += Refresh;
 			ProgressionSystem.OnTierChanged += Refresh;
+			WorldCaches.Reset += ForgetHouse;
 		}
 
 		public override void Unload()
 		{
 			Restore();
+			WorldCaches.Reset -= ForgetHouse;
+			keptHouse = null;
 			GuaranteedSources.ExtraRequirements.Clear();
 			CraftedValueItem.ClearCache();
 			originalTypes = null;
@@ -143,12 +146,28 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Recipes whose result, ingredients and station may change: vanilla recipes of randomizable items, except the mining chain
-		public static bool Touchable(int i) => !modded[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression);
+		// and the house items nothing else gives
+		public static bool Touchable(int i) => !modded[i] && !KeepRecipe(originalTypes[i], ProgressionConfig.Instance.ProtectPickaxeProgression) && !KeptForHouse(originalTypes[i]);
+
+		// What a house needs besides the table and the chair (basic stations, guaranteed in the world): hint targets, and their
+		// vanilla recipe stays as it is while nothing else in the world gives them (Findability, before guaranteed sources)
+		public static readonly int[] HouseItems = { ItemID.WoodenDoor, ItemID.WoodPlatform, ItemID.Torch };
+
+		private static HashSet<int> keptHouse;
+
+		private static void ForgetHouse() => keptHouse = null;
+
+		public static bool KeptForHouse(int item)
+		{
+			if (Array.IndexOf(HouseItems, item) < 0 || !ItemPool.Ready) return false;
+			keptHouse ??= HouseItems.Where(h => ItemPool.IsRandomizable(h) && Findability.BaseTier(h) >= Findability.Never).ToHashSet();
+			return keptHouse.Contains(item);
+		}
 
 		// Recipes whose ingredients may change: protected results (boss summons, progression stations...) keep their result
 		// and stations, but an ingredient that can't be found in time is replaced like in any recipe (protected ingredients
 		// stay); modded recipes and excluded results stay as they are
-		public static bool IngredientsTouchable(int i) => !modded[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded;
+		public static bool IngredientsTouchable(int i) => !modded[i] && ItemPool.IsValid(originalTypes[i]) && !ItemPool.Info[originalTypes[i]].Excluded && !KeptForHouse(originalTypes[i]);
 
 		public static bool IsModded(int i) => modded != null && i >= 0 && i < modded.Length && modded[i];
 

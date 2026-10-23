@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Terraria;
 using Terraria.ID;
+using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 
@@ -23,6 +24,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("PriceFloor", PriceFloor);
 			TestRunner.Register("DropRates", DropRatesValid);
 			TestRunner.Register("TierFromRecipes", TierFromRecipes);
+			TestRunner.Register("StorageKitOnce", StorageKitOnce);
 		}
 
 		private static IEnumerable<int> Randomizable() => Enumerable.Range(1, ItemPool.Info.Length - 1).Where(ItemPool.IsRandomizable);
@@ -276,6 +278,23 @@ namespace UltimateRandomizer.Common.Tests
 				if (denominator < 1) failures.Add($"{Lang.GetItemNameValue(item)}: 1/{denominator}");
 			}
 			Check.All(failures, "Invalid drop rates");
+		}
+
+		// The Magic Storage kit, on a fake set of worlds (the player's own record is not touched): given on the first visit of
+		// a world, not on the second, and again in another world
+		private static void StorageKitOnce()
+		{
+			if (!ModLoader.HasMod("MagicStorage")) Check.Skip("Magic Storage is not loaded");
+			if (!ExtrasConfig.Instance.MagicStorageKit) Check.Skip("the Magic Storage kit is off");
+			HashSet<string> worlds = new();
+			List<string> missing = new();
+			List<(int type, int stack)> first = Features.StorageKitPlayer.Grant(worlds, "test-world-A", "MagicStorage", missing);
+			Check.That(missing.Count == 0, $"Magic Storage items not found: {string.Join(", ", missing)}");
+			Check.Equal(Features.StorageKitPlayer.Kit.Length, first.Count, "Kit items on the first visit");
+			Check.That(first.All(x => x.type > 0 && x.stack > 0), "Invalid kit item");
+			Check.Equal(0, Features.StorageKitPlayer.Grant(worlds, "test-world-A", "MagicStorage", null).Count, "Kit items on the second visit");
+			Check.Equal(first.Count, Features.StorageKitPlayer.Grant(worlds, "test-world-B", "MagicStorage", null).Count, "Kit items in another world");
+			Check.Equal(0, Features.StorageKitPlayer.Grant(worlds, "", "MagicStorage", null).Count, "Kit items without a world id");
 		}
 	}
 }

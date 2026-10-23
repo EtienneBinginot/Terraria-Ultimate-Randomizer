@@ -20,6 +20,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 {
 	public enum HintPurchase { Bought, TooPoor, NotNext, NotSynced, NoTarget, Locked }
 
+	// The Guide's categories: crafting (stations, pickaxes, house items), bosses (boss and event summons), upgrades (life and
+	// mana crystals, life fruit)
+	public enum HintTab : byte { Crafting, Bosses, Upgrades }
+
 	// Buying hint levels: the local player pays with its own coins (inventory, piggy bank, safe...: Player.BuyItem, like
 	// a shop purchase, which vanilla also does on the client) and records the level. In multiplayer the level goes to
 	// the server with the codex discoveries; the server checks it is the next level of a target offered now and shares
@@ -52,9 +56,14 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			return HintPurchase.Bought;
 		}
 
-		// The Guide says it
+		// The Guide says it (his ghost, in the chat)
 		public static void Say(string text)
 		{
+			if (HintSystem.Ghost)
+			{
+				Main.NewText(text, new Color(190, 210, 255));
+				return;
+			}
 			Main.npcChatText = text;
 			Main.npcChatCornerItem = 0;
 		}
@@ -90,6 +99,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 
 		public static bool IsOpen => userInterface?.CurrentState != null;
 
+		// Opened from the codex while no Guide is alive (the Guide's ghost): no dialog to stay next to
+		public static bool Ghost { get; private set; }
+
 		// Typing in the panel's search: letters are text, not hotkeys
 		public static bool IsTyping => IsOpen && state != null && state.IsTyping;
 
@@ -119,6 +131,18 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			state?.StopTyping();
 			userInterface?.SetState(null);
 			hovered = false;
+			Ghost = false;
+		}
+
+		public static bool GuideAlive => NPC.AnyNPCs(NPCID.Guide);
+
+		// The Guide's ghost: the panel without the Guide (dead, or not moved in yet), from the codex
+		public static void OpenGhost()
+		{
+			if (userInterface == null || !HintFacts.Ready) return;
+			Open();
+			Ghost = true;
+			HintShop.Say(CodexText.Get(HintFacts.Targets().Count > 0 ? "Hint.GhostIntro" : "Hint.Nothing"));
 		}
 
 		// Leaves the Guide (panel and dialog) for the codex page about a hint target
@@ -161,7 +185,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		public override void UpdateUI(GameTime gameTime)
 		{
 			if (userInterface?.CurrentState == null) return;
-			if (!TalkingToGuide() || Main.InGuideCraftMenu || !HintFacts.Ready || (state != null && state.CloseRequested))
+			// The ghost's panel closes when the player talks to someone (the Guide's own button opens it next to him)
+			bool gone = Ghost ? Main.LocalPlayer.talkNPC >= 0 || Main.LocalPlayer.dead : !TalkingToGuide();
+			if (gone || Main.InGuideCraftMenu || !HintFacts.Ready || (state != null && state.CloseRequested))
 			{
 				if (state != null) state.CloseRequested = false;
 				Close();
@@ -225,9 +251,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			{
 				Main.mouseLeftRelease = false;
 				SoundEngine.PlaySound(SoundID.MenuOpen);
-				if (IsOpen) Close();
+				if (IsOpen && !Ghost) Close();
 				else
 				{
+					if (IsOpen) Close();
 					Open();
 					HintShop.Say(CodexText.Get(HintFacts.Targets().Count > 0 ? "Hint.Intro" : "Hint.Nothing"));
 				}
@@ -247,9 +274,9 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		// The tab shown: targets still to buy, or those fully known (bought to the end, or found)
 		private bool knownTab;
 		private CodexButton toBuyButton, knownButton;
-		// The category shown: crafting (stations, pickaxes) or bosses (boss and event summons)
-		private bool bossTab;
-		private CodexButton craftingButton, bossesButton;
+		// The category shown
+		private HintTab tab;
+		private readonly CodexButton[] tabButtons = new CodexButton[3];
 		private UIPanel searchPanel;
 		private UISearchBar searchBar;
 		private string search = "";
@@ -293,8 +320,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			panel.Append(close);
 
 			// The two tabs, then a smaller filter inside the tab
-			craftingButton = TabButton("Hint.TabCrafting", () => ShowCategory(false), 0f, 0, -4, 0.5f, 54, 34, 0.9f);
-			bossesButton = TabButton("Hint.TabBosses", () => ShowCategory(true), 4, 0.5f, -4, 0.5f, 54, 34, 0.9f);
+			string[] tabKeys = { "Hint.TabCrafting", "Hint.TabBosses", "Hint.TabUpgrades" };
+			for (int k = 0; k < tabButtons.Length; k++)
+			{
+				HintTab shown = (HintTab)k;
+				tabButtons[k] = TabButton(tabKeys[k], () => ShowCategory(shown), k == 0 ? 0 : 4, k / 3f, k == 1 ? -8 : -4, 1 / 3f, 54, 34, 0.9f);
+			}
 			toBuyButton = TabButton("Hint.TabToBuy", () => ShowTab(false), -166, 0.5f, 162, 0f, 94, 24, 0.68f);
 			knownButton = TabButton("Hint.TabKnown", () => ShowTab(true), 4, 0.5f, 162, 0f, 94, 24, 0.68f);
 
@@ -359,7 +390,14 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			float left = HintSystem.ChatRight + Gap;
 			float room = screenW - left - Gap;
 			float x, y, w, h;
-			if (room >= PanelMinWidth)
+			if (HintSystem.Ghost)
+			{
+				w = Math.Min(PanelMaxWidth, screenW - 2 * Gap);
+				x = (screenW - w) / 2;
+				y = 100;
+				h = Math.Max(400, Math.Min(620, screenH - y - Gap));
+			}
+			else if (room >= PanelMinWidth)
 			{
 				w = Math.Min(PanelMaxWidth, room);
 				x = left;
@@ -410,10 +448,10 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (IsTyping && !searchPanel.ContainsPoint(evt.MousePosition)) searchBar.ToggleTakingText();
 		}
 
-		private void ShowCategory(bool bosses)
+		private void ShowCategory(HintTab shown)
 		{
-			if (bossTab == bosses) return;
-			bossTab = bosses;
+			if (tab == shown) return;
+			tab = shown;
 			targets.ViewPosition = 0;
 			dirty = true;
 		}
@@ -426,13 +464,20 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			dirty = true;
 		}
 
-		// Boss and event summons in the bosses tab, stations and pickaxes in the crafting one
-		public static List<HintTarget> TabTargets(bool known, bool bosses) => TabTargets(known).Where(t => (t.Kind == HintTargetKind.Summon) == bosses).ToList();
+		public static HintTab TabOf(HintTarget target) => target.Kind switch
+		{
+			HintTargetKind.Summon => HintTab.Bosses,
+			HintTargetKind.Upgrade => HintTab.Upgrades,
+			_ => HintTab.Crafting
+		};
+
+		// Boss and event summons in the bosses tab, upgrades in theirs, stations, pickaxes and house items in the crafting one
+		public static List<HintTarget> TabTargets(bool known, HintTab tab) => TabTargets(known).Where(t => TabOf(t) == tab).ToList();
 
 		// What a tab shows below the targets on sale: those that come later (to buy tab only), greyed and not sold, in the
 		// order progression reaches them, so that the whole road is visible
-		public static List<HintTarget> LockedTabTargets(bool bosses) =>
-			HintFacts.ByProgress(HintFacts.LockedTargets().Where(t => (t.Kind == HintTargetKind.Summon) == bosses && CodexSystem.ShownHintLevel(t.Item) < HintFacts.MaxLevel));
+		public static List<HintTarget> LockedTabTargets(HintTab tab) =>
+			HintFacts.ByProgress(HintFacts.LockedTargets().Where(t => TabOf(t) == tab && CodexSystem.ShownHintLevel(t.Item) < HintFacts.MaxLevel));
 
 		// The targets of a tab, in the order progression reaches them: to buy, those offered now and not fully known; known,
 		// every target bought to the end or found
@@ -451,14 +496,13 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			List<UIElement> rows = new();
 			toBuyButton.Active = !knownTab;
 			knownButton.Active = knownTab;
-			craftingButton.Active = !bossTab;
-			bossesButton.Active = bossTab;
-			List<HintTarget> all = TabTargets(knownTab, bossTab);
+			for (int k = 0; k < tabButtons.Length; k++) tabButtons[k].Active = (int)tab == k;
+			List<HintTarget> all = TabTargets(knownTab, tab);
 			List<HintTarget> list = all.Where(Matches).ToList();
-			List<HintTarget> locked = knownTab ? new List<HintTarget>() : LockedTabTargets(bossTab).Where(Matches).ToList();
+			List<HintTarget> locked = knownTab ? new List<HintTarget>() : LockedTabTargets(tab).Where(Matches).ToList();
 			if (!CodexSystem.CanBuyHints) rows.Add(new CodexRow(30, 4).WithLabel(CodexText.Get("Hint.Syncing"), 0.8f, CodexDraw.Muted));
 			string empty = all.Count > 0 ? CodexText.Get("NoMatch")
-				: TabTargets(knownTab, !bossTab).Count > 0 ? CodexText.Get("Hint.NothingHere")
+				: TabTargets(knownTab).Count > 0 ? CodexText.Get("Hint.NothingHere")
 				: CodexText.Get(knownTab ? "Hint.NothingKnown" : "Hint.Nothing");
 			if (list.Count == 0) rows.Add(new CodexRow(30, 4).WithLabel(empty, 0.8f, CodexDraw.Muted));
 			foreach (HintTarget target in list) rows.Add(TargetRow(target));
@@ -525,7 +569,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			selected = item;
 			int level = CodexSystem.ShownHintLevel(item);
 			HintFact fact = HintFacts.For(item);
-			if (speak && fact != null && level > 0) HintShop.Say(HintFacts.Text(fact, level));
+			// The ghost writes in the chat: only what is bought, not each row clicked
+			if (speak && !HintSystem.Ghost && fact != null && level > 0) HintShop.Say(HintFacts.Text(fact, level));
 			BuildDetail();
 		}
 

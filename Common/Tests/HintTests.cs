@@ -139,7 +139,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, $"Hint trees giving other hints away ({hiddenSeen} parts kept for their own hint)");
 		}
 
-		// The Guide's two categories: boss and event summons in Bosses, stations and pickaxes in Crafting, each target once
+		// The Guide's three categories: boss and event summons in Bosses, life and mana upgrades in Upgrades, stations, pickaxes
+		// and house items in Crafting, each target once
 		private static void HintTabsSplit()
 		{
 			TargetsOrSkip();
@@ -147,11 +148,16 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (bool known in new[] { false, true })
 			{
 				List<HintTarget> all = HintPanelState.TabTargets(known);
-				List<HintTarget> crafting = HintPanelState.TabTargets(known, false), bosses = HintPanelState.TabTargets(known, true);
-				if (crafting.Count + bosses.Count != all.Count || crafting.Intersect(bosses).Any()) failures.Add($"known {known}: {crafting.Count} + {bosses.Count} of {all.Count}");
+				List<HintTarget> crafting = HintPanelState.TabTargets(known, HintTab.Crafting), bosses = HintPanelState.TabTargets(known, HintTab.Bosses),
+					upgrades = HintPanelState.TabTargets(known, HintTab.Upgrades);
+				if (crafting.Count + bosses.Count + upgrades.Count != all.Count || crafting.Intersect(bosses).Any() || crafting.Intersect(upgrades).Any() || bosses.Intersect(upgrades).Any())
+				{
+					failures.Add($"known {known}: {crafting.Count} + {bosses.Count} + {upgrades.Count} of {all.Count}");
+				}
 				// Judged on the items themselves, not on the kind the filter reads
 				failures.AddRange(bosses.Where(t => !Protection.IsBossSummon(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among the bosses"));
-				failures.AddRange(crafting.Where(t => Protection.IsBossSummon(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among crafting"));
+				failures.AddRange(crafting.Where(t => Protection.IsBossSummon(t.Item) || Protection.IsUpgrade(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among crafting"));
+				failures.AddRange(upgrades.Where(t => !Protection.IsUpgrade(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among the upgrades"));
 			}
 			Check.All(failures, "Hint categories");
 		}
@@ -551,12 +557,12 @@ namespace UltimateRandomizer.Common.Tests
 			List<HintTarget> locked = HintFacts.LockedTargets();
 			if (locked.Count == 0) Check.Skip("nothing is more than one tier ahead");
 			List<string> failures = new();
-			foreach (bool bosses in new[] { false, true })
+			foreach (HintTab tab in new[] { HintTab.Crafting, HintTab.Bosses, HintTab.Upgrades })
 			{
-				HashSet<int> onSale = HintPanelState.TabTargets(false, bosses).Select(t => t.Item).ToHashSet();
-				HashSet<int> known = HintPanelState.TabTargets(true, bosses).Select(t => t.Item).ToHashSet();
-				HashSet<int> later = HintPanelState.LockedTabTargets(bosses).Select(t => t.Item).ToHashSet();
-				foreach (HintTarget target in HintFacts.AllTargets().Where(t => (t.Kind == HintTargetKind.Summon) == bosses))
+				HashSet<int> onSale = HintPanelState.TabTargets(false, tab).Select(t => t.Item).ToHashSet();
+				HashSet<int> known = HintPanelState.TabTargets(true, tab).Select(t => t.Item).ToHashSet();
+				HashSet<int> later = HintPanelState.LockedTabTargets(tab).Select(t => t.Item).ToHashSet();
+				foreach (HintTarget target in HintFacts.AllTargets().Where(t => HintPanelState.TabOf(t) == tab))
 				{
 					string name = HintFacts.ItemName(target.Item);
 					bool isLocked = HintFacts.IsLocked(target);

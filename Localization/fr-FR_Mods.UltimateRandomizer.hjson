@@ -94,6 +94,7 @@ Tests: {
 	PriceFloor: Les prix des boutiques ne sont jamais sous la valeur de l'objet
 	DropRates: Les taux de drop sont valides
 	TierFromRecipes: Les objets fabriqués prennent le tier de leur recette vanilla quand il est plus précoce que leur rareté (combinaisons du Tinkerer)
+	StorageKitOnce: Le kit Magic Storage est donné une fois par monde, et de nouveau dans un autre monde
 	SnapshotsCaptured: Les tables de loot d'origine ont été lues
 	MobPlansValid: Toutes les tables de loot des ennemis sont valides
 	LootAbundanceScales: L'abondance du butin multiplie les drops des ennemis, pas les drops garantis
@@ -172,6 +173,7 @@ Tests: {
 	ProgressionStationsProtected: Les stations de progression et thématiques sont protégées, sauf si la protection des stations vaut Aucune
 	ProgressionStationsGuaranteed: Les stations de progression et les invocations de boss non protégées tombent d'ennemis fréquents de leur palier (1 % ou plus)
 	WorldSummonsProtected: Les invocations trouvées dans le monde restent protégées, celles qu'on fabrique sont randomisées
+	UpgradesOutOfPools: Les améliorations de vie et de mana ne sont jamais tirées au sort, garanties ni utilisées comme ingrédients, et les drops les gardent
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier
 	GuaranteedBiomeHosts: Chaque objet garanti est porté par au moins 3 ennemis d'un même biome, avec la même chance sur chacun
@@ -229,6 +231,8 @@ Tests: {
 	RecipeAlwaysFinalResult: Les recettes donnent toujours leur résultat final, sans remplaçant avant son tier
 	RecipeKeyIngredient: Les recettes randomisées ne sont pas faisables avant le tier de leur résultat (ingrédient clé)
 	RecipeNoStationTwins: Une même recette (résultat et ingrédients) n'apparaît jamais sur deux stations différentes
+	UpgradeRecipes: Chaque amélioration de vie ou de mana est le résultat d'une recette aléatoire, faisable dès son tier
+	HouseItemsObtainable: La porte, la plateforme et la torche sont des cibles d'indices et restent obtenables (trouvées dans le monde ou par leur recette vanilla)
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares
@@ -545,7 +549,10 @@ Codex: {
 
 		TabCrafting: Artisanat
 		TabBosses: Boss
-		NothingHere: Rien dans cet onglet pour l'instant : regarde dans l'autre.
+		TabUpgrades: Améliorations
+		GhostButton: Le fantôme du Guide
+		GhostIntro: Hououou... Même depuis l'au-delà, je peux encore te dire d'où viennent les choses. Contre quelques pièces, bien sûr.
+		NothingHere: Rien dans cet onglet pour l'instant : regarde dans les autres.
 		LockedTitle: Plus tard
 		LockedSay: "{0} ? Pas encore : redemande-moi {1}."
 		LockedWhen: Arrive {0} ; le Guide en parle {1}.
@@ -951,6 +958,7 @@ Chat: {
 	ResetNeedsReload: Certains réglages demandent un rechargement et n'ont pas été réinitialisés.
 	OldRandomizerEnabled: "[Ultimate Randomizer] tRandomizer est aussi activé : le loot est randomisé deux fois. N'active qu'un seul des deux randomizers dans Manage Mods."
 	StartingKit: Ultimate Randomizer : tu as reçu un kit de départ aléatoire pour ce monde !
+	StorageKit: Ultimate Randomizer : tu as reçu un kit Magic Storage pour ce monde !
 	PowerUp: Ton équipement a de l'avance sur le monde : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts.
 	PowerDown: Le monde rattrape ton équipement : les nouveaux ennemis ont x{0} de vie et x{1} de dégâts.
 	PowerCaughtUp: Le monde a rattrapé ton équipement : les nouveaux ennemis redeviennent normaux.
@@ -2141,6 +2149,11 @@ Configs: {
 		KitTools: {
 			Label: Outils
 			Tooltip: ""
+		}
+
+		MagicStorageKit: {
+			Label: "Kit Magic Storage"
+			Tooltip: "Si Magic Storage est chargé : donne à chaque personnage, une fois par monde, un Storage Heart, 4 Storage Units, un Crafting Access ainsi que le Portable Access et le Portable Crafting Access de base."
 		}
 
 		RandomizeTownNpcOrder: {
