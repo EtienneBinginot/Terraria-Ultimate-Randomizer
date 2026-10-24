@@ -614,10 +614,7 @@ namespace UltimateRandomizer.Common.Features
 		// The tier from which a recipe's stations (as planned) are all had, with the plan's availability (tests: station locks)
 		public static int StationAvailability(RecipePlan plan, int i)
 		{
-			Dictionary<int, List<int>> itemsByTile = Stations.PlacersByTile();
-			int tier = 0;
-			foreach (int tile in plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)) tier = Math.Max(tier, TileAvailability(tile, itemsByTile, plan.Availability));
-			return tier;
+			return LockStationTier(plan, i, plan.Availability, Stations.PlacersByTile());
 		}
 
 		// Is this recipe a shell this plan switches on (it got ingredients)?
@@ -757,7 +754,8 @@ namespace UltimateRandomizer.Common.Features
 			ItemGraph graph, bool waitChains, ref int placed, ref int waiting)
 		{
 			HashSet<int> handled = new();
-			HashSet<int> early = Enumerable.Range(0, Count).Where(i => KeyTurnedEarly(result, i, doable)).ToHashSet();
+			Dictionary<int, List<int>> itemsByTile = Stations.PlacersByTile();
+			HashSet<int> early = Enumerable.Range(0, Count).Where(i => KeyTurnedEarly(result, i, doable, avail, itemsByTile)).ToHashSet();
 			if (early.Count == 0) return handled;
 			HashSet<int> earlyResults = early.Select(i => results[i]).ToHashSet();
 			foreach (int i in early.OrderBy(i => i))
@@ -806,7 +804,8 @@ namespace UltimateRandomizer.Common.Features
 				int placed = 0, waiting = 0;
 				RekeyEarly(result, results, avail, doable, buckets, weights, uses, graph, waitChains, ref placed, ref waiting);
 				replaced += placed;
-				left = Enumerable.Range(0, count).Count(i => KeyTurnedEarly(result, i, doable)) - placed;
+				Dictionary<int, List<int>> itemsByTile = Stations.PlacersByTile();
+				left = Enumerable.Range(0, count).Count(i => KeyTurnedEarly(result, i, doable, avail, itemsByTile)) - placed;
 				if (placed == 0 && waiting > 0 && waitChains)
 				{
 					waitChains = false;
@@ -820,10 +819,26 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// A rebuilt recipe with a planned key or a station lock, doable before its T: that key (a crafted one) or that station is
-		// made earlier than planned. A station's recipe keeps its found materials (StationMaterialAllowed); houses and upgrades have no T to keep
-		private static bool KeyTurnedEarly(RecipePlan result, int i, int[] doable) =>
-			(result.PlannedKeys[i] > 0 || result.StationLocks[i]) && result.IngredientTiers[i] > 0 && result.Ingredients[i] != null && !result.Repaired[i] && !result.Twin[i]
-			&& !RecipeSystem.IsShell(i) && !RecipeSystem.HouseRecipe(i) && !StationRecipe(i) && !ItemPool.IsSpecial(result.Results[i].type) && doable[i] < result.IngredientTiers[i];
+		// made earlier than planned. A station lock also counts as turned early when its station is had before T whatever the
+		// ingredients: the lock is the recipe's only gate (a Bone Welder whose shell made it at 2 held tier-3 bone furniture
+		// that random tier-3 ingredients happened to keep at 3). A station's recipe keeps its found materials
+		// (StationMaterialAllowed); houses and upgrades have no T to keep
+		private static bool KeyTurnedEarly(RecipePlan result, int i, int[] doable, int[] avail, Dictionary<int, List<int>> itemsByTile)
+		{
+			int t = result.IngredientTiers[i];
+			if (!(result.PlannedKeys[i] > 0 || result.StationLocks[i]) || t <= 0 || result.Ingredients[i] == null || result.Repaired[i] || result.Twin[i]
+				|| RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i) || StationRecipe(i) || ItemPool.IsSpecial(result.Results[i].type)) return false;
+			if (doable[i] < t) return true;
+			return result.StationLocks[i] && LockStationTier(result, i, avail, itemsByTile) < t;
+		}
+
+		// The tier a station-locked recipe's planned stations are all had from with this availability (StationAvailability)
+		private static int LockStationTier(RecipePlan result, int i, int[] avail, Dictionary<int, List<int>> itemsByTile)
+		{
+			int tier = 0;
+			foreach (int tile in result.Tiles[i] ?? RecipeSystem.OriginalTiles(i)) tier = Math.Max(tier, TileAvailability(tile, itemsByTile, avail));
+			return tier;
+		}
 
 		// The recipes of the life and mana upgrades (SpecialRecipe), last (nothing else is planned around them): each one always
 		// has a key ingredient (of the upgrade's tier U; at tier 0, an uncommon material, so a cheap recipe is no free crystal),

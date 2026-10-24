@@ -81,7 +81,12 @@ namespace UltimateRandomizer.Common.Tests
 					continue;
 				}
 				if (current == original || !ItemPool.IsValid(current)) continue;
-				if (ItemPool.Info[current].Category != ItemPool.Info[original].Category) failures.Add($"{Lang.GetItemNameValue(type)} -> {Lang.GetItemNameValue(current)} changes category");
+				// A surprise (ShimmerSurpriseChance) changes category on purpose: recomputed with the live progression; when that
+				// moved since the set was applied, the surprise stream alone tells (its fallback may have kept the category)
+				float chance = CraftingConfig.Instance.ShimmerSurpriseChance;
+				int replayed = ShimmerSystem.PickTransformation(type, original, chance, ProgressionSystem.UnlockedTier, Main.hardMode, out bool fromSurprise);
+				bool surprise = replayed == current ? fromSurprise : ShimmerSystem.IsSurprise(type, original, chance);
+				if (!surprise && ItemPool.Info[current].Category != ItemPool.Info[original].Category) failures.Add($"{Lang.GetItemNameValue(type)} -> {Lang.GetItemNameValue(current)} changes category");
 				long max = Math.Max(StackRules.ValueOf(original), StackRules.ValueOf(type)) * 3L + Item.silver;
 				if (StackRules.ValueOf(current) > max) failures.Add($"{Lang.GetItemNameValue(type)} -> {Lang.GetItemNameValue(current)} too valuable");
 			}

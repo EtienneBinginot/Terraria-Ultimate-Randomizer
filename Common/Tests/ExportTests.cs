@@ -208,11 +208,9 @@ namespace UltimateRandomizer.Common.Tests
 				int doable = 0;
 				// A group slot (any Dragonfly, shown as its iconic Black Dragonfly) counts its best member
 				foreach ((int type, int stack) x in planned ?? Array.Empty<(int, int)>()) doable = Math.Max(doable, RecipeTests.IngredientAvail(plan, i, x.type));
-				foreach (int tile in plannedTiles ?? Array.Empty<int>())
-				{
-					int station = GuaranteedSources.StationItem(tile);
-					if (station > 0 && station < plan.Availability.Length) doable = Math.Max(doable, plan.Availability[station]);
-				}
+				// Every placer of each station counts, basic ones too (GuaranteedSources.StationItem skips them: a Teacup at a Tea
+				// Kettle had at 3 showed as doable at 0)
+				if (plan.Availability != null && plan.Tiles != null) doable = Math.Max(doable, RecipePlanner.StationAvailability(plan, i));
 				int resultTier = ItemPool.IsValid(result.type) ? ItemPool.Info[result.type].Tier : -1;
 				rows.Add(Row(i, recipe.Mod?.Name ?? "Terraria", ItemRef(result.type), result.stack, resultTier,
 					Ingr(vanillaIngredients), Tiles(vanillaTiles), Ingr(planned), Tiles(plannedTiles),

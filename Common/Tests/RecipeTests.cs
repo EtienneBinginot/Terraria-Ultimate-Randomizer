@@ -1144,8 +1144,10 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// A recipe locked by its station (RecipePlan.StationLocks) has no planned key, is rebuilt above tier 0, and its planned
-		// stations are had no earlier than its tier with the final plan (RecipePlanner.StationAvailability), so it is not doable
-		// before it (RecipeNotBeforeItsTier checks the doable tier too); never a house, shell, upgrade nor a station's recipe.
+		// stations are had no earlier than its tier with the final plan (RecipePlanner.StationAvailability), whatever its
+		// ingredients (the lock is its only gate: one whose station turns earlier is keyed, RecipePlanner.KeyTurnedEarly).
+		// RecipeNotBeforeItsTier checks the doable tier, which ingredients of T may still hold when the station comes early
+		// (tier-3 bone furniture of Bone and tier-3 materials at a Bone Welder made at 2); never a house, shell, upgrade nor a station's recipe.
 		// Vanilla stations lock recipes too (a recipe made at its vanilla station had exactly at its tier). Logs how many and a
 		// few of them
 		private static void RecipeStationLocks()
