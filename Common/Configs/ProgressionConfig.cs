@@ -159,7 +159,8 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(1f)]
 		public float GuaranteedDropMultiplier;
 
-		// Each crafting station is made from its recipe, or dropped by its single guardian enemy with this chance per kill (%)
+		// With randomized recipes, each crafting station is made from its recipe, or dropped by its single guardian enemy with
+		// this chance per kill (%), a tenth of it once the station has been obtained in the world (GuaranteedSources)
 		[Range(1f, 100f)]
 		[Increment(0.5f)]
 		[DefaultValue(12.5f)]

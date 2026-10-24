@@ -104,6 +104,37 @@ namespace UltimateRandomizer.Common.Features
 			}
 			return total / TotalKills;
 		}
+
+		// How many of an item one early kill gives on average (drops per kill), from the enemies the early kills meet
+		// (EarlyKillShare) and their planned drops: unlocked, without conditions (no event, no hardmode), guaranteed sources left
+		// out. Seed, spawn map and synced settings only (the critical stations' recipes read it: RecipePlanner.StartMaterials)
+		public static double EarlyDropRate(int item)
+		{
+			HashSet<int> types = new();
+			List<int> pool = BiomeSlots.Active ? null : EnemySwapPool.NaturalEnemies(0);
+			foreach ((int[] npcs, _, SpawnBiome biome) in EarlyKills)
+			{
+				foreach (int npc in npcs)
+				{
+					types.Add(BiomeSlots.TypeOf(npc));
+					if (!BiomeSlots.Active) continue;
+					BiomeSlot slot = BiomeSlots.SlotIn(BiomeSlots.Current, (int)biome, npc);
+					if (slot != null) types.UnionWith(BiomeSlots.SpawnParts(slot).Select(p => BiomeSlots.TypeOf(p.id)));
+				}
+			}
+			if (pool != null) types.UnionWith(pool.Select(BiomeSlots.TypeOf));
+			double rate = 0;
+			foreach (int type in types.OrderBy(t => t))
+			{
+				double share = EarlyKillShare(k => k == type);
+				if (share <= 0) continue;
+				double chance = RandomNpcDropRule.Plan(type, ProgressionSystem.PlannedExpert, guaranteed: false)
+					.Where(d => d.Item == item && !d.Locked && (d.Conditions == null || d.Conditions.Count == 0)).Sum(d => (double)d.Chance);
+				rate += share * chance;
+			}
+			return rate;
+		}
+
 		// planned: the chances' defaults (EarlyKillShare); else the settings (the simulations of the real early game)
 		private static float SwapChance(bool planned = false)
 		{

@@ -169,7 +169,10 @@ namespace UltimateRandomizer.Common.Tests
 				crafted = RecipePlanner.StationRecipeTiers(plan).GetValueOrDefault(ItemID.WorkBench, Findability.Never);
 				int count = Math.Min(RecipeSystem.RecipeCount, plan.Results.Length);
 				List<int> benches = Enumerable.Range(0, count).Where(i => plan.Results[i].type == ItemID.WorkBench && !Main.recipe[i].Disabled && !plan.Twin[i]).ToList();
-				byHand = benches.Any(i => (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Length == 0);
+				// By hand, and from start materials only (no ore: before any mining)
+				HashSet<int> start = RecipePlanner.StartMaterials(false);
+				byHand = benches.Any(i => (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Length == 0
+					&& (plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).All(x => start.Contains(x.type)));
 				recipe = benches.Count == 0 ? "none" : string.Join("; ", benches.Select(i => string.Join(", ", (plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).Select(x => $"{x.stack} {Lang.GetItemNameValue(x.type)}"))
 					+ ((plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Length == 0 ? " by hand" : " at " + string.Join("+", (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Select(Stations.Name)))));
 			}
@@ -180,7 +183,7 @@ namespace UltimateRandomizer.Common.Tests
 			if (!IsDefault(progression, "StationGuardianChance")) Check.Skip("StationGuardianChance is not at its default value");
 			RequireDefaults();
 			List<string> failures = new();
-			if (RecipeSystem.Applied && CraftingConfig.Instance.IngredientMode == IngredientMode.Randomized && (crafted != 0 || !byHand)) failures.Add($"the work bench's recipe is not made by hand at tier 0 ({recipe})");
+			if (RecipeSystem.Applied && CraftingConfig.Instance.IngredientMode == IngredientMode.Randomized && (crafted != 0 || !byHand)) failures.Add($"the work bench's recipe is not made by hand at tier 0 from start materials ({recipe})");
 			if (minutes > MaxGuardianBenchMinutes) failures.Add($"its guardian alone gives one after {minutes:0} minutes on average, at most {MaxGuardianBenchMinutes:0}");
 			Check.All(failures, "First work bench");
 		}

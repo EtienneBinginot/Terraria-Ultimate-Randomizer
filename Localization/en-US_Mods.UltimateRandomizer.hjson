@@ -1352,7 +1352,7 @@ Configs: {
 
 		StationGuardianChance: {
 			Label: "Station guardian drop chance (%)"
-			Tooltip: "Each crafting station has a random recipe doable at its tier (the Guide tells it) and one guardian: a common enemy of its tier that drops it with this chance per kill (shared between players). A boss guarding a late station always drops it. Pots and chests never give stations."
+			Tooltip: "With randomized recipes, each crafting station has a random recipe doable at its tier (the Guide tells it) and one guardian: a common enemy of its tier that drops it with this chance per kill (shared between players), ten times less often once anyone has obtained that station in the world. A boss guarding a late station always drops it. Pots and chests never give stations."
 		}
 
 		GuaranteedHostsPerItem: {
@@ -1362,7 +1362,7 @@ Configs: {
 
 		StationFindKills: {
 			Label: "Kills in its biome to find a summon or pickaxe"
-			Tooltip: "Average number of kills in its biome before a guaranteed boss summon or pickaxe drops, all its enemies together. Crafting stations come from their recipe, or from their guardian (see the guardian chance)."
+			Tooltip: "Average number of kills in its biome before a guaranteed boss summon or pickaxe drops, all its enemies together. Crafting stations come from their recipe, or from their guardian (see the guardian chance); with recipes not randomized, the unprotected progression stations are found this way too."
 		}
 
 		PotGuaranteeChance: {

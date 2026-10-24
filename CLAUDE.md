@@ -49,10 +49,13 @@ Everything is deterministic per world seed, follows progression tiers, and stays
     used by journal/debug/findability), `LootSubstitution` (swaps items in `GlobalItem.OnSpawn` by source),
     `DropHelper`, `BagLootFeature`, `ChestFeature`, `TileDropFeature` (ores, pots), `WorldSourcesFeature` (trees,
     herbs, Extractinator, Angler), `FishingFeature`, `ShopFeature`, `ShimmerFeature`.
-  - `GuaranteedSources` (+ `Findability`): items that must be findable (basic stations, vanilla ingredients) placed on
-    common enemies, pots, wooden chests; tier at which every item is found without crafting.
+  - `GuaranteedSources` (+ `Findability`): items that must be findable (boss summons, progression tools, vanilla
+    ingredients) placed on the common enemies of one biome of their tier (tools and early materials also in pots); tier
+    at which every item is found without crafting. Crafting stations (with randomized recipes) are small quests instead:
+    a recipe rebuilt by `RecipePlanner` for their tier (critical ones from start materials only, `StartMaterials`) and
+    one guardian enemy (`PlaceGuardian`, `StationGuardianChance`, a tenth once found in the world); never pots nor chests.
   - `RecipeFeature` (`RecipeSystem`: stores originals, applies/restores results, ingredients, stations) and
-    `RecipePlanner` (availability fixed point, ingredient and station plans).
+    `RecipePlanner` (availability fixed point, ingredient and station plans, `StationRecipeTiers`).
   - `EnemyStatsFeature` (type multipliers, `EnemyIndividualNPC`: individual variation, giants/minis, network sync,
     loot bonus), `EnemySwapFeature` (spawn swaps), `PacingModel` (simulated early hour).
 - `Tests/`: in-game test suite (`TestRunner`, `Check`), one file per area; `Debug/`: debug panel (K) and tools;

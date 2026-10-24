@@ -90,8 +90,11 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Every crafting station (GuaranteedSources.PlacerRequirements) has a live recipe, rebuilt (its shell when no recipe
 		// made it), that makes it by its tier without any guardian (RecipePlanner.StationRecipeTiers: the stations' own drops
-		// left out, so no station relies on its guardian through another one); its new ingredients are found, never crafted.
-		// The Work Bench is made by hand from materials found at tier 0. A few recipes are logged
+		// left out, so no station relies on its guardian through another one); its new ingredients are found, never crafted:
+		// a critical station's (Work Bench, Furnace, Anvil, Table, Chair) among the start materials (RecipePlanner.StartMaterials:
+		// gathered around the spawn in the first minutes, no ore for the Work Bench), another's had by its tier in the biomes
+		// open then (StationMaterialTier). The Work Bench is made by hand. No station shimmers back into its ingredients. A few
+		// recipes are logged
 		private static void StationsCraftable()
 		{
 			RequireRandomIngredients();
@@ -135,9 +138,14 @@ namespace UltimateRandomizer.Common.Tests
 					{
 						if (vanilla.Contains(type) && !RecipePlanner.IngredientReplaceable(type)) continue;
 						if (Findability.Tier(type) > tier) failures.Add($"{name}: {Name(type)} is not found by tier {tier} ({Show(Findability.Tier(type))})");
+						if (station.Critical && !RecipePlanner.StartMaterials(station.Item != ItemID.WorkBench).Contains(type)) failures.Add($"{name}: {Name(type)} is not a start material");
+						else if (!station.Critical && RecipePlanner.StationMaterialTier(type) > tier) failures.Add($"{name} (tier {tier}): {Name(type)} is in a biome opened at {Show(RecipePlanner.StationMaterialTier(type))}");
 					}
 				}
 				if (examples.Count < 8) examples.Add($"{name} (tier {tier}, crafted at {Show(made)}): {Describe(recipes[0])}");
+				// A station from its guardian never shimmers into its recipe's key
+				int[] decraft = station.Item < ItemID.Sets.CraftingRecipeIndices.Length ? ItemID.Sets.CraftingRecipeIndices[station.Item] : null;
+				if (RecipeSystem.Applied && decraft != null && decraft.Length > 0) failures.Add($"{name}: shimmers back into {decraft.Length} recipe(s)");
 			}
 			// The Work Bench by hand, from tier 0 materials
 			if (stations.Any(r => r.Item == ItemID.WorkBench))

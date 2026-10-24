@@ -51,11 +51,14 @@ namespace UltimateRandomizer.Common.Tests
 		// Every crafting station (GuaranteedSources.PlacerRequirements) has exactly one guardian: a natural, common enemy of its
 		// tier (a boss of its tier only without natural enemies there), never an event enemy, carrying it with
 		// StationGuardianChance (a boss: at every kill), and nothing else gives it among the guaranteed sources: no pot, no
-		// chest placement. Distinct guardians while the tier has enough enemies; also over other seeds
+		// chest placement. Placed at the station's own tier, and in a biome its guardian makes at least MinGuardianShare of
+		// the spawns of in each period kept (recomputed from the slots). Distinct guardians while the tier has enough enemies;
+		// also over other seeds
 		private static void StationsOneGuardian()
 		{
 			List<GuaranteedSources.Requirement> stations = GuaranteedSources.PlacerRequirements().ToList();
 			if (stations.Count == 0) Check.Skip("every station is protected");
+			periodShares.Clear();
 			List<string> failures = new();
 			HashSet<int> placers = stations.Select(r => r.Item).ToHashSet();
 			foreach (int item in GuaranteedSources.PotItems(Tiers.Max).Where(placers.Contains)) failures.Add($"{Name(item)} in the pot items");
@@ -77,6 +80,16 @@ namespace UltimateRandomizer.Common.Tests
 				int tier = Tiers.Clamp(station.Tier);
 				int hostTier = GuaranteedSources.HostTier(guardian);
 				if (!place.Shifted && hostTier != tier && !(place.Boss && NpcTiers.BaseTier(guardian) <= tier)) failures.Add($"{name} (tier {tier}): guardian {Lang.GetNPCNameValue(guardian)} of tier {hostTier}");
+				if (!place.Shifted && place.Tier != tier) failures.Add($"{name} (tier {tier}): placed at tier {place.Tier}");
+				// Met steadily: the sampled slot shares, with a little room for the sampling
+				if (place.Biome >= 0 && !place.Boss && !place.Fallback && BiomeSlots.HasAnySlot(guardian))
+				{
+					foreach (SlotTime period in Periods(place.Time))
+					{
+						double share = PeriodShareFromSlots(guardian, place.Biome, place.Tier, period);
+						if (share < GuaranteedSources.MinGuardianShare * 0.9) failures.Add($"{name}: {Lang.GetNPCNameValue(guardian)} makes {share:P1} of {BiomeSlots.BiomeName(place.Biome)} ({period}), at least {GuaranteedSources.MinGuardianShare:P0}");
+					}
+				}
 				if (place.Boss ? !NpcTiers.IsBoss(guardian) : !EnemySwapPool.IsSwappable(guardian)) failures.Add($"{name}: {Lang.GetNPCNameValue(guardian)} is not a natural enemy");
 				if (GuaranteedSources.IsEventEnemy(guardian)) failures.Add($"{name}: on {Lang.GetNPCNameValue(guardian)}, an event enemy");
 				if (!place.Boss && ContentSamples.NpcsByNetId.TryGetValue(guardian, out NPC sample) && sample.rarity > 0) failures.Add($"{name}: on {Lang.GetNPCNameValue(guardian)}, a rare enemy");
@@ -1090,8 +1103,9 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Every summon and tool drops within MaxFindKills kills of its biome (1 / sum of share x chance over its hosts); the
-		// worst ones are logged. The crafting stations' guardians are only logged (kills of their biome, minutes of early kills
-		// for the critical ones): their chance is a setting, their recipe the main way (StationsCraftable)
+		// worst ones are logged. A crafting station's guardian, a backup of its recipe (StationsCraftable), within
+		// GuardianKillsFactor x StationFindKills kills of its biome while StationGuardianChance is not below its default (the
+		// critical ones also logged in minutes of early kills; the Forest fallback, without a known share, logged only)
 		private static void GuaranteedFindTime()
 		{
 			if (!BiomeSlots.SpawnsPlanned) Check.Skip("enemies are swapped without biomes");
@@ -1100,14 +1114,15 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			periodShares.Clear();
 			List<string> guardians = new();
+			bool checkGuardians = ProgressionConfig.Instance.StationGuardianChance >= GuaranteedSources.NominalGuardianChance * 100 - 1e-3;
 			foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements.Where(r => r.Station || r.Tool))
 			{
 				bool guarded = Guarded(requirement.Item);
-				// Critical stations: logged in minutes of the pacing model's early kills
+				// Critical stations: also logged in minutes of the pacing model's early kills
 				if (requirement.Critical)
 				{
 					guardians.Add($"{Name(requirement.Item)} {GuaranteedSources.FindMinutes(requirement.Item):0} min");
-					continue;
+					if (!guarded) continue;
 				}
 				int biome = GuaranteedSources.BiomeOf(requirement.Item);
 				if (biome < 0) continue;
@@ -1132,6 +1147,11 @@ namespace UltimateRandomizer.Common.Tests
 				if (guarded)
 				{
 					guardians.Add($"{Name(requirement.Item)} {kills:0}");
+					// Bounded too (GuardianKillsFactor x StationFindKills) while the guardian's chance is at its default or above
+					double guardBound = GuaranteedSources.GuardianKillsFactor * ProgressionConfig.Instance.StationFindKills;
+					bool fallback = GuaranteedSources.TryPlacement(requirement.Item, out GuaranteedSources.Placement guardPlace) && guardPlace.Fallback;
+					if (checkGuardians && !fallback && kills > guardBound) failures.Add($"{Name(requirement.Item)} (guardian): {kills:0} kills ({worst}), at most {guardBound:0} "
+						+ $"({BiomeSlots.BiomeName(biome)}: {string.Join(", ", hosts.Select(h => $"{Lang.GetNPCNameValue(h)} {PeriodShareFromSlots(h, biome, tier, worst):P1}"))})");
 					continue;
 				}
 				double bound = GuaranteedSources.MaxFindKills;

@@ -129,9 +129,15 @@ namespace UltimateRandomizer.Common.Features
 			basePartners = null;
 			pairing = null;
 			placerTiers = null;
+			criticalPlacers = null;
+			startMaterials = null;
+			startMaterialsNoOre = null;
 		}
 
 		private static Dictionary<int, int> placerTiers;
+		private static HashSet<int> criticalPlacers;
+		private static HashSet<int> startMaterials;
+		private static HashSet<int> startMaterialsNoOre;
 
 		// The crafting stations' items and their tier (GuaranteedSources.PlacerRequirements: unprotected stations). Their
 		// recipes are rebuilt for that tier at the latest, from found materials and stations made before them, so each one can
@@ -141,9 +147,91 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (placerTiers != null) return placerTiers;
 			Dictionary<int, int> tiers = new();
-			foreach (GuaranteedSources.Requirement r in GuaranteedSources.PlacerRequirements()) tiers[r.Item] = Math.Min(tiers.GetValueOrDefault(r.Item, r.Tier), Tiers.Clamp(r.Tier));
-			if (ItemPool.Ready) placerTiers = tiers;
+			HashSet<int> critical = new();
+			foreach (GuaranteedSources.Requirement r in GuaranteedSources.PlacerRequirements())
+			{
+				tiers[r.Item] = Math.Min(tiers.GetValueOrDefault(r.Item, r.Tier), Tiers.Clamp(r.Tier));
+				if (r.Critical) critical.Add(r.Item);
+			}
+			if (ItemPool.Ready)
+			{
+				placerTiers = tiers;
+				criticalPlacers = critical;
+			}
 			return tiers;
+		}
+
+		// A critical station (Work Bench, Furnace, Anvil, Table, Chair) whose recipe is planned: made from StartMaterials only
+		public static bool CriticalPlacer(int item)
+		{
+			if (criticalPlacers == null) PlacerTiers();
+			return criticalPlacers?.Contains(item) ?? GuaranteedSources.PlacerRequirements().Any(r => r.Critical && r.Item == item);
+		}
+
+		// What a new character gathers in its first minutes around the spawn, its caves and the nearby desert: the critical
+		// stations' recipes take nothing else (a Hive, Marble or a Pumpkin out of Halloween is found at tier 0, not in the first
+		// minutes). The world materials of the start biomes, the first ores (never for the Work Bench: it comes before any
+		// mining), and the early drops the pacing model's early kills give within StartDropKills kills on average
+		private static readonly int[] StartWorldMaterials =
+		{
+			ItemID.Wood, ItemID.StoneBlock, ItemID.DirtBlock, ItemID.ClayBlock, ItemID.SandBlock, ItemID.Daybloom, ItemID.Mushroom, ItemID.Acorn, ItemID.Cobweb
+		};
+		private static readonly int[] StartOres = { ItemID.CopperOre, ItemID.TinOre, ItemID.IronOre, ItemID.LeadOre };
+		private static readonly int[] StartDrops = { ItemID.Gel, ItemID.Lens };
+		public const double StartDropKills = 60;
+
+		// Read for every candidate of a critical station's slots: cached (do not modify the set)
+		public static HashSet<int> StartMaterials(bool ores)
+		{
+			HashSet<int> set = startMaterials;
+			HashSet<int> noOre = startMaterialsNoOre;
+			if (set == null || noOre == null)
+			{
+				set = StartWorldMaterials.ToHashSet();
+				foreach (int ore in StartOres)
+				{
+					if (OreMap.IsFindable(ore)) set.Add(ore);
+				}
+				foreach (int drop in StartDrops)
+				{
+					double rate = PacingModel.EarlyDropRate(drop);
+					if (rate > 0 && 1 / rate <= StartDropKills) set.Add(drop);
+				}
+				noOre = set.Where(x => !StartOres.Contains(x)).ToHashSet();
+				if (ItemPool.Ready)
+				{
+					startMaterials = set;
+					startMaterialsNoOre = noOre;
+				}
+			}
+			return ores ? set : noOre;
+		}
+
+		// The tier from which a station's recipe may take a world material: the tier its biome opens at for guaranteed items
+		// (GuaranteedSources.AllowedTier: the Jungle's Hive after the Eye, the granite and marble caves after the evil boss),
+		// never a seasonal one (Pumpkins grow at Halloween only); its findable tier for anything else
+		public static int StationMaterialTier(int item)
+		{
+			int found = Findability.Tier(item);
+			SpawnBiome? biome = item switch
+			{
+				ItemID.Hive or ItemID.JungleSpores or ItemID.RichMahogany or ItemID.MudBlock => SpawnBiome.Jungle,
+				ItemID.GlowingMushroom => SpawnBiome.Mushroom,
+				ItemID.GraniteBlock => SpawnBiome.Granite,
+				ItemID.MarbleBlock => SpawnBiome.Marble,
+				_ => null
+			};
+			if (item == ItemID.Pumpkin) return Never;
+			return biome is SpawnBiome b && found < Never ? Math.Max(found, GuaranteedSources.AllowedTier((int)b)) : found;
+		}
+
+		// May a station's recipe take this new ingredient? A critical station: a start material; any other: a material had by
+		// its tier in the biomes open then
+		public static bool StationMaterialAllowed(int station, int item)
+		{
+			if (!StationPlacer(station, out int tier)) return true;
+			if (CriticalPlacer(station)) return StartMaterials(station != ItemID.WorkBench).Contains(item);
+			return StationMaterialTier(item) <= tier;
 		}
 
 		// Does this item place a crafting station whose recipe is planned for its tier (and which has a guardian)?
@@ -664,8 +752,8 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// The tier each crafting station's item can be crafted from without any guardian (Never: no recipe gives it in time):
-		// the plan's recipes, the stations' own drops left out (whatever drops them: their recipe is the way checked). Tests
-		// and the log
+		// the plan's recipes, the stations' own drops left out (whatever drops them: their recipe is the way checked), each
+		// result given from its planned tier (LockTiers: ResultTiers, at once for a vanilla source). Tests and the log
 		public static Dictionary<int, int> StationRecipeTiers(RecipePlan plan)
 		{
 			Dictionary<int, int> placers = PlacerTiers();
@@ -674,7 +762,7 @@ namespace UltimateRandomizer.Common.Features
 			(int, int)[][] ingredients = Enumerable.Range(0, count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
 			int[][] tiles = Enumerable.Range(0, count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
 			int Found(int item) => placers.ContainsKey(item) ? Never : Findability.Tier(item);
-			int[] avail = Availability(Found, results, new int[count], ingredients, tiles, out _, plan.Twin, PlannedGroups(plan));
+			int[] avail = Availability(Found, results, LockTiers(plan), ingredients, tiles, out _, plan.Twin, PlannedGroups(plan));
 			return placers.Keys.OrderBy(x => x).ToDictionary(x => x, x => x < avail.Length ? avail[x] : Never);
 		}
 
@@ -689,8 +777,14 @@ namespace UltimateRandomizer.Common.Features
 			List<string> late = tiers.Where(p => p.Value > placers[p.Key]).Select(p => $"{DetRandom.ItemName(p.Key)} (tier {placers[p.Key]}, crafted {(p.Value >= Never ? "never" : p.Value.ToString())})").ToList();
 			int byHand = Enumerable.Range(0, Count).Count(i => StationRecipe(i) && (!RecipeSystem.IsShell(i) || ShellActive(plan, i)) && !plan.Twin[i] && (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Length == 0);
 			int shells = Enumerable.Range(0, Count).Count(i => StationShell(i) && ShellActive(plan, i));
+			// Recipes of a station above tier 0 left without a key (none found at its tier): craftable a little early, listed
+			// with the station's tier and the tier they are really doable at
+			List<string> keyless = Enumerable.Range(0, Count).Where(i => StationRecipe(i) && (!RecipeSystem.IsShell(i) || ShellActive(plan, i)) && !plan.Twin[i]
+					&& plan.PlannedKeys[i] == 0 && !plan.KeyIngredient[i] && StationPlacer(plan.Results[i].type, out int t) && t > 0)
+				.Select(i => $"{DetRandom.ItemName(plan.Results[i].type)} (tier {placers[plan.Results[i].type]}{(RecipeSystem.IsShell(i) ? ", shell" : "")}, crafted "
+					+ $"{(tiers.GetValueOrDefault(plan.Results[i].type, Never) >= Never ? "never" : tiers[plan.Results[i].type].ToString())})").ToList();
 			string line = $"Station recipes: {tiers.Count - late.Count} of {tiers.Count} stations craftable by their tier without their guardian ({byHand} recipes by hand, {shells} shells); "
-				+ $"late: {(late.Count == 0 ? "none" : string.Join(", ", late))}";
+				+ $"late: {(late.Count == 0 ? "none" : string.Join(", ", late))}; without a key: {(keyless.Count == 0 ? "none" : string.Join(", ", keyless))}";
 			if (line == lastStationLine) return;
 			lastStationLine = line;
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info(line);
@@ -2152,7 +2246,7 @@ namespace UltimateRandomizer.Common.Features
 						// A station's recipe keeps found materials, and its tier (never T + 1: it must be craftable by then)
 						bool station = StationPlacer(results[i], out _);
 						bool Usable(int x) => x != results[i] && x != originalResult && !current.Any(p => p.type == x) && !below.Contains(x) && !RecipeSystem.InGroups(recipeGroups, x)
-							&& (!station || source[x] < 0);
+							&& (!station || source[x] < 0 && StationMaterialAllowed(results[i], x));
 						Random rng = DetRandom.Get(RollKey.RecipeIngredient, RecipeSystem.RecipeKey(i), RollKey.KeyIngredient);
 						long others = current.Where((p, k) => k != slot).Sum(p => UnitValue(p.type) * p.stack);
 						long budget = Math.Max(1, (long)(RecipeSystem.OriginalIngredientValue(Proxy(i)) * MaxValueFactor) + Item.silver - others);
@@ -2383,6 +2477,8 @@ namespace UltimateRandomizer.Common.Features
 				// A crafting station: found materials only (never one crafted, which could need this very station), no group,
 				// a key of its tier when one is had, else none (craftable a little early rather than late)
 				bool station = StationPlacer(result0, out _);
+				// A critical one from start materials only (StationMaterialAllowed), never left without ingredients
+				bool critical = station && CriticalPlacer(result0);
 				int originalResult = RecipeSystem.OriginalResult(i);
 				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
 				int[] originalGroups = RecipeSystem.OriginalGroups(i);
@@ -2477,7 +2573,8 @@ namespace UltimateRandomizer.Common.Features
 				HashSet<int> below = graph.From(result0);
 				HashSet<int> taken = kept.Select(p => p.type).ToHashSet();
 				bool Usable(int x) => x != result0 && x != originalResult && !taken.Contains(x) && !below.Contains(x) && !RecipeSystem.InGroups(chosenGroups, x)
-					&& (!house || (Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category) && !originalTypes.Contains(x))) && (!station || source[x] < 0);
+					&& (!house || (Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category) && !originalTypes.Contains(x)))
+					&& (!station || source[x] < 0 && StationMaterialAllowed(result0, x));
 				bool Stackable(int x) => !stackableResult || StackRules.MaxStackOf(x) > 1;
 				// Progression (Fits) for every new ingredient: required of the slots, preferred for the key
 				bool FitsHere(int x) => Fits(x, result0, top) && Stackable(x);
@@ -2602,8 +2699,9 @@ namespace UltimateRandomizer.Common.Features
 						picked = WeightedPick(options, rng);
 						wasSurprise = surprised && picked != 0;
 					}
-					// A house is built at once: any material found at tier 0 then, whatever its uses
-					if (picked == 0 && house) picked = HouseMaterial(Usable, rng);
+					// A house is built at once: any material found at tier 0 then, whatever its uses; so is a critical station,
+					// from the start materials
+					if (picked == 0 && (house || critical)) picked = HouseMaterial(Usable, rng);
 					if (picked == 0) continue;
 					if (wasSurprise && !isShell)
 					{

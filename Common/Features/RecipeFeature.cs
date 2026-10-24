@@ -519,6 +519,12 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (ItemPool.IsSpecial(type) && type < decraft.Length) decraft[type] = Array.Empty<int>();
 			}
+			// Nor the crafting stations made by a rebuilt recipe (RecipePlanner.StationPlacer): a station from its guardian
+			// would shimmer into its recipe's key, ahead of the tier that key opens
+			for (int type = 1; type < decraft.Length; type++)
+			{
+				if (RecipePlanner.StationPlacer(type, out _)) decraft[type] = Array.Empty<int>();
+			}
 		}
 
 		private static void Restore()

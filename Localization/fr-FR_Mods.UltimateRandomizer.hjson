@@ -1352,7 +1352,7 @@ Configs: {
 
 		StationGuardianChance: {
 			Label: "Chance de drop des gardiens de station (%)"
-			Tooltip: "Chaque station d'artisanat a une recette aléatoire faisable à son tier (le Guide la donne) et un gardien : un ennemi courant de son tier qui la lâche avec cette chance à chaque fois qu'il est tué (partagée entre joueurs). Un boss qui garde une station tardive la lâche toujours. Les pots et les coffres ne donnent jamais de station."
+			Tooltip: "Avec les recettes aléatoires, chaque station d'artisanat a une recette aléatoire faisable à son tier (le Guide la donne) et un gardien : un ennemi courant de son tier qui la lâche avec cette chance à chaque fois qu'il est tué (partagée entre joueurs), dix fois moins souvent dès que quelqu'un a obtenu cette station dans le monde. Un boss qui garde une station tardive la lâche toujours. Les pots et les coffres ne donnent jamais de station."
 		}
 
 		GuaranteedHostsPerItem: {
@@ -1362,7 +1362,7 @@ Configs: {
 
 		StationFindKills: {
 			Label: "Ennemis tués dans son biome pour trouver une invocation ou une pioche"
-			Tooltip: "Nombre moyen d'ennemis tués dans son biome avant qu'une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les stations d'artisanat viennent de leur recette, ou de leur gardien (voir la chance des gardiens)."
+			Tooltip: "Nombre moyen d'ennemis tués dans son biome avant qu'une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les stations d'artisanat viennent de leur recette, ou de leur gardien (voir la chance des gardiens) ; si les recettes ne sont pas aléatoires, les stations de progression non protégées se trouvent aussi de cette façon."
 		}
 
 		PotGuaranteeChance: {
