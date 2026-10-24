@@ -2400,13 +2400,13 @@ Configs: {
 		}
 
 		SwapEventEnemies: {
-			Label: "Remplacer aussi les ennemis d'événement"
-			Tooltip: "Armée gobeline, Légion du givre, pirates, lunes citrouille et de givre : leurs ennemis peuvent prendre la place d'autres ennemis (jamais avant que leur événement puisse arriver) et leurs propres apparitions peuvent être remplacées, comme celles de l'éclipse, de la lune de sang et des ennemis de météo ou de saison (voir « Apparitions d'événement remplacées »). Un envahisseur ou un ennemi de lune remplacé compte quand même pour la progression de son événement. Les Martiens, l'Armée de l'Ancien et les boss d'événement ne sont jamais remplacés."
+			Label: Remplacer aussi les ennemis d'événement
+			Tooltip: Armée gobeline, Légion du givre, pirates, lunes citrouille et de givre : leurs ennemis peuvent prendre la place d'autres ennemis (jamais avant que leur événement puisse arriver) et leurs propres apparitions peuvent être remplacées, comme celles de l'éclipse, de la lune de sang et des ennemis de météo ou de saison (voir « Apparitions d'événement remplacées »). Un envahisseur ou un ennemi de lune remplacé compte quand même pour la progression de son événement. Les Martiens, l'Armée de l'Ancien et les boss d'événement ne sont jamais remplacés.
 		}
 
 		EventSpawnSwapChance: {
-			Label: "Apparitions d'événement remplacées (%)"
-			Tooltip: "Part des ennemis d'une invasion, d'une lune ou d'une éclipse, et des ennemis qui ne viennent qu'avec un événement, une météo ou une saison (lune de sang, pluie, jour de vent, Halloween, Noël), qui deviennent un autre ennemi de leur niveau. Nécessite « Remplacer aussi les ennemis d'événement ». Un ennemi remplacé compte quand même pour la progression de son événement ; baissez-la pour garder des événements reconnaissables."
+			Label: Apparitions d'événement remplacées (%)
+			Tooltip: Part des ennemis d'une invasion, d'une lune ou d'une éclipse, et des ennemis qui ne viennent qu'avec un événement, une météo ou une saison (lune de sang, pluie, jour de vent, Halloween, Noël), qui deviennent un autre ennemi de leur niveau. Nécessite « Remplacer aussi les ennemis d'événement ». Un ennemi remplacé compte quand même pour la progression de son événement ; baissez-la pour garder des événements reconnaissables.
 		}
 
 		SwapModdedEnemies: {
