@@ -188,8 +188,13 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> rows = new();
 			int count = Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
 			string Tiles(IEnumerable<int> tiles) => string.Join("; ", (tiles ?? Enumerable.Empty<int>()).Select(t => t >= 0 && t < TileID.Count ? TileID.Search.GetName(t) : t.ToString()));
-			string Avail(int type) => type > 0 && type < plan.Availability.Length ? Show(plan.Availability[type]) : "?";
-			string Ingr(IEnumerable<(int type, int stack)> list) => string.Join("; ", (list ?? Enumerable.Empty<(int, int)>()).Select(x => $"{Internal(x.type)} x{x.stack} [tier {TierOfItem(x.type)}, avail {Avail(x.type)}, value {RecipeSystem.EffectiveValue(x.type)}]"));
+			// A group slot (any Macaw, shown as its iconic Scarlet Macaw) is had with its best member: "avail" is that one's, and
+			// the slot is marked "(group)" (an iconic critter never found itself listed whole recipes as never doable)
+			string Ingr(IEnumerable<(int type, int stack)> list, int[] groups) => string.Join("; ", (list ?? Enumerable.Empty<(int, int)>()).Select(x =>
+			{
+				int avail = RecipeTests.IngredientAvail(plan, groups, x.type, out bool group);
+				return $"{Internal(x.type)} x{x.stack} [tier {TierOfItem(x.type)}, avail {(x.type > 0 && x.type < plan.Availability.Length ? Show(avail) : "?")}, value {RecipeSystem.EffectiveValue(x.type)}]{(group ? " (group)" : "")}";
+			}));
 			for (int i = 0; i < count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
@@ -213,7 +218,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (plan.Availability != null && plan.Tiles != null) doable = Math.Max(doable, RecipePlanner.StationAvailability(plan, i));
 				int resultTier = ItemPool.IsValid(result.type) ? ItemPool.Info[result.type].Tier : -1;
 				rows.Add(Row(i, recipe.Mod?.Name ?? "Terraria", ItemRef(result.type), result.stack, resultTier,
-					Ingr(vanillaIngredients), Tiles(vanillaTiles), Ingr(planned), Tiles(plannedTiles),
+					Ingr(vanillaIngredients, RecipeSystem.OriginalGroups(i)), Tiles(vanillaTiles), Ingr(planned, RecipePlanner.GroupsOf(plan, i)), Tiles(plannedTiles),
 					plan.PlannedKeys != null && plan.PlannedKeys[i] > 0 ? Internal(plan.PlannedKeys[i]) : "",
 					RecipeSystem.IsRandomized(i), plan.IngredientTiers != null && plan.IngredientTiers[i] >= 0, partner >= 0, partner >= 0 ? partner : "",
 					shell, shell && Protection.IsUpgrade(result.type), !modded && !shell && !RecipeSystem.Touchable(i), RecipeSystem.HouseRecipe(i),
@@ -485,7 +490,7 @@ namespace UltimateRandomizer.Common.Tests
 		private const string Readme =
 			"Ultimate Randomizer world export (test WorldExport). Tab separated, one header line, overwritten at each run. Tier 0 = PreBoss ... 9 = PostMoonLord, 'never' = not obtainable.\n" +
 			"items.tsv: one row per item (columns of ItemTiers.tsv + mod). tier = planned tier, true tier = tier once sources are considered, findability tier = first tier found in this world (incl. guarantees), planned recipe tier = recipe availability.\n" +
-			"recipes.tsv: one row per recipe index. vanilla/planned ingredients 'internal xN [tier of item, availability tier, value]'. flags: randomized (live recipe differs from vanilla), rebuilt (ingredients rebuilt by the planner), swapped + partner (result swap), shell (recipe of an item no recipe makes), upgrade shell, station lock (no key: its planned station is had exactly at T), protected (not touchable), house, mining chain, switched off (twin or loopoff), repaired, value short. planned doable tier = max availability of planned ingredients and stations (off = switched off). ingredient tier T = tier the ingredients were rebuilt for (-1 none).\n" +
+			"recipes.tsv: one row per recipe index. vanilla/planned ingredients 'internal xN [tier of item, availability tier, value]' ('(group)': a recipe group slot shown as its iconic item, availability of its best member). flags: randomized (live recipe differs from vanilla), rebuilt (ingredients rebuilt by the planner), swapped + partner (result swap), shell (recipe of an item no recipe makes), upgrade shell, station lock (no key: its planned station is had exactly at T), protected (not touchable), house, mining chain, switched off (twin or loopoff), repaired, value short. planned doable tier = max availability of planned ingredients and stations (off = switched off). ingredient tier T = tier the ingredients were rebuilt for (-1 none).\n" +
 			"drops.tsv: for each NPC with a plan (lucky final plan, no progression lock), normal and expert. kind: permuted (content moved from origin npc/index), kept, replaced (original item swapped), surprise, extra (random extra drop), guaranteed (GuaranteedSources). lock gap = tiers progression would lock it (0 in the lucky plan). jackpot gap = runtime only (0).\n" +
 			"bags.tsv: same columns for every bag/crate plan (BagPlan.Plan, lucky).\n" +
 			"shops.tsv: every vanilla shop entry at simulated unlocked tiers 0..9 with its replacement (slot kind: roll, guaranteed shop-only item, or unchanged) and price.\n" +

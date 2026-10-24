@@ -47,7 +47,9 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Magic Storage (when loaded): its Storage Heart and at least one storage unit upgrade are hint targets of the storage
-		// kind with a source, at their item tier (which their price follows), in the storage tab; no crafting station among its pieces
+		// kind with a source, at their item tier (which their price follows), in the storage tab; none of its combined crafting
+		// stations (tiles acting as vanilla ones) among its pieces. A piece some recipe requires (the Crafting Access: Magic
+		// Storage's Snow Biome Emulator is made at it) is also a station of the catalog, and stays a hint target either way
 		private static void MagicStorageHints()
 		{
 			if (!ModLoader.TryGetMod(HintFacts.MagicStorage, out Mod mod)) Check.Skip("Magic Storage is not loaded");
@@ -58,7 +60,7 @@ namespace UltimateRandomizer.Common.Tests
 			else if (!pieces.Contains(heart.Type)) failures.Add("the Storage Heart is not among the storage items");
 			List<int> upgrades = pieces.Where(i => ItemLoader.GetItem(i)?.Name.StartsWith("Upgrade") == true).ToList();
 			if (upgrades.Count == 0) failures.Add("no storage unit upgrade among the storage items");
-			foreach (int item in pieces.Where(i => Stations.PlacedTile(i, out int tile) && Stations.CraftingStation(tile))) failures.Add($"{HintFacts.ItemName(item)}: a crafting station");
+			foreach (int item in pieces.Where(i => Stations.PlacedTile(i, out int tile) && Stations.ActsAs(tile).Any())) failures.Add($"{HintFacts.ItemName(item)}: a combined crafting station");
 			void Hinted(int item)
 			{
 				HintTarget target = targets.FirstOrDefault(t => t.Item == item);
@@ -73,6 +75,11 @@ namespace UltimateRandomizer.Common.Tests
 				if (target.Kind == HintTargetKind.Storage && HintPanelState.TabOf(target) != HintTab.Storage) failures.Add($"{name}: not in the storage tab");
 			}
 			if (heart != null) Hinted(heart.Type);
+			if (mod.TryFind("CraftingAccess", out ModItem access))
+			{
+				if (!pieces.Contains(access.Type)) failures.Add("the Crafting Access is not among the storage items");
+				else Hinted(access.Type);
+			}
 			if (upgrades.Count > 0 && !upgrades.Any(u => targets.Any(t => t.Item == u))) failures.Add($"no storage unit upgrade is a hint target with a source ({upgrades.Count} upgrades)");
 			foreach (int upgrade in upgrades.Where(u => targets.Any(t => t.Item == u))) Hinted(upgrade);
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Magic Storage hints: {pieces.Count} storage items, {pieces.Count(i => targets.Any(t => t.Item == i))} hint targets");

@@ -467,8 +467,8 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Vanilla's invasion group of a type (NPC.GetNPCInvasionGroup): 1 goblins, 2 Frost Legion, 3 pirates, 4 Martians,
-		// -1 Pumpkin Moon, -2 Frost Moon, -3 Old One's Army, 0 none
-		public const int PumpkinMoonGroup = -1, FrostMoonGroup = -2, OldOnesArmyGroup = -3;
+		// -1 Frost Moon (338-350), -2 Pumpkin Moon (305-315, 325-330), -3 Old One's Army, 0 none (as its IL switch says)
+		public const int FrostMoonGroup = -1, PumpkinMoonGroup = -2, OldOnesArmyGroup = -3;
 
 		public static int InvasionGroup(int type) => type > 0 && type < NPCID.Sets.BelongsToInvasionGoblinArmy.Length ? NPC.GetNPCInvasionGroup(type) : 0;
 

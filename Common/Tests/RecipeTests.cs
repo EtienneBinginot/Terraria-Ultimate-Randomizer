@@ -208,12 +208,17 @@ namespace UltimateRandomizer.Common.Tests
 		// The tier a station lock holds a recipe to (RecipePlan.StationLocks: its planned stations had from then), 0 without one
 		internal static int LockTier(RecipePlan plan, int i) => plan.StationLocks != null && plan.StationLocks[i] ? RecipePlanner.StationAvailability(plan, i) : 0;
 
-		internal static int IngredientAvail(RecipePlan plan, int i, int type)
+		internal static int IngredientAvail(RecipePlan plan, int i, int type) => IngredientAvail(plan, RecipePlanner.GroupsOf(plan, i), type, out _);
+
+		// The same with given groups (the live recipe's, the vanilla ones); inGroup: a group slot
+		internal static int IngredientAvail(RecipePlan plan, IEnumerable<int> groups, int type, out bool inGroup)
 		{
-			foreach (int id in RecipePlanner.GroupsOf(plan, i))
+			inGroup = false;
+			foreach (int id in groups ?? Enumerable.Empty<int>())
 			{
 				if (RecipeGroup.recipeGroups.TryGetValue(id, out RecipeGroup group) && group.ContainsItem(type))
 				{
+					inGroup = true;
 					return group.ValidItems.Where(v => v > 0 && v < plan.Availability.Length).Select(v => plan.Availability[v]).DefaultIfEmpty(Findability.Never).Min();
 				}
 			}
@@ -2450,7 +2455,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(failures.Count <= Math.Max(3, checkedCount / 200), $"{failures.Count} recipes with more new ingredients than their vanilla count allows: {string.Join("; ", failures.Take(10))}");
 		}
 
-		// No live planned recipe needs an ingredient that is never had with this plan (a group slot: its best member), nor
+		// No live planned recipe needs an ingredient that is never had with this plan (a group slot: its best member, only when
+		// the live recipe really accepts that group: a planned group lost when applied leaves its iconic item alone), nor
 		// does a recipe kept with its vanilla ingredients when one of them is randomizable and never had (it gets a
 		// replacement, RecipePlanner.KeepOriginals): a Cell Phone of an Ice Mirror, a Cooked Marshmallow of a Marshmallow
 		private static void NoNeverIngredients()
@@ -2489,8 +2495,8 @@ namespace UltimateRandomizer.Common.Tests
 				checkedCount++;
 				foreach ((int type, _) in plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i))
 				{
-					if (IngredientAvail(plan, i, type) < Findability.Never) continue;
-					string where = $"{Name(type)} in {Name(plan.Results[i].type)}{(planned ? "" : " (vanilla ingredients)")}";
+					if (IngredientAvail(plan, Main.recipe[i].acceptedGroups, type, out bool inGroup) < Findability.Never) continue;
+					string where = $"{Name(type)}{(inGroup ? " (group)" : "")} in {Name(plan.Results[i].type)}{(planned ? "" : " (vanilla ingredients)")}";
 					// A protected ingredient keeps its own (vanilla) sources: logged only
 					if (!ItemPool.IsRandomizable(type)) keptVanilla.Add(where);
 					else failures.Add(where);

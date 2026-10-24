@@ -229,6 +229,11 @@ namespace UltimateRandomizer.Common.Tests
 			float scalar = Main.masterMode ? 2.5f : Main.expertMode ? 2f : 1f;
 			// Wave 1 must not end with these few points (no wave text)
 			if (NPC.MoonEventRequiredPointsPerWaveLookup[1] <= 3 * scalar) Check.Skip("the first wave ends too soon to test");
+			// Vanilla's groups: the moons were once read the wrong way round (no swapped moon enemy ever counted)
+			Check.Equal(EnemySwapPool.PumpkinMoonGroup, EnemySwapPool.InvasionGroup(NPCID.Scarecrow1), "invasion group of a scarecrow");
+			Check.Equal(EnemySwapPool.PumpkinMoonGroup, EnemySwapPool.InvasionGroup(NPCID.Pumpking), "invasion group of the Pumpking");
+			Check.Equal(EnemySwapPool.FrostMoonGroup, EnemySwapPool.InvasionGroup(NPCID.ZombieElf), "invasion group of a zombie elf");
+			Check.Equal(EnemySwapPool.FrostMoonGroup, EnemySwapPool.InvasionGroup(NPCID.IceQueen), "invasion group of the Ice Queen");
 			InvasionState state = new();
 			try
 			{
