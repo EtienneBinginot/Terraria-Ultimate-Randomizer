@@ -1966,8 +1966,8 @@ Configs: {
 		}
 
 		ShopSurpriseChance: {
-			Label: "Shop surprises (%)"
-			Tooltip: "Share of the randomized shop slots that sell an item of any category instead of one of the original item's category. Weapons, armor, accessories and tools still never go above the unlocked tier."
+			Label: Shop surprises (%)
+			Tooltip: Share of the randomized shop slots that sell an item of any category instead of one of the original item's category. Weapons, armor, accessories and tools still never go above the unlocked tier.
 		}
 
 		StackCaps: {
@@ -2161,13 +2161,13 @@ Configs: {
 		}
 
 		RandomizeShimmer: {
-			Label: "Randomize shimmer transmutations"
-			Tooltip: "Each shimmer transformation gives another item of the same category, of its tier or one above (within progression), sometimes of any category (Shimmer surprises). Decrafting is not affected."
+			Label: Randomize shimmer transmutations
+			Tooltip: Each shimmer transformation gives another item of the same category, of its tier or one above (within progression), sometimes of any category (Shimmer surprises). Decrafting is not affected.
 		}
 
 		ShimmerSurpriseChance: {
-			Label: "Shimmer surprises (%)"
-			Tooltip: "Share of the shimmer transmutations that give an item of any category instead of one of the original result's category. The value cap and the hardmode wall still apply."
+			Label: Shimmer surprises (%)
+			Tooltip: Share of the shimmer transmutations that give an item of any category instead of one of the original result's category. The value cap and the hardmode wall still apply.
 		}
 	}
 

@@ -1966,8 +1966,8 @@ Configs: {
 		}
 
 		ShopSurpriseChance: {
-			Label: "Surprises en boutique (%)"
-			Tooltip: "Part des emplacements de boutique randomisés qui vendent un objet de n'importe quelle catégorie au lieu d'un objet de la catégorie d'origine. Les armes, armures, accessoires et outils ne dépassent toujours pas le tier débloqué."
+			Label: Surprises en boutique (%)
+			Tooltip: Part des emplacements de boutique randomisés qui vendent un objet de n'importe quelle catégorie au lieu d'un objet de la catégorie d'origine. Les armes, armures, accessoires et outils ne dépassent toujours pas le tier débloqué.
 		}
 
 		StackCaps: {
@@ -2161,13 +2161,13 @@ Configs: {
 		}
 
 		RandomizeShimmer: {
-			Label: "Randomiser les transmutations du Shimmer"
-			Tooltip: "Chaque transformation du Shimmer donne un autre objet de même catégorie, de son tier ou du suivant (selon la progression), parfois de n'importe quelle catégorie (Surprises du Shimmer). Le décraft n'est pas concerné."
+			Label: Randomiser les transmutations du Shimmer
+			Tooltip: Chaque transformation du Shimmer donne un autre objet de même catégorie, de son tier ou du suivant (selon la progression), parfois de n'importe quelle catégorie (Surprises du Shimmer). Le décraft n'est pas concerné.
 		}
 
 		ShimmerSurpriseChance: {
-			Label: "Surprises du Shimmer (%)"
-			Tooltip: "Part des transmutations du Shimmer qui donnent un objet de n'importe quelle catégorie au lieu d'un objet de la catégorie du résultat d'origine. Le plafond de valeur et le mur du hardmode s'appliquent toujours."
+			Label: Surprises du Shimmer (%)
+			Tooltip: Part des transmutations du Shimmer qui donnent un objet de n'importe quelle catégorie au lieu d'un objet de la catégorie du résultat d'origine. Le plafond de valeur et le mur du hardmode s'appliquent toujours.
 		}
 	}
 
