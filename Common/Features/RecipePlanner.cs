@@ -154,11 +154,14 @@ namespace UltimateRandomizer.Common.Features
 			foreach (GuaranteedSources.Requirement r in GuaranteedSources.PlacerRequirements())
 			{
 				int tier = Tiers.Clamp(r.Tier);
-				// A themed station's recipe stays within its item's tier and the allowance (its guardian keeps the true tier): a
-				// Decay Chamber of tier 1 planned at hardmode left 19 furniture recipes of tier 1 or 2 at hardmode
-				if (Stations.PlacedTile(r.Item, out int tile) && Stations.Info(tile).Kind == StationKind.Thematic && ItemPool.IsValid(r.Item))
+				// A pre-hardmode themed station's recipe stays within its classification tier (rarity and vanilla recipes, before
+				// the sources raised it: ItemPool.AllTiers) and the allowance; its guardian keeps the true tier. A Decay Chamber of
+				// tier 1 planned at hardmode left 19 furniture recipes of tier 1 or 2 at hardmode. Never for a hardmode station nor
+				// a hard gate: those are never doable before their true tier
+				if (Stations.PlacedTile(r.Item, out int tile) && Stations.Info(tile).Kind == StationKind.Thematic && ItemPool.IsValid(r.Item)
+					&& tier < (int)Tier.Hardmode && !ItemPool.IsHardGate(r.Item) && r.Item < ItemPool.AllTiers.Length)
 				{
-					tier = Math.Min(tier, Tiers.Clamp(ItemPool.TierOf(r.Item) + ProgressionConfig.Instance.TierAllowance));
+					tier = Math.Min(tier, Tiers.Clamp(ItemPool.AllTiers[r.Item] + ProgressionConfig.Instance.TierAllowance));
 				}
 				tiers[r.Item] = Math.Min(tiers.GetValueOrDefault(r.Item, tier), tier);
 				if (r.Critical) critical.Add(r.Item);
@@ -197,7 +200,8 @@ namespace UltimateRandomizer.Common.Features
 			HashSet<int> noOre = startMaterialsNoOre;
 			if (set == null || noOre == null)
 			{
-				set = StartWorldMaterials.ToHashSet();
+				// A herb (Daybloom, Mushroom) only when its plants still give it from the start (herbs randomized: Findability.HerbTier)
+				set = StartWorldMaterials.Where(m => Findability.HerbPlants.Contains(m) ? Findability.HerbTier(m) == 0 : true).ToHashSet();
 				foreach (int ore in StartOres)
 				{
 					if (OreMap.IsFindable(ore)) set.Add(ore);
@@ -911,12 +915,11 @@ namespace UltimateRandomizer.Common.Features
 			&& !Obtainability.RecipeResults.Contains(item) && !Tainted(item) && !OreMap.IsOre(item) && !guaranteed.Contains(item)
 			&& !(Stations.PlacedTile(item, out int tile) && stationTiles.Contains(tile));
 
-		// The mirrors and conches (sorted with the boss summons, classified BossSummon, summoning nothing) that no recipe
-		// makes: their chests are randomized, and the Ice Mirror had no source left at all (nor the Cell Phone's recipe using
-		// it). They get a shell like a block (category: as classified, read before the item pool exists at load)
-		public static bool ShellTool(int item, ItemCategory category) => category == ItemCategory.BossSummon && !Protection.IsBossSummon(item) && !Protection.IsUpgrade(item);
-
-		private static bool ShellTool(int item) => ItemPool.IsValid(item) && ShellTool(item, ItemPool.Info[item].Category);
+		// The mirrors and conches (sorted with the boss summons, summoning nothing: classified Misc) that no recipe makes: their
+		// chests are randomized, and the Ice Mirror had no source left at all (nor the Cell Phone's recipe using it). They get a
+		// shell like a block, whatever their category (read by item, so it holds at load before the item pool exists); the
+		// phones have a recipe of their own, the Shellphone's other modes are banned
+		public static bool ShellTool(int item) => Protection.SortedAsSummon(item) && !Protection.IsUpgrade(item);
 
 		// The tier a shell is doable from: when the item is found (its tier when it never is), and never before the unlocked tier
 		// of its true tier (gated rolls give it from there): crafting it never makes it available earlier
@@ -1715,8 +1718,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// A station recipe (StationRecipe) only gets stations that can be crafted by its own station's tier (RecipeTier):
 		// with its found ingredients, each station is craftable by its tier, the Work Bench by hand. When none fits, it is
-		// made by hand
-		private static void PlanStations(RecipePlan result, int[] results, int[] avail, StationLayout layout)
+		// made by hand. only: re-plan these recipes alone (a cancelled swap: CancelSwap), with the same keys
+		private static void PlanStations(RecipePlan result, int[] results, int[] avail, StationLayout layout, IEnumerable<int> only = null)
 		{
 			List<int> order = layout.Order;
 			Dictionary<int, int> position = layout.Position;
@@ -1725,8 +1728,9 @@ namespace UltimateRandomizer.Common.Features
 			int[] orderAvail = order.Select(TileAvail).ToArray();
 			int[] orderTier = order.Select(s => Stations.Info(s).Kind == StationKind.Progression ? Stations.Info(s).Tier : -1).ToArray();
 			float keep = CraftingConfig.Instance.StationKeepChance / 100f;
-			for (int i = 0; i < Count; i++)
+			foreach (int i in only ?? Enumerable.Range(0, Count))
 			{
+				result.Tiles[i] = null;
 				int[] original = RecipeSystem.OriginalTiles(i);
 				if (original.Length == 0 || !RecipeSystem.Touchable(i)) continue;
 				int bound = int.MaxValue;
@@ -1792,9 +1796,10 @@ namespace UltimateRandomizer.Common.Features
 		public static bool IngredientReplaceable(int item) =>
 			ItemPool.IsRandomizable(item) && !ItemPool.IsSpecial(item) && !Unusable.Contains(ItemPool.Info[item].Category);
 
-		// May this item be a new ingredient at all (found or crafted)?
+		// May this item be a new ingredient at all (found or crafted)? Never a mirror, phone or conch (Misc since they are no
+		// summons): a recipe must not consume a Cell Phone
 		private static bool Eligible(int item, HashSet<int> stationItems) =>
-			item > 0 && item < ItemPool.Info.Length && IngredientReplaceable(item) && !ItemPool.IsBanned(item) && !stationItems.Contains(item);
+			item > 0 && item < ItemPool.Info.Length && IngredientReplaceable(item) && !ItemPool.IsBanned(item) && !stationItems.Contains(item) && !Protection.SortedAsSummon(item);
 
 		// Hardmode pair ores (present or not depending on the altars: the plan must not depend on them), ores and blocks that need
 		// a strong pickaxe (Obsidian, Ebonstone, dungeon bricks...: a pickaxe chain could otherwise need its own block): never a
@@ -2225,6 +2230,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				private readonly int[] real, clean, source;
 				private readonly int[][] pool;
+				private readonly bool[] cheap;
 
 				public Snapshot(Rebuilder r)
 				{
@@ -2232,10 +2238,11 @@ namespace UltimateRandomizer.Common.Features
 					clean = (int[])r.clean.Clone();
 					source = (int[])r.source.Clone();
 					pool = r.pool.Cast<List<int>>().Select(l => l.ToArray()).ToArray();
+					cheap = (bool[])r.result.CheapCrafted.Clone();
 				}
 
 				public bool Matches(Rebuilder r) => real.SequenceEqual(r.real) && clean.SequenceEqual(r.clean) && source.SequenceEqual(r.source)
-					&& pool.Zip(r.pool.Cast<List<int>>(), (a, b) => a.SequenceEqual(b)).All(x => x);
+					&& pool.Zip(r.pool.Cast<List<int>>(), (a, b) => a.SequenceEqual(b)).All(x => x) && cheap.SequenceEqual(r.result.CheapCrafted);
 			}
 
 			private Snapshot TakeSnapshot() => new(this);
@@ -2250,6 +2257,8 @@ namespace UltimateRandomizer.Common.Features
 					result.SwapPartner[r] = -1;
 					result.ResultTiers[r] = ResultTier(r, results[r]);
 				}
+				// Their stations were chosen for the swapped results (SwapStationCap): chosen again for their own, as if never swapped
+				if (cfg.RandomizeStations) PlanStations(result, results, vanillaAvail, layout, new[] { i, j });
 				// Their kept ingredients already lead to their own results (Run)
 				foreach (int r in new[] { i, j }) targets[r] = TargetTier(r);
 				cancelled++;
@@ -2864,7 +2873,9 @@ namespace UltimateRandomizer.Common.Features
 					// from the start materials
 					if (picked == 0 && (house || critical) && needsNew) picked = HouseMaterial(x => Usable(x) && NewType(x) && (!house || Affordable(x)), rng);
 					if (picked == 0 && (house || critical)) picked = HouseMaterial(x => Usable(x) && (!house || Affordable(x)), rng);
-					// A house item whose vanilla ingredients are all the start materials left: one of them, rather than none
+					// Still nothing: any start material outside its vanilla types, whatever it costs; then, when its vanilla
+					// ingredients are all the start materials left, one of them rather than none (another stack below)
+					if (picked == 0 && house) picked = HouseMaterial(x => x != result0 && !taken.Contains(x) && !below.Contains(x) && HouseFits(x) && !vanillaTypes.Contains(x), rng);
 					if (picked == 0 && house) picked = HouseMaterial(x => x != result0 && !taken.Contains(x) && !below.Contains(x) && HouseFits(x) && Affordable(x), rng);
 					if (picked == 0) continue;
 					if (wasSurprise && !isShell)
@@ -2907,6 +2918,8 @@ namespace UltimateRandomizer.Common.Features
 				// A house item takes about its vanilla amounts (a Wooden Door 6 Wood: 2 to 6 of one or two materials), not a value
 				if (house) HouseStacks(ingredients, planned.Count, original, rng);
 				CapValue(ingredients, planned.Count, maxValue);
+				// A house item rebuilt from its own vanilla types only never comes back as its vanilla recipe: another stack
+				if (house && SameIngredients(ingredients, original)) OtherStack(ingredients, planned.Count);
 				int[] plannedGroups = chosenGroups.ToArray();
 				result.Ingredients[i] = ingredients;
 				result.Groups[i] = plannedGroups.SequenceEqual(originalGroups) ? null : plannedGroups;
@@ -2964,6 +2977,23 @@ namespace UltimateRandomizer.Common.Features
 
 			// The new ingredients of a house item (the first planned ones): its vanilla amount shared between them, give or take
 			// one, from 1 to HouseStackMax (more only when its vanilla slot alone needed more)
+			// The same types in the same amounts, whatever the order
+			private static bool SameIngredients((int type, int stack)[] a, (int type, int stack)[] b) =>
+				a.Length == b.Length && a.OrderBy(p => p.type).ThenBy(p => p.stack).SequenceEqual(b.OrderBy(p => p.type).ThenBy(p => p.stack));
+
+			// One planned ingredient one fewer (or one more when it is a single one), the first that can change
+			private static void OtherStack((int type, int stack)[] ingredients, int planned)
+			{
+				for (int k = 0; k < planned; k++)
+				{
+					(int type, int stack) = ingredients[k];
+					if (stack > 1) ingredients[k] = (type, stack - 1);
+					else if (StackRules.MaxStackOf(type) > 1) ingredients[k] = (type, stack + 1);
+					else continue;
+					return;
+				}
+			}
+
 			private static void HouseStacks((int type, int stack)[] ingredients, int planned, (int type, int stack)[] original, Random rng)
 			{
 				if (planned <= 0) return;

@@ -232,10 +232,9 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Hardmode wall");
 		}
 
-		// An item that may be re-picked: banned, or given later than its bucket's tier (a re-pick only happens when the true
-		// tier is above the roll's ceiling, which is never below the bucket it picked from), or a hard gate (its ceiling has no
-		// allowance: it may be below the bucket)
-		private static bool Flagged(int item) => ItemPool.IsBanned(item) || ItemPool.TrueTierOf(item) > ItemPool.TierOf(item) || ItemPool.IsHardGate(item);
+		// An item that may be re-picked: banned, or a hard gate (its ceiling has no allowance: it may be below the bucket). The
+		// bucket tier is the true tier now (TierOf == TrueTierOf), so no other item is ever above the ceiling of its own bucket
+		private static bool Flagged(int item) => ItemPool.IsBanned(item) || ItemPool.IsHardGate(item);
 
 		// The same rolls with and without the re-pick: every difference is an item the re-pick had to replace, so every other
 		// roll (mob plans, chest slots, gated rolls) gives exactly what it gave before the re-pick existed. Recipe results never

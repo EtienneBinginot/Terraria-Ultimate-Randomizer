@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.DataStructures;
 using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
@@ -56,6 +57,17 @@ namespace UltimateRandomizer.Common.Features
 		}
 	}
 
+	// A bought item forgets its shop price (vanilla only clears it for special currencies, ItemSlot.HandleShopSlot): kept, it
+	// would stack with the items of the same type and sell back at a fifth of the shop price instead of their value. Runs on
+	// the buying client, on the clone before it reaches the mouse
+	public class BoughtItem : GlobalItem
+	{
+		public override void OnCreated(Item item, ItemCreationContext context)
+		{
+			if (context is BuyItemCreationContext) item.shopCustomPrice = null;
+		}
+	}
+
 	// One shop slot as planned: the original item, what replaces it (0 when left as it is), its price, and whether it is an
 	// added slot selling a shop-only item (ShopPermutation, Original 0) rather than a roll
 	public readonly record struct ShopSlot(int Original, int Replacement, int Price, bool Guaranteed = false)
@@ -88,10 +100,13 @@ namespace UltimateRandomizer.Common.Features
 			ShopSlot[] slots = new ShopSlot[originalTypes.Count];
 			HashSet<int> used = new();
 			if (noDuplicates && avoid != null) used.UnionWith(avoid);
+			// A real duplicate weighs more than every other rule together (8 > 4 + 2 + 1): the last fallback level (7) only
+			// forbids that
 			int Penalty(int item)
 			{
 				int penalty = 0;
-				if (noDuplicates && (used.Contains(item) || !shuffle && !OwnTab(item, npcType, shopName))) penalty += 4;
+				if (noDuplicates && used.Contains(item)) penalty += 8;
+				else if (noDuplicates && !shuffle && !OwnTab(item, npcType, shopName)) penalty += 4;
 				if (shuffle) return penalty;
 				if (!Spread(item, npcType)) penalty += 2;
 				if (PriceRules.Overpriced(item)) penalty += 1;
@@ -133,8 +148,9 @@ namespace UltimateRandomizer.Common.Features
 					if (penalty == 0) break;
 				}
 				// The progression limits leave few items of a category (late potions, late furniture): another item of its
-				// category, no later than it, from its tier down, that breaks no rule, else fewer rules, else no duplicate
-				foreach (int allowed in new[] { 0, 1, 3 })
+				// category, no later than it, from its tier down, that breaks no rule, else fewer rules, else no duplicate (another
+				// tab's item, a crowded or overpriced one may be kept then)
+				foreach (int allowed in new[] { 0, 1, 3, 7 })
 				{
 					if (penalty <= allowed) break;
 					int other = Unused(replacement, item => Penalty(item) <= allowed,

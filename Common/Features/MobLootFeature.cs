@@ -133,6 +133,8 @@ namespace UltimateRandomizer.Common.Features
 		public bool Guardian;
 		// Kill time only: a jackpot, this many tiers above the progression limit (JackpotItem)
 		public int JackpotGap;
+		// An extra slot whose roll was a plan's jackpot (ItemPool.LastTierJackpot): it may keep a gate above its source
+		public bool TierJackpot;
 		// Tiers by which progression still locks this entry of the final plan (DropHelper.LockGap, 0: it drops): a locked
 		// entry does not drop (its chance goes to the others: RandomNpcDropRule.Redistribute), except on a lucky kill
 		public int LockGap;
@@ -174,6 +176,11 @@ namespace UltimateRandomizer.Common.Features
 
 		public bool CanDrop(DropAttemptInfo info) => true;
 
+		// Everything a kill of this NPC rolls before the bonus drops: its owner's random drops (KillDrops), then the guaranteed
+		// ones of the NPC and of its other forms (GuaranteedSources.ForKill). The GuardiansInThisWorld test reads it
+		public static IEnumerable<PlannedDrop> KillList(int netId, int npcType, bool expert, bool lucky, Random rng, float worth) =>
+			KillDrops(netId, BossParts.Owner(npcType), expert, lucky, rng, worth).Concat(GuaranteedSources.ForKill(npcType));
+
 		public ItemDropAttemptResult TryDroppingItem(DropAttemptInfo info)
 		{
 			NPC npc = info.npc;
@@ -188,8 +195,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 			// Weak swarm enemies (and critters: never) get a share of the jackpot chances (luck and madness)
 			float worth = JackpotWorth(npc);
-			IEnumerable<PlannedDrop> drops = KillDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky(worth), new Random(info.rng.Next()), worth)
-				.Concat(GuaranteedSources.ForKill(npc.type));
+			IEnumerable<PlannedDrop> drops = KillList(netId, npc.type, info.IsExpertMode, DropHelper.RollLucky(worth), new Random(info.rng.Next()), worth);
 			// Stronger enemies (type and individual) drop more often. Guaranteed drops (stations...) leave adaptive power
 			// out, so that how fast they are found does not depend on the player's equipment
 			float bonus = EnemyIndividualNPC.LootBonus(npc);
@@ -300,6 +306,8 @@ namespace UltimateRandomizer.Common.Features
 			if (individual.Kind == EnemyKind.Giant && cfg.GiantBonusDrop) item = GiantDrop(owner, key, lucky, GiantWildMultiplier * worth);
 			else if (individual.Kind == EnemyKind.Mini && cfg.MiniBonusDrop) item = MiniDrop(owner, key, lucky, MiniWildMultiplier * worth);
 			else return drops;
+			// Every roll gave a gate above the giant or mini (RollBelowGates)
+			if (item <= ItemID.None) return drops;
 			int gap = ItemPool.LastJackpotGap;
 			// Not the WildRng seed of the roll
 			Random rng = new(unchecked(key * 31 + 17));
@@ -352,8 +360,9 @@ namespace UltimateRandomizer.Common.Features
 					WildRng = new Random(unchecked(key + attempt * 7919)),
 					WildChanceMultiplier = wildMultiplier
 				};
-				item = ItemPool.Roll(request);
-				if (ItemPool.IsJackpotWorthy(item)) return item;
+				// Like the extra slots: no gate above the giant (but a jackpot); a roll that only gives gates tries the next attempt
+				item = RollBelowGates(request, out _);
+				if (item > ItemID.None && ItemPool.IsJackpotWorthy(item)) return item;
 			}
 			return item;
 		}
@@ -372,7 +381,7 @@ namespace UltimateRandomizer.Common.Features
 				WildRng = new Random(key),
 				WildChanceMultiplier = wildMultiplier
 			};
-			return ItemPool.Roll(request);
+			return RollBelowGates(request, out _);
 		}
 
 		// Multi-part bosses drop their loot once: the last Eater of Worlds segment (vanilla makes it a boss as it dies,
@@ -407,11 +416,12 @@ namespace UltimateRandomizer.Common.Features
 
 		// A random extra or surprise roll (IgnoreGating: the final plan) that gave a gate above its source (GateAbove) is
 		// rolled again a few times, each with its own keys (the first roll's keys and results stay as they were); a jackpot
-		// (aimed beyond the roll's jitter, AllowJackpot) keeps its gate. 0 when every roll gives one
+		// keeps its gate: one the roll really made (ItemPool.LastTierJackpot: aimed beyond its jitter by AllowJackpot; or
+		// LastJackpotGap: the madness or luck of a runtime roll). 0 when every roll gives one
 		public static int RollBelowGates(RollRequest request, out int tier)
 		{
 			int item = ItemPool.Roll(request, out tier);
-			bool jackpot = request.AllowJackpot && tier > request.SourceTier + request.TierJitterUp;
+			bool jackpot = ItemPool.LastTierJackpot || ItemPool.LastJackpotGap > 0;
 			if (!GateAbove(item, request.SourceTier) || jackpot) return item;
 			int[] keys = request.Keys;
 			for (int attempt = 1; attempt <= GateRerolls; attempt++)
@@ -419,6 +429,7 @@ namespace UltimateRandomizer.Common.Features
 				request.Keys = keys.Append(GateRerollKey - attempt).ToArray();
 				// The jackpot was the first roll's: no new one
 				request.AllowJackpot = false;
+				request.Wild = false;
 				item = ItemPool.Roll(request, out tier);
 				if (!GateAbove(item, request.SourceTier)) return item;
 			}
@@ -604,6 +615,8 @@ namespace UltimateRandomizer.Common.Features
 				? SlotCount(npcKey, true, critter, cfg.BossDropSlotsMin, cfg.BossDropSlotsMax, slotStyle, slotFactor)
 				: SlotCount(npcKey, false, critter, cfg.DropSlotsMin, cfg.DropSlotsMax, slotStyle, slotFactor);
 
+			// A boss always drops its first extra slot that rolls an item (slot 0 may lose it to the gate rerolls)
+			bool sureGiven = false;
 			for (int slot = 0; slot < slots; slot++)
 			{
 				RollRequest request = new()
@@ -621,6 +634,7 @@ namespace UltimateRandomizer.Common.Features
 				};
 				int item = RollBelowGates(request, out int tier);
 				if (item <= ItemID.None) continue;
+				bool tierJackpot = ItemPool.LastTierJackpot;
 				float chance;
 				if (slotStyle == DropTableStyle.Simple)
 				{
@@ -628,14 +642,14 @@ namespace UltimateRandomizer.Common.Features
 				}
 				else
 				{
-					// A boss always drops its first extra slot
-					int denominator = isBoss && slot == 0 ? 1 : DropRates.Denominator(item, tier, sourceTier, isBoss, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item, 7));
+					int denominator = isBoss && !sureGiven ? 1 : DropRates.Denominator(item, tier, sourceTier, isBoss, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item, 7));
+					sureGiven |= isBoss;
 					chance = Math.Min(1f, cfg.DropRateMultiplier * (permutationSlots ? 1f : slotFactor) * slotCritterFactor / denominator);
 				}
 				int lockGap = DropHelper.LockGap(item, minLimit);
 				item = Wild(request, item, lockGap, wildRng, wildMultiplier, out int gap);
 				(int stackMin, int stackMax) = StackRules.RollExtraRange(item, sourceTier, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
-				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap, LockGap = lockGap });
+				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap, LockGap = lockGap, TierJackpot = tierJackpot });
 			}
 			if (critterSlots)
 			{

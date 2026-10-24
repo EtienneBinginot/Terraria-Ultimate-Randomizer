@@ -194,6 +194,7 @@ Tests: {
 	SurpriseGatedAndProtected: Surprises respect progression and protected items
 	WeightTablesSeparated: Loot weights favor equipment, ingredient weights never pick it
 	TierWindowVariety: Early random rolls give many different items
+	SparseBucketsWiden: A sparse tier of a category widens to the tiers below for variety
 	OreMappingBijective: Each ore of this world still exists, as the drop of exactly one other ore of the world; absent ores stay themselves, and deciding a hardmode pair changes no ore of another tier; one-to-one even with both ores of a pair present
 	TreeShakeReplacement: Shaken trees give random items and keep acorns
 	HerbReplacementTable: Each herb has a fixed set of valid replacements

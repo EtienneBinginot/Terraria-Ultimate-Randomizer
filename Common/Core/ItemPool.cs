@@ -213,6 +213,13 @@ namespace UltimateRandomizer.Common.Core
 			}
 			HashSet<int> lootSources = LootSources();
 			int settled = ItemClassifier.SettleByRecipes(trueTiers, fixedTier, floors, lootSources, fromChest, corrected, out string settleExamples);
+			// The Shellphone's recipe makes the banned ShellphoneDummy (no recipe nor source is read for it): it is found with the
+			// last of what it is made of, the Cell Phone and both conches, not at its rarity's tier
+			if (ItemID.Shellphone < count && !overrides.ContainsKey(ItemID.Shellphone))
+			{
+				trueTiers[ItemID.Shellphone] = Math.Max(trueTiers[ItemID.CellPhone], Math.Max(trueTiers[ItemID.DemonConch], trueTiers[ItemID.MagicConch]));
+				corrected[ItemID.Shellphone] = true;
+			}
 			bool[] hardGates = ItemClassifier.HardGates(trueTiers, lootSources, fromChest);
 			// An item acting as progression stations (Stations.ActingFloor) is gated like them: no allowance, never rolled early
 			for (int type = 1; type < count; type++)
@@ -271,6 +278,18 @@ namespace UltimateRandomizer.Common.Core
 				+ $"{fromTable.Count(f => f)} + {ItemClassifier.TrueTierFixes.Count} listed, {tableChanged} true tiers changed, {tableBanned.Count(b => b)} banned; "
 				+ $"world chests: {byChests} true tiers lowered ({chestExamples}); settled by recipes: {settled} ({settleExamples}); {hardGates.Count(g => g)} hard gates.");
 			LogSuspicious(logger);
+			LogBucketSizes(logger);
+		}
+
+		// One line: the size of every bucket, per category, tier 0 to Tiers.Max (sparse ones widen downwards, MinCandidates)
+		private static void LogBucketSizes(log4net.ILog logger)
+		{
+			List<string> parts = new();
+			for (int c = 0; c < ItemCategories.Count; c++)
+			{
+				if (categoryHasItems[c]) parts.Add($"{(ItemCategory)c} [{string.Join(" ", buckets[c].Select(b => b.Length))}]");
+			}
+			logger.Info($"Bucket sizes per tier: {string.Join(", ", parts)}");
 		}
 
 		// Items something drops, a bag holds, a shop sells or an enabled recipe makes, as set up (load time: the recipes are not
@@ -362,7 +381,15 @@ namespace UltimateRandomizer.Common.Core
 		// above the limit (0: no jackpot). Rolls run on the game thread only
 		public static int LastJackpotGap { get; private set; }
 
-		public static void ClearJackpot() => LastJackpotGap = 0;
+		// Did the last Roll give an item aimed above its jitter by JackpotTierChance (AllowJackpot: a plan's own jackpot, within
+		// the limit)? False when the raised target was not unlocked (the stand-in of the fallback is no jackpot)
+		public static bool LastTierJackpot { get; private set; }
+
+		public static void ClearJackpot()
+		{
+			LastJackpotGap = 0;
+			LastTierJackpot = false;
+		}
 
 		private static int[] progressionStations;
 
@@ -453,6 +480,7 @@ namespace UltimateRandomizer.Common.Core
 		public static int Roll(in RollRequest request, out int rolledTier)
 		{
 			LastJackpotGap = 0;
+			LastTierJackpot = false;
 			RandomizerMode mode = GeneralConfig.Instance.RandomizerMode;
 			ProgressionConfig progression = ProgressionConfig.Instance;
 			bool hasOriginal = IsRandomizable(request.OriginalItem);
@@ -475,9 +503,11 @@ namespace UltimateRandomizer.Common.Core
 			}
 
 			int target = request.SourceTier + rng.Next(-request.TierJitterDown, request.TierJitterUp + 1);
+			bool aimedJackpot = false;
 			if (request.AllowJackpot && rng.NextDouble() * 100 < progression.JackpotTierChance)
 			{
 				target += rng.Next(2, 4);
+				aimedJackpot = true;
 			}
 			target = Tiers.Clamp(target);
 			ItemCategory category = request.Policy switch
@@ -548,6 +578,7 @@ namespace UltimateRandomizer.Common.Core
 					}
 				}
 				rolledTier = TierOf(intended);
+				LastTierJackpot = aimedJackpot;
 				return intended;
 			}
 
@@ -698,26 +729,28 @@ namespace UltimateRandomizer.Common.Core
 			return surpriseRng.NextDouble() * 100 < surpriseChance;
 		}
 
-		// Looks for an item in the wanted tier (and up to `window` tiers below, for variety), then the tiers below,
-		// then above; then in other categories
+		// Fewer candidates than this in the tiers a pick looks at (ammo or food of the early tiers, a boss summon tier left
+		// empty): the window widens to the tiers below until it has them, for variety. Never upwards
+		public const int MinCandidates = 6;
+
+		// Looks for an item in the wanted tier (and up to `window` tiers below, for variety, more when they are sparse), then
+		// the tiers below, then above; then in other categories
 		public static int PickFromBucket(ItemCategory category, int tier, Random rng, int maxTier = Tiers.Max, int window = 0)
 		{
 			if (buckets == null) return ItemID.DirtBlock;
 			if (!categoryHasItems[(int)category]) category = categoryHasItems[(int)ItemCategory.Material] ? ItemCategory.Material : ItemCategory.Misc;
 			int[][] tiers = buckets[(int)category];
-			if (window > 0)
+			int low = Math.Max(0, tier - window);
+			int total = 0;
+			for (int t = low; t <= tier; t++) total += tiers[t].Length;
+			while (total < MinCandidates && low > 0) total += tiers[--low].Length;
+			if (total > 0)
 			{
-				int low = Math.Max(0, tier - window);
-				int total = 0;
-				for (int t = low; t <= tier; t++) total += tiers[t].Length;
-				if (total > 0)
+				int index = rng.Next(total);
+				for (int t = low; t <= tier; t++)
 				{
-					int index = rng.Next(total);
-					for (int t = low; t <= tier; t++)
-					{
-						if (index < tiers[t].Length) return tiers[t][index];
-						index -= tiers[t].Length;
-					}
+					if (index < tiers[t].Length) return tiers[t][index];
+					index -= tiers[t].Length;
 				}
 			}
 			for (int t = tier; t >= 0; t--)

@@ -1291,8 +1291,29 @@ namespace UltimateRandomizer.Common.Features
 			return set;
 		}
 
-		// Gathered directly in this world (blocks, wood, gems, herbs...), ores apart
-		public static bool IsWorldMaterial(int item) => WorldMaterials.Any(m => m.item == item) && InThisWorld(item);
+		// Gathered directly in this world (blocks, wood, gems, herbs a plant still gives...), ores apart
+		public static bool IsWorldMaterial(int item) => WorldMaterials.Any(m => m.item == item) && InThisWorld(item) && (Array.IndexOf(Herbs, item) < 0 || HerbTier(item) < Never);
+
+		// The tier from which the plants of this world give a herb (Never: none). Herbs not randomized: its plant's tier. Randomized:
+		// its own plant when it keeps it often enough (HerbKeepChance, read as a drop chance against MinFindableChance), or any
+		// plant whose table holds it, from that plant's tier and gated like the other table items. Fireblossom is craft-only
+		// when no plant gives it (the craft-only caps of the recipes then apply)
+		public static int HerbTier(int herb)
+		{
+			int index = Array.FindIndex(WorldMaterials, m => m.item == herb);
+			if (index < 0 || Array.IndexOf(Herbs, herb) < 0) return Never;
+			int own = WorldMaterials[index].tier;
+			LootConfig loot = LootConfig.Instance;
+			if (!loot.RandomizeHerbs || !ItemPool.IsRandomizable(herb)) return InThisWorld(herb) ? own : Never;
+			int tier = InThisWorld(herb) && loot.HerbKeepChance >= ProgressionConfig.Instance.MinFindableChance ? own : Never;
+			foreach (int plant in Herbs.Where(p => ItemPool.IsRandomizable(p) && InThisWorld(p)))
+			{
+				if (!WorldSources.HerbTable(plant).Contains(herb)) continue;
+				int plantTier = WorldMaterials.First(m => m.item == plant).tier;
+				tier = Math.Min(tier, Math.Max(plantTier, ItemPool.UnlockTierOf(herb)));
+			}
+			return tier;
+		}
 
 		// The materials of one evil only grow in its worlds (both in drunk worlds), until hardmode spreads them
 		private static bool InThisWorld(int item)
@@ -1353,10 +1374,12 @@ namespace UltimateRandomizer.Common.Features
 			// checks. Mined ores keep their tier: mining is not gated, and the mining levels use it (RecipePlanner.MiningTier)
 			int Gated(int item) => ItemPool.UnlockTierOf(item);
 
-			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, tier);
+			// A herb only when a plant still gives it (HerbTier: its own plant may give other items only)
+			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, Array.IndexOf(Herbs, item) >= 0 ? HerbTier(item) : tier);
 			if (loot.RandomizeHerbs)
 			{
-				foreach (int herb in Herbs.Where(ItemPool.IsRandomizable))
+				// The plants of this world only (no Vile Mushroom in a crimson world)
+				foreach (int herb in Herbs.Where(h => ItemPool.IsRandomizable(h) && InThisWorld(h)))
 				{
 					int herbTier = WorldMaterials.First(m => m.item == herb).tier;
 					foreach (int item in WorldSources.HerbTable(herb)) Add(item, Math.Max(herbTier, Gated(item)));

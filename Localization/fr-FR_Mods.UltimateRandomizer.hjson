@@ -194,6 +194,7 @@ Tests: {
 	SurpriseGatedAndProtected: Les surprises respectent la progression et les objets protégés
 	WeightTablesSeparated: Les poids du loot favorisent l'équipement, ceux des ingrédients jamais
 	TierWindowVariety: Les tirages de début de partie donnent beaucoup d'objets différents
+	SparseBucketsWiden: Un palier pauvre d'une catégorie s'élargit aux paliers inférieurs pour varier les objets
 	OreMappingBijective: Chaque minerai du monde existe encore, comme drop d'un seul autre minerai du monde ; les minerais absents restent eux-mêmes, et le choix d'une paire hardmode ne change aucun minerai d'un autre palier ; un pour un même quand les deux minerais d'une paire sont présents
 	TreeShakeReplacement: Les arbres secoués donnent des objets aléatoires et gardent les glands
 	HerbReplacementTable: Chaque herbe a un ensemble fixe de remplaçants valides

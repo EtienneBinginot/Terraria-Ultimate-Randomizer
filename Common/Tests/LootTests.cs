@@ -1377,11 +1377,13 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			if (SeedSystem.WorldReady)
 			{
+				// The places holding a random item: a surprise, or the content of a synthetic place (rolled for its owner, then
+				// permuted like any content: wherever it went)
 				DropPermutation.WorldPlan plan = DropPermutation.Current;
 				for (int p = 0; p < plan.Places.Count; p++)
 				{
 					DropPermutation.Place place = plan.Places[p];
-					if (!plan.Surprised[p] && !place.Synthetic) continue;
+					if (!plan.Surprised[p] && !plan.Places[plan.ContentOf[p]].Synthetic) continue;
 					DropRateInfo entry = plan.ByUnit[place.Owner][place.Index].Entry;
 					surprises++;
 					if (ExtraStackProblem(entry.itemId, entry.stackMin, entry.stackMax) is string problem) Fail($"{NpcName(place.Owner)} surprise: {problem}");
@@ -1392,7 +1394,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// No random extra drop nor surprise gives a hard gate or a single use opener or summon (Temple Key, Lihzahrd Power
-		// Cell, biome keys, boss summons...) above the tier of its source, but a jackpot (an extra aimed beyond its jitter):
+		// Cell, biome keys, boss summons...) above the tier of its source, but a jackpot (an extra whose roll was aimed beyond its
+		// jitter: PlannedDrop.TierJackpot, from ItemPool.LastTierJackpot; the pure check below makes sure a gate is kept only then):
 		// every enemy's and boss's extra slots, this world's surprises and synthetic entries
 		private static void GatesNotOnLowerOwners()
 		{
@@ -1407,6 +1410,32 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (failures.Count < 30) failures.Add(message);
 			}
+			// Pure: a gate above its source only comes back from a roll that really was a jackpot (the flag is the last roll's), and
+			// a jackpot never comes from a roll that does not allow one
+			int keptJackpots = 0;
+			try
+			{
+				for (int i = 0; i < 3000; i++)
+				{
+					RollRequest request = new()
+					{
+						Keys = new[] { 6170, i }, SourceTier = i % 4, OriginalItem = -1, Policy = CategoryPolicy.Weighted, TierJitterDown = 1, TierJitterUp = 1,
+						AllowJackpot = i % 3 != 0, IgnoreGating = true
+					};
+					int item = RandomNpcDropRule.RollBelowGates(request, out _);
+					bool jackpot = ItemPool.LastTierJackpot;
+					if (jackpot && !request.AllowJackpot) Fail($"roll {i}: a jackpot without AllowJackpot");
+					if (item > ItemID.None && RandomNpcDropRule.GateAbove(item, request.SourceTier))
+					{
+						if (!jackpot) Fail($"roll {i}: {Lang.GetItemNameValue(item)} above tier {request.SourceTier} without a jackpot");
+						else keptJackpots++;
+					}
+				}
+			}
+			finally
+			{
+				ItemPool.ClearJackpot();
+			}
 			int checkedDrops = 0;
 			foreach (int netId in ContentSamples.NpcsByNetId.Keys.OrderBy(n => n))
 			{
@@ -1415,23 +1444,30 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(netId, type, false, planning: true))
 				{
 					checkedDrops++;
-					bool jackpot = ItemPool.TierOf(drop.Item) > sourceTier + 1;
-					if (RandomNpcDropRule.GateAbove(drop.Item, sourceTier) && !jackpot)
+					if (RandomNpcDropRule.GateAbove(drop.Item, sourceTier) && !drop.TierJackpot)
 					{
 						Fail($"{NpcName(netId)} (tier {sourceTier}) extra: {Lang.GetItemNameValue(drop.Item)} (true tier {ItemPool.TrueTierOf(drop.Item)})");
 					}
 				}
 			}
+			// A surprise is rolled at its place's tier; a synthetic content at its synthetic owner's (TrySynthetic), wherever the
+			// permutation moved it then
 			DropPermutation.WorldPlan plan = DropPermutation.Current;
 			for (int p = 0; p < plan.Places.Count; p++)
 			{
 				DropPermutation.Place place = plan.Places[p];
-				if (!plan.Surprised[p] && !place.Synthetic) continue;
+				DropPermutation.Place source = plan.Places[plan.ContentOf[p]];
+				bool surprised = plan.Surprised[p];
+				if (!surprised && !source.Synthetic) continue;
 				int item = plan.ByUnit[place.Owner][place.Index].Entry.itemId;
+				DropPermutation.Place roller = surprised ? place : source;
 				checkedDrops++;
-				if (RandomNpcDropRule.GateAbove(item, place.Tier)) Fail($"{NpcName(place.Owner)} (tier {place.Tier}) surprise: {Lang.GetItemNameValue(item)} (true tier {ItemPool.TrueTierOf(item)})");
+				if (RandomNpcDropRule.GateAbove(item, roller.Tier))
+				{
+					Fail($"{NpcName(roller.Owner)} (tier {roller.Tier}) {(surprised ? "surprise" : "synthetic")}: {Lang.GetItemNameValue(item)} (true tier {ItemPool.TrueTierOf(item)})");
+				}
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"GatesNotOnLowerOwners: {checkedDrops} random entries checked");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"GatesNotOnLowerOwners: {checkedDrops} random entries checked, {keptJackpots} gates kept by a jackpot in the pure rolls");
 			Check.All(failures, "Gates on lower owners");
 		}
 

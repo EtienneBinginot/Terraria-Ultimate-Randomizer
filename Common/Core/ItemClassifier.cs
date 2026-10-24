@@ -759,9 +759,10 @@ namespace UltimateRandomizer.Common.Core
 			[ItemID.PedguinHat] = Tier.PreBoss,
 			[ItemID.PedguinShirt] = Tier.PreBoss,
 			[ItemID.PedguinPants] = Tier.PreBoss,
-			// Its recipe (Cell Phone and both conches at a Tinkerer's Workshop) makes the banned ShellphoneDummy, so no source is
-			// read: the Demon Conch's tier (lava fishing), not its rarity's 7
-			[ItemID.Shellphone] = Tier.Hardmode
+			// Lava fishing in the Underworld, before hardmode (a lava-proof hook or bait): not its rarity's. The Shellphone (its
+			// recipe makes the banned ShellphoneDummy, so nothing is read for it) takes the latest of the Cell Phone and both
+			// conches (ItemPool.Build)
+			[ItemID.DemonConch] = Tier.PostEvilBoss
 		};
 
 		// Pick power gates that hold whatever the stage, their ore being in the world from the start: Hellstone (65),

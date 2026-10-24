@@ -5,8 +5,9 @@ using UltimateRandomizer.Common.Configs;
 namespace UltimateRandomizer.Common.Core
 {
 	// Shop prices derived from the item's real value, kept affordable for its tier: money is no obstacle, only the item is
-	// random. Never below half the value, so buying and reselling never makes money (the best happiness and the Discount
-	// Card take 40 % off a price at most, reselling pays at most value / 5 / 0.75)
+	// random. A bought item forgets its shop price (BoughtItem) and resells for its value / 5 like any other, so a price never
+	// below half the value never makes money (the best happiness and the Discount Card take 40 % off a price at most).
+	// Never below 2 copper: the Discount Card would make 1 free
 	public static class PriceRules
 	{
 		// Gear without a value (copper coins), and the base of the price ceiling, by tier
@@ -58,11 +59,13 @@ namespace UltimateRandomizer.Common.Core
 
 		// The lowest price: half the value (no money exploit), and the minimum price; a stackable item (an arrow, a block,
 		// bought one at a time) has its own, lower minimum
+		public const int MinPrice = 2;
+
 		public static int Floor(int itemType)
 		{
 			EconomyConfig cfg = EconomyConfig.Instance;
 			int minimum = StackRules.MaxStackOf(itemType) > 1 ? cfg.MinimumStackablePrice : cfg.MinimumPrice;
-			return Math.Max(Math.Max(1, minimum), (StackRules.ValueOf(itemType) + 1) / 2);
+			return Math.Max(Math.Max(MinPrice, minimum), (StackRules.ValueOf(itemType) + 1) / 2);
 		}
 
 		public static int Price(int itemType, Random rng)
@@ -73,7 +76,7 @@ namespace UltimateRandomizer.Common.Core
 			float max = Math.Max(cfg.PriceMultiplierMin, cfg.PriceMultiplierMax);
 			double multiplier = min + rng.NextDouble() * (max - min);
 			double price = Math.Min(value * multiplier, Ceiling(itemType));
-			return (int)Math.Clamp(Math.Round(Math.Max(price, Floor(itemType))), 1, int.MaxValue / 2);
+			return (int)Math.Clamp(Math.Round(Math.Max(price, Floor(itemType))), MinPrice, int.MaxValue / 2);
 		}
 	}
 }

@@ -74,6 +74,8 @@ namespace UltimateRandomizer.Common.Tests
 		private static void HerbTableDistinct()
 		{
 			if (Math.Max(1, LootConfig.Instance.HerbVariety) < 2) Check.Skip("a single replacement per herb");
+			// Shuffle and Chaos ignore the roll keys: the raw roll of an index is not reproducible there
+			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only in Coherent mode");
 			List<string> failures = new();
 			int rerolled = 0;
 			foreach (int herb in Herbs.Where(ItemPool.IsRandomizable))

@@ -278,8 +278,11 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				int price = PriceRules.Price(item, rng);
 				int value = StackRules.ValueOf(item);
-				// The best happiness and the Discount Card take 40 % off, reselling pays at most value / 5 / 0.75
+				// The best happiness and the Discount Card take 40 % off; reselling pays at most value / 5 / 0.75 (a bought item
+				// forgets its shop price, BoughtItem: it sells for its value like any other)
 				if (price * 0.6 < value / 3.75) failures.Add($"{Lang.GetItemNameValue(item)}: price {price}, value {value}");
+				// The Discount Card's 20 % off a price of 1 copper is free
+				if (price < PriceRules.MinPrice) failures.Add($"{Lang.GetItemNameValue(item)}: price {price}, below {PriceRules.MinPrice} copper");
 				int minimum = StackRules.MaxStackOf(item) > 1 ? cfg.MinimumStackablePrice : cfg.MinimumPrice;
 				if (price < minimum) failures.Add($"{Lang.GetItemNameValue(item)}: price {price} below the minimum {minimum}");
 			}

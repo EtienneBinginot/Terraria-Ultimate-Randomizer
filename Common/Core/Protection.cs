@@ -31,7 +31,8 @@ namespace UltimateRandomizer.Common.Core
 		// the Underworld's Shadow Chests, found in the Dungeon's locked chests and Golden Lock Boxes, the Temple Key for the
 		// Jungle Temple's door), at the tier they are needed from: randomized, and guaranteed on the enemies of that tier
 		// (GuaranteedSources.ProgressionToolRequirements). The other openers keep a source of their own: the Golden Key moves
-		// with the Dungeon enemies' drops, the biome keys are global drops (left running), the Light and Night Keys are crafted
+		// with the Dungeon enemies' drops, the biome keys are guaranteed from hardmode on the enemies of their own biome
+		// (GuaranteedSources.BiomeKeyRequirements; their vanilla global drop keeps running), the Light and Night Keys are crafted
 		public static readonly (int item, Tier tier)[] ProgressionTools =
 		{
 			(ItemID.Pwnhammer, Tier.Hardmode), (ItemID.ShadowKey, Tier.PostSkeletron), (ItemID.TempleKey, Tier.PostPlantera)

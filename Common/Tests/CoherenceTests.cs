@@ -51,7 +51,7 @@ namespace UltimateRandomizer.Common.Tests
 				(ItemID.VialofVenom, Tier.PostPlantera), (ItemID.ShadowKey, Tier.PostSkeletron), (ItemID.Hellforge, Tier.PostEvilBoss),
 				(ItemID.Wire, Tier.PostSkeletron), (ItemID.Actuator, Tier.PostSkeletron), (ItemID.DrillContainmentUnit, Tier.PostMoonLord),
 				(ItemID.TerraBlade, Tier.PostPlantera), (ItemID.ChippysCouch, Tier.PostSkeletron), (ItemID.PedguinHat, Tier.PreBoss),
-				(ItemID.PedguinShirt, Tier.PreBoss), (ItemID.PedguinPants, Tier.PreBoss),
+				(ItemID.PedguinShirt, Tier.PreBoss), (ItemID.PedguinPants, Tier.PreBoss), (ItemID.DemonConch, Tier.PostEvilBoss),
 				// Pets, mounts, trophies, relics and masks: their boss's tier
 				(ItemID.EyeOfCthulhuPetItem, Tier.PostEyeOfCthulhu), (ItemID.KingSlimePetItem, Tier.PostEyeOfCthulhu), (ItemID.SlimySaddle, Tier.PostEyeOfCthulhu),
 				(ItemID.HoneyedGoggles, Tier.PostEvilBoss), (ItemID.EyeofCthulhuTrophy, Tier.PostEyeOfCthulhu), (ItemID.KingSlimeMasterTrophy, Tier.PostEyeOfCthulhu),
@@ -76,6 +76,9 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (Usable(item) && ItemPool.TierOf(item) < (int)tier) failures.Add($"{Name(item)}: tier {ItemPool.TierOf(item)}, at least {(int)tier} expected ({ItemPool.Info[item].Source ?? "no source"})");
 			}
+			// The Shellphone: the latest of the Cell Phone and both conches it is made of
+			int shellphone = Math.Max(ItemPool.TierOf(ItemID.CellPhone), Math.Max(ItemPool.TierOf(ItemID.DemonConch), ItemPool.TierOf(ItemID.MagicConch)));
+			if (Usable(ItemID.Shellphone) && ItemPool.TierOf(ItemID.Shellphone) != shellphone) failures.Add($"{Name(ItemID.Shellphone)}: tier {ItemPool.TierOf(ItemID.Shellphone)}, {shellphone} expected");
 			foreach (int item in new[] { ItemID.MagicMirror, ItemID.IceMirror, ItemID.CellPhone, ItemID.MagicConch, ItemID.DemonConch, ItemID.Shellphone })
 			{
 				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.Info[item].Category == ItemCategory.BossSummon) failures.Add($"{Name(item)} is a boss summon");

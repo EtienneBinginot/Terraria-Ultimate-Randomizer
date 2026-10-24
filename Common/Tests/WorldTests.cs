@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Terraria;
+using Terraria.DataStructures;
 using Terraria.ID;
 using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
@@ -105,8 +106,9 @@ namespace UltimateRandomizer.Common.Tests
 				Item item = items[i];
 				if (item == null || item.IsAir) { failures.Add($"slot {i} emptied"); continue; }
 				if (ItemPool.IsRandomizable(stock[i]) && !seen.Add(item.type) && EconomyConfig.Instance.NoDuplicatesInShop) failures.Add($"{Lang.GetItemNameValue(item.type)} sold twice");
+				// Only the slots this mod priced (a protected item keeps its vanilla price)
 				int price = item.shopCustomPrice ?? item.value;
-				if (price < PriceRules.Floor(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} sold for {price} < floor {PriceRules.Floor(item.type)}");
+				if (ItemPool.IsRandomizable(stock[i]) && price < PriceRules.Floor(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} sold for {price} < floor {PriceRules.Floor(item.type)}");
 			}
 			if (items[stock.Length].type != ItemID.DD2ElderCrystal) failures.Add("special currency item replaced");
 			if (!items[stock.Length + 1].IsAir) failures.Add("reserved slot filled");
@@ -124,6 +126,10 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				else if (items[i] != null) failures.Add($"unused slot {i} filled with {Lang.GetItemNameValue(items[i].type)}");
 			}
+			// A bought item forgets its shop price (no buy-then-stack resale at the shop price)
+			Item bought = new(ItemID.Torch) { shopCustomPrice = 12345 };
+			ModContent.GetInstance<BoughtItem>().OnCreated(bought, new BuyItemCreationContext(new Item(), merchant));
+			if (bought.shopCustomPrice != null) failures.Add($"a bought item keeps its shop price {bought.shopCustomPrice}");
 			Check.All(failures, "Shop");
 		}
 

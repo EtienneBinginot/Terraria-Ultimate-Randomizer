@@ -697,6 +697,21 @@ namespace UltimateRandomizer.Common.Tests
 				int source = OpenerSourceTier(item, recipes);
 				if (source > tier) Fail($"{Name(item)} has no source before tier {(source == Findability.Never ? "never" : source.ToString())} (needed at {tier})");
 			}
+			// Both mirrors (Misc now, no recipe of their own: a shell, RecipePlanner.ShellTool) are had, found or crafted; no
+			// mirror, phone or conch is ever a new ingredient (a recipe must not consume a Cell Phone)
+			foreach (int mirror in new[] { ItemID.MagicMirror, ItemID.IceMirror }.Where(m => ItemPool.IsRandomizable(m) && !listed.Contains(m)))
+			{
+				int had = Math.Min(Findability.Tier(mirror), mirror < recipes.Availability.Length ? recipes.Availability[mirror] : Findability.Never);
+				if (had == Findability.Never) Fail($"{Name(mirror)} is never found nor crafted");
+			}
+			List<int>[,] newIngredients = RecipePlanner.IngredientCandidates();
+			for (int c = 0; c < ItemCategories.Count; c++)
+			{
+				for (int t = 0; t < Tiers.Count; t++)
+				{
+					foreach (int item in newIngredients[c, t].Where(Protection.SortedAsSummon)) Fail($"{Name(item)} is an ingredient candidate at tier {t}");
+				}
+			}
 			// Pure: fixed cuts (5, 7, 9) whatever the group holds. A gate band of a single owner joins the band below, its gate
 			// staying in place; a gate on a place below its true tier stays; with two owners from the gate's tier on, the band
 			// stays apart; a group without gates is cut too, so that adding a place holding a gate moves no other place; a place
@@ -923,21 +938,32 @@ namespace UltimateRandomizer.Common.Tests
 						if (BiomeSlots.NeverSpawns(type)) failures.Add($"{where}, which never spawns in this world");
 						if (place.Biome >= 0 && absent.Contains(place.Biome)) failures.Add($"{where} in {BiomeSlots.BiomeName(place.Biome)}, a biome of the absent evil");
 						if (place.Biome >= 0 && BiomeSlots.SteadyShareAt(place.Biome, type, place.Tier, SlotTime.Any) <= 0) failures.Add($"{where}, not met in {BiomeSlots.BiomeName(place.Biome)}");
-						List<(int biome, double share, SlotTime time)> planned = BiomeSlots.PlannedBiomes(type);
-						if (planned.Count == 0 || planned.All(b => absent.Contains(b.biome))) failures.Add($"{where}, met in no biome of this world");
+						// Only for a host the spawn map places (a boss part or an enemy outside the map has no planned biome)
+						if (place.Biome >= 0 && BiomeSlots.HasAnySlot(type))
+						{
+							List<(int biome, double share, SlotTime time)> planned = BiomeSlots.PlannedBiomes(type);
+							if (planned.Count == 0 || planned.All(b => absent.Contains(b.biome))) failures.Add($"{where}, met in no biome of this world");
+						}
 						if (map.Slots.Any(s => s.AbsentEvil && BiomeSlots.TypeOf(s.Original) == type) && !map.Slots.Any(s => !s.AbsentEvil && BiomeSlots.TypeOf(s.Original) == type)) absentNatives++;
 					}
 				}
 			}
-			// The other forms of a host carry its guaranteed drops at kill time
+			// The other forms of a host carry its guaranteed drops at kill time, at the same chance: the list a kill really rolls
+			// (RandomNpcDropRule.KillList, what TryDroppingItem walks)
 			foreach ((int form, int host) in new[] { (NPCID.LihzahrdCrawler, NPCID.Lihzahrd), (NPCID.BloodCrawler, NPCID.BloodCrawlerWall), (NPCID.BloodCrawlerWall, NPCID.BloodCrawler) })
 			{
-				List<PlannedDrop> kill = GuaranteedSources.ForKill(form);
-				foreach (PlannedDrop drop in GuaranteedSources.For(host).Where(d => !kill.Any(k => k.Item == d.Item)))
+				List<PlannedDrop> kill = RandomNpcDropRule.KillList(form, form, ProgressionSystem.PlannedExpert, false, new Random(1), 1f).Where(d => d.Guaranteed).ToList();
+				foreach (PlannedDrop drop in GuaranteedSources.For(host))
 				{
-					failures.Add($"a {Lang.GetNPCNameValue(form)} kill misses {Name(drop.Item)} of its {Lang.GetNPCNameValue(host)} form");
+					if (!kill.Any(k => k.Item == drop.Item)) failures.Add($"a {Lang.GetNPCNameValue(form)} kill misses {Name(drop.Item)} of its {Lang.GetNPCNameValue(host)} form");
+					else if (!kill.Any(k => k.Item == drop.Item && Math.Abs(k.Chance - drop.Chance) < 1e-6f && k.Guardian == drop.Guardian))
+					{
+						failures.Add($"a {Lang.GetNPCNameValue(form)} kill gives {Name(drop.Item)} of its {Lang.GetNPCNameValue(host)} form at another chance");
+					}
 				}
 			}
+			// KillDrops rolled: no jackpot mark left behind
+			ItemPool.ClearJackpot();
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"GuardiansInThisWorld: {absentNatives} guardian(s) native to the absent evil only, placed in this world's biomes");
 			Check.All(failures, "Station guardians");
 		}

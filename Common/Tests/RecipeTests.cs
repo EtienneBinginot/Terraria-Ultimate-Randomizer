@@ -2029,7 +2029,7 @@ namespace UltimateRandomizer.Common.Tests
 		// The house items (Torch, Wood Platform, Wooden Door) have a simple random recipe: one or two new ingredients, start
 		// materials only (never a fish, an ore bar nor anything crafted: a Torch was a Platinum Ore and a Flounder), a few of each
 		// (HouseStackMax, or the vanilla amount), worth at most twice the vanilla recipe (stacks at 1 apart), at a basic station
-		// or none
+		// or none, never its vanilla recipe again
 		private static void HouseRecipesSimple()
 		{
 			RequireRandomIngredients();
@@ -2046,6 +2046,11 @@ namespace UltimateRandomizer.Common.Tests
 				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
 				List<(int type, int stack)> added = ingredients.Where(p => RecipePlanner.IngredientReplaceable(p.type)).ToList();
 				if (added.Count == 0) failures.Add($"{where}: no new ingredient");
+				// Rebuilt, never back to its vanilla recipe (the same types in the same amounts)
+				if (ingredients.Length == original.Length && ingredients.OrderBy(p => p.type).ThenBy(p => p.stack).SequenceEqual(original.OrderBy(p => p.type).ThenBy(p => p.stack)))
+				{
+					failures.Add($"{where}: its vanilla recipe");
+				}
 				if (added.Count > RecipePlanner.HouseIngredientMax) failures.Add($"{where}: {added.Count} ingredients, at most {RecipePlanner.HouseIngredientMax}");
 				int most = Math.Max(RecipePlanner.HouseStackMax, original.Sum(o => o.stack));
 				foreach ((int type, int stack) in added)
