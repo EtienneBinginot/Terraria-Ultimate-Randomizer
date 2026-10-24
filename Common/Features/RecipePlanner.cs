@@ -1043,7 +1043,8 @@ namespace UltimateRandomizer.Common.Features
 					DetRandom.Get(RollKey.KeyIngredient, RecipeSystem.RecipeKey(i), RollKey.Fallback), append: true, replace: slot);
 				if (newKey <= 0) continue;
 				result.PlannedKeys[i] = newKey;
-				result.KeyIngredient[i] = true;
+				// Only an appended key is a LockResults key (KeyIngredient: doable by U + 1); a replaced one keeps the recipe's T
+				if (slot < 0) result.KeyIngredient[i] = true;
 				if (later) result.IngredientTiers[i] = Math.Min(t + 1, Tiers.Max);
 				placed++;
 				handled.Add(i);
