@@ -166,6 +166,7 @@ Tests: {
 	EaterOfWorldsParts: Le corps et la queue du Dévoreur des mondes tirent dans la table de la tête, avec le plancher du boss
 	BossGroupsMerge: Les petits tiers de boss consécutifs se regroupent d'abord, et le butin du Seigneur de la Lune reste avec les derniers boss
 	CodexShowsLocked: Interface du codex : les butins verrouillés sont grisés avec le boss qui les débloque, sans chance
+	CodexExpertDrops: Codex : en Expert, les butins d'un boss réservés au mode normal ne sont ni à trouver ni verrouillés (son sac les contient)
 	ProtectedDropsKept: Les drops protégés, pièces, sacs et améliorations sont conservés
 	NoMinionFarms: Les minions de boss et les PNJ n'ont pas de drops aléatoires
 	EventItemsKept: Objets de l'Armée de l'Ancien et segments de boss préservés

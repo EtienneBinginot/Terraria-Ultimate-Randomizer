@@ -166,6 +166,7 @@ Tests: {
 	EaterOfWorldsParts: The Eater of Worlds' body and tail segments drop from the head's table, with the boss floor
 	BossGroupsMerge: Small consecutive boss tiers group together first, and the Moon Lord's loot stays with the late bosses
 	CodexShowsLocked: Codex interface: locked drops are greyed with the boss that unlocks them, with no chance
+	CodexExpertDrops: Codex: in Expert, a boss's normal-mode-only drops are neither drops to find nor locked ones (its bag holds them)
 	ProtectedDropsKept: Protected drops, coins, bags and upgrades are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled

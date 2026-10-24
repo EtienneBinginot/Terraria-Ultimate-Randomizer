@@ -27,6 +27,50 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CodexShowsChances", CodexShowsChances);
 			TestRunner.Register("CodexShowsConditions", CodexShowsConditions);
 			TestRunner.Register("CodexShowsLocked", CodexShowsLocked);
+			TestRunner.Register("CodexExpertDrops", CodexExpertDrops);
+		}
+
+		// In Expert a boss's not-expert drops never drop (BossPermutation copies them into its bag): the codex counts them
+		// neither as drops to find nor as locked ones, while Classic shows them; in the permutation style the bag plan holds
+		// each of those items. Explicit difficulties: nothing in the world changes
+		private static void CodexExpertDrops()
+		{
+			if (!SeedSystem.WorldReady || !ItemPool.Ready) Check.Skip("no world");
+			List<string> failures = new();
+			int bosses = 0, bagsChecked = 0;
+			foreach (int unit in BossPermutation.Units())
+			{
+				List<PlannedDrop> plan = RandomNpcDropRule.Plan(unit, true, includeLocked: true);
+				// Forbidden by the difficulty only (not by the world's evil or a seed)
+				List<PlannedDrop> notExpert = plan.Where(d => d.Item > ItemID.None && !Findability.WorldAllows(d.Conditions, true, false) && Findability.WorldAllows(d.Conditions, false, false)).ToList();
+				if (notExpert.Count == 0) continue;
+				bosses++;
+				string name = $"{Lang.GetNPCNameValue(unit)} ({unit})";
+				HashSet<int> allowed = plan.Where(d => d.Item > ItemID.None && Findability.WorldAllows(d.Conditions, true, false)).Select(d => d.Item).ToHashSet();
+				Dictionary<int, float> expert = CodexStats.Compute(unit, true, false, out Dictionary<int, int> expertLocked);
+				Dictionary<int, float> classic = CodexStats.Compute(unit, false, false, out Dictionary<int, int> classicLocked);
+				foreach (int item in notExpert.Select(d => d.Item).Distinct().Where(i => !allowed.Contains(i)))
+				{
+					if (expert.ContainsKey(item) && failures.Count < 15) failures.Add($"{name}: the not-expert {Lang.GetItemNameValue(item)} has a chance in Expert");
+					if (expertLocked.ContainsKey(item) && failures.Count < 15) failures.Add($"{name}: the not-expert {Lang.GetItemNameValue(item)} is a locked drop in Expert");
+				}
+				List<PlannedDrop> classicPlan = RandomNpcDropRule.Plan(unit, false, includeLocked: true);
+				foreach (int item in classicPlan.Where(d => d.Item > ItemID.None && !Findability.WorldAllows(d.Conditions, true, false) && Findability.WorldAllows(d.Conditions, false, false)).Select(d => d.Item).Distinct())
+				{
+					if (!classic.ContainsKey(item) && !classicLocked.ContainsKey(item) && failures.Count < 15) failures.Add($"{name}: the not-expert {Lang.GetItemNameValue(item)} is missing from the Classic codex");
+				}
+				int bag = BossPermutation.BagOf(BossPermutation.UnitOf(unit));
+				if (bag <= ItemID.None || !BossPermutation.BagInStyle(bag)) continue;
+				bagsChecked++;
+				HashSet<int> inBag = BagPlan.Plan(bag, includeLocked: true).Select(d => d.Item).ToHashSet();
+				foreach (int item in notExpert.Where(d => d.Rolled && !DropHelper.KeepOriginal(d.Item)).Select(d => d.Item).Distinct())
+				{
+					if (!inBag.Contains(item) && failures.Count < 15) failures.Add($"{name}: the not-expert {Lang.GetItemNameValue(item)} is not in {Lang.GetItemNameValue(bag)}");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Codex expert drops: {bosses} bosses with not-expert drops, {bagsChecked} bags checked");
+			if (bosses == 0) Check.Skip("no boss with a not-expert drop");
+			Check.All(failures, "Not-expert boss drops leak into the Expert codex");
 		}
 
 		// A drop of the final plan that progression still locks has no chance and is not a drop to find: the enemy page shows
@@ -53,7 +97,7 @@ namespace UltimateRandomizer.Common.Tests
 			if (!Language.Exists(CodexText.Prefix + "LockedBy." + (Tier)tier)) failures.Add($"no text for tier {(Tier)tier}");
 			if (tier <= ProgressionSystem.UnlockedTier) failures.Add($"{Lang.GetItemNameValue(item)} locked until tier {tier}, already unlocked ({ProgressionSystem.UnlockedTier})");
 			if (CodexStats.PlannedChances(npc).ContainsKey(item)) failures.Add($"{Lang.GetItemNameValue(item)} is locked and has a chance");
-			List<PlannedDrop> now = RandomNpcDropRule.Plan(npc, Main.expertMode);
+			List<PlannedDrop> now = RandomNpcDropRule.Plan(npc, Main.expertMode).FindAll(d => Findability.WorldAllows(d.Conditions, Main.expertMode, Main.masterMode));
 			foreach ((int planned, float chance) in CodexStats.PlannedChances(npc))
 			{
 				float expected = CodexStats.CombinedChance(now, planned);
@@ -311,7 +355,7 @@ namespace UltimateRandomizer.Common.Tests
 			List<PlannedDrop> plan = null;
 			foreach (int id in new[] { NPCID.BlueSlime, NPCID.Zombie, NPCID.DemonEye, NPCID.GreenSlime, NPCID.Skeleton })
 			{
-				plan = RandomNpcDropRule.Plan(id, Main.expertMode);
+				plan = RandomNpcDropRule.Plan(id, Main.expertMode).FindAll(d => Findability.WorldAllows(d.Conditions, Main.expertMode, Main.masterMode));
 				if (plan.Exists(d => d.Item > ItemID.None))
 				{
 					npc = id;
