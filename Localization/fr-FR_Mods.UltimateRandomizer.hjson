@@ -652,8 +652,8 @@ Codex: {
 		Free: gratuit
 		NoStation: aucune station
 		Around: Cherche du côté de ces lieux : {0}.
-		StationRecipe: "Sa recette : {0} ({1})."
-		Guardian: "Son gardien, {0}, en laisse parfois tomber un exemplaire ({1} de chances à chaque fois qu'il est vaincu{2})."
+		StationRecipe: Sa recette : {0} ({1}).
+		Guardian: Son gardien, {0}, en laisse parfois tomber un exemplaire ({1} de chances à chaque fois qu'il est vaincu{2}).
 		GuardianWhere: ", {0}"
 		Place.Known: "{0}, {1}"
 		Share: " (environ {0} des créatures de ce lieu : {1})"
@@ -1341,18 +1341,18 @@ Configs: {
 		}
 
 		StationProtection: {
-			Label: "Protection des stations de craft"
-			Tooltip: "Aucune : toutes les stations sont randomisées, y compris celles de progression (Forge d'enfer, enclumes et forges hardmode, Atelier de bricolage, Manipulateur antique...) : chacune reçoit une recette aléatoire faisable à son palier et un gardien, un ennemi courant de son palier qui la lâche parfois. Progression seulement : seules les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) sont randomisées ainsi. Une station d'un autre mod dont beaucoup de recettes ont besoin reste protégée ; les autres sont traitées comme les stations thématiques (four à verre...)."
+			Label: Protection des stations de craft
+			Tooltip: Aucune : toutes les stations sont randomisées, y compris celles de progression (Forge d'enfer, enclumes et forges hardmode, Atelier de bricolage, Manipulateur antique...) : chacune reçoit une recette aléatoire faisable à son palier et un gardien, un ennemi courant de son palier qui la lâche parfois. Progression seulement : seules les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) sont randomisées ainsi. Une station d'un autre mod dont beaucoup de recettes ont besoin reste protégée ; les autres sont traitées comme les stations thématiques (four à verre...).
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: "Multiplicateur des drops garantis"
-			Tooltip: "Les invocations de boss et les pioches (et les ingrédients vanilla, si choisis) sont placées sur les ennemis courants d'un biome de leur tier. Augmente pour les trouver plus vite. Les gardiens des stations ont leur propre chance."
+			Label: Multiplicateur des drops garantis
+			Tooltip: Les invocations de boss et les pioches (et les ingrédients vanilla, si choisis) sont placées sur les ennemis courants d'un biome de leur tier. Augmente pour les trouver plus vite. Les gardiens des stations ont leur propre chance.
 		}
 
 		StationGuardianChance: {
-			Label: "Chance de drop des gardiens de station (%)"
-			Tooltip: "Avec les recettes aléatoires, chaque station d'artisanat a une recette aléatoire faisable à son tier (le Guide la donne) et un gardien : un ennemi courant de son tier qui la lâche avec cette chance à chaque fois qu'il est tué (partagée entre joueurs), dix fois moins souvent dès que quelqu'un a obtenu cette station dans le monde. Un boss qui garde une station tardive la lâche toujours. Les pots et les coffres ne donnent jamais de station."
+			Label: Chance de drop des gardiens de station (%)
+			Tooltip: Avec les recettes aléatoires, chaque station d'artisanat a une recette aléatoire faisable à son tier (le Guide la donne) et un gardien : un ennemi courant de son tier qui la lâche avec cette chance à chaque fois qu'il est tué (partagée entre joueurs), dix fois moins souvent dès que quelqu'un a obtenu cette station dans le monde. Un boss qui garde une station tardive la lâche toujours. Les pots et les coffres ne donnent jamais de station.
 		}
 
 		GuaranteedHostsPerItem: {
@@ -1361,8 +1361,8 @@ Configs: {
 		}
 
 		StationFindKills: {
-			Label: "Ennemis tués dans son biome pour trouver une invocation ou une pioche"
-			Tooltip: "Nombre moyen d'ennemis tués dans son biome avant qu'une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les stations d'artisanat viennent de leur recette, ou de leur gardien (voir la chance des gardiens) ; si les recettes ne sont pas aléatoires, les stations de progression non protégées se trouvent aussi de cette façon."
+			Label: Ennemis tués dans son biome pour trouver une invocation ou une pioche
+			Tooltip: Nombre moyen d'ennemis tués dans son biome avant qu'une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les stations d'artisanat viennent de leur recette, ou de leur gardien (voir la chance des gardiens) ; si les recettes ne sont pas aléatoires, les stations de progression non protégées se trouvent aussi de cette façon.
 		}
 
 		PotGuaranteeChance: {

@@ -652,8 +652,8 @@ Codex: {
 		Free: free
 		NoStation: no station
 		Around: Look around: {0}.
-		StationRecipe: "Its recipe: {0} ({1})."
-		Guardian: "Its guardian, the {0}, sometimes drops one too ({1} chance per kill{2})."
+		StationRecipe: Its recipe: {0} ({1}).
+		Guardian: Its guardian, the {0}, sometimes drops one too ({1} chance per kill{2}).
 		GuardianWhere: ", {0}"
 		Place.Known: "{0}, {1}"
 		Share: " (about {0} of the creatures of this place: {1})"
@@ -1341,18 +1341,18 @@ Configs: {
 		}
 
 		StationProtection: {
-			Label: "Crafting station protection"
-			Tooltip: "None: every station is randomized, progression ones too (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...): each one gets a random recipe doable at its tier and a guardian, a common enemy of its tier that sometimes drops it. Progression only: only basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are randomized that way. A station of another mod that many recipes need stays protected; the others are treated like the themed stations (Glass Kiln, Bone Welder...)."
+			Label: Crafting station protection
+			Tooltip: None: every station is randomized, progression ones too (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...): each one gets a random recipe doable at its tier and a guardian, a common enemy of its tier that sometimes drops it. Progression only: only basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are randomized that way. A station of another mod that many recipes need stays protected; the others are treated like the themed stations (Glass Kiln, Bone Welder...).
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: "Guaranteed drop chance multiplier"
-			Tooltip: "Boss summons and pickaxes (and vanilla ingredients, if chosen) are placed on the common enemies of one biome of their tier. Raise this to find them sooner. Station guardians have their own chance."
+			Label: Guaranteed drop chance multiplier
+			Tooltip: Boss summons and pickaxes (and vanilla ingredients, if chosen) are placed on the common enemies of one biome of their tier. Raise this to find them sooner. Station guardians have their own chance.
 		}
 
 		StationGuardianChance: {
-			Label: "Station guardian drop chance (%)"
-			Tooltip: "With randomized recipes, each crafting station has a random recipe doable at its tier (the Guide tells it) and one guardian: a common enemy of its tier that drops it with this chance per kill (shared between players), ten times less often once anyone has obtained that station in the world. A boss guarding a late station always drops it. Pots and chests never give stations."
+			Label: Station guardian drop chance (%)
+			Tooltip: With randomized recipes, each crafting station has a random recipe doable at its tier (the Guide tells it) and one guardian: a common enemy of its tier that drops it with this chance per kill (shared between players), ten times less often once anyone has obtained that station in the world. A boss guarding a late station always drops it. Pots and chests never give stations.
 		}
 
 		GuaranteedHostsPerItem: {
@@ -1361,8 +1361,8 @@ Configs: {
 		}
 
 		StationFindKills: {
-			Label: "Kills in its biome to find a summon or pickaxe"
-			Tooltip: "Average number of kills in its biome before a guaranteed boss summon or pickaxe drops, all its enemies together. Crafting stations come from their recipe, or from their guardian (see the guardian chance); with recipes not randomized, the unprotected progression stations are found this way too."
+			Label: Kills in its biome to find a summon or pickaxe
+			Tooltip: Average number of kills in its biome before a guaranteed boss summon or pickaxe drops, all its enemies together. Crafting stations come from their recipe, or from their guardian (see the guardian chance); with recipes not randomized, the unprotected progression stations are found this way too.
 		}
 
 		PotGuaranteeChance: {
