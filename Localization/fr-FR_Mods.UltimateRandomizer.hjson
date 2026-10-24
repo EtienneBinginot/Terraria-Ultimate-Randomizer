@@ -91,7 +91,7 @@ Tests: {
 	SameCategory: Les remplaçants gardent la catégorie
 	ShuffleBijection: Mélange garanti : chaque objet obtenable est donné exactement une fois
 	StackRules: Les tailles de stack sont valides
-	PriceFloor: Les prix des boutiques ne sont jamais sous la valeur de l'objet
+	PriceFloor: Un objet acheté en boutique ne se revend jamais plus cher qu'il n'a coûté, et ne coûte jamais moins que le prix minimum (celui des objets empilables pour un objet empilable)
 	DropRates: Les taux de drop sont valides
 	TierFromRecipes: Les objets fabriqués prennent le tier de leur recette vanilla quand il est plus précoce que leur rareté (combinaisons du Tinkerer)
 	StorageKitOnce: Le kit Magic Storage est donné une fois par monde, et de nouveau dans un autre monde
@@ -124,11 +124,15 @@ Tests: {
 	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
 	ShopDump: Écrit Shops.tsv, chaque article des boutiques vanilla à chaque palier débloqué avec son remplaçant (tirage aléatoire), puis les emplacements ajoutés qui vendent les objets exclusifs aux boutiques de ce monde, avec prix, conditions et alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu), et ShopOnly.tsv, qui indique quel marchand vend chaque objet exclusif aux boutiques de ce monde et à partir de quel palier (lecture seule)
 	WorldExport: Écrit dans Export/ les fichiers .tsv des objets, recettes, butins, sacs, boutiques, coffres, sources du monde et trouvabilité, plus un README, pour un audit de cohérence hors jeu (lecture seule)
-	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques, et aucun emplacement ajouté n'apparaît avant le palier de déblocage de son objet
+	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques, aucune arme, armure, aucun accessoire ni outil ne dépasse le palier débloqué, et aucun emplacement ajouté n'apparaît avant le palier de déblocage de son objet
 	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde : trouvés ou fabriqués à n'importe quel palier, ou vendus dans un emplacement ajouté chez un marchand fiable (une vente tardive est seulement signalée dans le journal)
 	ShopOnlyPlacement: Chaque objet exclusif aux boutiques de ce monde (vendu par un article tiré au hasard, et ni trouvé ni fabriqué nulle part dans ce monde, à aucun palier) a exactement un emplacement ajouté chez un marchand fiable (arrivée connue, ni le Père Noël, ni la Princesse, ni un marchand de passage), visible dès son palier de déblocage, sans dépasser la place libre d'une boutique tant que d'autres en ont, jamais tiré une seconde fois dans cette boutique, identique pour une même graine (les marchands tardifs sont signalés dans le journal)
 	ShopOnlySlots: Chaque boutique avec des emplacements ajoutés, remplie comme le jeu la remplit en ce moment puis complétée comme en jeu, propose chaque objet exclusif débloqué à son prix, et seul un emplacement tiré au hasard cède sa place quand la boutique est pleine
-	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant
+	ShopNoDuplicates: Sans doublons dans les boutiques, aucun marchand ne vend deux fois le même remplaçant, tous ses onglets confondus
+	ShopPricesAffordable: Les prix des boutiques restent entre leur plancher (la moitié de la valeur, le prix minimum) et le plafond de leur palier, les objets sans valeur hors équipement coûtent quelques pièces de cuivre ou d'argent, et les objets empilables bon marché gardent leur petit prix
+	ShopSpread: Aucun objet tiré au hasard n'est vendu par plus de marchands que la limite des réglages, à aucun palier, à part quelques-uns qu'une petite catégorie ne laisse pas choisir
+	ShopPylonsGuaranteed: Les neuf pylônes de téléportation et la Solution rouge ont chacun un emplacement ajouté chez un marchand fiable, quel que soit le monde
+	ShopAddedSlotsOnTime: Aucun emplacement ajouté n'ouvre avant le plus tardif du palier et du vrai palier de son objet, moins la marge de palier
 	ModdedRecipesRandomized: Avec Magic Storage, ses recettes sont reconstruites avec un ingrédient clé de leur palier, et les paliers de ses améliorations de stockage suivent leurs lingots dans l'ordre
 	ModdedItemsInPool: Les objets de Magic Storage peuvent être donnés au hasard ; ceux des mods utilitaires (tModLoader, Recipe Browser) et les objets créatifs jamais
 	ModdedDropsPermuted: Les butins des ennemis et boss des autres mods sont permutés avec ceux de tout le monde, à leur palier estimé
@@ -1894,13 +1898,28 @@ Configs: {
 		}
 
 		MinimumPrice: {
-			Label: Prix minimum (pièces de cuivre)
-			Tooltip: 100 cuivre = 1 argent.
+			Label: "Prix minimum (pièces de cuivre)"
+			Tooltip: "Pour les objets non empilables. 100 cuivre = 1 argent."
+		}
+
+		MinimumStackablePrice: {
+			Label: "Prix minimum des objets empilables (pièces de cuivre)"
+			Tooltip: "Les munitions, blocs, potions et autres objets empilables s'achètent un par un : ils gardent leur petit prix, jusqu'à ce minimum."
+		}
+
+		PriceCeiling: {
+			Label: "Plafond de prix (par palier)"
+			Tooltip: "Aucun prix au-dessus d'un prix de base du palier de l'objet x cette valeur (armes, armures, accessoires et outils : 4 fois plus), pour qu'un objet en boutique reste abordable quand il est vendu. Les objets qui valent plus (hors équipement : cosmétiques, meubles, familiers...) sont rarement vendus. Jamais moins de la moitié de la valeur de l'objet. 0 : pas de plafond."
 		}
 
 		NoDuplicatesInShop: {
 			Label: Pas de doublons dans une boutique
 			Tooltip: ""
+		}
+
+		MaxShopsPerItem: {
+			Label: "Nombre maximum de marchands vendant le même objet"
+			Tooltip: "Dans tout le monde, un objet tiré au hasard est vendu par ce nombre de marchands au plus, pour que les boutiques restent variées. Chaque marchand ne le vend que dans un de ses onglets. 0 : pas de limite."
 		}
 
 		ShopsFollowProgression: {

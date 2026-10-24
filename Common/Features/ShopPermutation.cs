@@ -13,7 +13,8 @@ namespace UltimateRandomizer.Common.Features
 	// (ShopPlanner.PlanShop); each shop-only item (sold by a rolled vanilla entry, and neither found nor crafted anywhere in
 	// this world, at any tier: Findability and the recipe plan, which count no shop) gets an ADDED slot, after the rolled
 	// entries, at one reliable merchant (known arrival: not the Princess, the Skeleton Merchant, the Traveling Merchant nor
-	// Santa), shown once progression reaches the item's unlock tier. Merchants are chosen by arrival (this world's town NPC
+	// Santa), shown once progression reaches the item's unlock tier (UnlockTier). The teleportation pylons and the Red Solution
+	// always get one (AlwaysAdded). Merchants are chosen by arrival (this world's town NPC
 	// order) and free capacity (Build). Built from the world seed, the synced settings and plans and the shop database built
 	// at load: the same on every machine, solo or hosted. Applied on the client that opens a shop (ShopNPC.ModifyActiveShop),
 	// shops being client-side; the hints read the same plan
@@ -276,19 +277,47 @@ namespace UltimateRandomizer.Common.Features
 				.OrderBy(ItemPool.TierOf).ThenBy(i => ItemID.Search.GetName(i), StringComparer.Ordinal).ToList();
 		}
 
-		// Rolled items with no other source at all in this world
-		public static List<int> ShopOnlyItems(List<Place> places, RecipePlan recipes) => RolledItems(places).Where(i => !HasOtherSource(i, recipes)).ToList();
+		// Always given an added slot, whatever their other sources and the world (no shuffle): the teleportation pylons, which
+		// vanilla sells only to a merchant happy in their biome (a roll rarely gives them back, some never), and the Red
+		// Solution, sold in a Crimson world only (it lets a Corruption world spread the Crimson: harmless, as in a drunk world)
+		public static readonly int[] AlwaysAdded =
+		{
+			ItemID.TeleportationPylonPurity, ItemID.TeleportationPylonSnow, ItemID.TeleportationPylonDesert, ItemID.TeleportationPylonUnderground,
+			ItemID.TeleportationPylonOcean, ItemID.TeleportationPylonJungle, ItemID.TeleportationPylonHallow, ItemID.TeleportationPylonMushroom,
+			ItemID.TeleportationPylonVictory, ItemID.RedSolution
+		};
 
-		// From which progression an added slot sells its item: the item's unlock tier (no allowance for a hard gate, never before
-		// hardmode for a hardmode item: ItemPool.UnlockTierOf)
-		public static bool Unlocked(int item, int unlockedTier, bool hardMode)
+		// The AlwaysAdded items this world adds (none in Shuffle mode, nor when the item is left alone or banned)
+		public static IEnumerable<int> AlwaysAddedItems() => GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle ? Enumerable.Empty<int>()
+			: AlwaysAdded.Where(i => ItemPool.IsRandomizable(i) && !ItemPool.IsBanned(i));
+
+		// Rolled items with no other source at all in this world, then the AlwaysAdded items
+		public static List<int> ShopOnlyItems(List<Place> places, RecipePlan recipes)
+		{
+			List<int> items = RolledItems(places).Where(i => !HasOtherSource(i, recipes)).ToList();
+			items.AddRange(AlwaysAddedItems().Where(i => !items.Contains(i)));
+			return items;
+		}
+
+		// From which progression an added slot sells its item: the unlock tier of the later of its tier and its true tier (an
+		// added slot is what makes its true tier: a Pogo Stick of tier 7 waits for tier 6 with an allowance of 1; no allowance
+		// for a hard gate, never before hardmode for a hardmode item: ItemPool.UnlockTierOf)
+		public static int UnlockTier(int item)
 		{
 			int unlock = ItemPool.UnlockTierOf(item);
+			int tier = ItemPool.TierOf(item);
+			if (tier <= ItemPool.TrueTierOf(item) || !ProgressionConfig.Instance.TierGating) return unlock;
+			return Math.Max(unlock, ItemPool.IsHardGate(item) ? tier : ItemPool.UnlockTier(tier));
+		}
+
+		public static bool Unlocked(int item, int unlockedTier, bool hardMode)
+		{
+			int unlock = UnlockTier(item);
 			return unlockedTier >= unlock && (unlock < (int)Tier.Hardmode || hardMode);
 		}
 
 		// The tier from which a merchant sells an added item: its arrival and the item's unlock tier
-		public static int SaleTier(Merchant merchant, int item) => Math.Max(merchant.Arrival, ItemPool.UnlockTierOf(item));
+		public static int SaleTier(Merchant merchant, int item) => Math.Max(merchant.Arrival, UnlockTier(item));
 
 		// The whole plan for a seed (the town NPC order of that seed too); recipes: the world's recipe plan (null: crafting
 		// counts for nothing). Findability is always the current world's. Each shop-only item gets an added slot at one
@@ -392,6 +421,10 @@ namespace UltimateRandomizer.Common.Features
 		public static IReadOnlyList<int> ItemsOf(WorldPlan plan, string shopName) =>
 			plan != null && shopName != null && plan.ShopItems.TryGetValue(shopName, out List<int> items) ? items : Array.Empty<int>();
 
+		// The shop-only items added to every shop of a merchant (its tabs): what none of its rolls gives
+		public static IEnumerable<int> ItemsOfNpc(WorldPlan plan, int npcType) =>
+			plan == null ? Enumerable.Empty<int>() : plan.Merchants.Where(m => m.Npc == npcType).SelectMany(m => m.Items);
+
 		// The slots a shop fills, by name (Chest.maxItems - 1 when unknown)
 		public static int SlotLimit(string shopName) =>
 			shopName != null && NPCShopDatabase.TryGetNPCShop(shopName, out AbstractNPCShop found) && found is NPCShop shop ? SlotLimit(shop) : Chest.maxItems - 1;
@@ -459,6 +492,7 @@ namespace UltimateRandomizer.Common.Features
 			SeedSystem.OnSeedChanged -= FollowTownNpcOrder;
 			townNpcOrder = null;
 			ShopPermutation.Reset();
+			ShopPlanner.ResetSpread();
 		}
 	}
 }

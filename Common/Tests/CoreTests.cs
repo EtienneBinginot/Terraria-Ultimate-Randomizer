@@ -276,10 +276,12 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				int price = PriceRules.Price(item, rng);
 				int value = StackRules.ValueOf(item);
-				if (price < value) failures.Add($"{Lang.GetItemNameValue(item)}: price {price} < value {value}");
-				if (price < cfg.MinimumPrice) failures.Add($"{Lang.GetItemNameValue(item)}: price {price} below the minimum");
+				// The best happiness and the Discount Card take 40 % off, reselling pays at most value / 5 / 0.75
+				if (price * 0.6 < value / 3.75) failures.Add($"{Lang.GetItemNameValue(item)}: price {price}, value {value}");
+				int minimum = StackRules.MaxStackOf(item) > 1 ? cfg.MinimumStackablePrice : cfg.MinimumPrice;
+				if (price < minimum) failures.Add($"{Lang.GetItemNameValue(item)}: price {price} below the minimum {minimum}");
 			}
-			Check.All(failures, "Shop prices below the item value (money exploit)");
+			Check.All(failures, "Shop prices that resell for more (money exploit)");
 		}
 
 		private static void DropRatesValid()
