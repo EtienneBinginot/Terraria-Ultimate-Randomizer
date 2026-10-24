@@ -1,8 +1,9 @@
-[h2]0.20.0[/h2]
+[h2]0.20.1[/h2]
 [b]Version numbers start again from 0.x:[/b] the old 1.0.0 to 1.9.1 are now 0.10.0 to 0.19.1. Full changelog: [url=https://github.com/EtienneBinginot/Terraria-Ultimate-Randomizer/blob/main/CHANGELOG.md]CHANGELOG.md[/url]
 [list]
-[*][b]Kill jackpots:[/b] every enemy kill has its own small chance of a jackpot, whatever the drop style (setting "Jackpot per kill", 1.2 % by default, less on weak enemies). About one jackpot every 30 minutes early in the game; before the Wall of Flesh, rarely a hardmode item.
+[*][b]Kill jackpots:[/b] every enemy kill has its own small chance of a jackpot, whatever the drop style (setting "Jackpot per kill", 0.8 % by default, less on weak enemies). About one jackpot every 27 minutes early in the game; before the Wall of Flesh, rarely a hardmode item.
 [*]Items in jackpot chests get the jackpot effects, sound and chat message when they are first picked up.
 [*]Jackpots far above your progression are rarer, so that more jackpots do not mean hardmode items in the first hour.
 [*][b]Expert and Master:[/b] the codex no longer lists a boss's normal-mode-only drops, which come in its treasure bag instead. Nothing was unobtainable: the bag always held the same randomized items.
+[*]Fixed: a recipe could get one ingredient too many when its station lock was replaced by a key.
 [/list]

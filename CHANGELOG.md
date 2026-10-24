@@ -7,6 +7,13 @@ a new minor version for a batch of features, a patch version for fixes and tunin
 became 0.11.0 to 0.11.2, since no 1.1.0 existed). The mod went from 0.9.3 to 1.0.0 by mistake; it was never meant as
 a stable release. Git tags `v0.x.y` mark the last commit of each version.
 
+## [0.20.1] - 2026-10-24
+### Changed
+- Jackpot per kill 1.2 % to 0.8 %: the first run measured 2.7 jackpots per early hour, now about 2.2 (one every
+  27 minutes).
+### Fixed
+- A recipe could get one ingredient too many when its station lock was replaced by a key (a Bone Candelabra of 5).
+
 ## [0.20.0] - 2026-10-24
 ### Added
 - Kill jackpots: every enemy kill has its own small chance of a jackpot, whatever the drop style (setting "Jackpot
