@@ -12,6 +12,15 @@ Everything is deterministic per world seed, follows progression tiers, and stays
 - The user likes **bold, visible randomness** (real giants, frequent varied loot), always configurable, and everything
   must remain findable according to progression with default settings.
 - One commit per phase or fix group; end commit messages with the attribution line given by the harness.
+- Commit messages in English, Karma format: `type(scope): subject` (types feat, fix, docs, style, refactor, perf, test,
+  chore, build, ci, revert; usual scopes loot, boss, codex, hints, recipes, shops, enemies, config, loc, tests, tools,
+  release; first line 72 characters at most). Localization normalized by tML: `chore(loc): ...`; version bump:
+  `chore(release): 0.x.y`. Enforced by `tools/githooks/commit-msg` (`git config core.hooksPath tools/githooks` once per clone).
+- Versions: `0.MINOR.PATCH` until the first stable release (old 1.N.x renumbered 0.(10+N).x): minor for a feature batch,
+  patch for fixes. Each delivered version gets a `CHANGELOG.md` entry, `changelog.txt` (Steam change notes, BBCode, the
+  current version only) and a `v0.x.y` git tag.
+- Workshop texts: `description_workshop.txt` (English, uploaded by tML) and `description_workshop_fr.txt` (same content
+  in French, pasted by hand in the French version of the Steam page); `description.txt` is the in-game description.
 - Large work: plan first (plan mode), ask the open questions, then delegate phases to agents (`.claude/agents/`), and
   verify yourself (`bash tools/verify.sh`) before each commit.
 - Handoff of the current work in progress: `C:\Users\etien\.claude\plans\ultimate-randomizer-next.md`.

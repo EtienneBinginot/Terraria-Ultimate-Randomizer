@@ -1,0 +1,20 @@
+#!/bin/bash
+# Refuses commit messages that do not follow the Karma format: "type(scope): subject", in English, subject line of
+# 72 characters at most. Merges and reverts made by git are accepted. Enabled by: git config core.hooksPath tools/githooks
+msg="$(head -n 1 "$1" | tr -d '\r')"
+case "$msg" in
+	"Merge "*|"Revert \""*|"fixup! "*|"squash! "*) exit 0 ;;
+esac
+pattern='^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|revert)(\([a-z0-9-]+\))?!?: [^ ].*$'
+if ! printf '%s' "$msg" | grep -Eq "$pattern"; then
+	echo "commit-msg: the first line must follow the Karma format: type(scope): subject" >&2
+	echo "  types: feat fix docs style refactor perf test chore build ci revert" >&2
+	echo "  example: fix(codex): hide boss drops the world difficulty forbids" >&2
+	echo "  got:     $msg" >&2
+	exit 1
+fi
+if [ ${#msg} -gt 72 ]; then
+	echo "commit-msg: the first line has ${#msg} characters (72 at most): $msg" >&2
+	exit 1
+fi
+exit 0

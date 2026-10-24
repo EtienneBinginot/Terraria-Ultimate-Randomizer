@@ -24,6 +24,6 @@ While writing code:
 
 Before reporting:
 - Run `bash tools/verify.sh` until it prints `VERIFY: OK`.
-- Do not commit, do not bump the version, do not touch `D:\Projets\tRandomizer`.
+- Do not commit unless the brief asks (then: Karma format `type(scope): subject`, see CLAUDE.md), do not bump the version, do not touch `D:\Projets\tRandomizer`.
 - Report briefly: what you changed (files), settings and tests added, what you checked in IL, what remains unverified
   (needs the in-game run), and any decision you had to make that the plan did not cover.
