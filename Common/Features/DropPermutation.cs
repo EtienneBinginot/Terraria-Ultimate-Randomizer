@@ -558,11 +558,12 @@ namespace UltimateRandomizer.Common.Features
 		// tier, everything unlocked (the plan is final: progression locks it like any entry, DropHelper.LockGap), no jackpot.
 		// Its chance is the content's, capped by a vanilla-like rate for the new item: a frequent entry (gel, 1/1) does not
 		// become a frequent weapon
-		public static bool TrySurprise(Place place, int seed, DropRateInfo content, out int item, out int stackMin, out int stackMax, out float dropRate)
+		// attempt: a forced copy rolls again when it drew its own content (attempt 0 keeps the keys of the first roll)
+		public static bool TrySurprise(Place place, int seed, DropRateInfo content, out int item, out int stackMin, out int stackMax, out float dropRate, int attempt = 0)
 		{
 			RollRequest request = new()
 			{
-				Keys = new[] { RollKey.DropSurprise, seed, place.OwnerKey, place.Index },
+				Keys = attempt == 0 ? new[] { RollKey.DropSurprise, seed, place.OwnerKey, place.Index } : new[] { RollKey.DropSurprise, seed, place.OwnerKey, place.Index, -attempt },
 				SourceTier = place.Tier,
 				OriginalItem = -1,
 				Policy = CategoryPolicy.Weighted,
@@ -580,6 +581,8 @@ namespace UltimateRandomizer.Common.Features
 			}
 			return item > ItemID.None && item != content.itemId;
 		}
+
+		public const int ForcedSurpriseAttempts = 4;
 
 		// The whole plan for a seed. The tier is the enemy's base tier, not the effective one: that one follows progression
 		// (ScaleWeakEnemiesWithProgression) and the drops of a world in progress must not move. surpriseChance: share of the
@@ -630,7 +633,12 @@ namespace UltimateRandomizer.Common.Features
 				Placed placed = byUnit[place.Owner][place.Index];
 				DropRateInfo content = placed.Entry;
 				if (!forced[p] && !(candidates[p] && chance > 0f && SurpriseRoll(seed, place) < chance)) continue;
-				if (!TrySurprise(place, seed, content, out int item, out int min, out int max, out float rate)) continue;
+				// A forced copy tries a few rolls: drawing its own item again would leave one copy over the cap
+				int item = 0, min = 0, max = 0;
+				float rate = 0f;
+				bool rolled = false;
+				for (int attempt = 0; attempt < (forced[p] ? ForcedSurpriseAttempts : 1) && !rolled; attempt++) rolled = TrySurprise(place, seed, content, out item, out min, out max, out rate, attempt);
+				if (!rolled) continue;
 				placed.Entry = new DropRateInfo(item, min, max, rate, content.conditions);
 				placed.Surprise = true;
 				placed.Replaced = content.itemId;

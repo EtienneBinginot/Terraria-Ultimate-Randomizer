@@ -1,4 +1,4 @@
 displayName = Ultimate Randomizer
 author = Pootouf (based on tRandomizer by ImplicitSaber)
-version = 1.6.4
+version = 1.6.5
 buildIgnore = tools\*, CLAUDE.md, *.psd, icon_512.png
