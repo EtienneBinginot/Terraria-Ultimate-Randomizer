@@ -98,8 +98,9 @@ namespace UltimateRandomizer.Common.Core
 		// Another mod's station (best effort: nothing says what a modded tile is for): a progression station when many recipes
 		// need it, else a themed one; its tier is its placing items' earliest true tier, known once the item pool is built
 		// (Tiers.Max before: the tiers from recipes read a modded station by its placers, ItemClassifier.StationTier). A
-		// progression one is protected and may be given to recipes of its tier or above (RecipePlanner.Assignable); a themed
-		// one is guaranteed like the vanilla themed stations when unprotected (Protection, GuaranteedSources.StationItem).
+		// progression one may be given to recipes of its tier or above (RecipePlanner.Assignable), a themed one to recipes of
+		// its tier or later (RecipePlanner.Offered); both are station quests like the vanilla ones when unprotected
+		// (Protection, GuaranteedSources.StationItem).
 		// Load-time facts only (original recipes, content samples, item tiers): the same on every machine
 		private static StationInfo ModdedInfo(int tile)
 		{

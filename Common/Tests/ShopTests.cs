@@ -29,6 +29,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ShopSpread", ShopSpread);
 			TestRunner.Register("ShopPylonsGuaranteed", ShopPylonsGuaranteed);
 			TestRunner.Register("ShopAddedSlotsOnTime", ShopAddedSlotsOnTime);
+			TestRunner.Register("ShopSurprises", ShopSurprises);
 		}
 
 		internal sealed class VanillaShop
@@ -247,6 +248,58 @@ namespace UltimateRandomizer.Common.Tests
 				+ $"; {permutation.OutOfWindow.Count} late, {permutation.OverCapacity.Count} over capacity; {permutation.LateSource.Count} rolled shop items found or crafted "
 				+ "only later than their tier + 1 (no slot): " + string.Join(", ", permutation.LateSource.Select(Name)));
 			logger.Info($"ShopDump: {shopOnly.Count} vanilla shop-only items, {lost.Count} lost in this world: {string.Join(", ", lost.Select(Name))}");
+		}
+
+		// Shop surprises (ShopSurpriseChance), planned with explicit chances over every vanilla shop at several progressions:
+		// none at 0 %; at 25 %, about that share of the rolled slots sells an item of another category (between 10 and 40 %
+		// once there are enough slots), never a bag, never gear of a true tier above the unlocked one (shops following
+		// progression), never above the unlocked tier + 1 + the jitter; and the same slots again when planned twice
+		private static void ShopSurprises()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("shuffle or chaos mode: no surprise");
+			List<VanillaShop> shops = VanillaShops();
+			if (shops.Count == 0) Check.Skip("no vanilla shop registered");
+			ShopPermutation.WorldPlan permutation = ShopOnlyPlan();
+			EconomyConfig cfg = EconomyConfig.Instance;
+			List<string> failures = new();
+			int rolled = 0, surprises = 0;
+			foreach (VanillaShop shop in shops)
+			{
+				IEnumerable<int> avoid = ShopPermutation.ItemsOfNpc(permutation, shop.Shop.NpcType);
+				foreach (int tier in new[] { 0, 3, 5, 8 })
+				{
+					bool hardMode = tier >= (int)Tier.Hardmode;
+					string where = $"{Lang.GetNPCNameValue(shop.Shop.NpcType)} at tier {tier}";
+					ShopSlot[] none = ShopPlanner.PlanShop(shop.Shop.NpcType, shop.Shop.FullName, shop.Originals, tier, hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop, avoid, 0f);
+					if (none.Any(x => x.Surprise)) failures.Add($"{where}: a surprise at 0 %");
+					ShopSlot[] plan = ShopPlanner.PlanShop(shop.Shop.NpcType, shop.Shop.FullName, shop.Originals, tier, hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop, avoid, 25f);
+					ShopSlot[] again = ShopPlanner.PlanShop(shop.Shop.NpcType, shop.Shop.FullName, shop.Originals, tier, hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop, avoid, 25f);
+					if (!plan.SequenceEqual(again)) failures.Add($"{where}: not the same plan twice");
+					foreach (ShopSlot slot in plan)
+					{
+						if (!slot.Replaced || slot.Guaranteed) continue;
+						rolled++;
+						if (!slot.Surprise) continue;
+						surprises++;
+						ItemInfo info = ItemPool.Info[slot.Replacement];
+						if (info.Category == ItemPool.Info[slot.Original].Category) failures.Add($"{where}: {Name(slot.Replacement)} marked as a surprise in its own category");
+						if (info.Category == ItemCategory.Bag) failures.Add($"{where}: sells the bag {Name(slot.Replacement)}");
+						if (cfg.ShopsFollowProgression && ShopPlanner.WithinUnlockedTier(info.Category) && ItemPool.TrueTierOf(slot.Replacement) > tier)
+						{
+							failures.Add($"{where}: {Name(slot.Original)} -> {Name(slot.Replacement)} (true tier {ItemPool.TrueTierOf(slot.Replacement)})");
+						}
+						if (ItemPool.TierOf(slot.Original) <= tier && ItemPool.TierOf(slot.Replacement) > tier + 1 + ShopPlanner.TierJitterUp)
+						{
+							failures.Add($"{where}: {Name(slot.Original)} -> {Name(slot.Replacement)} (tier {ItemPool.TierOf(slot.Replacement)})");
+						}
+					}
+				}
+			}
+			double share = rolled == 0 ? 0 : surprises / (double)rolled;
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ShopSurprises: {surprises} surprises of {rolled} rolled slots at 25 % ({share:P1}); setting {cfg.ShopSurpriseChance} %");
+			if (rolled >= 100 && (share < 0.10 || share > 0.40)) failures.Add($"{share:P1} of the rolled slots are surprises at 25 %");
+			Check.All(failures, "Shop surprises");
 		}
 
 		// No roll above the unlocked tier + 1 + the shop's jitter, for entries the unlocked tier already reaches (an entry of a

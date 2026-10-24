@@ -340,14 +340,15 @@ namespace UltimateRandomizer.Common.Features
 		// before the guaranteed sources exist). None when recipes are not randomized
 		public static IEnumerable<Requirement> PlacerRequirements() => StationRequirements().Concat(OtherStationRequirements()).Where(r => r.Placer);
 
-		// Vanilla boss summons (Guide Voodoo Doll included; those found in the world too: Truffle Worm, Prismatic Lacewing,
+		// Boss summons (Guide Voodoo Doll included; those found in the world too: Truffle Worm, Prismatic Lacewing,
 		// Lihzahrd Power Cell, Gelatin Crystal, guaranteed as items) when unprotected, at the tier before their boss's; dropped
 		// one at a time, as rarely as a station. Only the summon of the world's evil (both in drunk and zenith worlds:
-		// BiomeSlots.CurrentEvil, from the synced world data). Modded summons stay protected (Protection)
+		// BiomeSlots.CurrentEvil, from the synced world data). Other mods' summons at their own tier (Protection.SummonTier)
 		public static IEnumerable<Requirement> SummonRequirements()
 		{
 			WorldEvil evil = BiomeSlots.CurrentEvil;
-			for (int type = 1; type < ItemPool.Info.Length && type < ItemID.Count; type++)
+			// Modded summons too (at their estimated tier: Protection.ModdedSummonTierKnown, else protected and not randomizable)
+			for (int type = 1; type < ItemPool.Info.Length; type++)
 			{
 				if (!Protection.IsBossSummon(type) || !ItemPool.IsRandomizable(type)) continue;
 				if (type == ItemID.WormFood && evil == WorldEvil.Crimson || type == ItemID.BloodySpine && evil == WorldEvil.Corruption) continue;

@@ -18,8 +18,8 @@ namespace UltimateRandomizer.Common.Features
 	// chance and stack in the bag it came from (BagVersion); the rolled bag entries matching no not-expert drop of their boss
 	// (expert accessories such as the Royal Gel) are places of their own (access "Bag"), moved between the bags of the group.
 	// The bag item on the boss, coins, kept items and the rules that are not complete (per-player drops, one-from-rules...)
-	// stay as they are, as do the entries with a seasonal condition (DropPermutation.KeptVanilla); the other boss-specific
-	// conditions follow PlacedConditions. Groups: BossGroups; a hard gate only moves to bosses of its true tier or later
+	// stay as they are; the entries with a seasonal condition only move between places of the same seasonal class
+	// (DropPermutation.AccessOf); the other boss-specific conditions follow PlacedConditions. Groups: BossGroups; a hard gate only moves to bosses of its true tier or later
 	// (DropPermutation.GateBands). The evil boss the world lacks is left out (AbsentEvil). Computed from the world seed, the
 	// synced settings, the world's evil and the snapshots: the server (kills) and the clients (bags are opened on the
 	// client, journal, codex) get the same plan
@@ -529,8 +529,7 @@ namespace UltimateRandomizer.Common.Features
 
 		public static bool BagActive(int bag) => SeedSystem.WorldReady && ItemPool.Ready && BagInStyle(bag);
 
-		// Load time: the rule registered in place of a boss's rule. A complete rule without entries kept vanilla
-		// (DropPermutation.KeptVanilla) is wrapped whole (PermutableRule); a
+		// Load time: the rule registered in place of a boss's rule. A complete rule is wrapped whole (PermutableRule); a
 		// leading condition rule that is not (the Twins' MissingTwin rule also holds their bag) is copied with its complete
 		// chained rules wrapped, the others (the bag, per-player drops) kept as they are. The original instances (shared
 		// between net IDs) are never changed. next: the wrapper index, counted per net ID
@@ -541,12 +540,10 @@ namespace UltimateRandomizer.Common.Features
 			{
 				List<DropRateInfo> part = LootSnapshot.Capture(new List<IItemDropRule> { rule });
 				if (part.Count == 0) return rule;
-				// An entry kept vanilla (seasonal...) keeps its rule running: its chains are looked at below
-				if (!part.Any(d => DropPermutation.KeptVanilla(d.conditions))) return new PermutableRule(rule, netId, next++, part.Select(d => d.itemId));
+				return new PermutableRule(rule, netId, next++, part.Select(d => d.itemId));
 			}
 			if (rule.GetType() != typeof(LeadingConditionRule) || rule.ChainedRules == null || rule.ChainedRules.Count == 0
-				|| rule.ChainedRules.Any(c => !DropPermutation.IsCompleteChain(c))
-				|| DropPermutation.ClassOf(((LeadingConditionRule)rule).condition) == DropPermutation.ConditionClass.Seasonal) return rule;
+				|| rule.ChainedRules.Any(c => !DropPermutation.IsCompleteChain(c))) return rule;
 			LeadingConditionRule copy = new(((LeadingConditionRule)rule).condition);
 			bool changed = false;
 			foreach (IItemDropRuleChainAttempt chain in rule.ChainedRules)

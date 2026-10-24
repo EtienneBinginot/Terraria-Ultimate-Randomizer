@@ -119,11 +119,17 @@ namespace UltimateRandomizer.Common.Configs
 		// Chance that a recipe keeps its own station
 		[Range(0f, 100f)]
 		[Increment(5f)]
-		[DefaultValue(30f)]
+		[DefaultValue(15f)]
 		public float StationKeepChance;
 
 		[Header("Shimmer")]
 		[DefaultValue(true)]
 		public bool RandomizeShimmer;
+
+		// Share of the shimmer transmutations giving an item of any category (loot weights) instead of the same one
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(10f)]
+		public float ShimmerSurpriseChance;
 	}
 }

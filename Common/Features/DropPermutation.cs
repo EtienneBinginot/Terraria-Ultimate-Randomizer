@@ -46,8 +46,9 @@ namespace UltimateRandomizer.Common.Features
 		};
 
 		// Conditions on the season, the weather, the player or one NPC's own state (a named NPC, special AI values, a pirate
-		// map...): an entry holding one is never permuted (its rule keeps running as vanilla), a content moved there or away
-		// would drop at the wrong moment or never
+		// map...): an access class of their own, like the restrictive ones (AccessOf). A Halloween content only moves between
+		// Halloween places and takes the place's condition: a content moved to an ordinary place, or an ordinary one moved
+		// there, would drop at the wrong moment or never
 		private static readonly HashSet<Type> Seasonal = new()
 		{
 			typeof(Conditions.IsChristmas), typeof(Conditions.HalloweenWeapons), typeof(Conditions.HalloweenGoodieBagDrop), typeof(Conditions.XmasPresentDrop),
@@ -55,8 +56,8 @@ namespace UltimateRandomizer.Common.Features
 			typeof(Conditions.IsUsingSpecificAIValues), typeof(Conditions.LivingFlames), typeof(Conditions.PirateMap)
 		};
 
-		// The kinds of drop conditions. Restrictive: contents only move within their access class (AccessOf). Seasonal: the
-		// entry is not permuted. For bosses (BossPermutation.PlacedConditions): ItemSelf conditions are about the item itself
+		// The kinds of drop conditions. Restrictive and Seasonal: contents only move within their access class (AccessOf), the
+		// conditions staying on the place. For bosses (BossPermutation.PlacedConditions): ItemSelf conditions are about the item itself
 		// (the Demon Heart not used yet, no Portal Gun yet) and travel with it; Fight conditions (a genuinely enraged Empress)
 		// stay on their place, the content leaving it loses them; OneTime conditions (the first Plantera kill) are dropped on
 		// both sides. Enemies keep every other condition on the place
@@ -88,14 +89,14 @@ namespace UltimateRandomizer.Common.Features
 
 		public static bool Has(List<IItemDropRuleCondition> conditions, ConditionClass kind) => conditions != null && conditions.Any(c => c != null && ClassOf(c) == kind);
 
-		// An entry left to its vanilla rule (Seasonal conditions)
-		public static bool KeptVanilla(List<IItemDropRuleCondition> conditions) => Has(conditions, ConditionClass.Seasonal);
+		// An entry with a seasonal condition: permuted among the places of its own seasonal class only (AccessOf)
+		public static bool IsSeasonal(List<IItemDropRuleCondition> conditions) => Has(conditions, ConditionClass.Seasonal);
 
 		// Load time: a rule whose report is complete (Wrappable: only the vanilla rule types, so another mod's own rule classes
-		// keep running as they are), of any NPC or bag, vanilla or modded, and without any entry kept vanilla. part: the rule's
-		// capture
+		// keep running as they are), of any NPC or bag, vanilla or modded. Seasonal entries are wrapped too: they only move
+		// between places of their class. part: the rule's capture
 		public static bool Permutable(IItemDropRule rule, List<DropRateInfo> part, int ownerType, bool forBosses = false) =>
-			ownerType > 0 && part.Count > 0 && !part.Any(d => KeptVanilla(d.conditions)) && Wrappable(rule, forBosses: forBosses);
+			ownerType > 0 && part.Count > 0 && Wrappable(rule, forBosses: forBosses);
 
 		// The vanilla rule types whose ReportDroprates lists everything they can drop, with its chance and conditions: only
 		// these are wrapped (and their entries permuted). Exact types: a subclass (modded) may drop differently. Anything else
@@ -123,8 +124,7 @@ namespace UltimateRandomizer.Common.Features
 		// Groups smaller than this are merged with the next tier of the same access class (like ItemPool's shuffle)
 		public const int MinGroupSize = 3;
 
-		// The access class of an entry: its restrictive condition types, sorted ("" for an ordinary entry). Seasonal ones are
-		// counted too: such entries are kept vanilla (Permutable), and would only ever move between themselves
+		// The access class of an entry: its restrictive and seasonal condition types, sorted ("" for an ordinary entry)
 		public static string AccessOf(List<IItemDropRuleCondition> conditions)
 		{
 			if (conditions == null || conditions.Count == 0) return "";

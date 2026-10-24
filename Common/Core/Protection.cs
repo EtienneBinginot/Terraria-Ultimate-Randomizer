@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -98,6 +99,17 @@ namespace UltimateRandomizer.Common.Core
 			return Tiers.Clamp(tier);
 		}
 
+		// A modded summon's tier is estimated like any item's (ItemClassifier: its rarity, a modded recipe of its mod, the
+		// config's overrides), and its guarantee follows it (SummonTier). Unknown only when it has a special or another mod's
+		// own rarity (expert, master, quest, a ModRarity) and no tier override: its rarity then says nothing of its boss
+		public static bool ModdedSummonTierKnown(int type)
+		{
+			if (type < ItemID.Count) return true;
+			if (ProgressionConfig.Instance.TierOverrides.Any(o => o?.Item != null && !o.Item.IsUnloaded && o.Item.Type == type)) return true;
+			if (!ContentSamples.ItemsByType.TryGetValue(type, out Item item)) return false;
+			return item.rare >= ItemRarityID.White && item.rare <= ItemRarityID.Purple;
+		}
+
 		public static HashSet<int> BuildProtectedSet()
 		{
 			ProgressionConfig cfg = ProgressionConfig.Instance;
@@ -108,25 +120,26 @@ namespace UltimateRandomizer.Common.Core
 			}
 			if (cfg.ProtectProgressionMaterials) set.UnionWith(ProgressionMaterials);
 			int count = ItemLoader.ItemCount;
-			// Off: vanilla summons (crafted, dropped or found in the world) are randomized, with guaranteed drops
-			// (GuaranteedSources.SummonRequirements); modded ones keep their own sources (their recipes and drops may hold rules
-			// the planners don't know)
+			// Off: summons (crafted, dropped or found in the world), vanilla and modded, are randomized, with guaranteed drops
+			// (GuaranteedSources.SummonRequirements). A modded one whose tier can't be estimated (ModdedSummonTierKnown) keeps
+			// its own sources
 			for (int type = 1; type < count; type++)
 			{
-				if (IsBossSummon(type) && (cfg.AutoProtectBossSummons || type >= ItemID.Count)) set.Add(type);
+				if (IsBossSummon(type) && (cfg.AutoProtectBossSummons || type >= ItemID.Count && !ModdedSummonTierKnown(type))) set.Add(type);
 			}
 			{
 				// Any item placing a tile that some recipe requires (work bench, anvils, furnaces...). Unprotected stations,
 				// progression ones included, get guaranteed drops (GuaranteedSources); unknown vanilla stations keep their own
-				// sources: nothing would guarantee them. Other mods' stations: a progression-like one (many recipes need it,
-				// Stations.ModdedInfo) keeps its own sources, a themed one is guaranteed like the vanilla themed stations
+				// sources: nothing would guarantee them. Other mods' stations, progression-like (many recipes need it) or themed,
+				// are treated like the vanilla ones at their placers' tier (Stations.ModdedInfo): station quests (a rebuilt recipe
+				// and a guardian) when unprotected
 				HashSet<int> stationTiles = Stations.RequiredTiles();
 				foreach ((int type, Item item) in ContentSamples.ItemsByType)
 				{
 					if (item.createTile < 0 || !stationTiles.Contains(item.createTile)) continue;
 					Stations.StationInfo info = Stations.Info(item.createTile);
 					StationKind kind = info.Kind;
-					bool keep = kind == StationKind.Unknown || info.Modded && kind == StationKind.Progression || cfg.StationProtection switch
+					bool keep = kind == StationKind.Unknown || cfg.StationProtection switch
 					{
 						StationProtection.AllStations => true,
 						StationProtection.ProgressionOnly => kind != StationKind.Basic,
