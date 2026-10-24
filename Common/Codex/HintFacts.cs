@@ -100,6 +100,10 @@ namespace UltimateRandomizer.Common.Codex
 		public bool Conditional;
 		// A creature that fails the frequency rules, kept because nothing better than a chest or a pot gives the item
 		public bool Fallback;
+		// A crafting station: its other way, told at the last level (StationWays). Guardian: the enemy (or boss) carrying it
+		// when the hint names its recipe; StationRecipe: its recipe when the hint names another source
+		public HintFact Guardian;
+		public HintFact StationRecipe;
 	}
 
 	// Hint targets, facts, prices and sentences. Pure data from the planners (RecipePlanner, GuaranteedSources,
@@ -201,6 +205,11 @@ namespace UltimateRandomizer.Common.Codex
 				// The item of the station that is obtained first (Mythril or Orichalcum Anvil...), vanilla first
 				int best = Stations.Placers(tile).OrderBy(p => p < ItemID.Count ? 0 : 1).ThenBy(p => Availability(plan, p)).ThenBy(p => p).FirstOrDefault();
 				if (best > 0) Add(best, info.Tier, HintTargetKind.Station);
+			}
+			// The themed stations planned with a recipe and a guardian (GuaranteedSources.PlacerRequirements), at their tier
+			foreach (GuaranteedSources.Requirement r in GuaranteedSources.PlacerRequirements())
+			{
+				if (Stations.PlacedTile(r.Item, out int placed) && Stations.Info(placed).Kind == StationKind.Thematic) Add(r.Item, r.Tier, HintTargetKind.Station);
 			}
 			// Boss and event summons (not the life crystals and mirrors sorted with them), needed before their boss
 			for (int type = 1; type < ItemPool.Info.Length; type++)
@@ -506,16 +515,25 @@ namespace UltimateRandomizer.Common.Codex
 			GuaranteedSources.Requirement requirement = GuaranteedSources.Requirements.FirstOrDefault(r => r.Item == item);
 			bool required = requirement.Item == item;
 			List<int> hosts = GuaranteedSources.HostsOf(item).ToList();
+			// A crafting station: its guardian and its recipe are both told (StationWays)
+			HintFact guardian = null;
+			List<HintFact> recipes = new();
 			if (hosts.Count > 0 && GuaranteedSources.TryPlacement(item, out GuaranteedSources.Placement placement) && placement.Boss)
 			{
 				// Carried by the progression bosses of its tier (no natural enemy there): a boss hint for each
 				foreach (int boss in hosts)
 				{
 					int bossTier = Math.Max(NpcTiers.BaseTier(boss), required ? requirement.Tier : 0);
-					options.Add(new HintFact { Item = item, Kind = HintKind.Boss, Npc = boss, Tier = bossTier, Band = Band(bossTier), Chance = CodexStats.LuckyChance(boss, item) });
+					HintFact bossFact = new() { Item = item, Kind = HintKind.Boss, Npc = boss, Tier = bossTier, Band = Band(bossTier), Chance = CodexStats.LuckyChance(boss, item) };
+					guardian ??= bossFact;
+					options.Add(bossFact);
 				}
 			}
-			else if (hosts.Count > 0) AddCreature(GuaranteedFact(item, hosts, required ? requirement.Tier : 0));
+			else if (hosts.Count > 0)
+			{
+				guardian = GuaranteedFact(item, hosts, required ? requirement.Tier : 0);
+				AddCreature(guardian);
+			}
 			foreach (int recipe in RecipesMaking(item))
 			{
 				(int type, int stack)[] ingredients = PlannedIngredients(recipe);
@@ -524,7 +542,9 @@ namespace UltimateRandomizer.Common.Codex
 				int ingredientTier = ingredients.Select(x => Availability(plan, x.type)).DefaultIfEmpty(0).Max();
 				int tier = Math.Max(plan.ResultTiers[recipe], Math.Max(ingredientTier, tiles.Where(t => t >= 0).Select(t => RecipePlanner.StationTier(t, plan.Availability)).DefaultIfEmpty(0).Max()));
 				if (tier >= Findability.Never) continue;
-				options.Add(new HintFact { Item = item, Kind = HintKind.Recipe, Recipe = recipe, Ingredients = ingredients, Tiles = tiles.Where(t => t >= 0).ToArray(), Tier = tier, Band = Band(ingredientTier) });
+				HintFact recipeFact = new() { Item = item, Kind = HintKind.Recipe, Recipe = recipe, Ingredients = ingredients, Tiles = tiles.Where(t => t >= 0).ToArray(), Tier = tier, Band = Band(ingredientTier) };
+				recipes.Add(recipeFact);
+				options.Add(recipeFact);
 			}
 			if (planDrops.TryGetValue(item, out List<(int npc, int tier, float chance)> droppers))
 			{
@@ -580,6 +600,17 @@ namespace UltimateRandomizer.Common.Codex
 			if (best == null) return null;
 			if (best.Kind is HintKind.Creature or HintKind.Boss or HintKind.Shop) FillPlaces(best);
 			best.Conditions = DropConditions(best);
+			if (RecipePlanner.StationPlacer(item, out _))
+			{
+				// The recipe is the main way, the guardian the backup: the hint tells the one it does not name
+				if (guardian != null && !ReferenceEquals(guardian, best) && GuaranteedSources.GuardianOf(item) > 0)
+				{
+					FillPlaces(guardian);
+					best.Guardian = guardian;
+				}
+				HintFact recipe = Best(recipes);
+				if (recipe != null && !ReferenceEquals(recipe, best)) best.StationRecipe = recipe;
+			}
 			return best;
 		}
 
@@ -1034,8 +1065,28 @@ namespace UltimateRandomizer.Common.Codex
 			if (conditions.Length > 0) text += " " + CodexText.Get("Hint.Conditions", conditions);
 			// When the source works: the time (level 2 says it already), a weather or event, the drop's conditions
 			if (level is 2 or 4) text += WhenSentences(fact, level == 4);
+			if (level == MaxLevel) text += StationWays(fact);
 			return text;
 		}
+
+		// A crafting station's ways, at the last level: its recipe (ingredients and stations), and its guardian when the hint
+		// names another source (empty for any other item)
+		public static string StationWays(HintFact fact)
+		{
+			string text = "";
+			HintFact recipe = fact.Kind == HintKind.Recipe && RecipePlanner.StationPlacer(fact.Item, out _) ? fact : fact.StationRecipe;
+			if (recipe != null) text += " " + CodexText.Get("Hint.StationRecipe", IngredientList(recipe), recipe.Tiles.Length == 0 ? CodexText.Get("Hint.NoStation") : string.Join(", ", recipe.Tiles.Select(StationName)));
+			HintFact guardian = fact.Guardian;
+			if (guardian != null)
+			{
+				string where = guardian.Biomes.Count > 0 ? CodexText.Get("Hint.GuardianWhere", BestBiomeName(guardian)) : "";
+				text += " " + CodexText.Get("Hint.Guardian", NpcName(guardian.Npc), CodexStats.Percent(guardian.Chance), where);
+			}
+			return text;
+		}
+
+		// "3 Wood, 2 Gel"
+		public static string IngredientList(HintFact recipe) => string.Join(", ", recipe.Ingredients.Where(x => x.type > 0).Select(x => $"{x.stack} {ItemName(x.type)}"));
 
 		// " Only at night. It only comes with an event or a weather... Mind the condition: Drops on Windy Days." (empty:
 		// always)
@@ -1182,6 +1233,9 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (string key in TreeTextKeys) yield return "Hint.Tree." + key;
 			foreach (string kind in GatherKinds) yield return "Hint.Tree.Gathered." + kind;
 			yield return "Hint.Around";
+			yield return "Hint.StationRecipe";
+			yield return "Hint.Guardian";
+			yield return "Hint.GuardianWhere";
 			yield return "Hint.Place.Known";
 			yield return "Hint.Share";
 			yield return "Hint.Hosts.List";

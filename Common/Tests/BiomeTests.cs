@@ -172,6 +172,12 @@ namespace UltimateRandomizer.Common.Tests
 					if (!hosts.Any(met.Contains)) failures.Add($"{Lang.GetItemNameValue(requirement.Item)}: no host spawns in the early slots of {BiomeSlots.BiomeName(place.Biome)} ({string.Join(", ", hosts.Select(Name))})");
 					continue;
 				}
+				// A station's single guardian is met by day or by night
+				if (place.Guardian)
+				{
+					if (!hosts.Any(h => day.Contains(h) || night.Contains(h))) failures.Add($"{Lang.GetItemNameValue(requirement.Item)}: its guardian is not in the Forest's critical slots ({string.Join(", ", hosts.Select(Name))})");
+					continue;
+				}
 				if (!hosts.Any(day.Contains)) failures.Add($"{Lang.GetItemNameValue(requirement.Item)}: no host spawns in the Forest by day ({string.Join(", ", hosts.Select(Name))})");
 				if (!hosts.Any(night.Contains)) failures.Add($"{Lang.GetItemNameValue(requirement.Item)}: no host spawns in the Forest by night ({string.Join(", ", hosts.Select(Name))})");
 			}

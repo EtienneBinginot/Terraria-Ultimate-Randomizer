@@ -178,7 +178,7 @@ Tests: {
 	BiomeRedistributionComplete: Par biome : chaque ennemi naturel garde son nombre de lieux d'apparition, dans sa classe et sa paire de tiers, jamais plus d'un tier au-dessus du lieu (20 graines)
 	BiomeSlotsRespectDaylight: Par biome : aucun ennemi qui fuit ou meurt au soleil (Gnome) dans un lieu de surface de jour
 	BiomeExtrasShare: Par biome : 8 % des lieux d'apparition sont partagés avec des ennemis d'événement
-	CriticalHostsInForest: Par biome : les stations de base tombent d'ennemis croisés dès la première heure (Forêt, grottes ou désert)
+	CriticalHostsInForest: Par biome : les gardiens des premières stations sont des ennemis croisés dès la première heure (Forêt, grottes ou désert)
 	SurpriseZero: Avec 0 % de surprise, les objets remplacés gardent leur catégorie
 	SurpriseHundred: Avec 100 % de surprise, les catégories suivent les poids du loot
 	SurpriseGatedAndProtected: Les surprises respectent la progression et les objets protégés
@@ -195,23 +195,23 @@ Tests: {
 	PacingVariety: Au moins 10 pièces d'équipement différentes par heure en début de partie
 	JackpotPacing: Peu de jackpots dans une heure de début de partie (nombre par heure dans le journal)
 	DropFrequency: La plupart des kills donnent quelque chose (au moins 0,6 objet par kill ; valeur écrite dans client.log)
-	WorkBenchPacing: Le premier établi arrive après 15 à 30 minutes en moyenne (valeur écrite dans client.log)
+	WorkBenchPacing: L'établi se fabrique à la main dès le début, et son gardien seul en donne un en moins d'une heure en moyenne (valeur écrite dans client.log)
 	BasicStationsUnprotected: Les stations de base (établi, fourneau, enclume...) sont confiées au randomizer
 	ProgressionStationsProtected: Les stations de progression et thématiques sont protégées, sauf si la protection des stations vaut Aucune
-	ProgressionStationsGuaranteed: Les stations de progression et les invocations de boss non protégées tombent d'ennemis fréquents de leur palier (1 % ou plus)
+	ProgressionStationsGuaranteed: Les stations de progression (par leur gardien) et les invocations de boss non protégées tombent d'ennemis fréquents de leur palier (1 % ou plus)
 	ProtectionsRemoved: Les matériaux de progression, miroirs, invocations et outils de progression sont randomisés, restent trouvables à leur palier, et aucune permutation ne place un verrou de progression avant son palier
 	AbsentEvilBoss: Le boss maléfique absent du monde ne participe pas à la permutation des boss et ne compte pas comme source
 	TempleKeyOutsideTemple: La clé du temple n'est jamais garantie dans le temple ni sur des ennemis qu'on ne croise que là
 	ConfigMigration: Anciens réglages sauvegardés : une ancienne liste par défaut d'objets protégés est retirée, les choix du joueur sont gardés
 	UpgradesOutOfPools: Les améliorations de vie et de mana ne sont jamais tirées au sort, garanties ni utilisées comme ingrédients, et les drops les gardent
-	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
+	BasicStationsFindable: Chaque station de base se trouve dès le début (son gardien), jamais dans les pots
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier, ou par les boss de progression de son tier
-	GuaranteedBiomeHosts: Chaque objet garanti est porté par au moins 3 ennemis d'un même biome, avec la même chance sur chacun
+	GuaranteedBiomeHosts: Chaque objet garanti est porté par plusieurs ennemis d'un même biome, avec la même chance sur chacun (une station : son seul gardien)
 	GuaranteedSeveralSeeds: Chaque objet garanti obtient les ennemis d'un biome avec d'autres graines
 	GuaranteedBiomesSpread: Les objets garantis d'un tier sont répartis sur plusieurs biomes
 	GuaranteedBiomesVaried: Les premières stations tombent dans au moins cinq biomes proches différents, jamais dans un biome lointain
-	GuaranteedFindTime: Chaque station, invocation et outil garanti tombe en environ 90 ennemis tués dans son biome
-	GuaranteedDayAndNight: Un objet garanti dont le biome se visite de jour et de nuit a au moins deux ennemis à chaque moment
+	GuaranteedFindTime: Chaque invocation et outil garanti tombe en environ 90 ennemis tués dans son biome (les gardiens des stations sont journalisés)
+	GuaranteedDayAndNight: Une invocation ou un outil garanti dont le biome se visite de jour et de nuit a au moins deux ennemis à chaque moment
 	GuaranteedHostLoad: Aucun ennemi ne porte plus de quatre objets garantis (cinq quand son biome n'a pas d'autre choix), ni ne donne trop d'objets garantis par victime
 	GuaranteedReachable: Les objets garantis ne sont jamais dans un biome avant qu'on puisse y chasser (donjon, Enfer, temple, ciel), ni dans un cimetière ou une météorite
 	HintSortedByProgress: Les indices sont triés par avancement, en deux onglets
@@ -224,6 +224,7 @@ Tests: {
 	HintConditionsShown: Les indices et arbres de fabrication disent quand une source fonctionne : heure, météo ou événement, conditions de butin et de recette, autels pour les minerais du hardmode
 	HintSummonTiers: Les invocations de boss sont proposées quand leur boss est la prochaine étape (cellule énergétique après Plantera, œil mécanique en mode difficile)
 	HintLockedShown: Les indices pour plus tard sont listés en grisé avec le moment où ils viendront, et ne sont jamais vendus
+	StationHints: Le dernier indice sur une station donne à la fois sa recette (ingrédients et stations) et son gardien
 	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
@@ -234,6 +235,7 @@ Tests: {
 	AltarDecisionKeepsCaches: Le choix d'un minerai hardmode par un autel ne change ni les sources garanties ni la trouvabilité
 	PotOnlyUnfound: Les pots ne donnent que des objets garantis que personne n'a encore trouvés
 	GuaranteesNotBelowTier: Aucun objet garanti n'arrive avant son tier (Manipulateur antique et Sceau céleste pas avant le Cultiste lunatique)
+	StationsOneGuardian: Chaque station d'artisanat a un seul gardien, un ennemi courant de son palier, et ne vient jamais des pots ni des coffres
 	IngredientReplacementsFindable: Les nouveaux ingrédients s'obtiennent (trouvés ou fabriqués) au palier pour lequel leur recette a été reconstruite
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
 	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
@@ -285,6 +287,7 @@ Tests: {
 	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent entre la moitié et le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana, pas de fragment de nébuleuse gardé pour un objet bon marché échangé
 	ProtectedRecipesGated: Un résultat protégé dont les ingrédients sont reconstruits attend le palier débloqué de son vrai palier comme les autres : ni clé de nuit ni clé de lumière avant le mode difficile
 	PickaxeIngredientsBelowLevel: Une recette de pioche ou de foreuse ne reçoit jamais de minerai ni de lingot (ni rien qui en soit fait) dont le minage exige sa propre puissance de pioche ou plus : pas de pioche en orichalque faite de lingots de chlorophyte
+	StationsCraftable: Chaque station d'artisanat a une recette refaite avec des matériaux trouvés, faisable à son palier sans son gardien ; l'établi à la main dès le début
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares
@@ -649,6 +652,9 @@ Codex: {
 		Free: gratuit
 		NoStation: aucune station
 		Around: Cherche du côté de ces lieux : {0}.
+		StationRecipe: "Sa recette : {0} ({1})."
+		Guardian: "Son gardien, {0}, en laisse parfois tomber un exemplaire ({1} de chances à chaque fois qu'il est vaincu{2})."
+		GuardianWhere: ", {0}"
 		Place.Known: "{0}, {1}"
 		Share: " (environ {0} des créatures de ce lieu : {1})"
 
@@ -1335,13 +1341,18 @@ Configs: {
 		}
 
 		StationProtection: {
-			Label: Protection des stations de craft
-			Tooltip: Aucune : toutes les stations sont randomisées, y compris celles de progression (Forge d'enfer, enclumes et forges hardmode, Atelier de bricolage, Manipulateur antique...) ; des ennemis courants de leur palier lâchent chacune d'elles. Progression seulement : seules les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) sont randomisées ; on les trouve aussi dans les pots et les coffres en bois. Une station d'un autre mod dont beaucoup de recettes ont besoin reste protégée ; les autres sont traitées comme les stations thématiques (four à verre...).
+			Label: "Protection des stations de craft"
+			Tooltip: "Aucune : toutes les stations sont randomisées, y compris celles de progression (Forge d'enfer, enclumes et forges hardmode, Atelier de bricolage, Manipulateur antique...) : chacune reçoit une recette aléatoire faisable à son palier et un gardien, un ennemi courant de son palier qui la lâche parfois. Progression seulement : seules les stations de base (établi, fourneau, enclume, table, chaise, scierie, métier à tisser...) sont randomisées ainsi. Une station d'un autre mod dont beaucoup de recettes ont besoin reste protégée ; les autres sont traitées comme les stations thématiques (four à verre...)."
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: Multiplicateur des drops garantis
-			Tooltip: Les stations de base (et les ingrédients vanilla, si choisis) sont placées sur les ennemis courants d'un biome de leur tier. Augmente pour les trouver plus vite.
+			Label: "Multiplicateur des drops garantis"
+			Tooltip: "Les invocations de boss et les pioches (et les ingrédients vanilla, si choisis) sont placées sur les ennemis courants d'un biome de leur tier. Augmente pour les trouver plus vite. Les gardiens des stations ont leur propre chance."
+		}
+
+		StationGuardianChance: {
+			Label: "Chance de drop des gardiens de station (%)"
+			Tooltip: "Chaque station d'artisanat a une recette aléatoire faisable à son tier (le Guide la donne) et un gardien : un ennemi courant de son tier qui la lâche avec cette chance à chaque fois qu'il est tué (partagée entre joueurs). Un boss qui garde une station tardive la lâche toujours. Les pots et les coffres ne donnent jamais de station."
 		}
 
 		GuaranteedHostsPerItem: {
@@ -1350,8 +1361,8 @@ Configs: {
 		}
 
 		StationFindKills: {
-			Label: Ennemis tués dans son biome pour trouver une station
-			Tooltip: Nombre moyen d'ennemis tués dans son biome avant qu'une station, une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les pots et les coffres en bois aident aussi. L'établi et les premières stations suivent plutôt la première heure de jeu.
+			Label: "Ennemis tués dans son biome pour trouver une invocation ou une pioche"
+			Tooltip: "Nombre moyen d'ennemis tués dans son biome avant qu'une invocation de boss ou une pioche garantie tombe, tous ses ennemis confondus. Les stations d'artisanat viennent de leur recette, ou de leur gardien (voir la chance des gardiens)."
 		}
 
 		PotGuaranteeChance: {
@@ -1362,11 +1373,6 @@ Configs: {
 		ScaleGuaranteesWithPlayers: {
 			Label: Drops garantis partagés entre joueurs
 			Tooltip: En multijoueur, la chance d'une station, d'une invocation de boss ou d'une pioche garantie à chaque ennemi tué est divisée par le nombre de joueurs : l'équipe la trouve à peu près aussi vite qu'un joueur seul, sans en obtenir plusieurs exemplaires.
-		}
-
-		ChestStationGuarantee: {
-			Label: Stations de base dans les coffres en bois
-			Tooltip: Exemplaires de chaque station de base cachés dans des coffres en bois à la création du monde (ou avec /rchests).
 		}
 
 		MinFindableChance: {

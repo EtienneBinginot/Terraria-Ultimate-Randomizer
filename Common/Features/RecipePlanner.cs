@@ -128,7 +128,33 @@ namespace UltimateRandomizer.Common.Features
 			baseResults = null;
 			basePartners = null;
 			pairing = null;
+			placerTiers = null;
 		}
+
+		private static Dictionary<int, int> placerTiers;
+
+		// The crafting stations' items and their tier (GuaranteedSources.PlacerRequirements: unprotected stations). Their
+		// recipes are rebuilt for that tier at the latest, from found materials and stations made before them, so each one can
+		// be made by then without its guardian; one with no recipe gets its shell (StationShells). Static facts only (the
+		// guaranteed sources are planned from them)
+		private static Dictionary<int, int> PlacerTiers()
+		{
+			if (placerTiers != null) return placerTiers;
+			Dictionary<int, int> tiers = new();
+			foreach (GuaranteedSources.Requirement r in GuaranteedSources.PlacerRequirements()) tiers[r.Item] = Math.Min(tiers.GetValueOrDefault(r.Item, r.Tier), Tiers.Clamp(r.Tier));
+			if (ItemPool.Ready) placerTiers = tiers;
+			return tiers;
+		}
+
+		// Does this item place a crafting station whose recipe is planned for its tier (and which has a guardian)?
+		public static bool StationPlacer(int item, out int tier) => PlacerTiers().TryGetValue(item, out tier);
+
+		// A recipe making such a station (its vanilla result: stations are never swapped), a shell included
+		public static bool StationRecipe(int i) => i >= 0 && i < Count && StationPlacer(RecipeSystem.OriginalResult(i), out _);
+
+		// The shell recipe of a station no recipe makes (Tinkerer's Workshop, Ancient Manipulator...): planned whatever
+		// RecipesForUncraftable says, like the upgrades' shells
+		public static bool StationShell(int i) => RecipeSystem.IsShell(i) && StationRecipe(i);
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
 
@@ -151,6 +177,8 @@ namespace UltimateRandomizer.Common.Features
 		private static bool Gated(int i)
 		{
 			if (!ProgressionConfig.Instance.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) return false;
+			// A crafting station's recipe is planned for the station's tier (its key), never locked later
+			if (StationRecipe(i)) return false;
 			if (Randomized(i)) return true;
 			if (RecipeSystem.Touchable(i) || RecipeSystem.HouseRecipe(i) || !Rebuildable(i)) return false;
 			int original = RecipeSystem.OriginalResult(i);
@@ -581,15 +609,16 @@ namespace UltimateRandomizer.Common.Features
 			// its partner's, the vanilla recipe of the item it gives
 			int[] vanillaResults = Enumerable.Range(0, count).Select(RecipeSystem.OriginalResult).ToArray();
 			int[] avail = Availability(Findability.Tier, vanillaResults, new int[count], ingredients, tiles, out int[] recipeTiers, null, OriginalGroups());
+			StationLayout layout = OrderStations(avail);
 			// Stations first (from the original recipes only): the ingredient plan needs them to know when each result is made
-			if (cfg.RandomizeRecipes && cfg.RandomizeStations) PlanStations(result, results, avail, recipeTiers);
+			if (cfg.RandomizeRecipes && cfg.RandomizeStations) PlanStations(result, results, avail, layout);
 			// The shells are planned by the same rebuilder, after every other recipe (they shift none of their choices): the
 			// upgrades' shells whatever the setting, before LockSpecials keys them; the others after the locks
 			shells &= cfg.RandomizeRecipes;
 			ItemGraph graph = new();
 			if (cfg.RandomizeRecipes)
 			{
-				Rebuilder rebuilder = new(result, results, avail, recipeTiers, tiles, settings, graph);
+				Rebuilder rebuilder = new(result, results, avail, recipeTiers, tiles, settings, graph, layout);
 				rebuilder.Run();
 				LockResults(result, results, ingredients, tiles, graph);
 				LockSpecials(result, results, ingredients, tiles, graph);
@@ -630,7 +659,41 @@ namespace UltimateRandomizer.Common.Features
 				}
 			}
 			else FinalAvailability();
+			if (cfg.RandomizeRecipes && !settings.CheckRestore) LogStationRecipes(result);
 			return result;
+		}
+
+		// The tier each crafting station's item can be crafted from without any guardian (Never: no recipe gives it in time):
+		// the plan's recipes, the stations' own drops left out (whatever drops them: their recipe is the way checked). Tests
+		// and the log
+		public static Dictionary<int, int> StationRecipeTiers(RecipePlan plan)
+		{
+			Dictionary<int, int> placers = PlacerTiers();
+			int count = Count;
+			int[] results = plan.Results.Select(r => r.type).ToArray();
+			(int, int)[][] ingredients = Enumerable.Range(0, count).Select(i => plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).ToArray();
+			int[][] tiles = Enumerable.Range(0, count).Select(i => plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).ToArray();
+			int Found(int item) => placers.ContainsKey(item) ? Never : Findability.Tier(item);
+			int[] avail = Availability(Found, results, new int[count], ingredients, tiles, out _, plan.Twin, PlannedGroups(plan));
+			return placers.Keys.OrderBy(x => x).ToDictionary(x => x, x => x < avail.Length ? avail[x] : Never);
+		}
+
+		private static string lastStationLine;
+
+		// Once per plan: how many stations can be crafted by their tier without their guardian, and the late ones
+		private static void LogStationRecipes(RecipePlan plan)
+		{
+			Dictionary<int, int> placers = PlacerTiers();
+			if (placers.Count == 0) return;
+			Dictionary<int, int> tiers = StationRecipeTiers(plan);
+			List<string> late = tiers.Where(p => p.Value > placers[p.Key]).Select(p => $"{DetRandom.ItemName(p.Key)} (tier {placers[p.Key]}, crafted {(p.Value >= Never ? "never" : p.Value.ToString())})").ToList();
+			int byHand = Enumerable.Range(0, Count).Count(i => StationRecipe(i) && (!RecipeSystem.IsShell(i) || ShellActive(plan, i)) && !plan.Twin[i] && (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Length == 0);
+			int shells = Enumerable.Range(0, Count).Count(i => StationShell(i) && ShellActive(plan, i));
+			string line = $"Station recipes: {tiers.Count - late.Count} of {tiers.Count} stations craftable by their tier without their guardian ({byHand} recipes by hand, {shells} shells); "
+				+ $"late: {(late.Count == 0 ? "none" : string.Join(", ", late))}";
+			if (line == lastStationLine) return;
+			lastStationLine = line;
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info(line);
 		}
 
 		// Must this active shell be switched off? When it is doable before its tier (a key made earlier), or never;
@@ -640,6 +703,9 @@ namespace UltimateRandomizer.Common.Features
 		// for the first reasons: it is the upgrade's recipe (never a new ingredient, so it keys nothing), a little early at worst
 		private static bool ShellBreaksPlan(RecipePlan result, int i, int[] results, int[] doable, int[] baseAvail, HashSet<int> usedEarly)
 		{
+			// A station's shell is its recipe (its guardian only a backup): kept unless never doable. Stations are no
+			// ingredients, so it keys nothing; without a key of its tier it is made a little early at worst
+			if (StationShell(i)) return doable[i] >= Never;
 			if (doable[i] < result.ShellTiers[i] || doable[i] >= Never) return true;
 			int item = results[i];
 			if (ItemPool.IsSpecial(item)) return false;
@@ -1397,7 +1463,22 @@ namespace UltimateRandomizer.Common.Features
 			return !Stations.Info(tile).World && (kind == StationKind.Basic || kind == StationKind.Progression);
 		}
 
-		private static void PlanStations(RecipePlan result, int[] results, int[] avail, int[] recipeTiers)
+		// The stations a recipe may be given, in a fixed order: a recipe making a station only ever requires stations placed
+		// before it, so no station can end up needing itself. The Work Bench first (made by hand: every other station may
+		// need it), then by availability, basic ones first. RecipeTier: the tier from which each one can be crafted without
+		// its guardian (its placer's tier: its recipe is planned for it), else when it is had
+		private sealed class StationLayout
+		{
+			public List<int> Order;
+			public Dictionary<int, int> Position;
+			public Dictionary<int, int> Avail;
+			public Dictionary<int, int> RecipeTier;
+
+			public int PositionOf(int tile) => Position.TryGetValue(tile, out int p) ? p : Order.Count;
+		}
+
+		// From the original stations: the live ones are already randomized (the plan would depend on the previous one)
+		private static StationLayout OrderStations(int[] avail)
 		{
 			// avail does not change while stations are planned: each station's availability is computed once
 			Dictionary<int, List<int>> itemsByTile = Stations.PlacersByTile();
@@ -1407,13 +1488,37 @@ namespace UltimateRandomizer.Common.Features
 				if (!tileAvail.TryGetValue(tile, out int a)) tileAvail[tile] = a = TileAvailability(tile, itemsByTile, avail);
 				return a;
 			}
-			// A fixed order of the stations: a recipe making a station only ever requires stations placed before it,
-			// so no station can end up needing itself
-			// From the original stations: the live ones are already randomized (the plan would depend on the previous one)
 			List<int> order = Stations.RequiredTiles().Where(Assignable)
-				.OrderBy(TileAvail).ThenBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(Stations.Name(t)))
+				.OrderBy(t => t == TileID.WorkBenches ? 0 : 1).ThenBy(TileAvail).ThenBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(Stations.Name(t)))
 				.ToList();
-			Dictionary<int, int> position = order.Select((tile, index) => (tile, index)).ToDictionary(x => x.tile, x => x.index);
+			Dictionary<int, int> recipeTier = new();
+			foreach (int tile in order)
+			{
+				int best = Never;
+				foreach (int placer in Stations.Placers(tile))
+				{
+					if (StationPlacer(placer, out int tier)) best = Math.Min(best, tier);
+				}
+				recipeTier[tile] = best < Never ? best : TileAvail(tile);
+			}
+			return new StationLayout
+			{
+				Order = order,
+				Position = order.Select((tile, index) => (tile, index)).ToDictionary(x => x.tile, x => x.index),
+				Avail = order.ToDictionary(t => t, TileAvail),
+				RecipeTier = recipeTier
+			};
+		}
+
+		// A station recipe (StationRecipe) only gets stations that can be crafted by its own station's tier (RecipeTier):
+		// with its found ingredients, each station is craftable by its tier, the Work Bench by hand. When none fits, it is
+		// made by hand
+		private static void PlanStations(RecipePlan result, int[] results, int[] avail, StationLayout layout)
+		{
+			List<int> order = layout.Order;
+			Dictionary<int, int> position = layout.Position;
+			Dictionary<int, List<int>> itemsByTile = Stations.PlacersByTile();
+			int TileAvail(int tile) => layout.Avail.TryGetValue(tile, out int a) ? a : TileAvailability(tile, itemsByTile, avail);
 			int[] orderAvail = order.Select(TileAvail).ToArray();
 			int[] orderTier = order.Select(s => Stations.Info(s).Kind == StationKind.Progression ? Stations.Info(s).Tier : -1).ToArray();
 			float keep = CraftingConfig.Instance.StationKeepChance / 100f;
@@ -1427,6 +1532,9 @@ namespace UltimateRandomizer.Common.Features
 					if (Stations.PlacedTile(made, out int placed) && position.TryGetValue(placed, out int p)) bound = Math.Min(bound, p);
 				}
 				Random rng = DetRandom.Get(RollKey.Station, RecipeSystem.RecipeKey(i));
+				bool station = StationPlacer(RecipeSystem.OriginalResult(i), out int stationTier);
+				// A station's own stations: craftable by its tier, placed before it
+				bool StationFits(int tile) => !station || layout.RecipeTier.TryGetValue(tile, out int t) && t <= stationTier && layout.PositionOf(tile) < bound;
 				List<int> tiles = new();
 				foreach (int tile in original)
 				{
@@ -1441,12 +1549,14 @@ namespace UltimateRandomizer.Common.Features
 						List<int> allowed = new();
 						for (int k = 0; k < order.Count && k < bound; k++)
 						{
-							if (orderAvail[k] <= limit && orderTier[k] <= recipeTier && (!house || Stations.Info(order[k]).Kind == StationKind.Basic)) allowed.Add(order[k]);
+							if (orderAvail[k] <= limit && orderTier[k] <= recipeTier && (!house || Stations.Info(order[k]).Kind == StationKind.Basic) && StationFits(order[k])) allowed.Add(order[k]);
 						}
 						bool keepOwn = allowed.Contains(tile) && rng.NextDouble() < keep;
 						if (!keepOwn && allowed.Count > 0) chosen = allowed[rng.Next(allowed.Count)];
+						// Nothing fits a station's recipe: by hand
+						else if (!keepOwn && !StationFits(tile)) chosen = -1;
 					}
-					if (!tiles.Contains(chosen)) tiles.Add(chosen);
+					if (chosen >= 0 && !tiles.Contains(chosen)) tiles.Add(chosen);
 				}
 				if (!tiles.SequenceEqual(original)) result.Tiles[i] = tiles.ToArray();
 			}
@@ -1652,6 +1762,7 @@ namespace UltimateRandomizer.Common.Features
 			private readonly SortedSet<int> noKey = new();
 			// The recipes as set up (original results), for the loops that are already there (KeepOriginals)
 			private ItemGraph originalGraph;
+			private readonly StationLayout layout;
 
 			// What the log line counts (a struct: a tentative pair is taken back with a copy)
 			private struct Counters
@@ -1663,8 +1774,9 @@ namespace UltimateRandomizer.Common.Features
 				public int UnfitKeys;
 			}
 
-			public Rebuilder(RecipePlan result, int[] results, int[] vanillaAvail, int[] recipeTiers, int[][] tiles, PlanSettings settings, ItemGraph graph)
+			public Rebuilder(RecipePlan result, int[] results, int[] vanillaAvail, int[] recipeTiers, int[][] tiles, PlanSettings settings, ItemGraph graph, StationLayout layout)
 			{
+				this.layout = layout;
 				this.result = result;
 				this.results = results;
 				this.vanillaAvail = vanillaAvail;
@@ -1701,14 +1813,16 @@ namespace UltimateRandomizer.Common.Features
 			private int Proxy(int i) => result.SwapPartner[i] >= 0 ? result.SwapPartner[i] : i;
 
 			// T: the tier the recipe (its proxy) was doable at (never later: its level, RecipeTier), and never before the U of its
-			// result (the key ingredient then locks it) nor its ResultFloor. A house recipe is built at once
+			// result (the key ingredient then locks it) nor its ResultFloor. A house recipe is built at once; a crafting station's
+			// recipe by the station's tier (StationPlacer: its guardian is only a backup)
 			private int TargetTier(int i)
 			{
 				if (RecipeSystem.HouseRecipe(i)) return 0;
 				int proxy = Proxy(i);
 				int rt = RecipeTier(proxy);
 				int cap = recipeTiers[proxy] < Never ? Math.Min(rt, recipeTiers[proxy]) : rt;
-				return Tiers.Clamp(Math.Max(Math.Max(cap, result.ResultTiers[i]), ResultFloor(results[i])));
+				int t = Tiers.Clamp(Math.Max(Math.Max(cap, result.ResultTiers[i]), ResultFloor(results[i])));
+				return StationPlacer(results[i], out int station) ? Math.Min(t, station) : t;
 			}
 
 			// w / (1 + k * uses / tolerance): a material already in many recipes is picked less often (IngredientReusePenalty),
@@ -1783,8 +1897,10 @@ namespace UltimateRandomizer.Common.Features
 					$"(none at tiers {(noKey.Count == 0 ? "-" : string.Join(", ", noKey))}), {stats.SlotsTotal} new ingredients of which {stats.Crafted} crafted, {stats.GroupSlots} recipe groups and " +
 					$"{stats.Surprises} surprises ({surpriseShare} of the {stats.SurpriseSlots} slots drawn as one; stackable results {stackableShare} of {stats.StackableSurpriseSlots}; " +
 					$"{recipeShare} of the rebuilt recipes with one), {stats.UnfitKeys} keys not fitting progression for lack of another; use caps {string.Join("/", useCaps)}; most used: {busiest}");
-				// The upgrades' shells whatever the setting (they are the upgrades' recipes): they shift no choice above
+				// The upgrades' shells whatever the setting (they are the upgrades' recipes): they shift no choice above. The
+				// stations no recipe makes get theirs too (their recipe is their main way)
 				PlanShells(SpecialShells(), true);
+				PlanShells(StationShells(), true, stations: true);
 			}
 
 			// The other shells (RecipesForUncraftable), after the locks: nothing else is planned around them. Then the candidates
@@ -2033,13 +2149,16 @@ namespace UltimateRandomizer.Common.Features
 						if (slot < 0) continue;
 						HashSet<int> below = graph.From(results[i]);
 						int originalResult = RecipeSystem.OriginalResult(i);
-						bool Usable(int x) => x != results[i] && x != originalResult && !current.Any(p => p.type == x) && !below.Contains(x) && !RecipeSystem.InGroups(recipeGroups, x);
+						// A station's recipe keeps found materials, and its tier (never T + 1: it must be craftable by then)
+						bool station = StationPlacer(results[i], out _);
+						bool Usable(int x) => x != results[i] && x != originalResult && !current.Any(p => p.type == x) && !below.Contains(x) && !RecipeSystem.InGroups(recipeGroups, x)
+							&& (!station || source[x] < 0);
 						Random rng = DetRandom.Get(RollKey.RecipeIngredient, RecipeSystem.RecipeKey(i), RollKey.KeyIngredient);
 						long others = current.Where((p, k) => k != slot).Sum(p => UnitValue(p.type) * p.stack);
 						long budget = Math.Max(1, (long)(RecipeSystem.OriginalIngredientValue(Proxy(i)) * MaxValueFactor) + Item.silver - others);
 						int newKey = PickKey(t, null, Usable, rng, x => Fits(x, results[i], t), budget);
 						int newTier = t;
-						if (newKey == 0 && t < Tiers.Max)
+						if (newKey == 0 && t < Tiers.Max && !station)
 						{
 							newKey = PickKey(t + 1, null, Usable, rng, x => Fits(x, results[i], t + 1), budget);
 							newTier = t + 1;
@@ -2092,6 +2211,21 @@ namespace UltimateRandomizer.Common.Features
 				return list;
 			}
 
+			// The shells of the crafting stations no recipe makes (StationShell), at their station's tier: their recipe. Not when
+			// another enabled recipe makes the item (another mod's, added after the shells)
+			private List<int> StationShells()
+			{
+				List<int> list = new();
+				HashSet<int> made = Enumerable.Range(0, Count).Where(r => !RecipeSystem.IsShell(r) && !RecipeSystem.VanillaDisabled(r)).Select(r => results[r]).ToHashSet();
+				for (int i = 0; i < Count; i++)
+				{
+					if (!StationShell(i) || made.Contains(results[i]) || !StationPlacer(results[i], out int tier)) continue;
+					result.ShellTiers[i] = targets[i] = tier;
+					list.Add(i);
+				}
+				return list;
+			}
+
 			// The shells of the items no recipe makes (ShellEligible), from their tier
 			private List<int> EligibleShells()
 			{
@@ -2115,9 +2249,11 @@ namespace UltimateRandomizer.Common.Features
 			// (ShellIngredientCount, the ingredient weights, about the item's value), its key found exactly at T. A shell of tier
 			// T > 0 without a key would be doable earlier: it stays off, like one without any ingredient (an upgrade's shell keeps
 			// its station: LockSpecials adds its key)
-			private void PlanShells(List<int> shellList, bool special)
+			// stations: the stations' shells, which only get a station craftable by their tier and placed before theirs (as
+			// PlanStations gives the stations' recipes), else none (by hand)
+			private void PlanShells(List<int> shellList, bool special, bool stations = false)
 			{
-				List<int> stations = Stations.RequiredTiles().Where(Assignable)
+				List<int> candidates = Stations.RequiredTiles().Where(Assignable)
 					.OrderBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(Stations.Name(t))).ToList();
 				Dictionary<ItemCategory, (int eligible, int planned)> byCategory = new();
 				int planned = 0, noStation = 0;
@@ -2130,8 +2266,14 @@ namespace UltimateRandomizer.Common.Features
 					int top = targets[i];
 					// Any basic or progression station had by T (a progression one not above the item's own level)
 					Random rng = DetRandom.Get(RollKey.Uncraftable, DetRandom.ItemKey(results[i]), RollKey.Station);
-					List<int> allowed = stations.Where(t => TileAvailability(t, placers, real) <= top
+					List<int> allowed = candidates.Where(t => TileAvailability(t, placers, real) <= top
 						&& (Stations.Info(t).Kind != StationKind.Progression || Stations.Info(t).Tier <= RecipeTier(i))).ToList();
+					if (stations)
+					{
+						int bound = Stations.PlacedTile(results[i], out int placed) ? layout.PositionOf(placed) : layout.Order.Count;
+						allowed = layout.Order.Where(t => layout.PositionOf(t) < bound && layout.RecipeTier[t] <= top
+							&& (Stations.Info(t).Kind != StationKind.Progression || Stations.Info(t).Tier <= RecipeTier(i))).ToList();
+					}
 					if (allowed.Count == 0) noStation++;
 					else result.Tiles[i] = new[] { allowed[rng.Next(allowed.Count)] };
 					if (Rebuild(i))
@@ -2143,7 +2285,7 @@ namespace UltimateRandomizer.Common.Features
 					else if (!special) DropShell(result, i);
 					byCategory[category] = (eligible, done);
 				}
-				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {planned} of {shellList.Count} shell recipes planned for {(special ? "the upgrades" : "items no recipe makes")}" +
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {planned} of {shellList.Count} shell recipes planned for {(stations ? "the stations" : special ? "the upgrades" : "items no recipe makes")}" +
 					$" ({string.Join(", ", byCategory.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value.planned}/{p.Value.eligible}"))}); {noStation} without a station");
 			}
 
@@ -2238,6 +2380,9 @@ namespace UltimateRandomizer.Common.Features
 				int top = targets[i];
 				bool house = RecipeSystem.HouseRecipe(i);
 				int result0 = results[i];
+				// A crafting station: found materials only (never one crafted, which could need this very station), no group,
+				// a key of its tier when one is had, else none (craftable a little early rather than late)
+				bool station = StationPlacer(result0, out _);
 				int originalResult = RecipeSystem.OriginalResult(i);
 				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
 				int[] originalGroups = RecipeSystem.OriginalGroups(i);
@@ -2289,7 +2434,7 @@ namespace UltimateRandomizer.Common.Features
 						if (pool[c, t].Count > 0) has[c, t] = hasCategory[c] = true;
 					}
 				}
-				if (!house)
+				if (!house && !station)
 				{
 					for (int k = 0; k < groups.Count; k++)
 					{
@@ -2332,7 +2477,7 @@ namespace UltimateRandomizer.Common.Features
 				HashSet<int> below = graph.From(result0);
 				HashSet<int> taken = kept.Select(p => p.type).ToHashSet();
 				bool Usable(int x) => x != result0 && x != originalResult && !taken.Contains(x) && !below.Contains(x) && !RecipeSystem.InGroups(chosenGroups, x)
-					&& (!house || (Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category) && !originalTypes.Contains(x)));
+					&& (!house || (Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category) && !originalTypes.Contains(x))) && (!station || source[x] < 0);
 				bool Stackable(int x) => !stackableResult || StackRules.MaxStackOf(x) > 1;
 				// Progression (Fits) for every new ingredient: required of the slots, preferred for the key
 				bool FitsHere(int x) => Fits(x, result0, top) && Stackable(x);
@@ -2380,7 +2525,7 @@ namespace UltimateRandomizer.Common.Features
 					result.PlannedKeys[i] = key;
 					if (!isShell) stats.Keyed++;
 				}
-				else if (top > 0 && !house)
+				else if (top > 0 && !house && !station)
 				{
 					// Without a key, a shell would be doable before the tier its item is found at, a recipe before its tier
 					if (isShell) return false;
@@ -2444,7 +2589,7 @@ namespace UltimateRandomizer.Common.Features
 							if (surprised && UnitValue(x) > room) continue;
 							options.Add((x, (float)(CommonnessWeight(x) * IngredientPenalty(x, x) * Closeness(x, slotShare))));
 						}
-						if (!house)
+						if (!house && !station)
 						{
 							for (int k = 0; k < groups.Count; k++)
 							{

@@ -178,7 +178,7 @@ Tests: {
 	BiomeRedistributionComplete: By biome: every natural enemy keeps its number of spawn places, inside its class and its tier pair, never more than one tier above the place (20 seeds)
 	BiomeSlotsRespectDaylight: By biome: no enemy that flees or dies in daylight (Gnome) in a day surface place
 	BiomeExtrasShare: By biome: 8% of the spawn places are shared with event enemies
-	CriticalHostsInForest: By biome: the basic stations drop from enemies met in the first hour (Forest, caves or desert)
+	CriticalHostsInForest: By biome: the guardians of the first stations are enemies met in the first hour (Forest, caves or desert)
 	SurpriseZero: With 0% surprise, replaced items keep their category
 	SurpriseHundred: With 100% surprise, categories follow the loot weights
 	SurpriseGatedAndProtected: Surprises respect progression and protected items
@@ -195,23 +195,23 @@ Tests: {
 	PacingVariety: At least 10 different pieces of equipment per early hour
 	JackpotPacing: Few jackpots in an early hour (logged per hour)
 	DropFrequency: Most kills give something (at least 0.6 items per kill; the value is written to client.log)
-	WorkBenchPacing: The first work bench comes after 15 to 30 minutes on average (written to client.log)
+	WorkBenchPacing: The work bench is made by hand at the start, and its guardian alone gives one within an hour on average (written to client.log)
 	BasicStationsUnprotected: Basic stations (work bench, furnace, anvil...) are left to the randomizer
 	ProgressionStationsProtected: Progression and themed stations are protected unless station protection is None
-	ProgressionStationsGuaranteed: Unprotected progression stations and boss summons drop from frequent enemies of their tier (1 % or more)
+	ProgressionStationsGuaranteed: Unprotected progression stations (from their guardian) and boss summons drop from frequent enemies of their tier (1 % or more)
 	ProtectionsRemoved: Progression materials, mirrors, summons and progression tools are randomized, still found at their tier, and no permutation moves a hard gate below its tier
 	AbsentEvilBoss: The evil boss a world lacks takes no part in the boss permutation and is no source
 	TempleKeyOutsideTemple: The Temple Key is never guaranteed in the Temple nor on enemies met only there
 	ConfigMigration: Old saved settings: an old default list of protected items is removed, the player's choices kept
 	UpgradesOutOfPools: Life and mana upgrades are never rolled, guaranteed or used as ingredients, and drops keep them
-	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
+	BasicStationsFindable: Every basic station can be found at the start (its guardian), never in pots
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier, or by the progression bosses of its tier
-	GuaranteedBiomeHosts: Each guaranteed item is carried by 3 or more enemies of one biome, with the same chance on each
+	GuaranteedBiomeHosts: Each guaranteed item is carried by several enemies of one biome, with the same chance on each (a station: its single guardian)
 	GuaranteedSeveralSeeds: Every guaranteed item gets the enemies of a biome with other seeds
 	GuaranteedBiomesSpread: The guaranteed items of a tier are spread over several biomes
 	GuaranteedBiomesVaried: The first stations land in at least five different nearby biomes, never in a far one
-	GuaranteedFindTime: Every guaranteed station, summon and tool drops within about 90 kills of its biome
-	GuaranteedDayAndNight: A guaranteed item whose biome is met by day and by night has at least two enemies at each time
+	GuaranteedFindTime: Every guaranteed summon and tool drops within about 90 kills of its biome (the station guardians are logged)
+	GuaranteedDayAndNight: A guaranteed summon or tool whose biome is met by day and by night has at least two enemies at each time
 	GuaranteedHostLoad: No enemy carries more than four guaranteed items (five when its biome has no other choice), and none gives too many guaranteed drops per kill
 	GuaranteedReachable: Guaranteed items never sit in a biome before it can be farmed (Dungeon, Underworld, Temple, sky), nor in the Graveyard or the Meteor
 	HintSortedByProgress: Hints are sorted by progression, in two tabs
@@ -224,6 +224,7 @@ Tests: {
 	HintConditionsShown: Hints and craft trees say when a source works: time, weather or event, drop and recipe conditions, altars for hardmode ores
 	HintSummonTiers: Boss summons are offered when their boss is the next step (Power Cell after Plantera, Mechanical Eye in hardmode)
 	HintLockedShown: Hints for later are listed greyed with when they come, and are never sold
+	StationHints: The last hint about a station tells both its recipe (ingredients and stations) and its guardian
 	GuaranteedHostsNotEvents: Guaranteed drops are never on invasion, moon, seasonal or weather enemies
 	GuaranteedDeterminism: Guaranteed sources are the same after a rebuild
 	FindabilityDeterminism: Findability of items is the same after a rebuild
@@ -234,6 +235,7 @@ Tests: {
 	AltarDecisionKeepsCaches: An altar choosing a hardmode ore changes neither the guaranteed sources nor findability
 	PotOnlyUnfound: Pots only give guaranteed items nobody has found yet
 	GuaranteesNotBelowTier: No guaranteed item comes before its tier (Ancient Manipulator and Celestial Sigil from the Lunatic Cultist on)
+	StationsOneGuardian: Every crafting station has exactly one guardian, a common enemy of its tier, and never comes from pots or chests
 	IngredientReplacementsFindable: New ingredients are had (found or crafted) by the tier their recipe was rebuilt for
 	RecipesDoable: At least 85% of the randomized recipes can be made at their level
 	AvailabilityConsistent: The planned item availability matches an independent recomputation over the applied recipes
@@ -285,6 +287,7 @@ Tests: {
 	RecipeValueSane: Planned recipes ask for sane stacks (the stack cap, or three times a vanilla stack) and rebuilt ones are worth half to twice their vanilla recipe (value-0 items count their own recipe): no 9999 Ruby Walls for a Mana Crystal, no Nebula Fragment kept for a cheap swapped item
 	ProtectedRecipesGated: A protected result whose ingredients are rebuilt waits for the unlocked tier of its true tier like any other: no Key of Night or Key of Light before hardmode
 	PickaxeIngredientsBelowLevel: A pickaxe or drill recipe never gets an ore or bar (or anything made of one) that needs its own pick power or more to be mined: no Orichalcum Pickaxe made of Chlorophyte Bars
+	StationsCraftable: Every crafting station has a rebuilt recipe of found materials, doable by its tier without its guardian; the Work Bench by hand at the start
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
@@ -649,6 +652,9 @@ Codex: {
 		Free: free
 		NoStation: no station
 		Around: Look around: {0}.
+		StationRecipe: "Its recipe: {0} ({1})."
+		Guardian: "Its guardian, the {0}, sometimes drops one too ({1} chance per kill{2})."
+		GuardianWhere: ", {0}"
 		Place.Known: "{0}, {1}"
 		Share: " (about {0} of the creatures of this place: {1})"
 
@@ -1335,13 +1341,18 @@ Configs: {
 		}
 
 		StationProtection: {
-			Label: Crafting station protection
-			Tooltip: None: every station is randomized, progression ones too (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...); each one is dropped by common enemies of its tier. Progression only: only basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are randomized; they are also found in pots and wooden chests. A station of another mod that many recipes need stays protected; the others are treated like the themed stations (Glass Kiln, Bone Welder...).
+			Label: "Crafting station protection"
+			Tooltip: "None: every station is randomized, progression ones too (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...): each one gets a random recipe doable at its tier and a guardian, a common enemy of its tier that sometimes drops it. Progression only: only basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are randomized that way. A station of another mod that many recipes need stays protected; the others are treated like the themed stations (Glass Kiln, Bone Welder...)."
 		}
 
 		GuaranteedDropMultiplier: {
-			Label: Guaranteed drop chance multiplier
-			Tooltip: Basic stations (and vanilla ingredients, if chosen) are placed on the common enemies of one biome of their tier. Raise this to find them sooner.
+			Label: "Guaranteed drop chance multiplier"
+			Tooltip: "Boss summons and pickaxes (and vanilla ingredients, if chosen) are placed on the common enemies of one biome of their tier. Raise this to find them sooner. Station guardians have their own chance."
+		}
+
+		StationGuardianChance: {
+			Label: "Station guardian drop chance (%)"
+			Tooltip: "Each crafting station has a random recipe doable at its tier (the Guide tells it) and one guardian: a common enemy of its tier that drops it with this chance per kill (shared between players). A boss guarding a late station always drops it. Pots and chests never give stations."
 		}
 
 		GuaranteedHostsPerItem: {
@@ -1350,8 +1361,8 @@ Configs: {
 		}
 
 		StationFindKills: {
-			Label: Kills in its biome to find a station
-			Tooltip: Average number of kills in its biome before a guaranteed station, boss summon or pickaxe drops, all its enemies together. Pots and wooden chests help too. The work bench and the first stations follow the first hour of play instead.
+			Label: "Kills in its biome to find a summon or pickaxe"
+			Tooltip: "Average number of kills in its biome before a guaranteed boss summon or pickaxe drops, all its enemies together. Crafting stations come from their recipe, or from their guardian (see the guardian chance)."
 		}
 
 		PotGuaranteeChance: {
@@ -1362,11 +1373,6 @@ Configs: {
 		ScaleGuaranteesWithPlayers: {
 			Label: Guaranteed drops shared between players
 			Tooltip: In multiplayer, the chance of a guaranteed station, boss summon or pickaxe on each kill is divided by the number of players: the team finds it about as fast as one player alone, not several copies of it.
-		}
-
-		ChestStationGuarantee: {
-			Label: Basic stations in wooden chests
-			Tooltip: Copies of each basic station hidden in wooden chests when the world is created (or when /rchests is used).
 		}
 
 		MinFindableChance: {
