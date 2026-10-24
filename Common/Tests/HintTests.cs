@@ -42,6 +42,57 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintConditionsShown", HintConditionsShown);
 			TestRunner.Register("HintSummonTiers", HintSummonTiers);
 			TestRunner.Register("HintLockedShown", HintLockedShown);
+			TestRunner.Register("StationHints", StationHints);
+		}
+
+		// A crafting station's last hint level tells both its ways: its recipe (every ingredient, with its stations or "by
+		// hand", the plan's recipe) and its guardian (the enemy GuaranteedSources gives it to, with its chance), whichever the
+		// hint names first. Every station with a guardian and a recipe is a hint target
+		private static void StationHints()
+		{
+			List<HintTarget> targets = TargetsOrSkip();
+			List<GuaranteedSources.Requirement> stations = GuaranteedSources.PlacerRequirements().Where(r => GuaranteedSources.GuardianOf(r.Item) > 0).ToList();
+			if (stations.Count == 0) Check.Skip("no station has a guardian");
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			int both = 0;
+			string example = "";
+			foreach (GuaranteedSources.Requirement station in stations)
+			{
+				string name = HintFacts.ItemName(station.Item);
+				HintFact fact = HintFacts.For(station.Item);
+				if (fact == null)
+				{
+					failures.Add($"{name}: no hint");
+					continue;
+				}
+				bool target = targets.Any(t => t.Item == station.Item) || HintFacts.RawTarget(station.Item) != null;
+				// Another placer of its tile may be the target (the Orichalcum Anvil for the Mythril Anvil's tile)
+				if (!target && Stations.PlacedTile(station.Item, out int tile) && !Stations.Placers(tile).Any(p => HintFacts.RawTarget(p) != null)) failures.Add($"{name}: not a hint target");
+				string text = HintFacts.Text(fact, HintFacts.MaxLevel);
+				int guardian = GuaranteedSources.GuardianOf(station.Item);
+				if (!text.Contains(HintFacts.NpcName(guardian))) failures.Add($"{name}: the last level does not name its guardian {HintFacts.NpcName(guardian)} ({text})");
+				bool hasRecipe = HintFacts.RecipesMaking(station.Item).Any();
+				HintFact recipe = fact.Kind == HintKind.Recipe ? fact : fact.StationRecipe;
+				if (hasRecipe && recipe == null) failures.Add($"{name}: a recipe makes it, the hint does not tell it");
+				if (recipe != null)
+				{
+					if (!recipe.Ingredients.SequenceEqual(HintFacts.PlannedIngredients(recipe.Recipe))) failures.Add($"{name}: ingredients differ from the plan");
+					if (plan.Results[recipe.Recipe].type != station.Item) failures.Add($"{name}: recipe {recipe.Recipe} does not make it");
+					foreach ((int type, _) in recipe.Ingredients.Where(x => x.type > 0))
+					{
+						if (!text.Contains(HintFacts.ItemName(type))) failures.Add($"{name}: the last level does not name {HintFacts.ItemName(type)}");
+					}
+					foreach (int t in recipe.Tiles)
+					{
+						if (!text.Contains(HintFacts.StationName(t))) failures.Add($"{name}: the last level does not name the station {HintFacts.StationName(t)}");
+					}
+					both++;
+					if (example.Length == 0 || station.Item == ItemID.WorkBench) example = $"{name}: {text}";
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"StationHints: {both} of {stations.Count} stations hinted with their recipe and their guardian; e.g. {example}");
+			Check.All(failures, "Station hints");
 		}
 
 		private static List<HintTarget> RecipeTargets() =>
@@ -234,10 +285,10 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				if (Math.Abs((1f - missing) - fact.Chance) > 1e-4f) failures.Add($"{name}: states {fact.Chance:P2}, planned {1f - missing:P2}");
 				if (!shares || !BiomeSlots.HasAnySlot(type)) continue;
-				// Several enemies: the share they make together of the biome named first, at the tier and in the period(s) they
-				// were placed for
+				// Several enemies (or a station's single guardian): the share they make together of the biome named first, at the
+				// tier and in the period(s) they were placed for
 				int biome = GuaranteedSources.BiomeOf(fact.Item);
-				if (fact.Hosts.Count > 1 && biome >= 0)
+				if ((fact.Hosts.Count > 1 || fact.Hosts.Count == 1 && GuaranteedSources.GuardianOf(fact.Item) == fact.Hosts[0]) && biome >= 0)
 				{
 					int placed = GuaranteedSources.PlacedTier(fact.Item);
 					SlotTime period = GuaranteedSources.PlacedTime(fact.Item);

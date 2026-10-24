@@ -6,6 +6,7 @@ using Terraria.DataStructures;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.ModLoader;
+using UltimateRandomizer.Common.Codex;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 
@@ -127,6 +128,9 @@ namespace UltimateRandomizer.Common.Features
 		public bool Guaranteed;
 		// A guaranteed station, summon or tool, dropped one at a time (shared between players at kill time)
 		public bool Single;
+		// A crafting station on its guardian (GuaranteedSources.PlaceGuardian): rarer once the station has been obtained in
+		// this world (GuaranteedSources.FoundGuardianFactor)
+		public bool Guardian;
 		// Kill time only: a jackpot, this many tiers above the progression limit (JackpotItem)
 		public int JackpotGap;
 		// Tiers by which progression still locks this entry of the final plan (DropHelper.LockGap, 0: it drops): a locked
@@ -201,7 +205,11 @@ namespace UltimateRandomizer.Common.Features
 			bool shared = ProgressionConfig.Instance.ScaleGuaranteesWithPlayers;
 			foreach (PlannedDrop drop in drops)
 			{
-				if (info.rng.NextFloat() >= KillChance(drop, drop.Guaranteed ? guaranteedBonus : bonus, players, shared)) continue;
+				float chance = KillChance(drop, drop.Guaranteed ? guaranteedBonus : bonus, players, shared);
+				// A station already obtained in this world (the server's codex: picked up or crafted by anyone): its guardian
+				// is only a backup, it no longer hands out copies
+				if (drop.Guardian && CodexSystem.HasObtained(drop.Item)) chance *= GuaranteedSources.FoundGuardianFactor;
+				if (info.rng.NextFloat() >= chance) continue;
 				int stack = info.rng.Next(drop.StackMin, Math.Max(drop.StackMin, drop.StackMax) + 1);
 				DropMarked(npc, drop.Item, stack, drop.JackpotGap);
 			}

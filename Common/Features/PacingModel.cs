@@ -104,6 +104,37 @@ namespace UltimateRandomizer.Common.Features
 			}
 			return total / TotalKills;
 		}
+
+		// How many of an item one early kill gives on average (drops per kill), from the enemies the early kills meet
+		// (EarlyKillShare) and their planned drops: unlocked, without conditions (no event, no hardmode), guaranteed sources left
+		// out. Seed, spawn map and synced settings only (the critical stations' recipes read it: RecipePlanner.StartMaterials)
+		public static double EarlyDropRate(int item)
+		{
+			HashSet<int> types = new();
+			List<int> pool = BiomeSlots.Active ? null : EnemySwapPool.NaturalEnemies(0);
+			foreach ((int[] npcs, _, SpawnBiome biome) in EarlyKills)
+			{
+				foreach (int npc in npcs)
+				{
+					types.Add(BiomeSlots.TypeOf(npc));
+					if (!BiomeSlots.Active) continue;
+					BiomeSlot slot = BiomeSlots.SlotIn(BiomeSlots.Current, (int)biome, npc);
+					if (slot != null) types.UnionWith(BiomeSlots.SpawnParts(slot).Select(p => BiomeSlots.TypeOf(p.id)));
+				}
+			}
+			if (pool != null) types.UnionWith(pool.Select(BiomeSlots.TypeOf));
+			double rate = 0;
+			foreach (int type in types.OrderBy(t => t))
+			{
+				double share = EarlyKillShare(k => k == type);
+				if (share <= 0) continue;
+				double chance = RandomNpcDropRule.Plan(type, ProgressionSystem.PlannedExpert, guaranteed: false)
+					.Where(d => d.Item == item && !d.Locked && (d.Conditions == null || d.Conditions.Count == 0)).Sum(d => (double)d.Chance);
+				rate += share * chance;
+			}
+			return rate;
+		}
+
 		// planned: the chances' defaults (EarlyKillShare); else the settings (the simulations of the real early game)
 		private static float SwapChance(bool planned = false)
 		{
@@ -122,8 +153,10 @@ namespace UltimateRandomizer.Common.Features
 		public const float ItemsPerTree = 0.35f;
 		public const int Herbs = 15;
 
-		// Minutes until the first work bench, averaged over many simulated starts: kills (KillsPerMinute), pots
-		// (1 per minute) and a wooden chest every 12 minutes, which holds a work bench with the world's real odds.
+		// Minutes until a work bench drops, averaged over many simulated starts: kills (KillsPerMinute) on its guardian, pots
+		// (1 per minute, when they hold it: never since stations became quests) and a wooden chest every 12 minutes, which
+		// holds a work bench with the world's real odds (worlds made before). Its recipe is left out: it is had at once when
+		// its recipe is made by hand from tier 0 materials (WorkBenchByHand), this is the backup's time.
 		// chanceOverride: the work bench's chance on each of its hosts instead of the planned one (the test logs a few)
 		public static double MinutesToFirstWorkBench(int runs, int seed, float? chanceOverride = null)
 		{
@@ -144,8 +177,8 @@ namespace UltimateRandomizer.Common.Features
 				return chance;
 			}
 			// At the start nothing is found yet: every pot item may come (TileDropItem.Unfound)
-			int potItems = GuaranteedSources.PotItems(0).Count;
-			float potChance = potItems == 0 ? 0 : ProgressionConfig.Instance.PotGuaranteeChance / 100f / potItems;
+			List<int> potList = GuaranteedSources.PotItems(0);
+			float potChance = !potList.Contains(ItemID.WorkBench) ? 0 : ProgressionConfig.Instance.PotGuaranteeChance / 100f / potList.Count;
 			(int benches, int wooden) = WoodenChestsWithWorkBench();
 			double total = 0;
 			for (int run = 0; run < runs; run++)

@@ -244,7 +244,8 @@ namespace UltimateRandomizer.Common.Features
 				}
 				changed++;
 			}
-			PlaceGuaranteedStations(existingWorld);
+			// No station is hidden in chests any more (each one is a small quest: its recipe or its guardian); worlds made before
+			// keep the stations already placed (placedStations)
 			ChestsRandomized = true;
 			// Randomized with the caps: nothing to tame
 			chestsTamed = true;
@@ -416,53 +417,6 @@ namespace UltimateRandomizer.Common.Features
 				jackpotChests.Add(position);
 			}
 			return chosen.Count;
-		}
-
-		// Hides a few copies of each basic station (work bench, furnace...) in wooden chests, in a fixed random order
-		private static void PlaceGuaranteedStations(bool existingWorld)
-		{
-			int copies = ProgressionConfig.Instance.ChestStationGuarantee;
-			List<int> stations = GuaranteedSources.StationRequirements().Select(r => r.Item).ToList();
-			if (copies <= 0 || stations.Count == 0) return;
-			List<Chest> chests = new();
-			for (int c = 0; c < Main.maxChests; c++)
-			{
-				Chest chest = Main.chest[c];
-				if (chest == null || !string.IsNullOrEmpty(chest.name) || !IsWoodenChest(chest.x, chest.y)) continue;
-				if (existingWorld && NearPlayerBase(chest.x, chest.y)) continue;
-				chests.Add(chest);
-			}
-			if (chests.Count == 0) return;
-			chests.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
-			Random rng = DetRandom.Get(RollKey.Guaranteed, RollKey.Chest);
-			for (int i = chests.Count - 1; i > 0; i--)
-			{
-				int j = rng.Next(i + 1);
-				(chests[i], chests[j]) = (chests[j], chests[i]);
-			}
-			int next = 0;
-			foreach (int station in stations)
-			{
-				for (int copy = 0; copy < copies; copy++)
-				{
-					for (int tries = 0; tries < chests.Count; tries++)
-					{
-						Chest chest = chests[next++ % chests.Count];
-						int slot = Array.FindIndex(chest.item, item => item == null || item.IsAir);
-						if (slot < 0) continue;
-						chest.item[slot] = new Item(station);
-						placedStations.Add(station);
-						break;
-					}
-				}
-			}
-		}
-
-		private static bool IsWoodenChest(int x, int y)
-		{
-			if (!WorldGen.InWorld(x, y)) return false;
-			Tile tile = Main.tile[x, y];
-			return tile.HasTile && tile.TileType == TileID.Containers && tile.TileFrameX / 36 == 0;
 		}
 
 		private static bool NearPlayerBase(int x, int y)

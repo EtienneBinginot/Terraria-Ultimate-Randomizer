@@ -70,6 +70,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("RecipeValueSane", RecipeValueSane);
 			TestRunner.Register("ProtectedRecipesGated", ProtectedRecipesGated);
 			TestRunner.Register("PickaxeIngredientsBelowLevel", PickaxeIngredientsBelowLevel);
+			TestRunner.Register("StationsCraftable", StationsCraftable);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -85,6 +86,79 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			RequireApplied();
 			if (CraftingConfig.Instance.IngredientMode != IngredientMode.Randomized) Check.Skip("ingredients are vanilla");
+		}
+
+		// Every crafting station (GuaranteedSources.PlacerRequirements) has a live recipe, rebuilt (its shell when no recipe
+		// made it), that makes it by its tier without any guardian (RecipePlanner.StationRecipeTiers: the stations' own drops
+		// left out, so no station relies on its guardian through another one); its new ingredients are found, never crafted:
+		// a critical station's (Work Bench, Furnace, Anvil, Table, Chair) among the start materials (RecipePlanner.StartMaterials:
+		// gathered around the spawn in the first minutes, no ore for the Work Bench), another's had by its tier in the biomes
+		// open then (StationMaterialTier). The Work Bench is made by hand. No station shimmers back into its ingredients. A few
+		// recipes are logged
+		private static void StationsCraftable()
+		{
+			RequireRandomIngredients();
+			List<GuaranteedSources.Requirement> stations = GuaranteedSources.PlacerRequirements().ToList();
+			if (stations.Count == 0) Check.Skip("every station is protected");
+			RecipePlan plan = RecipePlanner.Get();
+			Dictionary<int, int> crafted = RecipePlanner.StationRecipeTiers(plan);
+			List<string> failures = new();
+			List<string> examples = new();
+			bool Live(int i) => !Main.recipe[i].Disabled && !plan.Twin[i] && (!RecipeSystem.IsShell(i) || RecipePlanner.ShellActive(plan, i));
+			int shells = 0;
+			List<string> guardianOnly = new();
+			foreach (GuaranteedSources.Requirement station in stations)
+			{
+				string name = Name(station.Item);
+				int tier = Tiers.Clamp(station.Tier);
+				List<int> recipes = Enumerable.Range(0, Count).Where(i => plan.Results[i].type == station.Item && Live(i)).ToList();
+				if (recipes.Count == 0)
+				{
+					// No recipe and no shell registered for it (an item this mod gives none): its guardian alone, logged
+					if (!Enumerable.Range(0, Count).Any(i => RecipeSystem.OriginalResult(i) == station.Item)) guardianOnly.Add(name);
+					else failures.Add($"{name} (tier {tier}): no live recipe");
+					continue;
+				}
+				// Another mod's recipe left as its mod made it (RandomizeModdedRecipes off)
+				if (recipes.All(RecipeSystem.LeftAlone))
+				{
+					guardianOnly.Add(name + " (modded recipe left alone)");
+					continue;
+				}
+				shells += recipes.Count(RecipeSystem.IsShell);
+				int made = crafted.GetValueOrDefault(station.Item, Findability.Never);
+				string Describe(int i) => $"{Ingredients(plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i))} at {string.Join("+", (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Select(Stations.Name).DefaultIfEmpty("hand"))}";
+				if (made > tier) failures.Add($"{name} (tier {tier}): crafted at {Show(made)} without its guardian ({string.Join("; ", recipes.Select(Describe))})");
+				// Rebuilt when it may be (another mod's recipe left alone keeps its own)
+				if (recipes.All(i => plan.Ingredients[i] == null) && recipes.Any(i => RecipeSystem.IsShell(i) || RecipePlanner.Rebuildable(i))) failures.Add($"{name}: recipe not rebuilt");
+				foreach (int i in recipes.Where(i => plan.Ingredients[i] != null && !plan.Repaired[i]))
+				{
+					HashSet<int> vanilla = RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
+					foreach ((int type, _) in plan.Ingredients[i])
+					{
+						if (vanilla.Contains(type) && !RecipePlanner.IngredientReplaceable(type)) continue;
+						if (Findability.Tier(type) > tier) failures.Add($"{name}: {Name(type)} is not found by tier {tier} ({Show(Findability.Tier(type))})");
+						if (station.Critical && !RecipePlanner.StartMaterials(station.Item != ItemID.WorkBench).Contains(type)) failures.Add($"{name}: {Name(type)} is not a start material");
+						else if (!station.Critical && RecipePlanner.StationMaterialTier(type) > tier) failures.Add($"{name} (tier {tier}): {Name(type)} is in a biome opened at {Show(RecipePlanner.StationMaterialTier(type))}");
+					}
+				}
+				if (examples.Count < 8) examples.Add($"{name} (tier {tier}, crafted at {Show(made)}): {Describe(recipes[0])}");
+				// A station from its guardian never shimmers into its recipe's key
+				int[] decraft = station.Item < ItemID.Sets.CraftingRecipeIndices.Length ? ItemID.Sets.CraftingRecipeIndices[station.Item] : null;
+				if (RecipeSystem.Applied && decraft != null && decraft.Length > 0) failures.Add($"{name}: shimmers back into {decraft.Length} recipe(s)");
+			}
+			// The Work Bench by hand, from tier 0 materials
+			if (stations.Any(r => r.Item == ItemID.WorkBench))
+			{
+				List<int> benches = Enumerable.Range(0, Count).Where(i => plan.Results[i].type == ItemID.WorkBench && Live(i)).ToList();
+				bool byHand = benches.Any(i => (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Length == 0
+					&& (plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).All(x => Findability.Tier(x.type) == 0 || RecipeSystem.InGroups(RecipePlanner.GroupsOf(plan, i), x.type)));
+				if (!byHand) failures.Add($"the Work Bench is not made by hand from tier 0 materials ({string.Join("; ", benches.Select(i => Ingredients(plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i))))})");
+				if (crafted.GetValueOrDefault(ItemID.WorkBench, Findability.Never) != 0) failures.Add($"the Work Bench is crafted at {Show(crafted.GetValueOrDefault(ItemID.WorkBench, Findability.Never))}");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"StationsCraftable: {stations.Count} stations, {shells} of them by a shell recipe, guardian only: "
+				+ $"{(guardianOnly.Count == 0 ? "none" : string.Join(", ", guardianOnly))}; e.g. {string.Join("; ", examples)}");
+			Check.All(failures, "Stations not craftable by their tier");
 		}
 
 		// A new ingredient is always had (found, or crafted) by the tier its recipe was rebuilt for (the recipe's level when it
@@ -839,7 +913,8 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				int tier = plan.IngredientTiers[i];
 				// A repaired recipe found no key: it keeps its vanilla ingredients (LockResults locks it at U)
-				if (tier <= 0 || plan.Ingredients[i] == null || plan.Repaired[i] || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i) || SpecialRecipe(plan, i)) continue;
+				// A station's recipe takes found materials only, keyed when one is found at its tier (StationsCraftable)
+				if (tier <= 0 || plan.Ingredients[i] == null || plan.Repaired[i] || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i) || SpecialRecipe(plan, i) || RecipePlanner.StationRecipe(i)) continue;
 				checkedCount++;
 				byTier[tier] = byTier.GetValueOrDefault(tier) + 1;
 				string where = $"{Name(RecipeSystem.OriginalResult(i))} -> {Name(plan.Results[i].type)} (tier {tier}: {Ingredients(plan.Ingredients[i])})";
@@ -1234,7 +1309,8 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (!RecipeSystem.Touchable(i) || Main.recipe[i].Disabled) continue;
 				int u = plan.ResultTiers[i];
-				int expectedU = ItemPool.IsSpecial(results[i]) ? Protection.UpgradeTier(results[i]) : Tiers.Clamp(ItemPool.UnlockTierOf(results[i]));
+				// A crafting station is not locked: its recipe is planned for its tier (RecipePlanner.StationRecipe)
+				int expectedU = RecipePlanner.StationRecipe(i) ? 0 : ItemPool.IsSpecial(results[i]) ? Protection.UpgradeTier(results[i]) : Tiers.Clamp(ItemPool.UnlockTierOf(results[i]));
 				if (u != expectedU) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: result tier {u}, {expectedU} expected for {Name(results[i])}");
 				if (plan.KeyIngredient[i]) keys++;
 				if (plan.SwapPartner[i] >= 0) swapped++;
@@ -1630,14 +1706,16 @@ namespace UltimateRandomizer.Common.Tests
 				int found = Findability.Tier(item);
 				int unlock = ItemPool.UnlockTierOf(item);
 				bool upgrade = ItemPool.IsSpecial(item);
+				// A station's shell is its recipe, planned for the station's tier (StationsCraftable), keyed when it can be
+				bool station = RecipePlanner.StationShell(i);
 				if (upgrade && tier != Protection.UpgradeTier(item)) failures.Add($"{where}: tier {tier}, the upgrade's tier is {Protection.UpgradeTier(item)}");
-				if (!upgrade && (found < Findability.Never && tier < Math.Min(found, Tiers.Max) || tier < Math.Min(unlock, Tiers.Max))) failures.Add($"{where}: tier {tier}, found at {Show(found)}, unlocked at {unlock}");
+				if (!upgrade && !station && (found < Findability.Never && tier < Math.Min(found, Tiers.Max) || tier < Math.Min(unlock, Tiers.Max))) failures.Add($"{where}: tier {tier}, found at {Show(found)}, unlocked at {unlock}");
 				if (doable[i] >= Findability.Never) failures.Add($"{where}: never doable");
-				else if (doable[i] < tier) failures.Add($"{where}: doable at {doable[i]}, before its tier {tier}");
+				else if (doable[i] < tier && !station) failures.Add($"{where}: doable at {doable[i]}, before its tier {tier}");
 				if (Terraria.GameContent.ShimmerTransforms.GetDecraftingRecipeIndex(item) == i || (ItemID.Sets.CraftingRecipeIndices[item]?.Contains(i) ?? false)) failures.Add($"{where}: shimmers back");
 			}
 			// The upgrades' shells are their recipes (planned whatever the setting): in both
-			bool[] noShells = Enumerable.Range(0, Count).Select(i => RecipeSystem.IsShell(i) && !ItemPool.IsSpecial(RecipeSystem.OriginalResult(i)) || (i < plan.Twin.Length && plan.Twin[i])).ToArray();
+			bool[] noShells = Enumerable.Range(0, Count).Select(i => RecipeSystem.IsShell(i) && !ItemPool.IsSpecial(RecipeSystem.OriginalResult(i)) && !RecipePlanner.StationShell(i) || (i < plan.Twin.Length && plan.Twin[i])).ToArray();
 			int[] withShells = RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out _, plan.Twin);
 			int[] without = RecipePlanner.Availability(Findability.Tier, results, new int[results.Length], ingredients, tiles, out int[] doableWithout, noShells);
 			for (int i = 0; i < Count; i++)
@@ -1648,7 +1726,7 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (int i in active)
 			{
 				int item = results[i];
-				if (!ItemPool.IsSpecial(item) && without[item] < Findability.Never && withShells[item] < without[item]) failures.Add($"{Name(item)}: had at {withShells[item]} with its shell, {without[item]} without");
+				if (!ItemPool.IsSpecial(item) && !RecipePlanner.StationShell(i) && without[item] < Findability.Never && withShells[item] < without[item]) failures.Add($"{Name(item)}: had at {withShells[item]} with its shell, {without[item]} without");
 			}
 			if (eligible == 0) Check.Skip("no item may get a shell recipe");
 			Check.That(active.Count > 0, $"none of the {eligible} eligible shells is switched on");
@@ -1677,8 +1755,8 @@ namespace UltimateRandomizer.Common.Tests
 				if (RecipeSystem.IsShell(i))
 				{
 					shells++;
-					// The upgrades' shells are their recipes: planned whatever the setting
-					bool upgrade = ItemPool.IsSpecial(RecipeSystem.OriginalResult(i));
+					// The upgrades' and the stations' shells are their recipes: planned whatever the setting
+					bool upgrade = ItemPool.IsSpecial(RecipeSystem.OriginalResult(i)) || RecipePlanner.StationShell(i);
 					if (!upgrade && (RecipePlanner.ShellActive(off, i) || off.Tiles[i] != null)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: shell planned with the setting off");
 					if (upgrade && RecipePlanner.ShellActive(on, i) != RecipePlanner.ShellActive(off, i)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: upgrade shell planned with the setting on only");
 					continue;
@@ -1798,7 +1876,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (plan.Ingredients[i] == null || plan.IngredientTiers[i] < 0 || plan.Repaired[i] || plan.Twin[i] || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i)) continue;
 				// Protected results, upgrades and stations keep their vanilla level (RecipePlanner.ResultFloor)
 				if (!ItemPool.IsRandomizable(item) || ItemPool.IsSpecial(item)) continue;
-				if (Stations.PlacedTile(item, out int tile) && Stations.Info(tile).Kind is StationKind.Basic or StationKind.Progression) continue;
+				if (Stations.PlacedTile(item, out int tile) && Stations.Info(tile).Kind is StationKind.Basic or StationKind.Progression || RecipePlanner.StationRecipe(i)) continue;
 				int floor = Tiers.Clamp(Math.Max(ItemPool.Info[item].Tier, ItemPool.Info[item].TrueTier));
 				string where = $"{Name(RecipeSystem.OriginalResult(i))}{(plan.SwapPartner[i] >= 0 ? " -> " + Name(item) : "")} (tier {floor}, T {plan.IngredientTiers[i]}, " +
 					$"key {(plan.PlannedKeys[i] > 0 ? Name(plan.PlannedKeys[i]) : "none")}): doable at {Show(doable[i])} ({Ingredients(plan.Ingredients[i])})";

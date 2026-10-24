@@ -143,23 +143,49 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Items per kill");
 		}
 
-		// The first work bench is a small quest: 15 to 30 minutes on average (guaranteed drops: LootAbundance does not change it)
+		// The work bench is a small quest: its recipe, rebuilt from materials found at tier 0 and made by hand, is the
+		// main way (the first one comes as soon as its ingredients are gathered); its guardian, the Forest enemy the early kills
+		// meet most, is the backup. From the model, with StationGuardianChance 12.5 %: a guardian making a third of the early
+		// kills (the slimes' slot) gives one in about 6 minutes, one making a tenth in about 20; MaxGuardianBenchMinutes leaves
+		// room for a Forest whose most met enemy is rarer. Both are logged (the guardian's time with a few fixed chances)
+		public const double MaxGuardianBenchMinutes = 60;
+
 		private static void WorkBenchPacing()
 		{
 			if (!GuaranteedSources.StationRequirements().Any(r => r.Item == ItemID.WorkBench)) Check.Skip("the work bench is protected");
 			double minutes = PacingModel.MinutesToFirstWorkBench(400, 45);
 			List<int> hosts = GuaranteedSources.HostsOf(ItemID.WorkBench).ToList();
 			float planned = hosts.Count > 0 ? GuaranteedSources.For(hosts[0]).Where(d => d.Item == ItemID.WorkBench).Sum(d => d.Chance) : 0;
-			// The same hosts with fixed chances, to see how the time follows the chance (the planned one comes from the model)
-			string candidates = string.Join(", ", new[] { 20, 30, 40, 50, 60 }.Select(d => $"1/{d}: {PacingModel.MinutesToFirstWorkBench(400, 45, 1f / d):0}"));
+			// The same guardian with fixed chances, to see how the time follows the chance
+			string candidates = string.Join(", ", new[] { 5f, 12.5f, 25f }.Select(c => $"{c}%: {PacingModel.MinutesToFirstWorkBench(400, 45, c / 100f):0}"));
 			int biome = GuaranteedSources.BiomeOf(ItemID.WorkBench);
-			Log($"First work bench: {minutes:0} minutes on average (chance {planned:P1} on {string.Join(", ", hosts.Select(Lang.GetNPCNameValue))}"
-				+ $"{(biome >= 0 ? " in " + BiomeSlots.BiomeName(biome) : "")}, "
-				+ $"{PacingModel.EarlyKillShare(hosts.Contains):P1} of the early kills; fixed chances {candidates})");
+			// Its recipe: made by hand at tier 0 without any guardian (RecipePlanner.StationRecipeTiers)
+			string recipe = "not randomized";
+			int crafted = Findability.Never;
+			bool byHand = false;
+			if (RecipeSystem.Applied)
+			{
+				RecipePlan plan = RecipePlanner.Get();
+				crafted = RecipePlanner.StationRecipeTiers(plan).GetValueOrDefault(ItemID.WorkBench, Findability.Never);
+				int count = Math.Min(RecipeSystem.RecipeCount, plan.Results.Length);
+				List<int> benches = Enumerable.Range(0, count).Where(i => plan.Results[i].type == ItemID.WorkBench && !Main.recipe[i].Disabled && !plan.Twin[i]).ToList();
+				// By hand, and from start materials only (no ore: before any mining)
+				HashSet<int> start = RecipePlanner.StartMaterials(false);
+				byHand = benches.Any(i => (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Length == 0
+					&& (plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).All(x => start.Contains(x.type)));
+				recipe = benches.Count == 0 ? "none" : string.Join("; ", benches.Select(i => string.Join(", ", (plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)).Select(x => $"{x.stack} {Lang.GetItemNameValue(x.type)}"))
+					+ ((plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Length == 0 ? " by hand" : " at " + string.Join("+", (plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i)).Select(Stations.Name)))));
+			}
+			Log($"First work bench: recipe {recipe} (crafted at tier {(crafted == Findability.Never ? "never" : crafted.ToString())}); guardian alone {minutes:0} minutes on average (chance {planned:P1} on "
+				+ $"{string.Join(", ", hosts.Select(Lang.GetNPCNameValue))}{(biome >= 0 ? " in " + BiomeSlots.BiomeName(biome) : "")}, {PacingModel.EarlyKillShare(hosts.Contains):P1} of the early kills; "
+				+ $"fixed chances {candidates}); target: by hand at tier 0, guardian within {MaxGuardianBenchMinutes:0} minutes");
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			if (!IsDefault(progression, "GuaranteedDropMultiplier") || !IsDefault(progression, "PotGuaranteeChance")) Check.Skip("guarantee settings are not the default ones");
+			if (!IsDefault(progression, "StationGuardianChance")) Check.Skip("StationGuardianChance is not at its default value");
 			RequireDefaults();
-			Check.That(minutes >= 15 && minutes <= 30, $"first work bench after {minutes:0} minutes on average, expected 15 to 30");
+			List<string> failures = new();
+			if (RecipeSystem.Applied && CraftingConfig.Instance.IngredientMode == IngredientMode.Randomized && (crafted != 0 || !byHand)) failures.Add($"the work bench's recipe is not made by hand at tier 0 from start materials ({recipe})");
+			if (minutes > MaxGuardianBenchMinutes) failures.Add($"its guardian alone gives one after {minutes:0} minutes on average, at most {MaxGuardianBenchMinutes:0}");
+			Check.All(failures, "First work bench");
 		}
 
 		// Jackpots per early hour (luck and madness of the kills, with their share of the progression), logged; bounded before

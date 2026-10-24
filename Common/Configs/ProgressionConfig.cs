@@ -152,11 +152,19 @@ namespace UltimateRandomizer.Common.Configs
 		public StationProtection StationProtection;
 
 		[Header("Guarantees")]
-		// Chance multiplier of the drops placed on common enemies so that unprotected stations can be found
+		// Chance multiplier of the drops placed on common enemies so that unprotected summons and tools can be found (not the
+		// station guardians: StationGuardianChance)
 		[Range(0.25f, 4f)]
 		[Increment(0.25f)]
 		[DefaultValue(1f)]
 		public float GuaranteedDropMultiplier;
+
+		// With randomized recipes, each crafting station is made from its recipe, or dropped by its single guardian enemy with
+		// this chance per kill (%), a tenth of it once the station has been obtained in the world (GuaranteedSources)
+		[Range(1f, 100f)]
+		[Increment(0.5f)]
+		[DefaultValue(12.5f)]
+		public float StationGuardianChance;
 
 		// Each guaranteed item is carried by the enemies of one biome, the most met first, up to this many (the same chance
 		// on each, see GuaranteedSources.Assign)
@@ -164,12 +172,12 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(6)]
 		public int GuaranteedHostsPerItem;
 
-		// Kills in its biome to find a guaranteed station, summon or tool on average, all its enemies together
+		// Kills in its biome to find a guaranteed summon or tool on average, all its enemies together
 		[Range(20, 300)]
 		[DefaultValue(60)]
 		public int StationFindKills;
 
-		// Chance that a pot also gives one of the guaranteed items (basic stations...) already unlocked and not found yet
+		// Chance that a pot also gives one of the guaranteed items (pickaxes, early materials) already unlocked and not found yet
 		[Range(0f, 20f)]
 		[Increment(0.1f)]
 		[DefaultValue(0.3f)]
@@ -179,11 +187,6 @@ namespace UltimateRandomizer.Common.Configs
 		// the number of players (more players kill more enemies)
 		[DefaultValue(true)]
 		public bool ScaleGuaranteesWithPlayers;
-
-		// Copies of each basic station hidden in wooden chests when the world is created
-		[Range(0, 5)]
-		[DefaultValue(1)]
-		public int ChestStationGuarantee;
 
 		// A drop counts as a way to find an item (recipe ingredients...) when its chance is at least this (%)
 		[Range(0.1f, 20f)]
