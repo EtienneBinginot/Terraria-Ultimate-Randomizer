@@ -68,9 +68,10 @@ namespace UltimateRandomizer.Common.Features
 		}
 	}
 
-	// One shop slot as planned: the original item, what replaces it (0 when left as it is), its price, and whether it is an
-	// added slot selling a shop-only item (ShopPermutation, Original 0) rather than a roll
-	public readonly record struct ShopSlot(int Original, int Replacement, int Price, bool Guaranteed = false)
+	// One shop slot as planned: the original item, what replaces it (0 when left as it is), its price, whether it is an
+	// added slot selling a shop-only item (ShopPermutation, Original 0) rather than a roll, and whether its roll was a
+	// category surprise (ShopSurpriseChance)
+	public readonly record struct ShopSlot(int Original, int Replacement, int Price, bool Guaranteed = false, bool Surprise = false)
 	{
 		public bool Replaced => Replacement > 0;
 	}
@@ -89,10 +90,14 @@ namespace UltimateRandomizer.Common.Features
 		// another tab of the merchant sells, OwnTab), a merchant beyond the item's share of shops (Spread), an item worth more
 		// than its tier affords (PriceRules.Overpriced); when every roll breaks a rule, another item of its category that
 		// breaks fewer. Weapons, armor, accessories and tools never go above the unlocked tier (no post-Moon Lord hamaxe
-		// before the Moon Lord), unless the vanilla entry itself is of a later tier
+		// before the Moon Lord), unless the vanilla entry itself is of a later tier. A share of the slots (surpriseChance, in
+		// percent: ShopSurpriseChance when null) rolls its category with the loot weights instead: a surprise never sells a bag,
+		// nor gear above the unlocked tier (whatever the original was), and falls back to the original's category when none
+		// of its rolls fits (Surprise: the slot kept one)
 		public static ShopSlot[] PlanShop(int npcType, string shopName, IList<int> originalTypes, int unlockedTier, bool hardMode, bool followProgression, bool noDuplicates,
-			IEnumerable<int> avoid = null)
+			IEnumerable<int> avoid = null, float? surpriseChance = null)
 		{
+			float surpriseShare = surpriseChance ?? EconomyConfig.Instance.ShopSurpriseChance;
 			int npcKey = DetRandom.NpcKey(npcType);
 			int shopKey = DetRandom.StableHash(shopName ?? "");
 			// Shuffle mode: the permutation keeps every item somewhere, only the duplicates are re-rolled (as they always were)
@@ -123,29 +128,41 @@ namespace UltimateRandomizer.Common.Features
 				int? maxTier = followProgression && WithinUnlockedTier(ItemPool.Info[original].Category) ? Math.Max(unlockedTier, originalTier) : null;
 				int replacement = original;
 				int penalty = int.MaxValue;
-				for (int attempt = 0; attempt < Attempts; attempt++)
+				// Its own stream, from the slot's identity only (never the progression): the same slots are surprises all game
+				bool surprise = !shuffle && ItemPool.IsSurprise(original, surpriseShare,
+					DetRandom.Get(RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), RollKey.Surprise));
+				bool surprised = false;
+				// A surprise slot first (pass 0), then the original's category when none of its rolls is acceptable
+				for (int pass = surprise ? 0 : 1; pass < 2 && !surprised && penalty > 0; pass++)
 				{
-					RollRequest request = new()
+					for (int attempt = 0; attempt < Attempts; attempt++)
 					{
-						Keys = new[] { RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), attempt },
-						SourceTier = Tiers.Clamp(sourceTier),
-						OriginalItem = original,
-						Policy = CategoryPolicy.SameAsOriginal,
-						TierJitterDown = 0,
-						TierJitterUp = TierJitterUp,
-						AllowJackpot = false,
-						GatingTier = unlockedTier,
-						GatingHardMode = hardMode,
-						MaxTier = maxTier
-					};
-					int rolled = ItemPool.Roll(request);
-					int p = Penalty(rolled);
-					if (p < penalty)
-					{
-						replacement = rolled;
-						penalty = p;
+						RollRequest request = new()
+						{
+							Keys = pass == 0 ? new[] { RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), attempt, RollKey.Surprise }
+								: new[] { RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), attempt },
+							SourceTier = Tiers.Clamp(sourceTier),
+							OriginalItem = original,
+							Policy = pass == 0 ? CategoryPolicy.Weighted : CategoryPolicy.SameAsOriginal,
+							TierJitterDown = 0,
+							TierJitterUp = TierJitterUp,
+							AllowJackpot = false,
+							GatingTier = unlockedTier,
+							GatingHardMode = hardMode,
+							// A surprise category empty at that tier would look higher: never above the jitter
+							MaxTier = pass == 0 ? Math.Min(maxTier ?? Tiers.Max, Tiers.Clamp(sourceTier) + TierJitterUp) : maxTier
+						};
+						int rolled = ItemPool.Roll(request);
+						if (pass == 0 && !SurpriseFits(rolled, unlockedTier, followProgression)) continue;
+						int p = Penalty(rolled);
+						if (p < penalty)
+						{
+							replacement = rolled;
+							penalty = p;
+							surprised = pass == 0;
+						}
+						if (penalty == 0) break;
 					}
-					if (penalty == 0) break;
 				}
 				// The progression limits leave few items of a category (late potions, late furniture): another item of its
 				// category, no later than it, from its tier down, that breaks no rule, else fewer rules, else no duplicate (another
@@ -160,9 +177,20 @@ namespace UltimateRandomizer.Common.Features
 					penalty = Penalty(other);
 				}
 				used.Add(replacement);
-				slots[i] = new ShopSlot(original, replacement, Price(npcKey, shopKey, replacement));
+				slots[i] = new ShopSlot(original, replacement, Price(npcKey, shopKey, replacement), Surprise: surprised && ItemPool.IsValid(replacement)
+					&& ItemPool.Info[replacement].Category != ItemPool.Info[original].Category);
 			}
 			return slots;
+		}
+
+		// A surprise sells no bag (a boss bag bought again and again), and no gear above the unlocked tier: the original's
+		// exception (a vanilla entry of a later tier) is for its own category only
+		public static bool SurpriseFits(int item, int unlockedTier, bool followProgression)
+		{
+			if (!ItemPool.IsValid(item)) return false;
+			ItemCategory category = ItemPool.Info[item].Category;
+			if (category == ItemCategory.Bag) return false;
+			return !followProgression || !WithinUnlockedTier(category) || ItemPool.TrueTierOf(item) <= unlockedTier;
 		}
 
 		// The categories a shop never sells above the unlocked tier: what makes a fight easier

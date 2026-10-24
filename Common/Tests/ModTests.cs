@@ -21,6 +21,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ModdedItemsInPool", ModdedItemsInPool);
 			TestRunner.Register("ModdedDropsPermuted", ModdedDropsPermuted);
 			TestRunner.Register("ModdedStationsTiered", ModdedStationsTiered);
+			TestRunner.Register("ModdedProgressionGuaranteed", ModdedProgressionGuaranteed);
 		}
 
 		private static string Name(int item) => Lang.GetItemNameValue(item);
@@ -238,9 +239,55 @@ namespace UltimateRandomizer.Common.Tests
 			Log($"ModdedDropsPermuted: no modded table, synthetic places checked ({groups.Count} groups, access \"{access}\")");
 		}
 
+		// Other mods' boss summons and stations are treated like the vanilla ones: a summon whose tier is estimated
+		// (Protection.ModdedSummonTierKnown) is unprotected unless AutoProtectBossSummons, and when randomizable it is a
+		// guarantee at its summon tier with hosts; one whose tier is unknown stays protected. A modded progression or themed
+		// station is protected only by StationProtection, else a guarantee (a station quest with randomized recipes)
+		private static void ModdedProgressionGuaranteed()
+		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			ProgressionConfig cfg = ProgressionConfig.Instance;
+			List<int> summons = Enumerable.Range(ItemID.Count, Math.Max(0, ItemPool.Info.Length - ItemID.Count)).Where(Protection.IsBossSummon).ToList();
+			List<int> stationTiles = Stations.RequiredTiles().Where(t => Stations.IsModded(t) && !Stations.Info(t).World && Stations.Info(t).Kind is StationKind.Progression or StationKind.Thematic).ToList();
+			if (summons.Count == 0 && stationTiles.Count == 0) Check.Skip("no modded boss summon nor crafting station");
+			HashSet<int> listed = cfg.ProtectedItems.Where(d => d != null && !d.IsUnloaded).Select(d => d.Type).ToHashSet();
+			List<string> failures = new();
+			List<string> shown = new();
+			foreach (int item in summons)
+			{
+				ItemInfo info = ItemPool.Info[item];
+				if (info.Excluded || listed.Contains(item)) continue;
+				bool known = Protection.ModdedSummonTierKnown(item);
+				if (cfg.AutoProtectBossSummons || !known)
+				{
+					if (!info.Protected) failures.Add($"{Name(item)}: not protected ({(known ? "AutoProtectBossSummons" : "tier unknown")})");
+					continue;
+				}
+				if (info.Protected) failures.Add($"{Name(item)}: protected although its tier is estimated");
+				if (!ItemPool.IsRandomizable(item)) continue;
+				GuaranteedSources.Requirement r = GuaranteedSources.Requirements.FirstOrDefault(x => x.Item == item);
+				if (r.Item != item) failures.Add($"{Name(item)}: not guaranteed");
+				else if (!GuaranteedSources.HostsOf(item).Any()) failures.Add($"{Name(item)}: guaranteed at tier {r.Tier} without a host");
+				else if (shown.Count < 8) shown.Add($"{Name(item)} (tier {r.Tier}, {GuaranteedSources.HostsOf(item).Count()} hosts)");
+			}
+			foreach (int tile in stationTiles)
+			{
+				List<int> placers = Stations.Placers(tile).Where(p => ItemPool.IsValid(p) && !ItemPool.Info[p].Excluded && !listed.Contains(p)).ToList();
+				if (placers.Count == 0 || cfg.StationProtection != StationProtection.None) continue;
+				if (placers.Any(p => ItemPool.Info[p].Protected)) failures.Add($"{Stations.Name(tile)}: placer protected");
+				int item = GuaranteedSources.StationItem(tile);
+				if (item <= 0) continue;
+				if (!GuaranteedSources.Requirements.Any(x => x.Item == item)) failures.Add($"{Stations.Name(tile)}: {Name(item)} not guaranteed");
+				else if (shown.Count < 12) shown.Add($"{Stations.Name(tile)} ({Stations.Info(tile).Kind}, tier {Stations.Info(tile).Tier})");
+			}
+			Log($"ModdedProgressionGuaranteed: {summons.Count} modded summons, {stationTiles.Count} modded stations; e.g. {string.Join(", ", shown)}");
+			Check.All(failures, "Modded summons and stations");
+		}
+
 		// Every modded station some recipe needs is known (themed, or progression when many recipes need it) at its item's true
-		// tier; a progression one is protected, a themed one guaranteed when stations are not protected; a recipe given a
-		// modded station it did not have gets a progression one of its tier or below
+		// tier; both are guaranteed (station quests) when stations are not protected (StationProtection), like the vanilla
+		// ones; a recipe given a modded station it did not have gets a progression one of its tier or below, or a themed one
+		// (only an ordinary recipe: never a station's nor a house's)
 		private static void ModdedStationsTiered()
 		{
 			List<int> tiles = Stations.RequiredTiles().Where(Stations.IsModded).OrderBy(t => t).ToList();
@@ -259,7 +306,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (placers.Count == 0) continue;
 				int expected = placers.Min(ItemPool.TrueTierOf);
 				if (info.Tier != expected) failures.Add($"{name}: tier {info.Tier}, its item says {expected}");
-				bool shouldProtect = info.Kind == StationKind.Progression || cfg.StationProtection != StationProtection.None;
+				bool shouldProtect = cfg.StationProtection != StationProtection.None;
 				foreach (int placer in placers)
 				{
 					bool isProtected = ItemPool.Info[placer].Protected;
@@ -282,7 +329,11 @@ namespace UltimateRandomizer.Common.Tests
 					foreach (int tile in plan.Tiles[i].Where(t => Stations.IsModded(t) && !RecipeSystem.OriginalTiles(i).Contains(t)))
 					{
 						Stations.StationInfo info = Stations.Info(tile);
-						if (info.Kind != StationKind.Progression || info.Tier > RecipePlanner.RecipeTier(i))
+						if (info.Kind == StationKind.Thematic)
+						{
+							if (RecipePlanner.StationRecipe(i) || RecipeSystem.HouseRecipe(i)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} (a station or a house) got the themed {Stations.Name(tile)}");
+						}
+						else if (info.Kind != StationKind.Progression || info.Tier > RecipePlanner.RecipeTier(i))
 						{
 							failures.Add($"{Name(RecipeSystem.OriginalResult(i))} (tier {RecipePlanner.RecipeTier(i)}) got {Stations.Name(tile)} ({info.Kind}, tier {info.Tier})");
 						}

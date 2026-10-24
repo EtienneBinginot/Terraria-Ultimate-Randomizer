@@ -53,6 +53,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("CraftedValueFromIngredients", CraftedValueFromIngredients);
 			TestRunner.Register("ShimmerNoMoneyLoop", ShimmerNoMoneyLoop);
 			TestRunner.Register("ShimmerLiveNoMoneyLoop", ShimmerLiveNoMoneyLoop);
+			TestRunner.Register("ShimmerTransmutationRules", ShimmerTransmutationRules);
+			TestRunner.Register("StationIngredientsRare", StationIngredientsRare);
 			TestRunner.Register("ProtectedRecipesDoable", ProtectedRecipesDoable);
 			TestRunner.Register("RecipeKeyIngredient", RecipeKeyIngredient);
 			TestRunner.Register("RecipeNoStationTwins", RecipeNoStationTwins);
@@ -556,7 +558,13 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int tile in plan.Tiles[i])
 				{
 					Stations.StationInfo info = Stations.Info(tile);
-					if (info.Kind is StationKind.Thematic or StationKind.Unknown && !RecipeSystem.OriginalTiles(i).Contains(tile)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} got {Stations.Name(tile)}");
+					bool given = !RecipeSystem.OriginalTiles(i).Contains(tile);
+					if (info.Kind == StationKind.Unknown && given) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} got {Stations.Name(tile)}");
+					// A themed station: only to an ordinary recipe, and only one found without crafting
+					if (info.Kind == StationKind.Thematic && given && (RecipePlanner.StationRecipe(i) || RecipeSystem.HouseRecipe(i) || RecipePlanner.FoundTier(tile) >= Findability.Never))
+					{
+						failures.Add($"{Name(RecipeSystem.OriginalResult(i))} got the themed {Stations.Name(tile)}");
+					}
 					if (info.Kind == StationKind.Progression && info.Tier > RecipePlanner.RecipeTier(i)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} needs {Stations.Name(tile)} (tier {info.Tier})");
 				}
 			}
@@ -1218,6 +1226,139 @@ namespace UltimateRandomizer.Common.Tests
 		// An item crafted cheaply (a crafted unit value) never shimmers into more money than it was worth: whatever the vanilla
 		// value of what it gives (a randomized transformation up to 3 times its own, decrafted ingredients), the stack it gives
 		// sells for at most the input's value, and an item without crafted value gives vanilla-valued items. Pure
+		// The shimmer plan (ShimmerSystem.PickTransformation) of every vanilla transmutation, at several progressions, with
+		// explicit chances: never worth more than its value cap, never above the original result's tier + the jitter, nothing
+		// above the hardmode wall before hardmode, no bag from a surprise, the same result twice; at 0 % no surprise and (almost)
+		// always the original result's category; at 25 % about that share of surprises, most of them in another category
+		private static void ShimmerTransmutationRules()
+		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("shuffle or chaos mode");
+			List<string> failures = new();
+			int pairs = 0, surprises = 0, surpriseChanged = 0, plainChanged = 0, plain = 0;
+			for (int type = 1; type < ItemPool.Info.Length; type++)
+			{
+				int target = ShimmerSystem.OriginalTransform(type);
+				if (target <= 0 || !ItemPool.IsRandomizable(type) || !ItemPool.IsRandomizable(target)) continue;
+				if (ShimmerSystem.IsSurprise(type, target, 0f)) failures.Add($"{Name(type)}: a surprise at 0 %");
+				bool surprise = ShimmerSystem.IsSurprise(type, target, 25f);
+				pairs++;
+				if (surprise) surprises++;
+				long cap = ShimmerSystem.MaxValue(type, target);
+				int tierCap = ItemPool.Info[target].Tier + ShimmerSystem.TierJitterUp;
+				foreach ((int tier, bool hardMode) in new[] { (0, false), (3, false), (5, true), (9, true) })
+				{
+					string where = $"{Name(type)} at tier {tier}";
+					foreach (float chance in new[] { 0f, 25f })
+					{
+						int result = ShimmerSystem.PickTransformation(type, target, chance, tier, hardMode);
+						if (result != ShimmerSystem.PickTransformation(type, target, chance, tier, hardMode)) failures.Add($"{where}: not the same result twice");
+						if (result == target) continue;
+						if (StackRules.ValueOf(result) > cap) failures.Add($"{where}: {Name(result)} worth {StackRules.ValueOf(result)}, cap {cap}");
+						if (ItemPool.TierOf(result) > tierCap) failures.Add($"{where}: {Name(result)} of tier {ItemPool.TierOf(result)}, above {tierCap}");
+						if (!hardMode && ItemPool.TrueTierOf(result) > ItemPool.PreHardmodeCap) failures.Add($"{where}: {Name(result)} of true tier {ItemPool.TrueTierOf(result)} before hardmode");
+						bool changed = ItemPool.Info[result].Category != ItemPool.Info[target].Category;
+						if (chance > 0 && surprise)
+						{
+							if (ItemPool.Info[result].Category == ItemCategory.Bag) failures.Add($"{where}: the bag {Name(result)}");
+							if (tier == 0 && changed) surpriseChanged++;
+						}
+						else if (tier == 0)
+						{
+							plain++;
+							if (changed) plainChanged++;
+						}
+					}
+				}
+			}
+			if (pairs == 0) Check.Skip("no randomizable transmutation");
+			double share = surprises / (double)pairs;
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ShimmerTransmutationRules: {pairs} transmutations, {surprises} surprises at 25 % ({share:P1}), " +
+				$"{surpriseChanged} in another category at tier 0; {plainChanged} of {plain} plain ones in another category; setting {CraftingConfig.Instance.ShimmerSurpriseChance} %");
+			if (pairs >= 60 && (share < 0.10 || share > 0.40)) failures.Add($"{share:P1} of the transmutations are surprises at 25 %");
+			if (surprises >= 20 && surpriseChanged < surprises / 2) failures.Add($"only {surpriseChanged} of {surprises} surprises in another category");
+			if (plain > 0 && plainChanged > Math.Max(3, plain / 20)) failures.Add($"{plainChanged} of {plain} plain transmutations in another category");
+			Check.All(failures, "Shimmer transmutations");
+		}
+
+		// Guaranteed crafting stations as new ingredients (RecipePlanner.StationIngredientWeight): rare (at most
+		// StationIngredientUses recipes per station, at most 3 % of the rebuilt recipes), never in a station's recipe nor a
+		// house's, never a key, and never in a loop: no item made from the recipe's result (ingredients, and every recipe made
+		// at a station whose main placer is had: the basic station's item, the guaranteed one, else any) leads back to the
+		// station, in the live plan
+		private static void StationIngredientsRare()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			HashSet<int> stationItems = RecipePlanner.GuaranteedStationItems();
+			if (stationItems.Count == 0) Check.Skip("no guaranteed station");
+			// Edges of the final plan: each ingredient and the main placer of each station to the result (another item placing
+			// a Work Bench, such as a themed bench, is no way to the station for the others)
+			Dictionary<int, List<int>> placers = Stations.PlacersByTile();
+			Dictionary<int, HashSet<int>> next = new();
+			void Edge(int from, int to)
+			{
+				if (from <= 0 || to <= 0) return;
+				if (!next.TryGetValue(from, out HashSet<int> set)) next[from] = set = new HashSet<int>();
+				set.Add(to);
+			}
+			for (int i = 0; i < Count; i++)
+			{
+				if (plan.Twin[i] || RecipeSystem.VanillaDisabled(i)) continue;
+				int made = plan.Results[i].type;
+				foreach ((int type, _) in plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i)) Edge(type, made);
+				foreach (int tile in plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i))
+				{
+					foreach (int p in RecipePlanner.MainPlacers(tile, placers)) Edge(p, made);
+				}
+			}
+			bool Leads(int from, int to)
+			{
+				HashSet<int> seen = new() { from };
+				Stack<int> todo = new();
+				todo.Push(from);
+				while (todo.Count > 0)
+				{
+					if (!next.TryGetValue(todo.Pop(), out HashSet<int> set)) continue;
+					foreach (int x in set)
+					{
+						if (x == to) return true;
+						if (seen.Add(x)) todo.Push(x);
+					}
+				}
+				return false;
+			}
+			List<string> failures = new();
+			Dictionary<int, int> uses = new();
+			int rebuilt = 0, using_ = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				if (plan.Ingredients[i] == null) continue;
+				rebuilt++;
+				HashSet<int> original = RecipeSystem.OriginalIngredients(i).Select(p => p.type).ToHashSet();
+				List<int> stations = plan.Ingredients[i].Select(p => p.type).Where(t => stationItems.Contains(t) && !original.Contains(t)).ToList();
+				if (stations.Count == 0) continue;
+				using_++;
+				int result = plan.Results[i].type;
+				foreach (int station in stations)
+				{
+					uses[station] = uses.GetValueOrDefault(station) + 1;
+					string where = $"{Name(result)} needs {Name(station)}";
+					if (RecipePlanner.StationRecipe(i) || RecipeSystem.HouseRecipe(i)) failures.Add($"{where} (a station's or a house's recipe)");
+					if (plan.PlannedKeys[i] == station) failures.Add($"{where} as its key");
+					if (Leads(result, station)) failures.Add($"{where}, which needs it back");
+				}
+			}
+			foreach ((int station, int n) in uses)
+			{
+				if (n > RecipePlanner.StationIngredientUses) failures.Add($"{Name(station)} in {n} recipes");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"StationIngredientsRare: {using_} of {rebuilt} rebuilt recipes need a station; " +
+				string.Join(", ", uses.OrderByDescending(p => p.Value).Take(8).Select(p => $"{Name(p.Key)} x{p.Value}")));
+			if (rebuilt >= 200 && using_ > rebuilt * 0.03) failures.Add($"{using_} of {rebuilt} rebuilt recipes need a station");
+			Check.All(failures, "Stations as ingredients");
+		}
+
 		private static void ShimmerNoMoneyLoop()
 		{
 			List<string> failures = new();

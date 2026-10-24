@@ -1,4 +1,5 @@
 using System;
+using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
@@ -6,7 +7,9 @@ using UltimateRandomizer.Common.Core;
 
 namespace UltimateRandomizer.Common.Features
 {
-	// Shimmer transmutations: each existing transformation gives another item of the same category and tier
+	// Shimmer transmutations: each existing transformation gives another item of the same category, of its tier or one above
+	// (within the progression limit), or for a share of them (ShimmerSurpriseChance) of any category. Applied on every machine
+	// from the seed, the synced settings and the synced progression (boss flags, hardmode), so all agree
 	public class ShimmerSystem : ModSystem
 	{
 		private static int[] original;
@@ -48,33 +51,54 @@ namespace UltimateRandomizer.Common.Features
 					set[type] = target;
 					continue;
 				}
-				set[type] = PickTransformation(type, target);
+				set[type] = PickTransformation(type, target, CraftingConfig.Instance.ShimmerSurpriseChance, ProgressionSystem.UnlockedTier, Main.hardMode);
 			}
 			applied = true;
 		}
 
-		// Same category and tier as the original result, and never worth much more (no shimmer money machine)
-		private static int PickTransformation(int type, int target)
+		public const int TierJitterUp = 1;
+
+		// Is this transmutation a category surprise (its own stream: the same for every attempt and every progression)?
+		public static bool IsSurprise(int type, int target, float surpriseChance) =>
+			ItemPool.IsSurprise(target, surpriseChance, DetRandom.Get(RollKey.Shimmer, DetRandom.ItemKey(type), RollKey.Surprise));
+
+		// The value cap of a transmutation: never worth much more than the item or its vanilla result (no shimmer money machine)
+		public static long MaxValue(int type, int target) => Math.Max(StackRules.ValueOf(target), StackRules.ValueOf(type)) * 3L + Item.silver;
+
+		// Pure (seed, settings, the given progression): the original result's tier or one above, gated like any roll (the
+		// progression limit and its allowance, never below the original result's own tier: the player already holds an item
+		// of that level), never above the hardmode wall before hardmode, never worth more than MaxValue. A surprise
+		// (surpriseChance) draws its category with the loot weights; when none of its attempts fits, the same category is tried
+		public static int PickTransformation(int type, int target, float surpriseChance, int unlockedTier, bool hardMode)
 		{
-			long maxValue = Math.Max(StackRules.ValueOf(target), StackRules.ValueOf(type)) * 3L + Terraria.Item.silver;
-			for (int attempt = 0; attempt < 6; attempt++)
+			long maxValue = MaxValue(type, target);
+			bool surprise = IsSurprise(type, target, surpriseChance);
+			int targetTier = ItemPool.Info[target].Tier;
+			for (int pass = surprise ? 0 : 1; pass < 2; pass++)
 			{
-				RollRequest request = new()
+				for (int attempt = 0; attempt < 6; attempt++)
 				{
-					Keys = new[] { RollKey.Shimmer, DetRandom.ItemKey(type), attempt },
-					SourceTier = ItemPool.Info[target].Tier,
-					OriginalItem = target,
-					Policy = CategoryPolicy.SameAsOriginal,
-					TierJitterDown = 0,
-					TierJitterUp = 0,
-					AllowJackpot = false,
-					// The player already holds an item of that tier: no progression to protect, but no hardmode item before
-					// hardmode (Refresh applies them again when the tier changes)
-					IgnoreGating = true,
-					MaxTier = ItemPool.HardmodeWall
-				};
-				int replacement = ItemPool.Roll(request);
-				if (replacement != type && StackRules.ValueOf(replacement) <= maxValue) return replacement;
+					RollRequest request = new()
+					{
+						Keys = pass == 0 ? new[] { RollKey.Shimmer, DetRandom.ItemKey(type), attempt, RollKey.Surprise } : new[] { RollKey.Shimmer, DetRandom.ItemKey(type), attempt },
+						SourceTier = targetTier,
+						OriginalItem = target,
+						Policy = pass == 0 ? CategoryPolicy.Weighted : CategoryPolicy.SameAsOriginal,
+						TierJitterDown = 0,
+						TierJitterUp = TierJitterUp,
+						AllowJackpot = false,
+						MinLimit = targetTier,
+						GatingTier = unlockedTier,
+						GatingHardMode = hardMode,
+						// Never above the jitter (a surprise category empty at that tier would look higher), no hardmode item before
+						// hardmode (Refresh applies them again when the tier changes)
+						MaxTier = Math.Min(hardMode ? Tiers.Max : ItemPool.PreHardmodeCap, targetTier + TierJitterUp)
+					};
+					int replacement = ItemPool.Roll(request);
+					// A surprise never gives a bag (a cheap item shimmered into a boss bag would be a loot machine)
+					if (pass == 0 && ItemPool.IsValid(replacement) && ItemPool.Info[replacement].Category == ItemCategory.Bag) continue;
+					if (replacement != type && replacement > ItemID.None && StackRules.ValueOf(replacement) <= maxValue) return replacement;
+				}
 			}
 			return target;
 		}

@@ -97,6 +97,12 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool ShopsFollowProgression;
 
+		// Share of the rolled shop slots selling an item of any category (loot weights) instead of the original's
+		[Range(0f, 100f)]
+		[Increment(1f)]
+		[DefaultValue(10f)]
+		public float ShopSurpriseChance;
+
 		[Header("Stacks")]
 		public StackCaps StackCaps = new();
 

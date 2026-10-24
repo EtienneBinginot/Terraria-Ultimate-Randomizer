@@ -1742,12 +1742,36 @@ namespace UltimateRandomizer.Common.Features
 			return info.Kind == StationKind.Progression ? info.Tier : Never;
 		}
 
-		// Stations a recipe may be given: basic and progression ones (not the Demon Altar, not themed ones). A modded progression
-		// station (Stations.ModdedInfo) only to recipes of its tier or above, like the vanilla ones (orderTier, RecipeTier)
+		// Stations a recipe's own station may be replaced with, and that any recipe may be given: basic and progression ones
+		// (not the Demon Altar, not themed ones). A modded progression station (Stations.ModdedInfo) only to recipes of its tier
+		// or above, like the vanilla ones (orderTier, RecipeTier)
 		private static bool Assignable(int tile)
 		{
 			StationKind kind = Stations.Info(tile).Kind;
 			return !Stations.Info(tile).World && (kind == StationKind.Basic || kind == StationKind.Progression);
+		}
+
+		// Stations PlanStations may give: the assignable ones, and the themed ones (a Glass Kiln, a Bone Welder, a mod's
+		// themed station), only to an ordinary recipe (never a station's nor a house's: no station chain can go through a
+		// themed one) of their tier or later (their placer's: RecipeTier), had no later than the recipe's own station and found
+		// without crafting by then (their guardian or the world: a recipe loop through their own recipe still has a way out)
+		private static bool Offered(int tile) => Assignable(tile) || Stations.Info(tile).Kind == StationKind.Thematic && !Stations.Info(tile).World;
+
+		public static bool Themed(int tile) => Stations.Info(tile).Kind == StationKind.Thematic;
+
+		public static int FoundTier(int tile) => Stations.Placers(tile).Select(Findability.Tier).DefaultIfEmpty(Never).Min();
+
+		// The way to a station tile: its basic station's item, else its guaranteed one (GuaranteedSources.StationItem), else
+		// every item placing it. Another item placing a Work Bench (a themed bench) is no way to it for the others
+		public static IEnumerable<int> MainPlacers(int tile, Dictionary<int, List<int>> placers)
+		{
+			foreach ((int basicTile, Stations.StationInfo info) in Stations.Basic())
+			{
+				if (basicTile == tile && info.Item > 0) return new[] { info.Item };
+			}
+			int guaranteed = GuaranteedSources.StationItem(tile);
+			if (guaranteed > 0) return new[] { guaranteed };
+			return placers.TryGetValue(tile, out List<int> list) ? list : Enumerable.Empty<int>();
 		}
 
 		// The stations a recipe may be given, in a fixed order: a recipe making a station only ever requires stations placed
@@ -1775,7 +1799,7 @@ namespace UltimateRandomizer.Common.Features
 				if (!tileAvail.TryGetValue(tile, out int a)) tileAvail[tile] = a = TileAvailability(tile, itemsByTile, avail);
 				return a;
 			}
-			List<int> order = Stations.RequiredTiles().Where(Assignable)
+			List<int> order = Stations.RequiredTiles().Where(Offered)
 				.OrderBy(t => t == TileID.WorkBenches ? 0 : 1).ThenBy(TileAvail).ThenBy(t => Stations.Info(t).Kind == StationKind.Basic ? 0 : 1).ThenBy(t => DetRandom.StableHash(Stations.Name(t)))
 				.ToList();
 			Dictionary<int, int> recipeTier = new();
@@ -1807,7 +1831,15 @@ namespace UltimateRandomizer.Common.Features
 			Dictionary<int, List<int>> itemsByTile = Stations.PlacersByTile();
 			int TileAvail(int tile) => layout.Avail.TryGetValue(tile, out int a) ? a : TileAvailability(tile, itemsByTile, avail);
 			int[] orderAvail = order.Select(TileAvail).ToArray();
-			int[] orderTier = order.Select(s => Stations.Info(s).Kind == StationKind.Progression ? Stations.Info(s).Tier : -1).ToArray();
+			// A themed station: from its placer's tier (RecipeTier)
+			int[] orderTier = order.Select(s => Stations.Info(s).Kind == StationKind.Progression ? Stations.Info(s).Tier
+				: Themed(s) ? layout.RecipeTier.GetValueOrDefault(s, Never) : -1).ToArray();
+			Dictionary<int, int> foundTiers = new();
+			int Found(int tile)
+			{
+				if (!foundTiers.TryGetValue(tile, out int f)) foundTiers[tile] = f = FoundTier(tile);
+				return f;
+			}
 			float keep = CraftingConfig.Instance.StationKeepChance / 100f;
 			foreach (int i in only ?? Enumerable.Range(0, Count))
 			{
@@ -1815,9 +1847,10 @@ namespace UltimateRandomizer.Common.Features
 				int[] original = RecipeSystem.OriginalTiles(i);
 				if (original.Length == 0 || !RecipeSystem.Touchable(i)) continue;
 				int bound = int.MaxValue;
+				// Themed stations are never given to a station's recipe: their own place in the order bounds nothing
 				foreach (int made in new[] { RecipeSystem.OriginalResult(i), results[i] })
 				{
-					if (Stations.PlacedTile(made, out int placed) && position.TryGetValue(placed, out int p)) bound = Math.Min(bound, p);
+					if (Stations.PlacedTile(made, out int placed) && Assignable(placed) && position.TryGetValue(placed, out int p)) bound = Math.Min(bound, p);
 				}
 				Random rng = DetRandom.Get(RollKey.Station, RecipeSystem.RecipeKey(i));
 				bool station = StationPlacer(RecipeSystem.OriginalResult(i), out int stationTier);
@@ -1842,6 +1875,7 @@ namespace UltimateRandomizer.Common.Features
 						List<int> allowed = new();
 						for (int k = 0; k < order.Count && k < bound; k++)
 						{
+							if (Themed(order[k]) && (station || Found(order[k]) > limit)) continue;
 							if (orderAvail[k] <= limit && orderTier[k] <= recipeTier && (!house || Stations.Info(order[k]).Kind == StationKind.Basic) && StationFits(order[k])
 								&& SwapFitsStation(k)) allowed.Add(order[k]);
 						}
@@ -1897,8 +1931,9 @@ namespace UltimateRandomizer.Common.Features
 			return Findability.NonMiningTier(item) <= tier ? tier : Never;
 		}
 
-		// Guaranteed stations (basic ones, and progression or themed ones when unprotected) are never new ingredients
-		private static HashSet<int> GuaranteedStationItems()
+		// Guaranteed stations (basic ones, and progression or themed ones when unprotected): never in the candidate lists of the
+		// keys and the locks; the rebuilder alone takes them, rarely, as ordinary ingredients (StationIngredientWeight)
+		public static HashSet<int> GuaranteedStationItems()
 		{
 			HashSet<int> stationItems = Stations.Basic().Select(s => s.info.Item).ToHashSet();
 			stationItems.UnionWith(GuaranteedSources.Requirements.Where(r => r.Station).Select(r => r.Item));
@@ -1934,6 +1969,11 @@ namespace UltimateRandomizer.Common.Features
 		public const float CommonWeight = 10f;
 		public const float UncommonWeight = 3f;
 		public const float RareWeight = 0.5f;
+
+		// A crafting station as a new ingredient (of an ordinary recipe only: Rebuilder.StationIngredientFits): this weight
+		// factor, and at most StationIngredientUses recipes per station
+		public const float StationIngredientWeight = 0.1f;
+		public const int StationIngredientUses = 3;
 
 		public static float CommonnessWeight(int item) => ItemPool.CommonnessOf(item) switch
 		{
@@ -2176,7 +2216,12 @@ namespace UltimateRandomizer.Common.Features
 				{
 					real[item] = Findability.Tier(item);
 					clean[item] = CandidateTier(item);
-					if (clean[item] < Tiers.Count && Eligible(item, stationItems)) pool[(int)ItemPool.Info[item].Category, clean[item]].Add(item);
+					// A guaranteed station joins the candidates at the tier it is found from (its guardian): never moved by its
+					// recipe (Made, RestoreItem: Eligible), so its place in the lists never depends on the plan
+					if (clean[item] < Tiers.Count && (Eligible(item, stationItems) || stationItems.Contains(item) && Eligible(item, NoStations)))
+					{
+						pool[(int)ItemPool.Info[item].Category, clean[item]].Add(item);
+					}
 				}
 				real[0] = clean[0] = Never;
 				SortedSet<int> used = new();
@@ -2192,6 +2237,53 @@ namespace UltimateRandomizer.Common.Features
 				}
 				targets = new int[Count];
 			}
+
+			private static readonly HashSet<int> NoStations = new();
+
+			// The recipes giving each item (built at the first station candidate)
+			private Dictionary<int, List<int>> makers;
+			private readonly Dictionary<int, HashSet<int>> stationNeeds = new();
+
+			// Every station item a station needs through the stations of its recipes, and theirs (MainPlacers of each tile)
+			private HashSet<int> StationNeeds(int item)
+			{
+				if (stationNeeds.TryGetValue(item, out HashSet<int> needs)) return needs;
+				if (makers == null)
+				{
+					makers = new Dictionary<int, List<int>>();
+					for (int r = 0; r < results.Length; r++)
+					{
+						if (!makers.TryGetValue(results[r], out List<int> list)) makers[results[r]] = list = new List<int>();
+						list.Add(r);
+					}
+				}
+				needs = new HashSet<int>();
+				Stack<int> todo = new();
+				todo.Push(item);
+				HashSet<int> seen = new() { item };
+				while (todo.Count > 0)
+				{
+					if (!makers.TryGetValue(todo.Pop(), out List<int> recipes)) continue;
+					foreach (int r in recipes)
+					{
+						foreach (int tile in result.Tiles[r] ?? tiles[r])
+						{
+							foreach (int placer in MainPlacers(tile, placers))
+							{
+								needs.Add(placer);
+								if (seen.Add(placer)) todo.Push(placer);
+							}
+						}
+					}
+				}
+				stationNeeds[item] = needs;
+				return needs;
+			}
+
+			// A guaranteed station as a new ingredient: never of a station's recipe nor a house's, and never when the result
+			// already leads to a station it needs (below: the items made from the result), so no station ever needs itself
+			private bool StationIngredientFits(int x, bool station, bool house, HashSet<int> below) =>
+				!station && !house && !StationNeeds(x).Overlaps(below);
 
 			// The recipe whose vanilla recipe a recipe is rebuilt as: its swap partner, or itself
 			private int Proxy(int i) => result.SwapPartner[i] >= 0 ? result.SwapPartner[i] : i;
@@ -2459,7 +2551,7 @@ namespace UltimateRandomizer.Common.Features
 								{
 									foreach (int x in pool[c, t])
 									{
-										if (x == item || below.Contains(x) || current.Any(p => p.type == x) || RecipeSystem.InGroups(recipeGroups, x) || uses.GetValueOrDefault(x) >= useCaps[t]) continue;
+										if (x == item || below.Contains(x) || stationItems.Contains(x) || current.Any(p => p.type == x) || RecipeSystem.InGroups(recipeGroups, x) || uses.GetValueOrDefault(x) >= useCaps[t]) continue;
 										options.Add((x, CommonnessWeight(x) * IngredientPenalty(x, x)));
 									}
 								}
@@ -2653,8 +2745,8 @@ namespace UltimateRandomizer.Common.Features
 						&& (Stations.Info(t).Kind != StationKind.Progression || Stations.Info(t).Tier <= RecipeTier(i))).ToList();
 					if (stations)
 					{
-						int bound = Stations.PlacedTile(results[i], out int placed) ? layout.PositionOf(placed) : layout.Order.Count;
-						allowed = layout.Order.Where(t => layout.PositionOf(t) < bound && layout.RecipeTier[t] <= top
+						int bound = Stations.PlacedTile(results[i], out int placed) && Assignable(placed) ? layout.PositionOf(placed) : layout.Order.Count;
+						allowed = layout.Order.Where(t => !Themed(t) && layout.PositionOf(t) < bound && layout.RecipeTier[t] <= top
 							&& (Stations.Info(t).Kind != StationKind.Progression || Stations.Info(t).Tier <= RecipeTier(i))).ToList();
 					}
 					if (allowed.Count == 0) noStation++;
@@ -2888,7 +2980,10 @@ namespace UltimateRandomizer.Common.Features
 				bool HouseFits(int x) => StartMaterials(true).Contains(x) && Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category);
 				bool Usable(int x) => x != result0 && x != originalResult && !taken.Contains(x) && !below.Contains(x) && !RecipeSystem.InGroups(chosenGroups, x)
 					&& (!house || HouseFits(x) && !originalTypes.Contains(x))
-					&& (!station || source[x] < 0 && StationMaterialAllowed(result0, x));
+					&& (!station || source[x] < 0 && StationMaterialAllowed(result0, x))
+					&& (!stationItems.Contains(x) || StationIngredientFits(x, station, house, below));
+				// A station is never a key (the key decides when the recipe is doable)
+				bool KeyUsable(int x) => Usable(x) && !stationItems.Contains(x);
 				bool Stackable(int x) => !stackableResult || StackRules.MaxStackOf(x) > 1;
 				// Progression (Fits) for every new ingredient: required of the slots, preferred for the key
 				bool FitsHere(int x) => Fits(x, result0, top) && Stackable(x);
@@ -2927,15 +3022,15 @@ namespace UltimateRandomizer.Common.Features
 				{
 					long keyBudget = Math.Max(1, maxValue - keptValue);
 					bool newKey = NeedsNew(0);
-					Func<int, bool> keyUsable = newKey ? x => Usable(x) && NewType(x) : Usable;
+					Func<int, bool> keyUsable = newKey ? x => KeyUsable(x) && NewType(x) : KeyUsable;
 					key = PickKey(top, catWeight, keyUsable, rng, FitsHere, keyBudget);
 					if (key == 0) key = PickKey(top, null, keyUsable, rng, FitsHere, keyBudget);
-					if (key == 0 && newKey) key = PickKey(top, catWeight, Usable, rng, FitsHere, keyBudget);
-					if (key == 0 && newKey) key = PickKey(top, null, Usable, rng, FitsHere, keyBudget);
-					if (key == 0) key = VanillaKey(original.Concat(proxyOriginal), top, Usable);
+					if (key == 0 && newKey) key = PickKey(top, catWeight, KeyUsable, rng, FitsHere, keyBudget);
+					if (key == 0 && newKey) key = PickKey(top, null, KeyUsable, rng, FitsHere, keyBudget);
+					if (key == 0) key = VanillaKey(original.Concat(proxyOriginal), top, KeyUsable);
 					if (key == 0 && isSwapped && top < Tiers.Max)
 					{
-						key = PickKey(top + 1, null, Usable, rng, x => Fits(x, result0, top + 1) && Stackable(x), keyBudget);
+						key = PickKey(top + 1, null, KeyUsable, rng, x => Fits(x, result0, top + 1) && Stackable(x), keyBudget);
 						if (key > 0) keyTier = top + 1;
 					}
 				}
@@ -3009,9 +3104,10 @@ namespace UltimateRandomizer.Common.Features
 						List<(int item, float weight)> options = new();
 						foreach (int x in pool[c, tier])
 						{
-							if (!Usable(x) || uses.GetValueOrDefault(x) >= cap || !Affordable(x) || !FitsHere(x) || fresh && !NewType(x)) continue;
+							bool stationItem = stationItems.Contains(x);
+							if (!Usable(x) || uses.GetValueOrDefault(x) >= (stationItem ? Math.Min(cap, StationIngredientUses) : cap) || !Affordable(x) || !FitsHere(x) || fresh && !NewType(x)) continue;
 							if (surprised && UnitValue(x) > room) continue;
-							options.Add((x, (float)(CommonnessWeight(x) * IngredientPenalty(x, x) * Closeness(x, slotShare, SlotCount(slot, shareSum)))));
+							options.Add((x, (float)(CommonnessWeight(x) * IngredientPenalty(x, x) * Closeness(x, slotShare, SlotCount(slot, shareSum)) * (stationItem ? StationIngredientWeight : 1f))));
 						}
 						if (!house && !station)
 						{

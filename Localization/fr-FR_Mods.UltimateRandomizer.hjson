@@ -133,10 +133,12 @@ Tests: {
 	ShopSpread: Aucun objet tiré au hasard n'est vendu par plus de marchands que la limite des réglages, à aucun palier, à part quelques-uns qu'une petite catégorie ne laisse pas choisir
 	ShopPylonsGuaranteed: Les neuf pylônes de téléportation et la Solution rouge ont chacun un emplacement ajouté chez un marchand fiable, quel que soit le monde
 	ShopAddedSlotsOnTime: Aucun emplacement ajouté n'ouvre avant le plus tardif du palier et du vrai palier de son objet, moins la marge de palier
+	ShopSurprises: Une part des emplacements de boutique vend un objet d'une autre catégorie, jamais un sac ni un équipement au-delà du palier débloqué
 	ModdedRecipesRandomized: Avec Magic Storage, ses recettes sont reconstruites avec un ingrédient clé de leur palier, et les paliers de ses améliorations de stockage suivent leurs lingots dans l'ordre
 	ModdedItemsInPool: Les objets de Magic Storage peuvent être donnés au hasard ; ceux des mods utilitaires (tModLoader, Recipe Browser) et les objets créatifs jamais
 	ModdedDropsPermuted: Les butins des ennemis et boss des autres mods sont permutés avec ceux de tout le monde, à leur palier estimé
-	ModdedStationsTiered: Les stations des autres mods prennent le palier de leur objet, ne sont données qu'aux recettes de leur palier, et les thématiques sont garanties quand elles ne sont pas protégées
+	ModdedStationsTiered: Les stations des autres mods prennent le palier de leur objet, ne sont données qu'aux recettes de leur palier, et sont garanties (quêtes de station) quand elles ne sont pas protégées
+	ModdedProgressionGuaranteed: Les invocations de boss et les stations des autres mods sont garanties comme celles du jeu de base quand leur palier est estimé
 	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
 	TiersConsistent: Le tier de chaque objet est son vrai tier, et les erreurs de tier relevées par l'audit restent corrigées
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
@@ -159,7 +161,8 @@ Tests: {
 	WorldDropsReported: Avec la permutation, le bestiaire et les rapports de drops montrent les drops du monde : ce qu'un ennemi lâche maintenant, ni ses règles vanilla réduites au silence, ni les entrées encore verrouillées par la progression
 	BossRuntime: Les règles de drop des boss et des sacs suivent vraiment la permutation : les drops coupés sont tirés quelque part, rien ne tombe deux fois
 	PermutationConservation: Chaque entrée de drop vanilla des ennemis, des boss et des sacs de boss se trouve exactement une fois quelque part, à sa place ou déplacée
-	PermutedConditions: Les drops déplacés n'ont que des conditions possibles : ni saisonnière ni de premier kill, les conditions propres à un objet le suivent
+	PermutedConditions: Les drops déplacés n'ont que des conditions possibles : les saisonnières seulement celles de leur emplacement, aucune de premier kill, les conditions propres à un objet le suivent
+	SeasonalDropsPermuted: Les drops saisonniers (Halloween, Noël, jours de vent...) sont permutés entre eux uniquement et gardent les conditions de leur emplacement
 	EaterOfWorldsParts: Le corps et la queue du Dévoreur des mondes tirent dans la table de la tête, avec le plancher du boss
 	BossGroupsMerge: Les petits tiers de boss consécutifs se regroupent d'abord, et le butin du Seigneur de la Lune reste avec les derniers boss
 	CodexShowsLocked: Interface du codex : les butins verrouillés sont grisés avec le boss qui les débloque, sans chance
@@ -285,6 +288,8 @@ Tests: {
 	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement
 	ShimmerNoMoneyLoop: Un objet fabriqué à bas prix ne donne jamais plus d'argent qu'il n'en valait en passant dans le Shimmer
 	ShimmerLiveNoMoneyLoop: Un vrai passage dans le Shimmer d'objets fabriqués à bas prix ne rend jamais plus de valeur qu'il n'en a consommé
+	ShimmerTransmutationRules: Les résultats du Shimmer restent à un palier au plus au-dessus de l'original, sous le plafond de valeur et le mur du hardmode ; une part change de catégorie
+	StationIngredientsRare: Les stations d'artisanat sont de rares nouveaux ingrédients, jamais dans la recette d'une station, jamais clés et jamais dans une boucle
 	ProtectedRecipesDoable: Les recettes des stations de progression et des objets protégés sont faisables à leur niveau
 	RecipeKeyIngredient: Les recettes randomisées ne sont pas faisables avant le tier de leur résultat (ingrédient clé)
 	RecipeNoStationTwins: Une même recette (résultat et ingrédients) n'apparaît jamais sur deux stations différentes
@@ -1959,6 +1964,11 @@ Configs: {
 			Tooltip: Les boutiques vendent de meilleurs objets à mesure que tu bats les boss.
 		}
 
+		ShopSurpriseChance: {
+			Label: "Surprises en boutique (%)"
+			Tooltip: "Part des emplacements de boutique randomisés qui vendent un objet de n'importe quelle catégorie au lieu d'un objet de la catégorie d'origine. Les armes, armures, accessoires et outils ne dépassent toujours pas le tier débloqué."
+		}
+
 		StackCaps: {
 			Label: Stack maximum par catégorie
 			Tooltip: Quantité maximale donnée d'un coup. Le stack maximum propre à l'objet s'applique toujours.
@@ -2155,8 +2165,13 @@ Configs: {
 		}
 
 		RandomizeShimmer: {
-			Label: Randomiser les transmutations du Shimmer
-			Tooltip: Chaque transformation du Shimmer donne un autre objet de même catégorie et de même tier. Le décraft n'est pas concerné.
+			Label: "Randomiser les transmutations du Shimmer"
+			Tooltip: "Chaque transformation du Shimmer donne un autre objet de même catégorie, de son tier ou du suivant (selon la progression), parfois de n'importe quelle catégorie (Surprises du Shimmer). Le décraft n'est pas concerné."
+		}
+
+		ShimmerSurpriseChance: {
+			Label: "Surprises du Shimmer (%)"
+			Tooltip: "Part des transmutations du Shimmer qui donnent un objet de n'importe quelle catégorie au lieu d'un objet de la catégorie du résultat d'origine. Le plafond de valeur et le mur du hardmode s'appliquent toujours."
 		}
 	}
 

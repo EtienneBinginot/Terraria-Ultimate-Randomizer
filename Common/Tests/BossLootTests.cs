@@ -24,6 +24,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BossRuntime", BossRuntime);
 			TestRunner.Register("PermutationConservation", PermutationConservation);
 			TestRunner.Register("PermutedConditions", PermutedConditions);
+			TestRunner.Register("SeasonalDropsPermuted", SeasonalDropsPermuted);
 			TestRunner.Register("EaterOfWorldsParts", EaterOfWorldsParts);
 			TestRunner.Register("BossGroupsMerge", BossGroupsMerge);
 		}
@@ -180,8 +181,8 @@ namespace UltimateRandomizer.Common.Tests
 		private static bool HasType(List<IItemDropRuleCondition> conditions, IItemDropRuleCondition condition) =>
 			conditions != null && conditions.Any(c => c != null && c.GetType() == condition.GetType());
 
-		// Moved contents carry only conditions they can satisfy: never a seasonal one (those entries stay vanilla), never the
-		// first-Plantera-kill one; a boss place keeps its own conditions (restrictive, Legacy "is a boss", the Twins'
+		// Moved contents carry only conditions they can satisfy: a seasonal one only from their place (SeasonalDropsPermuted),
+		// never the first-Plantera-kill one; a boss place keeps its own conditions (restrictive, Legacy "is a boss", the Twins'
 		// MissingTwin, a fight condition) plus the item's own ones (the Demon Heart, the Portal Gun), and a content freed from
 		// a fight or one-time condition has a capped chance; a bag-only content keeps its own bag conditions
 		private static void PermutedConditions()
@@ -199,21 +200,13 @@ namespace UltimateRandomizer.Common.Tests
 					{
 						Fail($"{where}: {ItemName(entry.itemId)} needs {c.GetType().Name}");
 					}
-					if (DropPermutation.ClassOf(c) is DropPermutation.ConditionClass.Seasonal or DropPermutation.ConditionClass.OneTime) Fail($"{where}: {ItemName(entry.itemId)} moved with {c.GetType().Name}");
+					if (DropPermutation.ClassOf(c) == DropPermutation.ConditionClass.OneTime) Fail($"{where}: {ItemName(entry.itemId)} moved with {c.GetType().Name}");
 				}
 			}
 			int moved = 0;
 			foreach (int seed in Seeds())
 			{
 				BossPermutation.WorldPlan plan = Plan(seed);
-				DropPermutation.WorldPlan enemies = DropPermutation.Build(seed);
-				foreach ((int unit, DropPermutation.Placed[] table) in enemies.ByUnit)
-				{
-					foreach (DropPermutation.Placed placed in table.Where(p => p.Rolled))
-					{
-						if (DropPermutation.KeptVanilla(placed.Entry.conditions)) Fail($"seed {seed}: {NpcName(unit)}: {ItemName(placed.Entry.itemId)} rolled with a seasonal condition");
-					}
-				}
 				for (int p = 0; p < plan.Places.Count; p++)
 				{
 					DropPermutation.Place place = plan.Places[p];
@@ -311,6 +304,74 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		private static int[] Seeds() => new[] { SeedSystem.WorldSeed, 12345, -98765 };
+
+		// Seasonal entries (Halloween, Christmas, windy days, a named NPC...) are permuted, but only among themselves: in the
+		// enemies' and the bosses' plans, every place of a seasonal class takes a content of the same class (the original
+		// entry it came from has the same seasonal and restrictive condition types), keeps its own seasonal conditions, and
+		// some seasonal contents really move. Read from the snapshots (the original entries), not from the plans' own fields
+		private static void SeasonalDropsPermuted()
+		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			List<string> failures = new();
+			void Fail(string message)
+			{
+				if (failures.Count < 25) failures.Add(message);
+			}
+			IEnumerable<string> Seasonal(List<IItemDropRuleCondition> conditions) => (conditions ?? new List<IItemDropRuleCondition>())
+				.Where(c => c != null && DropPermutation.ClassOf(c) == DropPermutation.ConditionClass.Seasonal).Select(c => c.GetType().FullName).OrderBy(n => n, StringComparer.Ordinal);
+			DropRateInfo? Original(int owner, int index, bool bag)
+			{
+				List<DropRateInfo> entries = bag ? LootSnapshot.ForItem(BossPermutation.BagOf(owner)) : LootSnapshot.ForNpc(owner);
+				int i = bag ? index - BossPermutation.BagIndexOffset : index;
+				return i >= 0 && i < entries.Count ? entries[i] : null;
+			}
+			int seasonalPlaces = 0, moved = 0;
+			foreach (int seed in Seeds())
+			{
+				DropPermutation.WorldPlan enemies = DropPermutation.Build(seed, surpriseChance: 0f, duplicateCopies: 0, materialCopies: 0);
+				BossPermutation.WorldPlan bosses = Plan(seed);
+				foreach ((List<DropPermutation.Place> places, int[] contentOf, string kind) in new[] { (enemies.Places, enemies.ContentOf, "enemy"), (bosses.Places, bosses.ContentOf, "boss") })
+				{
+					for (int p = 0; p < places.Count; p++)
+					{
+						DropPermutation.Place place = places[p];
+						if (place.Synthetic) continue;
+						bool bag = BossPermutation.IsBagOnly(place);
+						DropRateInfo? own = Original(place.Owner, place.Index, bag);
+						if (own == null) continue;
+						bool seasonal = DropPermutation.IsSeasonal(own.Value.conditions);
+						DropPermutation.Place source = places[contentOf[p]];
+						DropRateInfo? from = source.Synthetic ? null : Original(source.Owner, source.Index, BossPermutation.IsBagOnly(source));
+						string where = $"seed {seed}: {kind} {NpcName(place.Owner)} #{place.Index}";
+						if (from == null)
+						{
+							if (seasonal) Fail($"{where}: a seasonal place got a synthetic content");
+							continue;
+						}
+						if (!Seasonal(own.Value.conditions).SequenceEqual(Seasonal(from.Value.conditions)))
+						{
+							Fail($"{where}: {ItemName(from.Value.itemId)} [{string.Join("+", Seasonal(from.Value.conditions))}] moved to a place [{string.Join("+", Seasonal(own.Value.conditions))}]");
+						}
+						if (!seasonal) continue;
+						seasonalPlaces++;
+						if (contentOf[p] != p) moved++;
+						// The place keeps its seasonal conditions (the enemies' entries are rolled with the place's conditions)
+						if (kind == "enemy" && enemies.ByUnit.TryGetValue(place.Owner, out DropPermutation.Placed[] table) && place.Index < table.Length
+							&& !Seasonal(table[place.Index].Entry.conditions).SequenceEqual(Seasonal(own.Value.conditions)))
+						{
+							Fail($"{where}: lost its seasonal condition");
+						}
+					}
+				}
+			}
+			// The seasonal entries of the ordinary enemies' tables (whether their rule is wrapped or not): some must be places
+			int seasonalEntries = DropPermutation.Units().Sum(u => LootSnapshot.ForNpc(u).Count(d => DropPermutation.IsSeasonal(d.conditions) && !DropHelper.KeepOriginal(d.itemId)));
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"SeasonalDropsPermuted: {seasonalEntries} seasonal enemy entries, {seasonalPlaces} seasonal places over {Seeds().Length} seeds, {moved} with a moved content");
+			if (seasonalEntries == 0 && seasonalPlaces == 0) Check.Skip("no seasonal drop entry");
+			Check.That(seasonalPlaces > 0, $"none of the {seasonalEntries} seasonal entries is permuted");
+			Check.That(moved > 0, "no seasonal content moved");
+			Check.All(failures, "Seasonal drops");
+		}
 
 		private static BossPermutation.WorldPlan Plan(int seed)
 		{

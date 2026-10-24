@@ -133,10 +133,12 @@ Tests: {
 	ShopSpread: No randomized item is sold by more merchants than the limit of the settings at any tier, apart from a few that a small category leaves no choice
 	ShopPylonsGuaranteed: The nine teleportation pylons and the Red Solution each have an added slot at a reliable merchant, whatever the world
 	ShopAddedSlotsOnTime: No added slot opens before the later of its item's tier and true tier minus the tier allowance
+	ShopSurprises: A share of the shop slots sells an item of another category, never a bag nor gear above the unlocked tier
 	ModdedRecipesRandomized: With Magic Storage, its recipes are rebuilt with a key of their tier, and its storage upgrades' tiers follow their bars in order
 	ModdedItemsInPool: Magic Storage's items may be given at random; the items of utility mods (tModLoader, Recipe Browser) and creative items never are
 	ModdedDropsPermuted: The drops of other mods' enemies and bosses are permuted with everyone's, at their estimated tier
-	ModdedStationsTiered: Other mods' stations get the tier of their item, are only given to recipes of their tier, and the themed ones are guaranteed when unprotected
+	ModdedStationsTiered: Other mods' stations get the tier of their item, are only given to recipes of their tier, and are guaranteed (station quests) when unprotected
+	ModdedProgressionGuaranteed: Other mods' boss summons and stations are guaranteed like the vanilla ones when their tier is estimated
 	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
 	TiersConsistent: Every item's tier is its true tier, and the audited tier errors stay fixed
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
@@ -159,7 +161,8 @@ Tests: {
 	WorldDropsReported: With the permutation, the bestiary and the drop reports show the world's drops: what an enemy drops now, not its silenced vanilla rules nor the entries progression still locks
 	BossRuntime: The bosses' and bags' drop rules really follow the permutation: silenced drops are rolled somewhere, nothing drops twice
 	PermutationConservation: Every vanilla drop entry of the enemies, bosses and boss bags is somewhere exactly once, at its place or moved
-	PermutedConditions: Moved drops only carry conditions they can meet: no seasonal or first-kill condition, item conditions stay with their item
+	PermutedConditions: Moved drops only carry conditions they can meet: seasonal ones only from their place, no first-kill condition, item conditions stay with their item
+	SeasonalDropsPermuted: Seasonal drops (Halloween, Christmas, windy days...) are permuted among themselves only, keeping their place's conditions
 	EaterOfWorldsParts: The Eater of Worlds' body and tail segments drop from the head's table, with the boss floor
 	BossGroupsMerge: Small consecutive boss tiers group together first, and the Moon Lord's loot stays with the late bosses
 	CodexShowsLocked: Codex interface: locked drops are greyed with the boss that unlocks them, with no chance
@@ -285,6 +288,8 @@ Tests: {
 	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks
 	ShimmerNoMoneyLoop: A cheaply crafted item never shimmers into more money than it was worth
 	ShimmerLiveNoMoneyLoop: A real shimmer of cheaply crafted items never gives more value than it consumed
+	ShimmerTransmutationRules: Shimmer results stay within one tier above the original, the value cap and the hardmode wall; a share are category surprises
+	StationIngredientsRare: Crafting stations are rare new ingredients, never of a station's recipe, never a key and never in a loop
 	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
 	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
 	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
@@ -1959,6 +1964,11 @@ Configs: {
 			Tooltip: Shops sell better items as you defeat bosses.
 		}
 
+		ShopSurpriseChance: {
+			Label: "Shop surprises (%)"
+			Tooltip: "Share of the randomized shop slots that sell an item of any category instead of one of the original item's category. Weapons, armor, accessories and tools still never go above the unlocked tier."
+		}
+
 		StackCaps: {
 			Label: Maximum stack per category
 			Tooltip: Largest amount given at once. The item's own maximum stack still applies.
@@ -2155,8 +2165,13 @@ Configs: {
 		}
 
 		RandomizeShimmer: {
-			Label: Randomize shimmer transmutations
-			Tooltip: Each shimmer transformation gives another item of the same category and tier. Decrafting is not affected.
+			Label: "Randomize shimmer transmutations"
+			Tooltip: "Each shimmer transformation gives another item of the same category, of its tier or one above (within progression), sometimes of any category (Shimmer surprises). Decrafting is not affected."
+		}
+
+		ShimmerSurpriseChance: {
+			Label: "Shimmer surprises (%)"
+			Tooltip: "Share of the shimmer transmutations that give an item of any category instead of one of the original result's category. The value cap and the hardmode wall still apply."
 		}
 	}
 
