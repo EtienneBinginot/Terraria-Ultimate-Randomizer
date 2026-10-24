@@ -143,6 +143,7 @@ Tests: {
 	DropPermutationRuntime: Each enemy's drop rules really follow the permutation: silenced vanilla drops are rolled somewhere, nothing drops twice, variants keep their own drops, enemies without drops get one
 	DropPermutationStable: Removing one drop entry from the permutation only changes the content of very few other entries
 	DropPermutationSurprise: Permutation surprises replace about the set share of the shuffled drops, never a material nor the copy every item but blocks, critters and ores keeps
+	PermutationDuplicatesCapped: An item keeps at most its capped number of shuffled copies (the others become surprises), and always at least one
 	BossPermutationConserves: The boss permutation loses and duplicates nothing: every shuffled boss drop and treasure bag content is still in some boss or bag
 	BossBagMatchesBoss: Each treasure bag holds the shuffled normal-mode drops of its boss, with their chance and stack in the bag they come from
 	BossPermutationTiers: Boss drops only move between bosses of the same group of tiers, with the same restrictions
@@ -1431,8 +1432,18 @@ Configs: {
 		}
 
 		PermutationSurpriseChance: {
-			Label: Surprise drops (permutation, %)
-			Tooltip: Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays.
+			Label: "Surprise drops (permutation, %)"
+			Tooltip: "Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays. Copies beyond the limits below always become surprises."
+		}
+
+		PermutationDuplicateCopies: {
+			Label: "Max copies per item (permutation)"
+			Tooltip: "Permutation style only: vanilla gives the same item to many enemies (every zombie its Shackle and Zombie Arm, every slime its Slime Staff). An item (except materials, ores and bars) keeps at most this many shuffled copies, the most reachable ones; every other copy always becomes a surprise. 0: no limit."
+		}
+
+		PermutationMaterialCopies: {
+			Label: "Max copies per material (permutation)"
+			Tooltip: "Permutation style only: the same limit for materials (Gel, Lens...), so recipes still find them on several enemies. Ores and bars are never limited. 0: no limit."
 		}
 
 		EnemiesWithoutDropsCanDrop: {

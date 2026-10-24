@@ -78,7 +78,7 @@ namespace UltimateRandomizer.Common.Tests
 			LootConfig loot = LootConfig.Instance;
 			EnemiesConfig enemies = EnemiesConfig.Instance;
 			string[] lootFields = { "SurpriseChance", "DropRateMultiplier", "LootAbundance", "DropSlotsMin", "DropSlotsMax", "RandomizeMobDrops", "RandomizePotDrops", "RandomizeChests", "TierWindow",
-				"PermutationExtraSlots", "PermutationSurpriseChance" };
+				"PermutationExtraSlots", "PermutationSurpriseChance", "PermutationDuplicateCopies", "PermutationMaterialCopies" };
 			foreach (string field in lootFields)
 			{
 				if (!IsDefault(loot, field)) Check.Skip($"{field} is not at its default value");
