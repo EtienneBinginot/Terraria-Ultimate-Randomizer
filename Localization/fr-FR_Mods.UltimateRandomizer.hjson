@@ -143,7 +143,8 @@ Tests: {
 	DropPermutationRuntime: Les règles de drop de chaque ennemi suivent vraiment la permutation : les drops vanilla réduits au silence tombent ailleurs, rien ne tombe en double, les variantes gardent leurs propres drops, les ennemis sans drop en reçoivent un
 	DropPermutationStable: Retirer un drop de la permutation ne change le contenu que de très peu d'autres drops
 	DropPermutationSurprise: Les surprises de la permutation remplacent à peu près la part réglée des drops mélangés, jamais un matériau ni l'exemplaire que garde chaque objet (sauf blocs, créatures et minerais)
-	PermutationDuplicatesCapped: Un objet garde au plus son nombre limité d'exemplaires mélangés (les autres deviennent des surprises), et toujours au moins un
+	PermutationDuplicatesCapped: Un objet garde au plus son nombre limité d'exemplaires mélangés par condition de drop (les autres deviennent des surprises), et toujours au moins un dans chacune
+	PermutationKeepsStartDrops: Avec les limites par défaut, le gel et la lentille restent des matériaux de départ (les exemplaires gardés sont sur les premiers ennemis rencontrés)
 	BossPermutationConserves: La permutation des boss ne perd et ne double rien : chaque drop de boss et contenu de sac mélangé est toujours dans un boss ou un sac
 	BossBagMatchesBoss: Chaque sac de trésor contient les drops mélangés du mode normal de son boss, avec leur chance et leur quantité dans le sac d'où ils viennent
 	BossPermutationTiers: Les drops de boss ne passent qu'entre boss du même groupe de tiers, avec les mêmes restrictions
@@ -1438,7 +1439,7 @@ Configs: {
 
 		PermutationDuplicateCopies: {
 			Label: "Exemplaires max par objet (permutation)"
-			Tooltip: "Style permutation uniquement : le jeu de base donne le même objet à beaucoup d'ennemis (chaque variante de zombie ou de slime a les mêmes drops). Un objet (hors matériaux, minerais et lingots) garde au plus ce nombre d'exemplaires mélangés, les plus accessibles ; tous les autres deviennent toujours des surprises. 0 : aucune limite."
+			Tooltip: "Style permutation uniquement : le jeu de base donne le même objet à beaucoup d'ennemis (chaque variante de zombie ou de slime a les mêmes drops). Un objet (hors matériaux, minerais et lingots) garde au plus ce nombre d'exemplaires mélangés, les plus accessibles ; tous les autres deviennent toujours des surprises. Les drops du mode Classique et du mode Expert sont comptés à part. 0 : aucune limite."
 		}
 
 		PermutationMaterialCopies: {

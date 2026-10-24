@@ -117,7 +117,7 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(15f)]
 		public float PermutationSurpriseChance;
 
-		// Permutation style: the permuted copies an item keeps over the whole world (the most reachable ones); every other copy
+		// Permutation style: the permuted copies an item keeps in each access class (the most reachable ones); every other copy
 		// becomes a surprise. Vanilla gives each zombie variant its Shackle and each slime its Slime Staff: without a cap the
 		// early loot looks vanilla. 0: no limit. Not materials (below), ores, bars, blocks or critters
 		[Range(0, 20)]

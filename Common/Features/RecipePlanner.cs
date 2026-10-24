@@ -2598,8 +2598,9 @@ namespace UltimateRandomizer.Common.Features
 				}
 				// A rebuilt station never takes its vanilla ingredients only (a Work Bench of 12 Wood looks vanilla): its last slot
 				// takes a new type while every planned one is vanilla (a lone slot: the key too), falling back to anything when no
-				// other type can be had
-				bool NewType(int x) => !originalTypes.Contains(x);
+				// other type can be had. A swapped recipe avoids the vanilla types of both its own recipe and its item's (proxy)
+				HashSet<int> vanillaTypes = isSwapped ? originalTypes.Concat(proxyOriginal.Select(o => o.type)).ToHashSet() : originalTypes;
+				bool NewType(int x) => !vanillaTypes.Contains(x);
 				bool NeedsNew(int slot) => station && slot == slots - 1 && !planned.Any(NewType);
 
 				// The key: a material found exactly at T (had no earlier), so the recipe is doable from T, not before. Without one

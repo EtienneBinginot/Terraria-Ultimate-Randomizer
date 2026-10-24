@@ -73,7 +73,7 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// anyStyle: the test simulates both drop styles itself (PacingModel.Simulate with an explicit style)
-		private static void RequireDefaults(bool anyStyle = false)
+		internal static void RequireDefaults(bool anyStyle = false)
 		{
 			LootConfig loot = LootConfig.Instance;
 			EnemiesConfig enemies = EnemiesConfig.Instance;

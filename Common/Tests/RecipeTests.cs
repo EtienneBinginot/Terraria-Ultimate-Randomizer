@@ -134,8 +134,11 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int i in recipes.Where(i => plan.Ingredients[i] != null && !plan.Repaired[i]))
 				{
 					HashSet<int> vanilla = RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
+					// A swapped recipe: the vanilla types of its item's recipe (its proxy) are vanilla too
+					int partner = plan.SwapPartner != null && i < plan.SwapPartner.Length ? plan.SwapPartner[i] : -1;
+					HashSet<int> vanillaLike = partner >= 0 && partner != i ? vanilla.Concat(RecipeSystem.OriginalIngredients(partner).Select(x => x.type)).ToHashSet() : vanilla;
 					// Rebuilt, never its vanilla ingredient types alone (a Work Bench of 12 Wood looks vanilla)
-					if (vanilla.Count > 0 && plan.Ingredients[i].All(x => vanilla.Contains(x.type))) failures.Add($"{name}: rebuilt from its vanilla ingredients only ({Describe(i)})");
+					if (vanillaLike.Count > 0 && plan.Ingredients[i].All(x => vanillaLike.Contains(x.type))) failures.Add($"{name}: rebuilt from its vanilla ingredients only ({Describe(i)})");
 					foreach ((int type, _) in plan.Ingredients[i])
 					{
 						if (vanilla.Contains(type) && !RecipePlanner.IngredientReplaceable(type)) continue;

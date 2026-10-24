@@ -64,6 +64,8 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (int item in GuaranteedSources.PotItems(Tiers.Max).Where(placers.Contains)) failures.Add($"{Name(item)} in the pot items");
 			float chance = GuaranteedSources.GuardianChance;
 			Dictionary<int, int> guarding = new();
+			// Per guardian, the non-critical stations it guards
+			Dictionary<int, List<GuaranteedSources.Requirement>> guarded = new();
 			foreach (GuaranteedSources.Requirement station in stations)
 			{
 				string name = Name(station.Item);
@@ -75,6 +77,11 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				int guardian = hosts[0];
 				guarding[guardian] = guarding.GetValueOrDefault(guardian) + 1;
+				if (!station.Critical)
+				{
+					if (!guarded.TryGetValue(guardian, out List<GuaranteedSources.Requirement> list)) guarded[guardian] = list = new();
+					list.Add(station);
+				}
 				if (GuaranteedSources.GuardianOf(station.Item) != guardian) failures.Add($"{name}: guardian {GuaranteedSources.GuardianOf(station.Item)}, host {guardian}");
 				GuaranteedSources.TryPlacement(station.Item, out GuaranteedSources.Placement place);
 				int tier = Tiers.Clamp(station.Tier);
@@ -102,16 +109,18 @@ namespace UltimateRandomizer.Common.Tests
 					if (open < 0 || open > place.Tier) failures.Add($"{name}: in {BiomeSlots.BiomeName(place.Biome)}, open from tier {open}");
 				}
 			}
-			// Distinct guardians: a second station on one enemy only once every enemy that may guard one at its tier (met
-			// steadily in an open biome: GuardianCandidates, not every enemy of the tier) guards one. Critical stations
-			// keep to the early slots, so their tier may share guardians while others are left
-			foreach ((int guardian, int count) in guarding.Where(g => g.Value > 1))
+			// Distinct guardians: a second station of a tier on one enemy only once every enemy that may guard one at that tier
+			// (met steadily in an open biome, outside the station's excluded biome: GuardianCandidates, not every enemy of the
+			// tier) guards one. Critical stations keep to the early slots, so they may share guardians while others are left:
+			// only the non-critical ones count
+			foreach ((int guardian, List<GuaranteedSources.Requirement> list) in guarded)
 			{
 				if (NpcTiers.IsBoss(guardian)) continue;
-				int tier = GuaranteedSources.HostTier(guardian);
-				if (stations.Any(r => Tiers.Clamp(r.Tier) == tier && r.Critical)) continue;
-				List<int> idle = GuaranteedSources.GuardianCandidates(tier).Where(n => !guarding.ContainsKey(n)).ToList();
-				if (idle.Count > 0) failures.Add($"{Lang.GetNPCNameValue(guardian)} guards {count} stations while {idle.Count} enemies of tier {tier} guard none ({string.Join(", ", idle.Take(4).Select(Lang.GetNPCNameValue))})");
+				foreach (IGrouping<int, GuaranteedSources.Requirement> byTier in list.GroupBy(r => Tiers.Clamp(r.Tier)).Where(g => g.Count() > 1))
+				{
+					List<int> idle = byTier.SelectMany(r => GuaranteedSources.GuardianCandidates(byTier.Key, r.ExcludedBiome)).Distinct().Where(n => !guarding.ContainsKey(n)).OrderBy(n => n).ToList();
+					if (idle.Count > 0) failures.Add($"{Lang.GetNPCNameValue(guardian)} guards {byTier.Count()} stations of tier {byTier.Key} while {idle.Count} enemies of that tier guard none ({string.Join(", ", idle.Take(4).Select(Lang.GetNPCNameValue))})");
+				}
 			}
 			// Other seeds: one host each too
 			for (int i = 0; i < 3; i++)
