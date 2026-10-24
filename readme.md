@@ -14,7 +14,8 @@ Originally made for the YouTube videos of **Pootouf & Nouke**: [youtube.com/@pou
 - Treasure bags, fishing crates and other bags, chests of new worlds, pots, fishing, shaken trees, herbs and plants,
   the Extractinator and the Angler's rewards.
 - Mined ores are swapped with each other (one ore always gives the same other ore in a world).
-- Jackpots: now and then a drop aims a few tiers ahead of your progression, with light and sound.
+- Jackpots: every kill has a small chance (about one every 30 minutes early on) of an item a few tiers ahead of your
+  progression, with light and sound. Jackpot chests too.
 
 **Crafting and economy**
 - Recipe results, ingredients and crafting stations, planned so that every recipe can still be made with what the world
@@ -38,9 +39,10 @@ Originally made for the YouTube videos of **Pootouf & Nouke**: [youtube.com/@pou
 - **Chaos**: anything from anywhere.
 
 ## Always obtainable
-Progression items (Pwnhammer, keys, Lihzahrd Power Cell...) are protected. Basic crafting stations, boss summons and the
-vanilla ingredients you need are guaranteed on common enemies, in pots and in wooden chests, and every tier of pickaxe
-can be found in time. All of this can be changed in the settings.
+Progression items (Pwnhammer, keys, Lihzahrd Power Cell...) are protected. Boss summons, progression tools and the
+vanilla ingredients you need are guaranteed on the common enemies of a biome of their tier, and every tier of pickaxe
+can be found in time. Crafting stations are small quests: a randomized recipe for their tier, and one guardian enemy as
+a backup. All of this can be changed in the settings.
 
 ## Randomizer codex (J key)
 Everything you discovered: the drops of the enemies you killed, the content of the bags you opened, the craft tree, the

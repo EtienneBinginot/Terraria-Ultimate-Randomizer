@@ -6,7 +6,7 @@ Originally made for the YouTube videos of Pootouf & Nouke: https://www.youtube.c
 ==[What gets randomized]==
 - Enemy and boss drops, plus extra random drops on every enemy (loot abundance x3 by default), critters included
 - Treasure bags, crates, chests, pots, fishing, mined ores, shaken trees, herbs, the Extractinator, the Angler's rewards
-- Jackpots: now and then a drop aims a few tiers ahead of your progression
+- Jackpots: every kill has a small chance (about one every 30 minutes early on) of an item a few tiers ahead of your progression
 - Recipe results, ingredients and crafting stations, planned so that everything can still be crafted
 - Shimmer, shops, the starting kit, the arrival order of town NPCs
 - Enemy spawns redistributed between the biomes
@@ -18,7 +18,7 @@ Originally made for the YouTube videos of Pootouf & Nouke: https://www.youtube.c
 - Guaranteed shuffle: every item is swapped with another of the same category and tier
 - Chaos: anything from anywhere
 
-Progression items are protected; basic stations, boss summons and needed ingredients are guaranteed on common enemies, in pots and wooden chests.
+Progression items are protected; boss summons, progression tools and needed ingredients are guaranteed on the common enemies of a biome of their tier; crafting stations are small quests (a randomized recipe and a guardian enemy).
 
 ==[Codex and hints]==
 J key: drops of the enemies you killed, bags you opened, craft tree, enemies of each biome. The Guide sells hints about crafting stations, pickaxes and boss summons; for a crafted item, the whole tree down to the enemies and ores.

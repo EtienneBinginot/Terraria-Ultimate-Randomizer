@@ -1,0 +1,37 @@
+
+[h1]Ultimate Randomizer[/h1]
+Un randomizer complet qui mélange presque tout : le butin, les coffres, l'artisanat, les boutiques, les ennemis, leurs stats et leurs biomes. Chaque monde a sa propre graine, l'aléatoire suit ta progression, et avec les réglages par défaut tout ce dont tu as besoin reste trouvable.
+
+Créé à l'origine pour les vidéos YouTube de [b]Pootouf & Nouke[/b] : [url=https://www.youtube.com/@pounouke]youtube.com/@pounouke[/url]
+
+[h2]Ce qui est aléatoire[/h2]
+[list]
+[*][b]Butin :[/b] drops des ennemis et des boss (mélangés entre ennemis du même tier par défaut), plus des drops aléatoires en bonus sur chaque ennemi (abondance x3 par défaut), créatures comprises. Sacs de trésor, caisses, coffres, pots, pêche, minerais, arbres secoués, herbes, Extractinator, récompenses du Pêcheur.
+[*][b]Jackpots :[/b] chaque ennemi tué a une petite chance de donner un jackpot (environ un toutes les 30 minutes en début de partie) : un objet quelques tiers au-dessus de ta progression, avec lumière et son. Des coffres jackpot aussi.
+[*][b]Artisanat :[/b] résultats, ingrédients et stations des recettes, planifiés pour que tout reste fabricable. Le chatoiement (shimmer) aussi.
+[*][b]Économie et ville :[/b] boutiques (prix selon la valeur), kit de départ aléatoire, ordre d'arrivée des PNJ.
+[*][b]Ennemis :[/b] apparitions redistribuées entre les biomes, stats en cloche, géants et minis, vie et dégâts des boss aléatoires. Les dégâts restent limités à x3 au total, car la défense en est soustraite.
+[*][b]Puissance adaptative :[/b] un équipement très en avance sur le monde rend les ennemis plus coriaces (surtout leur vie), pour qu'une arme chanceuse reste fun.
+[/list]
+
+[h2]Modes[/h2]
+[list]
+[*][b]Cohérent[/b] (par défaut) : les objets gardent leur catégorie et leur tier, et se débloquent en battant les boss.
+[*][b]Mélange garanti :[/b] chaque objet est échangé avec un autre de même catégorie et de même tier.
+[*][b]Chaos :[/b] n'importe quoi, n'importe où.
+[/list]
+Les objets de progression sont protégés. Les invocations de boss, les outils de progression et les ingrédients nécessaires sont garantis sur les ennemis courants d'un biome de leur tier. Les stations d'artisanat sont de petites quêtes : une recette aléatoire de leur tier, et un ennemi gardien en secours.
+
+[h2]Codex et indices[/h2]
+Touche [b]J[/b] : drops des ennemis tués, sacs ouverts, arbre de fabrication, ennemis de chaque biome. Le Guide vend des indices sur les stations, les pioches et les invocations de boss (onglets Artisanat et Boss, avec une recherche). Pour un objet fabriqué, l'indice donne tout l'arbre : chaque ingrédient et station, jusqu'à l'ennemi qui le donne ou au minerai à miner.
+
+[h2]Réglages et multijoueur[/h2]
+Tout est configurable, en français et en anglais. La graine est sauvegardée avec le monde et partagée en multijoueur.
+Commandes : /rseed (voir ou changer la graine), /rjournal, /rchests (mondes créés avant le mod).
+Ne pas l'activer en même temps que tRandomizer.
+
+[hr][/hr]
+
+[h2]Crédits[/h2]
+Basé sur [url=https://github.com/ImplicitSaber/tRandomizer]tRandomizer[/url] d'ImplicitSaber (licence MIT).
+Ultimate Randomizer par Pootouf, licence MIT.
