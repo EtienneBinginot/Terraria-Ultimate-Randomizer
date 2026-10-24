@@ -1330,7 +1330,7 @@ Configs: {
 
 		KillJackpotChance: {
 			Label: "Jackpot par kill (%)"
-			Tooltip: "Chance, à chaque kill, d'obtenir un jackpot en plus des drops habituels, quel que soit le style de drops : toujours un équipement utile ou une station de progression au-delà de la limite de progression (chaque palier plus haut est plus rare, voir le réglage précédent), signalé par de la lumière et un son. Les ennemis faibles ont moins de chances, les bestioles, les statues et les ennemis engendrés par un autre ennemi aucune. Les sacs n'en donnent jamais. 0 = seulement les autres jackpots."
+			Tooltip: "Chance, à chaque kill, d'obtenir un jackpot en plus des drops habituels, quel que soit le style de drops : toujours un équipement utile au-delà de la limite de progression (chaque palier plus haut est plus rare, voir le réglage précédent), signalé par de la lumière et un son. Avant le hardmode, un objet de hardmode n'est gardé qu'une fois sur autant, sinon rien ne tombe. Aucun en mode Chaos ni quand « Bloquer les objets selon la progression » est désactivé. Les ennemis faibles ont moins de chances, les bestioles, les statues et les ennemis engendrés par un autre ennemi aucune. Les sacs n'en donnent jamais. 0 = seulement les autres jackpots."
 		}
 
 		MechTierRequiresAllThree: {

@@ -1296,7 +1296,8 @@ namespace UltimateRandomizer.Common.Tests
 
 		// The per-kill jackpot through the function kills use (RandomNpcDropRule.KillJackpot), with a seeded rng and explicit
 		// chances: about chance x worth of the kills get one (within 30 %: a forced roll may find nothing useful twice), each a
-		// useful item above the progression limit by its gap; at 0 % never one
+		// useful item above the progression limit by its gap; at 0 % never one. Before hardmode at the wall (a simulated
+		// progression whose limit is ItemPool.PreHardmodeCap), at most about 1 forced roll in WildTierDecay gives a hardmode item
 		private static void KillJackpotRate()
 		{
 			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
@@ -1335,6 +1336,19 @@ namespace UltimateRandomizer.Common.Tests
 						failures.Add("a jackpot at 0 %");
 						break;
 					}
+				}
+				const int WallKills = 4000;
+				int wallTier = ItemPool.PreHardmodeCap;
+				if (ItemPool.GatingLimit(wallTier, false, minLimit) == ItemPool.PreHardmodeCap)
+				{
+					int hardmode = 0;
+					for (int i = 0; i < WallKills; i++)
+					{
+						int item = RandomNpcDropRule.KillJackpot(owner, 100f, 1f, rng, out _, wallTier, false);
+						if (item > ItemID.None && ItemPool.TrueTierOf(item) > ItemPool.PreHardmodeCap) hardmode++;
+					}
+					double most = WallKills / Math.Max(1.01, ProgressionConfig.Instance.WildTierDecay) * 1.2 + 20;
+					if (hardmode > most) failures.Add($"{hardmode} hardmode items in {WallKills} forced rolls at the hardmode wall before hardmode, expected at most {most:0}");
 				}
 			}
 			finally

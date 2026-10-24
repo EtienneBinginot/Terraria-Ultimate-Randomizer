@@ -256,12 +256,16 @@ namespace UltimateRandomizer.Common.Features
 		// A kill's own jackpot (KillJackpotChance x JackpotWorth, %): one forced madness roll (ItemPool.Roll, ForceWild), a
 		// useful item above the progression limit, each extra tier WildTierDecay times rarer. A roll that found nothing above
 		// the limit (an empty tier: the normal roll stood) tries once more, then gives nothing, never a plain item. Runtime rng
-		// only (never in plans, findability nor guarantees): where the loot drops (server or single player)
+		// only (never in plans, findability nor guarantees): where the loot drops (server or single player).
+		// Before hardmode the limit soon reaches the hardmode wall (ItemPool.PreHardmodeCap, after the evil boss), where most
+		// rolls above it would be hardmode items: one is kept only 1 time in WildTierDecay, else nothing (no re-roll into the
+		// same wall). gatingTier, hardMode: a simulated progression (tests), else the world's
 		public const int KillJackpotAttempts = 2;
 
-		public static int KillJackpot(int ownerType, float chancePercent, float worth, Random rng, out int gap)
+		public static int KillJackpot(int ownerType, float chancePercent, float worth, Random rng, out int gap, int? gatingTier = null, bool? hardMode = null)
 		{
 			gap = 0;
+			bool hard = hardMode ?? Main.hardMode;
 			if (chancePercent <= 0f || worth <= 0f || rng.NextDouble() * 100 >= chancePercent * worth) return ItemID.None;
 			int item = ItemID.None;
 			for (int attempt = 0; attempt < KillJackpotAttempts && gap == 0; attempt++)
@@ -274,6 +278,8 @@ namespace UltimateRandomizer.Common.Features
 					Policy = CategoryPolicy.Weighted,
 					Weights = KillJackpotWeights.Instance,
 					MinLimit = MinLimit(ownerType),
+					GatingTier = gatingTier,
+					GatingHardMode = hard,
 					Wild = true,
 					ForceWild = true,
 					WildRng = new Random(rng.Next())
@@ -282,6 +288,12 @@ namespace UltimateRandomizer.Common.Features
 				gap = item > ItemID.None ? ItemPool.LastJackpotGap : 0;
 			}
 			ItemPool.ClearJackpot();
+			// The Wall of Flesh's own floor is hardmode already (MinLimit): its items are not behind the wall
+			if (gap > 0 && !hard && ItemPool.TrueTierOf(item) > ItemPool.PreHardmodeCap && MinLimit(ownerType) <= ItemPool.PreHardmodeCap
+				&& rng.NextDouble() * Math.Max(1.01, ProgressionConfig.Instance.WildTierDecay) >= 1.0)
+			{
+				gap = 0;
+			}
 			return gap > 0 ? item : ItemID.None;
 		}
 

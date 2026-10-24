@@ -131,6 +131,20 @@ namespace UltimateRandomizer.Common.Features
 
 		public override bool CanStackInWorld(Item destination, Item source) => GapOf(destination) == GapOf(source);
 
+		// A jackpot chest's stack is announced once: the part that moves keeps the flag, the part left behind is silent
+		public override void SplitStack(Item destination, Item source, int numToTransfer)
+		{
+			if (source.TryGetGlobalItem(out JackpotItem from) && from.Unannounced) from.Unannounced = false;
+		}
+
+		// Merged into a stack (CanStack: same gap), an unannounced part still announces itself where it lands
+		public override void OnStack(Item destination, Item source, int numToTransfer)
+		{
+			if (numToTransfer <= 0 || !source.TryGetGlobalItem(out JackpotItem from) || !from.Unannounced) return;
+			Unannounced = Gap > 0;
+			from.Unannounced = false;
+		}
+
 		public override void PostDrawInWorld(Item item, SpriteBatch spriteBatch, Color lightColor, Color alphaColor, float rotation, float scale, int whoAmI)
 		{
 			if (Gap >= 1) JackpotEffects.Beam(item, spriteBatch, Gap);
@@ -233,18 +247,22 @@ namespace UltimateRandomizer.Common.Features
 		public override void PostUpdate()
 		{
 			if (Main.dedServ || Player.whoAmI != Main.myPlayer) return;
-			Check(Main.mouseItem);
-			foreach (Item item in Player.inventory) Check(item);
+			// Slot 58 is a copy of the cursor (Player.dropItemCheck clones Main.mouseItem into it every update): never announced
+			// itself, silenced when the cursor's item is
+			if (Check(Main.mouseItem) && Player.inventory[58].TryGetGlobalItem(out JackpotItem copy)) copy.Unannounced = false;
+			for (int i = 0; i < 58; i++) Check(Player.inventory[i]);
 		}
 
-		private void Check(Item item)
+		// True when the item had the flag
+		private bool Check(Item item)
 		{
-			if (item == null || item.IsAir || !item.TryGetGlobalItem(out JackpotItem jackpot) || !jackpot.Unannounced) return;
+			if (item == null || item.IsAir || !item.TryGetGlobalItem(out JackpotItem jackpot) || !jackpot.Unannounced) return false;
 			jackpot.Unannounced = false;
-			if (jackpot.Gap == 0) return;
+			if (jackpot.Gap == 0) return true;
 			// The tiers ahead now (the chest was filled long before)
 			jackpot.Above = (byte)JackpotItem.AboveUnlocked(item.type, jackpot.Gap);
 			JackpotEffects.Announce(Player.Hitbox, item.type, jackpot.Gap, Math.Max(jackpot.Gap, jackpot.Above));
+			return true;
 		}
 	}
 

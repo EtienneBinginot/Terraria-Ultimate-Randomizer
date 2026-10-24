@@ -1330,7 +1330,7 @@ Configs: {
 
 		KillJackpotChance: {
 			Label: "Jackpot per kill (%)"
-			Tooltip: "Chance, on each kill, of one extra jackpot on top of the usual drops, whatever the drop style: always useful equipment or a progression station above the progression limit (each tier further is rarer, see the previous setting), shown with light and sound. Weak enemies get a smaller chance, critters, statues and enemies spawned by another enemy none. Bags never give one. 0 = only the other jackpots."
+			Tooltip: "Chance, on each kill, of one extra jackpot on top of the usual drops, whatever the drop style: always useful equipment above the progression limit (each tier further is rarer, see the previous setting), shown with light and sound. Before hardmode, a hardmode item is kept only once in that many times, else nothing drops. None in Chaos mode or when \"Lock items behind progression\" is off. Weak enemies get a smaller chance, critters, statues and enemies spawned by another enemy none. Bags never give one. 0 = only the other jackpots."
 		}
 
 		MechTierRequiresAllThree: {
