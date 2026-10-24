@@ -1213,14 +1213,21 @@ namespace UltimateRandomizer.Common.Features
 		public static bool CraftOnly(int type) => Findability.Tier(type) >= Never;
 
 		// Had a few at a time, or only at some moments: an uncommon material (gems, shards, souls, most boss and event drops),
-		// a Fallen Star (nights only), a fish, a critter or a bait
+		// a Fallen Star (nights only), a herb (one per plant, often another item when herbs are randomized), a fish, a critter
+		// or a bait
 		public static bool SlowIngredient(int type)
 		{
-			if (type == ItemID.FallenStar || SlowFish.Contains(type)) return true;
+			if (type == ItemID.FallenStar || SlowFish.Contains(type) || SlowHerbs.Contains(type)) return true;
 			if (MaterialTiers.Table.TryGetValue(type, out var entry) && entry.Commonness == Commonness.Uncommon) return true;
 			if (ItemPool.IsValid(type) && ItemPool.Info[type].Category == ItemCategory.Critter) return true;
 			return ContentSamples.ItemsByType.TryGetValue(type, out Item sample) && (sample.makeNPC > 0 || sample.bait > 0);
 		}
+
+		// Until 1.7.0 a Meteorite Bar could ask 30 Fireblossoms
+		private static readonly HashSet<int> SlowHerbs = new()
+		{
+			ItemID.Daybloom, ItemID.Moonglow, ItemID.Blinkroot, ItemID.Deathweed, ItemID.Waterleaf, ItemID.Fireblossom, ItemID.Shiverthorn
+		};
 
 		// The fish of the catch tables (fishing is slow; the Angler's rewards are randomized)
 		private static readonly HashSet<int> SlowFish = new()

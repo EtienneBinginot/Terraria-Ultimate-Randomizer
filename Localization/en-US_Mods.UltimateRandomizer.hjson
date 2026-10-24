@@ -303,7 +303,7 @@ Tests: {
 	PickaxeIngredientsBelowLevel: A pickaxe or drill recipe never gets an ore or bar (or anything made of one) that needs its own pick power or more to be mined: no Orichalcum Pickaxe made of Chlorophyte Bars
 	StationsCraftable: Every crafting station has a rebuilt recipe of found materials, doable by its tier without its guardian; the Work Bench by hand at the start
 	HouseRecipesSimple: Torch, Wood Platform and Wooden Door have a simple random recipe: one or two start materials, a few of each, worth at most twice the vanilla recipe, at a basic station or by hand
-	IngredientCountCaps: No new ingredient asks for more than its count cap: a few of a crafted-only item, about ten of a slow one (gems, Fallen Stars, fish, critters, shards, souls)
+	IngredientCountCaps: No new ingredient asks for more than its count cap: a few of a crafted-only item, about ten of a slow one (gems, Fallen Stars, herbs, fish, critters, shards, souls)
 	NoNeverIngredients: No live planned recipe needs an ingredient that is never had (an Ice Mirror, a Marshmallow); a recipe kept vanilla gets a replacement for it
 	NoEmptyLiveRecipes: No live recipe has an empty ingredient list (a free craft)
 	SwapStationsInTime: A swapped result never lands on a station later than its own tier and the allowance (no Tungsten Bow at the Lunar Crafting Station)
@@ -2117,7 +2117,7 @@ Configs: {
 
 		SlowIngredientStackCap: {
 			Label: "Maximum amount of a slow ingredient"
-			Tooltip: "Largest amount of a new ingredient that is gathered slowly: gems, Fallen Stars, fish, critters, shards, souls, uncommon drops."
+			Tooltip: "Largest amount of a new ingredient that is gathered slowly: gems, Fallen Stars, herbs, fish, critters, shards, souls, uncommon drops."
 		}
 
 		IngredientReusePenalty: {

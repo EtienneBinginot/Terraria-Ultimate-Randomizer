@@ -303,7 +303,7 @@ Tests: {
 	PickaxeIngredientsBelowLevel: Une recette de pioche ou de foreuse ne reçoit jamais de minerai ni de lingot (ni rien qui en soit fait) dont le minage exige sa propre puissance de pioche ou plus : pas de pioche en orichalque faite de lingots de chlorophyte
 	StationsCraftable: Chaque station d'artisanat a une recette refaite avec des matériaux trouvés, faisable à son palier sans son gardien ; l'établi à la main dès le début
 	HouseRecipesSimple: La torche, la plateforme en bois et la porte en bois ont une recette aléatoire simple : un ou deux matériaux de départ, quelques-uns de chaque, valant au plus le double de la recette vanilla, sur une station de base ou à la main
-	IngredientCountCaps: Aucun nouvel ingrédient n'est demandé au-delà de son plafond : quelques exemplaires d'un objet qu'on ne peut que fabriquer, une dizaine d'un objet lent (gemmes, étoiles filantes, poissons, créatures, éclats, âmes)
+	IngredientCountCaps: Aucun nouvel ingrédient n'est demandé au-delà de son plafond : quelques exemplaires d'un objet qu'on ne peut que fabriquer, une dizaine d'un objet lent (gemmes, étoiles filantes, herbes, poissons, créatures, éclats, âmes)
 	NoNeverIngredients: Aucune recette planifiée active ne demande un ingrédient impossible à obtenir (un miroir de glace, une guimauve) ; une recette gardée vanilla le voit remplacé
 	NoEmptyLiveRecipes: Aucune recette active n'a une liste d'ingrédients vide (une fabrication gratuite)
 	SwapStationsInTime: Un résultat échangé n'arrive jamais sur une station plus tardive que son propre palier plus la tolérance (pas d'arc en tungstène à l'établi lunaire)
@@ -2117,7 +2117,7 @@ Configs: {
 
 		SlowIngredientStackCap: {
 			Label: "Quantité maximale d'un ingrédient lent"
-			Tooltip: "Quantité maximale d'un nouvel ingrédient qui s'obtient lentement : gemmes, étoiles filantes, poissons, créatures, éclats, âmes, butins peu courants."
+			Tooltip: "Quantité maximale d'un nouvel ingrédient qui s'obtient lentement : gemmes, étoiles filantes, herbes, poissons, créatures, éclats, âmes, butins peu courants."
 		}
 
 		IngredientReusePenalty: {
