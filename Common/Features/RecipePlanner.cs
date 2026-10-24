@@ -243,8 +243,11 @@ namespace UltimateRandomizer.Common.Features
 				if ((RecipeSystem.IsShell(i) ? ingredients[i].Length == 0 : RecipeSystem.VanillaDisabled(i)) || (skip != null && i < skip.Length && skip[i])) continue;
 				live.Add(i);
 			}
+			// Run to the true fixed point: a long crafted chain whose recipes come in reverse index order takes one pass per link,
+			// and a cap (it was 40) left such items later, or never, in the plan while they were craftable (Night's Edge "never").
+			// It always ends: every change strictly lowers one of finitely many tiers
 			bool changed = true;
-			for (int pass = 0; pass < 40 && changed; pass++)
+			while (changed)
 			{
 				changed = false;
 				foreach (int i in live)
@@ -2527,11 +2530,11 @@ namespace UltimateRandomizer.Common.Features
 				int stream = shellRecipe ? RollKey.Uncraftable : RollKey.RecipeIngredient;
 				int recipeKey = shellRecipe ? DetRandom.ItemKey(results[i]) : RecipeSystem.RecipeKey(i);
 				Random rng = DetRandom.Get(stream, recipeKey, RollKey.Special);
-				// Still short (every free slot taken by a richer material, the key alone, the use caps reached): past the use caps,
-				// and a new ingredient while the recipe has room (its vanilla count plus the spread). Only the recipes the first
-				// pass left short change, on their own stream
+				// Still short (every free slot taken by a richer material, the key alone): a new ingredient while the recipe has room
+				// (its vanilla count plus the spread), still within the use caps (going past them put Lead Ore in 81 recipes, cap 80;
+				// the recipes left short are a handful). Only the recipes the first pass left short change, on their own stream
 				if (!RaiseValue(result, i, want, key, Richer(true), rng)
-					&& !RaiseValue(result, i, want, key, Richer(false), DetRandom.Get(stream, recipeKey, RollKey.Special, RollKey.Fallback),
+					&& !RaiseValue(result, i, want, key, Richer(true), DetRandom.Get(stream, recipeKey, RollKey.Special, RollKey.Fallback),
 						append: true, appendMax: RecipeSystem.OriginalIngredients(i).Length + cfg.IngredientCountSpread))
 				{
 					result.ValueShort[i] = true;

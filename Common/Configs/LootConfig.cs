@@ -127,6 +127,13 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(0.5f)]
 		public float CritterDropFactor;
 
+		// Permutation style: chance (%) of the one small frequent drop critters get on top of their slots (enemies get none there:
+		// the moved original drops feed them; critters have no place in the permutation)
+		[Range(0f, 100f)]
+		[Increment(5f)]
+		[DefaultValue(35f)]
+		public float CritterCommonDropChance;
+
 		// 2 to 7 (skewed towards the minimum): about 3.7 slots per enemy type before abundance, long drop tables
 		[Range(0, 20)]
 		[DefaultValue(2)]

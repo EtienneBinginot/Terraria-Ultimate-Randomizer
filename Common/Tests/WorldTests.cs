@@ -110,7 +110,20 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			if (items[stock.Length].type != ItemID.DD2ElderCrystal) failures.Add("special currency item replaced");
 			if (!items[stock.Length + 1].IsAir) failures.Add("reserved slot filled");
-			if (items[stock.Length + 2] != null) failures.Add("unused slot filled");
+			// The unused slots take exactly the shop-only items planned for this shop (ShopPermutation), in order, and nothing else
+			const string shopName = "Terraria/Merchant/Shop";
+			List<ShopSlot> added = ShopPlanner.AddedSlots(NPCID.Merchant, shopName, ShopPermutation.ItemsOf(ShopPermutation.Current, shopName),
+				ProgressionSystem.UnlockedTier, Main.hardMode);
+			for (int i = stock.Length + 2; i < items.Length; i++)
+			{
+				int a = i - (stock.Length + 2);
+				if (a < added.Count)
+				{
+					if (items[i] == null || items[i].type != added[a].Replacement)
+						failures.Add($"slot {i}: {(items[i] == null ? "empty" : Lang.GetItemNameValue(items[i].type))}, added {Lang.GetItemNameValue(added[a].Replacement)} expected");
+				}
+				else if (items[i] != null) failures.Add($"unused slot {i} filled with {Lang.GetItemNameValue(items[i].type)}");
+			}
 			Check.All(failures, "Shop");
 		}
 

@@ -929,9 +929,12 @@ namespace UltimateRandomizer.Common.Core
 		// (wall or platform back to its block: the block would take the wall's rarity)
 		// ingredients: the recipe's original ones (the live ones are randomized in a world: the tests pass
 		// RecipeSystem.OriginalIngredients)
-		public static bool SetsTier(Recipe recipe, IReadOnlyList<int> ingredients)
+		public static bool SetsTier(Recipe recipe, IReadOnlyList<int> ingredients) => SetsTier(recipe, ingredients, recipe?.createItem?.type ?? 0);
+
+		// The same with the recipe's original result (the live one is randomized in a world: the tests pass RecipeSystem.OriginalResult)
+		public static bool SetsTier(Recipe recipe, IReadOnlyList<int> ingredients, int result)
 		{
-			if (!IsTierRecipe(recipe) || recipe.Conditions.Any(c => WorldConditions.Contains(c))) return false;
+			if (!IsTierRecipe(recipe, result) || recipe.Conditions.Any(c => WorldConditions.Contains(c))) return false;
 			if (ingredients.Count == 1 && ContentSamples.ItemsByType.TryGetValue(ingredients[0], out Item part))
 			{
 				if (part.createWall > 0 || part.createTile >= TileID.Dirt && TileID.Sets.Platforms[part.createTile]) return false;
@@ -949,8 +952,10 @@ namespace UltimateRandomizer.Common.Core
 		// vanilla item is a shortcut the tiers ignore (that item keeps what vanilla gives it). Read at load, whatever
 		// RandomizeModdedRecipes says: the tiers never depend on a world's settings. Best effort: a modded recipe condition
 		// (a modded boss beaten...) is not read
-		public static bool IsTierRecipe(Recipe recipe) => IsVanillaRecipe(recipe)
-			|| recipe != null && !Features.RecipeSystem.VanillaDisabled(recipe.RecipeIndex) && recipe.createItem != null && recipe.createItem.type >= ItemID.Count;
+		public static bool IsTierRecipe(Recipe recipe) => IsTierRecipe(recipe, recipe?.createItem?.type ?? 0);
+
+		public static bool IsTierRecipe(Recipe recipe, int result) => recipe != null && !Features.RecipeSystem.VanillaDisabled(recipe.RecipeIndex) && result > 0
+			&& (recipe.Mod == null || recipe.Mod.Name == "ModLoader" || result >= ItemID.Count);
 
 		// The items an ingredient of a recipe accepts: every item of its recipe group, else itself
 		public static IEnumerable<int> IngredientChoices(Recipe recipe, int ingredient) => IngredientChoices(recipe.acceptedGroups, ingredient);

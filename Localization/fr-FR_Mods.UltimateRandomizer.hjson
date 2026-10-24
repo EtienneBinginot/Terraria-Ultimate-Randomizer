@@ -1441,7 +1441,12 @@ Configs: {
 
 		CritterDropFactor: {
 			Label: Part du drop fréquent des critters
-			Tooltip: Part du petit drop fréquent (matériau, potion, munitions...) que reçoivent les critters par rapport aux autres ennemis. Ils arrivent en nuées et meurent en un coup : 0,5 = deux fois moins souvent, 0 = jamais. En style de drops par permutation (sans petit drop fréquent), les critters ont les mêmes emplacements de drops aléatoires que les ennemis, chacun avec cette part de sa chance.
+			Tooltip: Part du petit drop fréquent (matériau, potion, munitions...) que reçoivent les critters par rapport aux autres ennemis. Ils arrivent en nuées et meurent en un coup : 0,5 = deux fois moins souvent, 0 = jamais. En style de drops par permutation, les critters ont les mêmes emplacements de drops aléatoires que les ennemis, chacun avec cette part de sa chance, et leur drop fréquent a sa propre chance (Chance du drop fréquent des critters).
+		}
+
+		CritterCommonDropChance: {
+			Label: "Chance du drop fréquent des critters (permutation)"
+			Tooltip: "Style de drops par permutation uniquement : chance (%) à chaque mort qu'un critter donne un petit drop fréquent (matériau, potion, munitions, nourriture, bloc...), en plus de ses emplacements de drops aléatoires. Jamais de jackpot. 0 = aucun drop fréquent."
 		}
 
 		DropRateMultiplier: {

@@ -391,6 +391,9 @@ namespace UltimateRandomizer.Common.Features
 		public static bool LeftAlone(int i) => IsModded(i) && !shell[i]
 			&& (!CraftingConfig.Instance.RandomizeModdedRecipes || moddedCondition[i] || ExcludedMod(modNames[i]));
 
+		// A mod's recipe with a condition of that mod (always LeftAlone)
+		public static bool HasModdedCondition(int i) => moddedCondition != null && i >= 0 && i < moddedCondition.Length && moddedCondition[i];
+
 		private static bool ExcludedMod(string mod) => mod != null && GeneralConfig.Instance.ExcludedMods.Any(m => m != null && m.Trim() == mod);
 
 		// A recipe condition defined by another mod: its type or its predicate's code lives outside tModLoader (the vanilla

@@ -510,9 +510,10 @@ namespace UltimateRandomizer.Common.Features
 		// wildRng: at kill time only, the madness tail (WildDropChance) may replace an unlocked item by one above the limit;
 		// the chance stays the one of the planned item, so the setting really is a share of the drops. wildMultiplier: scales
 		// that chance (JackpotWorth), 0 = no madness
-		// style: the configured one when null. critterFactor: CritterDropFactor when null (the CrittersDrop test compares)
+		// style: the configured one when null. critterFactor: CritterDropFactor when null, critterCommon: CritterCommonDropChance
+		// (%) when null (the CrittersDrop test compares)
 		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, float? abundance = null, Random wildRng = null, float wildMultiplier = 1f, DropTableStyle? style = null,
-			bool planning = false, float? critterFactor = null)
+			bool planning = false, float? critterFactor = null, float? critterCommon = null)
 		{
 			if (wildMultiplier <= 0f) wildRng = null;
 			List<PlannedDrop> drops = new();
@@ -534,8 +535,9 @@ namespace UltimateRandomizer.Common.Features
 			// weights (no materials: the moved original drops give them), plus the chances of the locked entries
 			// (Redistribute); no small frequent drops. Bosses (BossPermutation) too, at boss rates (the first slot always drops),
 			// those of the boss owning their bag (ExtrasOwner: both Twins roll Retinazer's, as their bag). Critters have no place
-			// in it but get the same slots, each at CritterDropFactor times the rate, and no small frequent drop either. The
-			// enemies it leaves out (bosses outside the boss table) keep the vanilla-like extras
+			// in it but get the same slots, each at CritterDropFactor times the rate, plus one small frequent drop at
+			// CritterCommonDropChance (else they would almost never drop). The enemies it leaves out (bosses outside the boss
+			// table) keep the vanilla-like extras
 			bool permutation = DropPermutation.InStyle(netId, tableStyle) || BossPermutation.InStyle(netId, tableStyle);
 			bool critter = NPCID.Sets.CountsAsCritter[type];
 			bool critterSlots = critter && tableStyle == DropTableStyle.Permutation;
@@ -582,31 +584,41 @@ namespace UltimateRandomizer.Common.Features
 				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
 				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap, LockGap = lockGap });
 			}
+			if (critterSlots)
+			{
+				// The vanilla-like style's first small frequent drop (same roll, same keys), at its own chance: not scaled by
+				// abundance like the rest of the permutation style. No madness: critters have no jackpot (JackpotWorth 0)
+				float critterChance = Math.Clamp((critterCommon ?? cfg.CritterCommonDropChance) / 100f, 0f, 1f);
+				if (critterChance > 0.0001f) drops.Add(CommonDrop(npcKey, 0, sourceTier, critterChance, null, 0f));
+			}
 			if (permutationSlots) return drops;
 
 			// Small frequent drops (material, potion, ammo...), so that most kills give something. Abundance scales the
 			// chance: every full 100 % is one sure drop, the rest the chance of one more (each a different item).
 			// Critters get only a share of it (CritterDropFactor): they come in swarms and die in one hit
 			float commonTotal = cfg.CommonDropChance / 100f * abundanceFactor * (critter ? Math.Max(0f, cfg.CritterDropFactor) : 1f);
-			for (int c = 0; !isBoss && commonTotal > 0.0001f && c < 20; c++, commonTotal -= 1f)
-			{
-				RollRequest common = new()
-				{
-					Keys = new[] { RollKey.MobDrop, npcKey, 2000 + c },
-					SourceTier = sourceTier,
-					OriginalItem = -1,
-					Policy = CategoryPolicy.Weighted,
-					Weights = CommonDropWeights.Instance,
-					TierJitterDown = 1,
-					IgnoreGating = true
-				};
-				int planned = ItemPool.Roll(common);
-				int lockGap = DropHelper.LockGap(planned, 0);
-				int item = Wild(common, planned, lockGap, wildRng, wildMultiplier, out int gap);
-				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000 + c, item));
-				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = Math.Min(1f, commonTotal), Extra = true, JackpotGap = gap, LockGap = lockGap });
-			}
+			for (int c = 0; !isBoss && commonTotal > 0.0001f && c < 20; c++, commonTotal -= 1f) drops.Add(CommonDrop(npcKey, c, sourceTier, Math.Min(1f, commonTotal), wildRng, wildMultiplier));
 			return drops;
+		}
+
+		// The c-th small frequent drop of an NPC type (material, potion, ammo...: CommonDropWeights)
+		private static PlannedDrop CommonDrop(int npcKey, int c, int sourceTier, float chance, Random wildRng, float wildMultiplier)
+		{
+			RollRequest common = new()
+			{
+				Keys = new[] { RollKey.MobDrop, npcKey, 2000 + c },
+				SourceTier = sourceTier,
+				OriginalItem = -1,
+				Policy = CategoryPolicy.Weighted,
+				Weights = CommonDropWeights.Instance,
+				TierJitterDown = 1,
+				IgnoreGating = true
+			};
+			int planned = ItemPool.Roll(common);
+			int lockGap = DropHelper.LockGap(planned, 0);
+			int item = Wild(common, planned, lockGap, wildRng, wildMultiplier, out int gap);
+			(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000 + c, item));
+			return new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap, LockGap = lockGap };
 		}
 
 		// Number of random extra slots of an enemy type, with explicit settings (the DropTableLength test compares ranges)

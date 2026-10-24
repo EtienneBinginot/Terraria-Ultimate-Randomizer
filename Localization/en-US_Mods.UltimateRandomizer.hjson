@@ -1441,7 +1441,12 @@ Configs: {
 
 		CritterDropFactor: {
 			Label: Critter frequent drop share
-			Tooltip: Share of the small frequent drop (material, potion, ammo...) that critters get, compared with other enemies. They come in swarms and die in one hit: 0.5 = half as often, 0 = never. In the permutation drop style (no small frequent drop), critters get the same random extra slots as enemies, each at this share of its chance.
+			Tooltip: Share of the small frequent drop (material, potion, ammo...) that critters get, compared with other enemies. They come in swarms and die in one hit: 0.5 = half as often, 0 = never. In the permutation drop style, critters get the same random extra slots as enemies, each at this share of its chance, and their frequent drop has a chance of its own (Critter frequent drop chance).
+		}
+
+		CritterCommonDropChance: {
+			Label: "Critter frequent drop chance (permutation)"
+			Tooltip: "Permutation drop style only: chance (%) per kill that a critter gives one small frequent drop (material, potion, ammo, food, block...), on top of its random extra slots. Never a jackpot. 0 = no frequent drop."
 		}
 
 		DropRateMultiplier: {
