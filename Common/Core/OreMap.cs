@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Terraria;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace UltimateRandomizer.Common.Core
@@ -70,12 +71,25 @@ namespace UltimateRandomizer.Common.Core
 
 		// Counted by Findability: the ores that can be mined in this world. Both hardmode ores of a pair always count, so
 		// an altar smash never changes the world caches (CheckWorld only rebuilds them for the pairs decided at world
-		// generation). The one that will be absent is harmless: hardmode pair ores are never picked as new ingredients
-		// nor given guaranteed sources (IsHardmodePairOre), only their own bar recipes rely on them.
+		// generation). The one that will be absent is harmless: a new ingredient asks for either ore of the pair
+		// (OrePairGroups, AskedAsPair), and they get no guaranteed source; only their own vanilla bar recipes need one of them.
 		public static bool IsFindable(int type) => IsHardmodePairOre(type) || IsPresent(type);
 
 		// An ore of a pair decided by the altars: its presence changes during hardmode
 		public static bool IsHardmodePairOre(int type) => PairOf(type) >= FirstHardmodePair;
+
+		// An ore the recipe plan may only ask for through its pair's group ("Cobalt or Palladium Ore"): a hardmode pair ore
+		// (the altars decide after the plan), or a pre-hardmode one whose pair this world has not recorded (an old world:
+		// both count as present). The pre-hardmode ores of a world that recorded them are known from its creation: the real one
+		public static bool AskedAsPair(int type)
+		{
+			int p = PairOf(type);
+			if (p < 0) return false;
+			if (p >= FirstHardmodePair) return true;
+			if (BothVariants(p)) return false;
+			int chosen = Chosen(p);
+			return chosen != Pairs[p].a && chosen != Pairs[p].b;
+		}
 
 		private static int Signature(int pairs)
 		{
@@ -165,6 +179,49 @@ namespace UltimateRandomizer.Common.Core
 			mapSignature = Signature(Pairs.Length);
 			findSignature = Signature(FirstHardmodePair);
 		}
+	}
+
+	// "Either ore of the pair" recipe groups (and the hardmode pairs' bars), registered on every machine at load in the same
+	// order, so their ids match everywhere: the recipe plan (computed on each machine) asks for them instead of an ore whose
+	// presence it can't know (OreMap.AskedAsPair)
+	public class OrePairGroups : ModSystem
+	{
+		private static readonly (string key, int a, int b, int ore)[] Groups =
+		{
+			("Mods.UltimateRandomizer.RecipeGroups.CopperOre", ItemID.CopperOre, ItemID.TinOre, ItemID.CopperOre),
+			("Mods.UltimateRandomizer.RecipeGroups.IronOre", ItemID.IronOre, ItemID.LeadOre, ItemID.IronOre),
+			("Mods.UltimateRandomizer.RecipeGroups.SilverOre", ItemID.SilverOre, ItemID.TungstenOre, ItemID.SilverOre),
+			("Mods.UltimateRandomizer.RecipeGroups.GoldOre", ItemID.GoldOre, ItemID.PlatinumOre, ItemID.GoldOre),
+			("Mods.UltimateRandomizer.RecipeGroups.CobaltOre", ItemID.CobaltOre, ItemID.PalladiumOre, ItemID.CobaltOre),
+			("Mods.UltimateRandomizer.RecipeGroups.MythrilOre", ItemID.MythrilOre, ItemID.OrichalcumOre, ItemID.MythrilOre),
+			("Mods.UltimateRandomizer.RecipeGroups.AdamantiteOre", ItemID.AdamantiteOre, ItemID.TitaniumOre, ItemID.AdamantiteOre),
+			("Mods.UltimateRandomizer.RecipeGroups.CobaltBar", ItemID.CobaltBar, ItemID.PalladiumBar, ItemID.CobaltOre),
+			("Mods.UltimateRandomizer.RecipeGroups.MythrilBar", ItemID.MythrilBar, ItemID.OrichalcumBar, ItemID.MythrilOre),
+			("Mods.UltimateRandomizer.RecipeGroups.AdamantiteBar", ItemID.AdamantiteBar, ItemID.TitaniumBar, ItemID.AdamantiteOre)
+		};
+
+		// Registered id -> the ore whose pair decides whether the group is needed
+		private static readonly Dictionary<int, int> ids = new();
+
+		public static IEnumerable<int> Ids => ids.Keys;
+
+		public static bool IsPairGroup(int id) => ids.ContainsKey(id);
+
+		// Is this group a candidate in this world: its pair is unknown when planning (hardmode pairs always)
+		public static bool Needed(int id) => ids.TryGetValue(id, out int ore) && OreMap.AskedAsPair(ore);
+
+		public override void AddRecipeGroups()
+		{
+			ids.Clear();
+			foreach ((string key, int a, int b, int ore) in Groups)
+			{
+				// Read when shown (the texts load after the recipe groups)
+				RecipeGroup group = new(() => Language.GetTextValue(key), a, b);
+				ids[RecipeGroup.RegisterGroup("UltimateRandomizer:" + key.Substring(key.LastIndexOf('.') + 1), group)] = ore;
+			}
+		}
+
+		public override void Unload() => ids.Clear();
 	}
 
 	// Server, single player and clients: each one watches its own (synced) copy of the world's ore choices

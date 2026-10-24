@@ -447,7 +447,7 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// 1. What a replaced ingredient may become (RecipePlanner.IngredientCandidates: found, never crafted, randomizable, no
-		// guaranteed station, no mining ore, no bag or summon; categories of weight 0 left out as PickIngredient does), by
+		// guaranteed station, no ore the altars decide, no bag or summon; categories of weight 0 left out as PickIngredient does), by
 		// findability tier. Natural: its own tier (or the unlock tier of it); later: a lower-tier item only a later random
 		// source gives; earlier: found before its tier (gathered, mined, herbs)
 		private const int MinTierMaterials = 10;

@@ -42,6 +42,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("BagContentFindable", BagContentFindable);
 			TestRunner.Register("CrateAccessWorld", CrateAccessWorld);
 			TestRunner.Register("HardmodeOresOfWorld", HardmodeOresOfWorld);
+			TestRunner.Register("NoFishingSource", NoFishingSource);
 			TestRunner.Register("AltarDecisionKeepsCaches", AltarDecisionKeepsCaches);
 			TestRunner.Register("PotOnlyUnfound", PotOnlyUnfound);
 			TestRunner.Register("GuaranteesNotBelowTier", GuaranteesNotBelowTier);
@@ -1407,7 +1408,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Hardmode pair ores always count as findable (the altars must not change the world caches) and are never picked as
-		// new recipe ingredients, so an ore the altars did not choose is never required
+		// new recipe ingredients on their own (only through their pair group), unless something other than mining gives them as
+		// early, so an ore the altars did not choose is never required
 		private static void HardmodeOresOfWorld()
 		{
 			List<string> failures = new();
@@ -1427,11 +1429,30 @@ namespace UltimateRandomizer.Common.Tests
 					HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
 					foreach ((int type, _) in plan.Ingredients[i])
 					{
-						if (!originals.Contains(type) && OreMap.IsHardmodePairOre(type)) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} now needs {Name(type)}");
+						if (!originals.Contains(type) && OreMap.IsHardmodePairOre(type) && !RecipePlanner.GroupsOf(plan, i).Any(gr => OrePairGroups.IsPairGroup(gr) && RecipeGroup.recipeGroups[gr].ContainsItem(type))
+							&& RecipePlanner.CandidateTier(type) == Findability.Never) failures.Add($"{Name(RecipeSystem.OriginalResult(i))} now needs {Name(type)}");
 					}
 				}
 			}
 			Check.All(failures, "Hardmode ores");
+		}
+
+		// Fishing is only a bonus: no fishing crate is the source of anything findable (Findability.BaseSource), whatever
+		// fishing gives; an item a crate holds is found through its other sources only
+		private static void NoFishingSource()
+		{
+			if (!ItemPool.Ready) Check.Skip("no item pool");
+			List<string> failures = new();
+			int fromBags = 0;
+			for (int item = 1; item < ItemPool.Info.Length; item++)
+			{
+				(Findability.SourceKind kind, int id) = Findability.BaseSource(item);
+				if (kind != Findability.SourceKind.Bag) continue;
+				fromBags++;
+				if (id > 0 && id < ItemID.Sets.IsFishingCrate.Length && ItemID.Sets.IsFishingCrate[id]) failures.Add($"{Name(item)} found in {Name(id)}");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"NoFishingSource: {fromBags} items found first in a bag");
+			Check.All(failures, "Items found through fishing crates");
 		}
 
 		// An altar deciding Cobalt or Palladium changes nothing the world caches hold: same requirements, same guaranteed

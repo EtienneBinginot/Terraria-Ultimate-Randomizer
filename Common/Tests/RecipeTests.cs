@@ -39,6 +39,9 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("StationPlanFromOriginals", StationPlanFromOriginals);
 			TestRunner.Register("RealCrafting", RealCrafting);
 			TestRunner.Register("PickaxePerMiningLevel", PickaxePerMiningLevel);
+			TestRunner.Register("MiningPickaxeGuaranteed", MiningPickaxeGuaranteed);
+			TestRunner.Register("OresAsIngredients", OresAsIngredients);
+			TestRunner.Register("OrePairGroupsUsed", OrePairGroupsUsed);
 			TestRunner.Register("RecipeRandomizationShare", RecipeRandomizationShare);
 			TestRunner.Register("RecipeEveryItemKept", RecipeEveryItemKept);
 			TestRunner.Register("RecipeNoCycles", RecipeNoCycles);
@@ -707,8 +710,9 @@ namespace UltimateRandomizer.Common.Tests
 			}
 		}
 
-		// Every mining level has a pickaxe by the tier of its ores, with the live plan and the guaranteed sources, without
-		// counting the ores of that level and above as found (they need that pickaxe)
+		// Every mining level has a pickaxe by the tier of its ores, with the live plan and the guaranteed sources, counting the
+		// ores of that level and above only by their other sources (drops, bags: mining them needs that pickaxe). The plan's
+		// recipes may ask for those ores (a pickaxe of an ore it can't mine yet is no cycle as long as this holds)
 		private static void PickaxePerMiningLevel()
 		{
 			if (!ItemPool.Ready || RecipeSystem.RecipeCount == 0) Check.Skip("no recipes");
@@ -725,12 +729,121 @@ namespace UltimateRandomizer.Common.Tests
 				if (oreTier < 0) continue;
 				levels++;
 				HashSet<int> unmined = RecipePlanner.OresFrom(level.pick);
-				int[] avail = RecipePlanner.Availability(item => unmined.Contains(item) ? Findability.Never : Findability.Tier(item), results, new int[results.Length], ingredients, tiles, out _, plan.Twin);
+				int[] avail = RecipePlanner.Availability(item => unmined.Contains(item) || Findability.MiningNeed(item) >= level.pick ? Findability.NonMiningTier(item) : Findability.Tier(item),
+					results, new int[results.Length], ingredients, tiles, out _, plan.Twin, Enumerable.Range(0, results.Length).Select(i => RecipePlanner.GroupsOf(plan, i)).ToArray());
 				int best = pickaxes.Where(p => RecipePlanner.PickPower(p) >= level.pick && p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Findability.Never).Min();
 				if (best > oreTier) failures.Add($"pick power {level.pick} ({string.Join("/", level.ores.Select(Name))}, tier {oreTier}): first pickaxe at {Show(best)}");
 			}
 			Check.That(levels > 0, "no mining level in this world");
 			Check.All(failures, "Mining levels without a pickaxe in time");
+		}
+
+		// The mining chain needs no recipe: every mining level whose ores this world has gets a guaranteed pickaxe of its power
+		// by the tier of its ores (RecipePlanner.MiningRequirements), found without crafting (it has hosts). A mined ore or block
+		// never counts as found before a pickaxe that mines it is found, unless something else gives it (Findability.Tier)
+		private static void MiningPickaxeGuaranteed()
+		{
+			if (!ItemPool.Ready || RecipeSystem.RecipeCount == 0) Check.Skip("no recipes");
+			List<string> failures = new();
+			List<string> found = new();
+			foreach ((int pick, int[] ores) level in RecipePlanner.MiningLevels)
+			{
+				int oreTier = RecipePlanner.MiningTier(level);
+				if (oreTier < 0) continue;
+				string what = $"pick power {level.pick} ({string.Join("/", level.ores.Select(Name))}, tier {oreTier})";
+				GuaranteedSources.Requirement guaranteed = GuaranteedSources.Requirements.FirstOrDefault(r => r.Tool && RecipePlanner.PickPower(r.Item) >= level.pick && r.Tier <= oreTier);
+				if (guaranteed.Item <= 0)
+				{
+					failures.Add($"{what}: no guaranteed pickaxe");
+					continue;
+				}
+				int foundAt = GuaranteedSources.FoundTier(guaranteed);
+				found.Add($"{level.pick}: {Name(guaranteed.Item)} at {Show(foundAt)}");
+				if (foundAt == Findability.Never) failures.Add($"{what}: {Name(guaranteed.Item)} has no host");
+				if (Findability.PickaxeTier(level.pick) > foundAt) failures.Add($"{what}: first pickaxe found at {Show(Findability.PickaxeTier(level.pick))}, after the guaranteed one");
+			}
+			int mined = 0;
+			for (int type = 1; type < ItemPool.Info.Length; type++)
+			{
+				if (Findability.MinedTier(type) == Findability.Never) continue;
+				int need = Findability.MiningNeed(type);
+				if (need <= 0) continue;
+				mined++;
+				int earliest = Math.Min(Findability.NonMiningTier(type), Math.Max(Findability.MinedTier(type), Findability.PickaxeTier(need)));
+				if (Findability.Tier(type) < earliest) failures.Add($"{Name(type)} (pick {need}) found at {Show(Findability.Tier(type))}, before a pickaxe mines it ({Show(earliest)})");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"MiningPickaxeGuaranteed: {mined} mined materials need a pickaxe; guaranteed pickaxes {string.Join(", ", found)}");
+			Check.That(mined > 0, "no mined material needs a pickaxe");
+			Check.All(failures, "Mining chain");
+		}
+
+		// Ores and blocks that need a pickaxe are ingredients again: the plan's new ingredients (not in the vanilla recipe) take
+		// some of them, as items or through an ore pair group (counts logged)
+		private static void OresAsIngredients()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			HashSet<int> mining = RecipePlanner.MiningLevels.SelectMany(l => l.ores).Append(ItemID.Obsidian).ToHashSet();
+			Dictionary<int, int> counts = new();
+			int pairGroups = 0;
+			for (int i = 0; i < plan.Ingredients.Length; i++)
+			{
+				if (plan.Ingredients[i] == null || plan.Twin[i]) continue;
+				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
+				int[] groups = RecipePlanner.GroupsOf(plan, i);
+				foreach ((int type, _) in plan.Ingredients[i])
+				{
+					if (originals.Contains(type)) continue;
+					if (groups.Any(g => OrePairGroups.IsPairGroup(g) && RecipeGroup.recipeGroups[g].ContainsItem(type)))
+					{
+						pairGroups++;
+						continue;
+					}
+					if (mining.Contains(type) || RecipePlanner.PickToMine(type) >= RecipePlanner.MiningLevels[0].pick) counts[type] = counts.GetValueOrDefault(type) + 1;
+				}
+			}
+			int total = counts.Values.Sum() + pairGroups;
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"OresAsIngredients: {total} new ingredients mined with a pickaxe ({pairGroups} ore pair groups): "
+				+ string.Join(", ", counts.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Select(p => $"{Name(p.Key)} x{p.Value}")));
+			Check.That(total > 0, "no ore or block needing a pickaxe is a new ingredient");
+		}
+
+		// The ore pair groups ("Cobalt or Palladium Ore", their bars...) exist with both ores, are new ingredients in some recipes
+		// (the hardmode pairs: their ore is decided by the altars after the plan), and the live recipe accepts either member
+		private static void OrePairGroupsUsed()
+		{
+			List<string> failures = new();
+			List<int> ids = OrePairGroups.Ids.ToList();
+			Check.That(ids.Count >= 6, $"only {ids.Count} ore pair groups registered");
+			foreach (int id in ids)
+			{
+				RecipeGroup group = RecipeGroup.recipeGroups[id];
+				string text = group.GetText();
+				if (group.ValidItems.Count != 2) failures.Add($"group {text}: {group.ValidItems.Count} members");
+				if (string.IsNullOrEmpty(text) || text.StartsWith("Mods.")) failures.Add($"group {id} has no name ({text})");
+			}
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			int used = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				if (plan.Ingredients[i] == null || plan.Twin[i] || Main.recipe[i].Disabled) continue;
+				foreach (int id in RecipePlanner.GroupsOf(plan, i).Where(OrePairGroups.IsPairGroup))
+				{
+					used++;
+					Recipe recipe = Main.recipe[i];
+					RecipeGroup group = RecipeGroup.recipeGroups[id];
+					if (!recipe.acceptedGroups.Contains(id)) failures.Add($"{Name(recipe.createItem.type)}: live recipe without {group.GetText()}");
+					if (!recipe.requiredItem.Any(item => item.type == group.IconicItemId)) failures.Add($"{Name(recipe.createItem.type)}: {group.GetText()} without its ingredient");
+					foreach (int member in group.ValidItems)
+					{
+						if (!recipe.AcceptedByItemGroups(member, group.IconicItemId)) failures.Add($"{Name(recipe.createItem.type)}: {Name(member)} not accepted for {group.GetText()}");
+					}
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"OrePairGroupsUsed: {used} recipe slots ask for an ore pair group");
+			Check.That(used > 0, "no recipe asks for an ore pair group");
+			Check.All(failures, "Ore pair groups");
 		}
 
 		// Share of the vanilla recipes the plan changes, and why the others keep their result (values logged even when passing):

@@ -243,7 +243,8 @@ Tests: {
 	WorldMaterialsFindable: Bois, pierre, gemmes et premiers minerais se trouvent dès le début
 	BagContentFindable: Le contenu d'un sac ne compte comme trouvable que si le sac peut être obtenu (jamais les sacs saisonniers, les sacs de trésor seulement en mode expert)
 	CrateAccessWorld: Les caisses que le monde ne peut pas donner (autre mal, caisse sacrée avant le hardmode) ne comptent pas comme source
-	HardmodeOresOfWorld: Les minerais des paires hardmode comptent toujours comme trouvables et ne deviennent jamais de nouveaux ingrédients
+	HardmodeOresOfWorld: Les minerais des paires hardmode comptent toujours comme trouvables et ne deviennent de nouveaux ingrédients que par leur groupe de paire
+	NoFishingSource: Aucune caisse de pêche n'est jamais la source d'un objet trouvable (la pêche n'est qu'un bonus)
 	AltarDecisionKeepsCaches: Le choix d'un minerai hardmode par un autel ne change ni les sources garanties ni la trouvabilité
 	PotOnlyUnfound: Les pots ne donnent que des objets garantis que personne n'a encore trouvés
 	GuaranteesNotBelowTier: Aucun objet garanti n'arrive avant son tier (Manipulateur antique et Sceau céleste pas avant le Cultiste lunatique)
@@ -270,6 +271,9 @@ Tests: {
 	StationPlanFromOriginals: Le choix des stations ne dépend que des recettes d'origine, pas de celles déjà randomisées
 	RealCrafting: Le menu d'artisanat propose une recette avec ses nouveaux ingrédients, et plus avec les anciens
 	PickaxePerMiningLevel: Chaque niveau de minage a une pioche au tier de ses minerais (fabriquée, trouvée ou garantie)
+	MiningPickaxeGuaranteed: Chaque niveau de minage a une pioche garantie trouvée sans fabrication, et aucun minerai miné ne compte avant qu'une pioche puisse le miner
+	OresAsIngredients: Les minerais et blocs qui demandent une pioche redeviennent de nouveaux ingrédients (seuls ou par groupe de paire)
+	OrePairGroupsUsed: Les groupes de paires de minerais (cobalt ou palladium...) existent, servent dans des recettes et acceptent l'un ou l'autre minerai
 	RecipeRandomizationShare: Presque toutes les recettes vanilla changent (95 %), peu échangent leur résultat (environ la chance d'échange) ; les raisons sont journalisées
 	RecipeEveryItemKept: Chaque objet fait par une recette vanilla reste fabricable, et rien de ce qu'on obtient en vanilla n'est perdu (Zénith)
 	RecipeNoCycles: Aucun objet n'est fabriqué à partir de lui-même par un nouvel ingrédient, directement ou via d'autres recettes
@@ -364,6 +368,19 @@ Tests: {
 }
 
 Journal.Description: Ouvre le codex du randomizer (aussi avec la touche J)
+
+RecipeGroups: {
+	CopperOre: N'importe quel minerai de cuivre ou d'étain
+	IronOre: N'importe quel minerai de fer ou de plomb
+	SilverOre: N'importe quel minerai d'argent ou de tungstène
+	GoldOre: N'importe quel minerai d'or ou de platine
+	CobaltOre: N'importe quel minerai de cobalt ou de palladium
+	MythrilOre: N'importe quel minerai de mythril ou d'orichalque
+	AdamantiteOre: N'importe quel minerai d'adamantite ou de titane
+	CobaltBar: N'importe quel lingot de cobalt ou de palladium
+	MythrilBar: N'importe quel lingot de mythril ou d'orichalque
+	AdamantiteBar: N'importe quel lingot d'adamantite ou de titane
+}
 
 Jackpot: {
 	Popup: Jackpot ! +{0}
