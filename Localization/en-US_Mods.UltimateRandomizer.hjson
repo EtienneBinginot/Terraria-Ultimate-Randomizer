@@ -1991,8 +1991,8 @@ Configs: {
 		}
 
 		RandomizeModdedRecipes: {
-			Label: "Randomize other mods' recipes"
-			Tooltip: "Recipes added by other mods (Magic Storage...) are randomized like the vanilla ones: new ingredients and stations, and the odd swapped result. Each one keeps a key ingredient of its item's level, so a storage upgrade still waits for its bars. Off: they stay as their mod made them. Adding or removing mods, or changing this setting, changes this world's random results; turning it back off does not bring the previous ones back."
+			Label: Randomize other mods' recipes
+			Tooltip: Recipes added by other mods (Magic Storage...) are randomized like the vanilla ones: new ingredients and stations, and the odd swapped result. Each one keeps a key ingredient of its item's level, so a storage upgrade still waits for its bars. Off: they stay as their mod made them. Adding or removing mods, or changing this setting, changes this world's random results; turning it back off does not bring the previous ones back.
 		}
 
 		LimitRecipeValue: {

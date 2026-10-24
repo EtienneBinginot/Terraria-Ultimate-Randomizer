@@ -1991,8 +1991,8 @@ Configs: {
 		}
 
 		RandomizeModdedRecipes: {
-			Label: "Randomiser les recettes des autres mods"
-			Tooltip: "Les recettes ajoutées par d'autres mods (Magic Storage...) sont randomisées comme celles du jeu : nouveaux ingrédients et stations, et parfois un résultat échangé. Chacune garde un ingrédient clé du niveau de son objet : une amélioration de stockage attend toujours ses lingots. Désactivé : elles restent telles que leur mod les a faites. Ajouter ou retirer des mods, ou changer ce réglage, modifie les résultats aléatoires de ce monde ; le désactiver ensuite ne rétablit pas les anciens."
+			Label: Randomiser les recettes des autres mods
+			Tooltip: Les recettes ajoutées par d'autres mods (Magic Storage...) sont randomisées comme celles du jeu : nouveaux ingrédients et stations, et parfois un résultat échangé. Chacune garde un ingrédient clé du niveau de son objet : une amélioration de stockage attend toujours ses lingots. Désactivé : elles restent telles que leur mod les a faites. Ajouter ou retirer des mods, ou changer ce réglage, modifie les résultats aléatoires de ce monde ; le désactiver ensuite ne rétablit pas les anciens.
 		}
 
 		LimitRecipeValue: {
