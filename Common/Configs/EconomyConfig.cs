@@ -74,8 +74,25 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(100)]
 		public int MinimumPrice;
 
+		// Ammo, blocks, potions... are bought one at a time: their own small price, not the minimum price
+		[Range(1, 1000000)]
+		[DefaultValue(1)]
+		public int MinimumStackablePrice;
+
+		// Price ceiling = a base price of the item's tier x this (gear: x 4 more); 0: no ceiling. Items worth more than it
+		// (no gear) are seldom rolled
+		[Range(0f, 50f)]
+		[Increment(0.5f)]
+		[DefaultValue(3f)]
+		public float PriceCeiling;
+
 		[DefaultValue(true)]
 		public bool NoDuplicatesInShop;
+
+		// World-wide: one item is rolled by at most this many merchants (0: no limit)
+		[Range(0, 50)]
+		[DefaultValue(3)]
+		public int MaxShopsPerItem;
 
 		[DefaultValue(true)]
 		public bool ShopsFollowProgression;

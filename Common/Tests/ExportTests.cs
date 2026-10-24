@@ -329,7 +329,7 @@ namespace UltimateRandomizer.Common.Tests
 							// An added slot: a shop-only item of this world, sold from its unlock tier
 							int added = slots[i].Replacement;
 							ItemInfo ainfo = ItemPool.Info[added];
-							rows.Add(Row(NpcInternal(npc), NpcName(npc), shop.Shop.FullName, tier, i, "", "", "", "", "from tier " + ItemPool.UnlockTierOf(added), "added slot",
+							rows.Add(Row(NpcInternal(npc), NpcName(npc), shop.Shop.FullName, tier, i, "", "", "", "", "from tier " + ShopPermutation.UnlockTier(added), "added slot",
 								Internal(added), Name(added), ainfo.Category, ainfo.Tier, ainfo.TrueTier, slots[i].Price, "", true, ShopTests.KeptBy(added, permutation, recipes)));
 							continue;
 						}

@@ -25,6 +25,10 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ShopNoDuplicates", ShopNoDuplicates);
 			TestRunner.Register("ShopOnlyPlacement", ShopOnlyPlacement);
 			TestRunner.Register("ShopOnlySlots", ShopOnlySlots);
+			TestRunner.Register("ShopPricesAffordable", ShopPricesAffordable);
+			TestRunner.Register("ShopSpread", ShopSpread);
+			TestRunner.Register("ShopPylonsGuaranteed", ShopPylonsGuaranteed);
+			TestRunner.Register("ShopAddedSlotsOnTime", ShopAddedSlotsOnTime);
 		}
 
 		internal sealed class VanillaShop
@@ -91,7 +95,8 @@ namespace UltimateRandomizer.Common.Tests
 			EconomyConfig cfg = EconomyConfig.Instance;
 			IReadOnlyList<int> added = ShopPermutation.ItemsOf(permutation, shop.Shop.FullName);
 			bool hardMode = tier >= (int)Tier.Hardmode;
-			ShopSlot[] slots = ShopPlanner.PlanShop(shop.Shop.NpcType, shop.Shop.FullName, shop.Originals, tier, hardMode, cfg.ShopsFollowProgression, noDuplicates, added);
+			ShopSlot[] slots = ShopPlanner.PlanShop(shop.Shop.NpcType, shop.Shop.FullName, shop.Originals, tier, hardMode, cfg.ShopsFollowProgression, noDuplicates,
+				ShopPermutation.ItemsOfNpc(permutation, shop.Shop.NpcType));
 			return slots.Concat(ShopPlanner.AddedSlots(shop.Shop.NpcType, shop.Shop.FullName, added, tier, hardMode)).ToArray();
 		}
 
@@ -183,7 +188,7 @@ namespace UltimateRandomizer.Common.Tests
 							ItemInfo ainfo = ItemPool.Info[added];
 							if (!seen.Add(added)) duplicates++;
 							tsv.AppendLine(string.Join("	", NPCID.Search.GetName(npc), Lang.GetNPCNameValue(npc), shop.Shop.FullName, tier, i, "", "", "", "", "",
-								"from tier " + ItemPool.UnlockTierOf(added), "added slot", Internal(added), Name(added), ainfo.Category, ainfo.Tier, ainfo.TrueTier,
+								"from tier " + ShopPermutation.UnlockTier(added), "added slot", Internal(added), Name(added), ainfo.Category, ainfo.Tier, ainfo.TrueTier,
 								plan[i].Price, "", "", "", "", "shop-only", KeptBy(added, permutation, recipes)));
 							rows++;
 							continue;
@@ -219,11 +224,11 @@ namespace UltimateRandomizer.Common.Tests
 				string sellers = string.Join(", ", permutation.Places.Where(p => p.Original == item).Select(p => $"{Lang.GetNPCNameValue(p.Npc)} ({p.Shop}#{p.Index}, tier {p.Tier})"));
 				if (!permutation.SellerOf.TryGetValue(item, out int m))
 				{
-					onlyTsv.AppendLine(string.Join("	", Internal(item), Name(item), ItemPool.Info[item].Category, ItemPool.TierOf(item), ItemPool.UnlockTierOf(item), "", "", "", "", "", "", "", sellers));
+					onlyTsv.AppendLine(string.Join("	", Internal(item), Name(item), ItemPool.Info[item].Category, ItemPool.TierOf(item), ShopPermutation.UnlockTier(item), "", "", "", "", "", "", "", sellers));
 					continue;
 				}
 				ShopPermutation.Merchant merchant = permutation.Merchants[m];
-				onlyTsv.AppendLine(string.Join("	", Internal(item), Name(item), ItemPool.Info[item].Category, ItemPool.TierOf(item), ItemPool.UnlockTierOf(item),
+				onlyTsv.AppendLine(string.Join("	", Internal(item), Name(item), ItemPool.Info[item].Category, ItemPool.TierOf(item), ShopPermutation.UnlockTier(item),
 					NPCID.Search.GetName(merchant.Npc), Lang.GetNPCNameValue(merchant.Npc), merchant.Shop, merchant.Arrival, ShopPermutation.SaleTier(merchant, item),
 					Late(merchant, item) ? "late" : "", permutation.OverCapacity.Contains(item) ? "over" : "", sellers));
 			}
@@ -245,7 +250,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// No roll above the unlocked tier + 1 + the shop's jitter, for entries the unlocked tier already reaches (an entry of a
-		// later tier is not sold yet); no added slot before its item's unlock tier
+		// later tier is not sold yet); no weapon, armor, accessory or tool of a true tier above the unlocked tier (when shops
+		// follow progression; or above the entry's own tier); no added slot before its item's unlock tier
 		private static void ShopsNotTooEarly()
 		{
 			if (!ItemPool.Ready) Check.Skip("items not classified yet");
@@ -263,10 +269,15 @@ namespace UltimateRandomizer.Common.Tests
 					{
 						if (slot.Guaranteed)
 						{
-							if (ItemPool.UnlockTierOf(slot.Replacement) > tier) failures.Add($"{Lang.GetNPCNameValue(shop.Shop.NpcType)} at tier {tier}: added {Name(slot.Replacement)} (unlock tier {ItemPool.UnlockTierOf(slot.Replacement)})");
+							if (ShopPermutation.UnlockTier(slot.Replacement) > tier) failures.Add($"{Lang.GetNPCNameValue(shop.Shop.NpcType)} at tier {tier}: added {Name(slot.Replacement)} (unlock tier {ShopPermutation.UnlockTier(slot.Replacement)})");
 							continue;
 						}
 						if (!slot.Replaced || ItemPool.TierOf(slot.Original) > tier) continue;
+						if (EconomyConfig.Instance.ShopsFollowProgression && ShopPlanner.WithinUnlockedTier(ItemPool.Info[slot.Original].Category)
+							&& ItemPool.TrueTierOf(slot.Replacement) > Math.Max(tier, ItemPool.TierOf(slot.Original)))
+						{
+							failures.Add($"{Lang.GetNPCNameValue(shop.Shop.NpcType)} at tier {tier}: {Name(slot.Original)} -> {Name(slot.Replacement)} (true tier {ItemPool.TrueTierOf(slot.Replacement)})");
+						}
 						int max = tier + 1 + ShopPlanner.TierJitterUp;
 						if (ItemPool.TierOf(slot.Replacement) > max)
 						{
@@ -316,7 +327,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Shop-only items no longer obtainable");
 		}
 
-		// With NoDuplicatesInShop, no shop sells the same item twice at any tier (rolls and added slots together)
+		// With NoDuplicatesInShop, no merchant sells the same item twice at any tier (rolls and added slots together, all its
+		// tabs together: the Painter's decor too)
 		private static void ShopNoDuplicates()
 		{
 			if (!ItemPool.Ready) Check.Skip("items not classified yet");
@@ -325,14 +337,17 @@ namespace UltimateRandomizer.Common.Tests
 			if (shops.Count == 0) Check.Skip("no vanilla shop registered");
 			ShopPermutation.WorldPlan permutation = ShopOnlyPlan();
 			List<string> failures = new();
-			foreach (VanillaShop shop in shops)
+			foreach (IGrouping<int, VanillaShop> merchant in shops.GroupBy(s => s.Shop.NpcType))
 			{
 				for (int tier = 0; tier < Tiers.Count; tier++)
 				{
 					HashSet<int> seen = new();
-					foreach (ShopSlot slot in Plan(permutation, shop, tier, true))
+					foreach (VanillaShop shop in merchant)
 					{
-						if (slot.Replaced && !seen.Add(slot.Replacement)) failures.Add($"{Lang.GetNPCNameValue(shop.Shop.NpcType)} at tier {tier}: {Name(slot.Replacement)} twice");
+						foreach (ShopSlot slot in Plan(permutation, shop, tier, true))
+						{
+							if (slot.Replaced && !seen.Add(slot.Replacement)) failures.Add($"{Lang.GetNPCNameValue(merchant.Key)} ({shop.Shop.FullName}) at tier {tier}: {Name(slot.Replacement)} twice");
+						}
 					}
 				}
 			}
@@ -373,6 +388,7 @@ namespace UltimateRandomizer.Common.Tests
 					expected.Add(item);
 				}
 			}
+			expected.UnionWith(ShopPermutation.AlwaysAddedItems());
 			foreach (int item in expected.Where(i => !plan.ShopOnly.Contains(i))) failures.Add($"{Name(item)}: shop-only, not in the plan");
 			foreach (int item in plan.ShopOnly.Where(i => !expected.Contains(i))) failures.Add($"{Name(item)}: in the plan, but not shop-only");
 
@@ -388,7 +404,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (MerchantProblem(merchant) is string problem) failures.Add($"{Name(item)} at {Where(merchant)}: {problem}");
 				if (plan.Merchants.Count(x => x.Items.Contains(item)) != 1) failures.Add($"{Name(item)}: not exactly one added slot");
 				if (!ShopPermutation.ItemsOf(plan, merchant.Shop).Contains(item)) failures.Add($"{Name(item)}: missing from the items of {merchant.Shop}");
-				int unlock = ItemPool.UnlockTierOf(item);
+				int unlock = ShopPermutation.UnlockTier(item);
 				if (!ShopPermutation.Unlocked(item, unlock, unlock >= (int)Tier.Hardmode)) failures.Add($"{Name(item)}: not sold at its unlock tier {unlock}");
 				if (unlock > 0 && ShopPermutation.Unlocked(item, unlock - 1, unlock - 1 >= (int)Tier.Hardmode)) failures.Add($"{Name(item)}: sold before its unlock tier {unlock}");
 				if (Late(merchant, item)) late.Add($"{Name(item)} (tier {ItemPool.TierOf(item)}) at {Where(merchant)}");
@@ -469,7 +485,8 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				int[] originals = items.Select(i => i == null || i.IsAir || i.shopSpecialCurrency != -1 ? 0 : i.type).ToArray();
 				IReadOnlyList<int> shopOnly = ShopPermutation.ItemsOf(plan, shopName);
-				ShopSlot[] rolls = ShopPlanner.PlanShop(shop.NpcType, shopName, originals, ProgressionSystem.UnlockedTier, Main.hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop, shopOnly);
+				ShopSlot[] rolls = ShopPlanner.PlanShop(shop.NpcType, shopName, originals, ProgressionSystem.UnlockedTier, Main.hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop,
+					ShopPermutation.ItemsOfNpc(plan, shop.NpcType));
 				bool[] rolled = rolls.Select(r => r.Replaced).ToArray();
 				Item[] before = (Item[])items.Clone();
 				List<ShopSlot> added = ShopPlanner.AddedSlots(shop.NpcType, shopName, shopOnly, ProgressionSystem.UnlockedTier, Main.hardMode);
@@ -499,6 +516,152 @@ namespace UltimateRandomizer.Common.Tests
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ShopOnlySlots: {shown} added slots shown right now, {displaced} of them in place of a roll (shop full)");
 			Check.All(failures, "Shop-only slots");
 			if (shown == 0) Check.Skip("no added slot is unlocked right now");
+		}
+
+		// Every randomizable item's shop price: never below its floor (half the value: no money exploit; the minimum price, lower
+		// for a stackable item), never above its tier's ceiling unless the floor is higher; an item without a value is cheap
+		// unless it is gear (a block or ammo a few copper, a material or a piece of furniture a few silver at most); a
+		// stackable item of a small value keeps a small price (no single arrow at the unstackable minimum)
+		private static void ShopPricesAffordable()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			EconomyConfig cfg = EconomyConfig.Instance;
+			float maxMultiplier = Math.Max(cfg.PriceMultiplierMin, cfg.PriceMultiplierMax);
+			List<string> failures = new();
+			int cheap = 0, capped = 0;
+			for (int item = 1; item < ItemPool.Info.Length; item++)
+			{
+				if (!ItemPool.IsRandomizable(item)) continue;
+				int price = PriceRules.Price(item, DetRandom.Get(RollKey.Price, item));
+				int floor = PriceRules.Floor(item);
+				int value = StackRules.ValueOf(item);
+				if (price < floor) failures.Add($"{Name(item)}: {price} below its floor {floor}");
+				if (cfg.PriceCeiling > 0 && price > Math.Max(PriceRules.Ceiling(item), floor) + 1) failures.Add($"{Name(item)}: {price} above its ceiling {PriceRules.Ceiling(item)} (tier {ItemPool.TierOf(item)})");
+				if (cfg.PriceCeiling > 0 && value * cfg.PriceMultiplierMin > PriceRules.Ceiling(item)) capped++;
+				// Ammo and blocks: 2-5 copper per tier, materials 20, furniture 50, x the multiplier
+				ItemCategory category = ItemPool.Info[item].Category;
+				if (value == 0 && category is ItemCategory.Ammo or ItemCategory.Block or ItemCategory.Material or ItemCategory.OreBar or ItemCategory.Furniture)
+				{
+					cheap++;
+					int most = (int)Math.Ceiling(50 * Tiers.Count * maxMultiplier) + 1;
+					if (price > Math.Max(floor, most)) failures.Add($"{Name(item)} ({category}, no value): {price}");
+				}
+				if (StackRules.MaxStackOf(item) > 1 && value > 0)
+				{
+					int most = (int)Math.Ceiling(value * maxMultiplier) + 1;
+					if (price > Math.Max(most, Math.Max(cfg.MinimumStackablePrice, (value + 1) / 2))) failures.Add($"{Name(item)} (stackable, value {value}): {price}");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ShopPricesAffordable: {cheap} items without a value priced by category, {capped} items capped by their tier's ceiling");
+			Check.All(failures, "Shop prices");
+		}
+
+		// World-wide spread: at each simulated tier, no rolled item is sold by more merchants than MaxShopsPerItem, except the
+		// few that a small category leaves no choice (at most 2 % of the items, never twice the limit); a merchant's share of
+		// an item does not depend on the tier
+		private static void ShopSpread()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (!EconomyConfig.Instance.RandomizeShops) Check.Skip("shops not randomized");
+			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) Check.Skip("shuffle mode: the permutation decides");
+			int limit = EconomyConfig.Instance.MaxShopsPerItem;
+			if (limit <= 0) Check.Skip("no limit in the settings");
+			List<VanillaShop> shops = VanillaShops();
+			if (shops.Count == 0) Check.Skip("no vanilla shop registered");
+			ShopPermutation.WorldPlan permutation = ShopOnlyPlan();
+			List<string> failures = new();
+			int over = 0, distinct = 0, worst = 0;
+			string worstItem = "";
+			for (int tier = 0; tier < Tiers.Count; tier++)
+			{
+				Dictionary<int, HashSet<int>> sellers = new();
+				foreach (VanillaShop shop in shops)
+				{
+					foreach (ShopSlot slot in Plan(permutation, shop, tier, EconomyConfig.Instance.NoDuplicatesInShop))
+					{
+						if (!slot.Replaced || slot.Guaranteed) continue;
+						if (!sellers.TryGetValue(slot.Replacement, out HashSet<int> npcs)) sellers[slot.Replacement] = npcs = new HashSet<int>();
+						npcs.Add(shop.Shop.NpcType);
+					}
+				}
+				int tierOver = sellers.Count(s => s.Value.Count > limit);
+				over += tierOver;
+				distinct += sellers.Count;
+				foreach ((int item, HashSet<int> npcs) in sellers)
+				{
+					if (npcs.Count > worst)
+					{
+						worst = npcs.Count;
+						worstItem = $"{Name(item)} at tier {tier} ({npcs.Count} merchants)";
+					}
+					if (npcs.Count > 2 * limit) failures.Add($"{Name(item)} at tier {tier}: {npcs.Count} merchants (limit {limit})");
+				}
+				if (tierOver > Math.Max(2, sellers.Count / 50)) failures.Add($"tier {tier}: {tierOver} of {sellers.Count} items above {limit} merchants");
+			}
+			int sample = ItemPool.Info.Length > ItemID.Torch ? ItemID.Torch : 1;
+			HashSet<int> first = ShopPlanner.ShareOf(sample);
+			ShopPlanner.ResetSpread();
+			HashSet<int> again = ShopPlanner.ShareOf(sample);
+			if (first != null && (again == null || !first.SetEquals(again))) failures.Add("the share of merchants changed once rebuilt");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ShopSpread: {over} of {distinct} (item, tier) pairs above {limit} merchants; most: {worstItem}");
+			Check.All(failures, "Items sold by too many merchants");
+		}
+
+		// The teleportation pylons and the Red Solution (ShopPermutation.AlwaysAdded) each have an added slot at a reliable
+		// merchant, whatever their other sources and the world's evil, sold from their unlock tier
+		private static void ShopPylonsGuaranteed()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (!EconomyConfig.Instance.RandomizeShops) Check.Skip("shops not randomized");
+			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) Check.Skip("shuffle mode: the permutation keeps every item");
+			ShopPermutation.WorldPlan plan = ShopOnlyPlan();
+			if (plan.Merchants.Count == 0) Check.Skip("no vanilla shop registered");
+			List<string> failures = new();
+			List<string> sold = new();
+			foreach (int item in ShopPermutation.AlwaysAdded)
+			{
+				if (!ItemPool.IsRandomizable(item) || ItemPool.IsBanned(item)) continue;
+				if (!plan.SellerOf.TryGetValue(item, out int m))
+				{
+					failures.Add($"{Name(item)}: no added slot");
+					continue;
+				}
+				ShopPermutation.Merchant merchant = plan.Merchants[m];
+				if (MerchantProblem(merchant) is string problem) failures.Add($"{Name(item)} at {Where(merchant)}: {problem}");
+				int unlock = ShopPermutation.UnlockTier(item);
+				if (ShopPlanner.AddedSlots(merchant.Npc, merchant.Shop, ShopPermutation.ItemsOf(plan, merchant.Shop), Tiers.Max, true).All(s => s.Replacement != item))
+					failures.Add($"{Name(item)}: not sold at {Where(merchant)} even after the Moon Lord");
+				sold.Add($"{Name(item)}: {Lang.GetNPCNameValue(merchant.Npc)} from tier {ShopPermutation.SaleTier(merchant, item)} (unlock {unlock})");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info("ShopPylonsGuaranteed: " + string.Join(", ", sold));
+			Check.All(failures, "Pylons and Red Solution");
+		}
+
+		// An added slot opens no earlier than the later of its item's tier and true tier minus the tier allowance (none for a
+		// hard gate, hardmode items in hardmode), whatever the merchant: no Pogo Stick nor Static Hook from the first shops
+		private static void ShopAddedSlotsOnTime()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (!ProgressionConfig.Instance.TierGating) Check.Skip("tier gating off");
+			ShopPermutation.WorldPlan plan = ShopOnlyPlan();
+			if (plan.ShopOnly.Count == 0) Check.Skip("no shop-only item in this world");
+			int allowance = ProgressionConfig.Instance.TierAllowance;
+			List<string> failures = new();
+			foreach (int item in plan.ShopOnly)
+			{
+				int tier = Math.Max(ItemPool.TierOf(item), ItemPool.TrueTierOf(item));
+				int earliest = Math.Max(0, tier - (ItemPool.IsHardGate(item) ? 0 : allowance));
+				if (tier >= (int)Tier.Hardmode) earliest = Math.Max(earliest, (int)Tier.Hardmode);
+				for (int t = 0; t < earliest; t++)
+				{
+					if (!ShopPermutation.Unlocked(item, t, t >= (int)Tier.Hardmode)) continue;
+					failures.Add($"{Name(item)} (tier {ItemPool.TierOf(item)}, true tier {ItemPool.TrueTierOf(item)}): sold from tier {t}");
+					break;
+				}
+				if (plan.SellerOf.TryGetValue(item, out int m) && ShopPermutation.SaleTier(plan.Merchants[m], item) < earliest)
+					failures.Add($"{Name(item)}: sale tier {ShopPermutation.SaleTier(plan.Merchants[m], item)} before {earliest}");
+			}
+			Check.All(failures, "Added slots too early");
 		}
 	}
 }

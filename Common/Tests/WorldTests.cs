@@ -106,7 +106,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (item == null || item.IsAir) { failures.Add($"slot {i} emptied"); continue; }
 				if (ItemPool.IsRandomizable(stock[i]) && !seen.Add(item.type) && EconomyConfig.Instance.NoDuplicatesInShop) failures.Add($"{Lang.GetItemNameValue(item.type)} sold twice");
 				int price = item.shopCustomPrice ?? item.value;
-				if (price < StackRules.ValueOf(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} sold for {price} < value {StackRules.ValueOf(item.type)}");
+				if (price < PriceRules.Floor(item.type)) failures.Add($"{Lang.GetItemNameValue(item.type)} sold for {price} < floor {PriceRules.Floor(item.type)}");
 			}
 			if (items[stock.Length].type != ItemID.DD2ElderCrystal) failures.Add("special currency item replaced");
 			if (!items[stock.Length + 1].IsAir) failures.Add("reserved slot filled");

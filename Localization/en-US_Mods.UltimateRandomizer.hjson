@@ -91,7 +91,7 @@ Tests: {
 	SameCategory: Replacements keep the category
 	ShuffleBijection: Guaranteed shuffle: every obtainable item is given exactly once
 	StackRules: Stack sizes are valid
-	PriceFloor: Shop prices are never below the item value
+	PriceFloor: Shop prices never resell for more than they cost, and never go below the minimum price (the stackable one for a stackable item)
 	DropRates: Drop rates are valid
 	TierFromRecipes: Crafted items take the tier of their vanilla recipe when it is earlier than their rarity (Tinkerer combinations)
 	StorageKitOnce: The Magic Storage kit is given once per world, and again in another world
@@ -124,11 +124,15 @@ Tests: {
 	WorldChestTrueTiers: Items of world-generated chests are found from their chest's tier (true tier lowered, never raised)
 	ShopDump: Writes Shops.tsv, every vanilla shop entry at each unlocked tier with its replacement (a random roll), then the added slots selling this world's shop-only items, with price, conditions and flags (too early, other category, shop-only item lost), and ShopOnly.tsv, which merchant sells each shop-only item of this world and from which tier (read-only)
 	WorldExport: Writes items, recipes, drops, bags, shops, chests, worldsources and findability .tsv files plus a README into Export/ next to the other dumps, for an offline coherence audit (read-only)
-	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter, and no added slot appears before its item's unlock tier
+	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter, no weapon, armor, accessory or tool goes above the unlocked tier, and no added slot appears before its item's unlock tier
 	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world: found or crafted at any tier, or sold in an added slot of a reliable merchant (late sales are only logged)
 	ShopOnlyPlacement: Every shop-only item of this world (sold by a random shop entry, and neither found nor crafted anywhere in this world, at any tier) has exactly one added slot at a reliable merchant (known arrival, not Santa, the Princess or a visitor), shown from its unlock tier, without exceeding a shop's free capacity while others have room, never rolled again in that shop, the same for the same seed (late merchants are logged)
 	ShopOnlySlots: Each shop with added slots, filled as the game fills it right now and given its added slots as in game, shows every unlocked shop-only item at its price, and only a rolled slot ever gives way when the shop is full
-	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
+	ShopNoDuplicates: With no duplicates in shops, no merchant sells the same replacement twice, all its tabs together
+	ShopPricesAffordable: Shop prices stay between their floor (half the value, the minimum price) and their tier's ceiling, items without a value other than gear cost a few copper or silver, and cheap stackable items keep their small price
+	ShopSpread: No randomized item is sold by more merchants than the limit of the settings at any tier, apart from a few that a small category leaves no choice
+	ShopPylonsGuaranteed: The nine teleportation pylons and the Red Solution each have an added slot at a reliable merchant, whatever the world
+	ShopAddedSlotsOnTime: No added slot opens before the later of its item's tier and true tier minus the tier allowance
 	ModdedRecipesRandomized: With Magic Storage, its recipes are rebuilt with a key of their tier, and its storage upgrades' tiers follow their bars in order
 	ModdedItemsInPool: Magic Storage's items may be given at random; the items of utility mods (tModLoader, Recipe Browser) and creative items never are
 	ModdedDropsPermuted: The drops of other mods' enemies and bosses are permuted with everyone's, at their estimated tier
@@ -1901,13 +1905,28 @@ Configs: {
 		}
 
 		MinimumPrice: {
-			Label: Minimum price (copper coins)
-			Tooltip: 100 copper = 1 silver.
+			Label: "Minimum price (copper coins)"
+			Tooltip: "For the items that don't stack. 100 copper = 1 silver."
+		}
+
+		MinimumStackablePrice: {
+			Label: "Minimum price of stackable items (copper coins)"
+			Tooltip: "Ammo, blocks, potions and other stackable items are bought one at a time: they keep their own small price down to this one."
+		}
+
+		PriceCeiling: {
+			Label: "Price ceiling (by tier)"
+			Tooltip: "No price above a base price of the item's tier x this value (weapons, armor, accessories and tools: 4 times more), so a shop item stays affordable when it is sold. Items worth more than that, other than gear (vanity, furniture, pets...), are seldom sold. Never below half the item's value. 0: no ceiling."
 		}
 
 		NoDuplicatesInShop: {
 			Label: No duplicates in a shop
 			Tooltip: ""
+		}
+
+		MaxShopsPerItem: {
+			Label: "Most merchants selling the same item"
+			Tooltip: "Across the whole world, a randomized item is sold by this many merchants at most, so that the shops stay varied. Each merchant sells it in one of its tabs only. 0: no limit."
 		}
 
 		ShopsFollowProgression: {
