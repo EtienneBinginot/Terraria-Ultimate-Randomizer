@@ -11,7 +11,9 @@ namespace UltimateRandomizer.Common.Core
 	// Items required for progression: never replaced, and never given as a random replacement
 	public static class Protection
 	{
-		// Materials needed for the pickaxe and progression chain, and biome keys
+		// Materials needed for the pickaxe and progression chain, and biome keys: protected only when ProtectProgressionMaterials
+		// is on (off by default: the recipes give each crafted item a key of its tier, hard gates never move below their true
+		// tier, and the drop and boss permutations keep every content dropping somewhere)
 		private static readonly int[] ProgressionMaterials =
 		{
 			ItemID.ShadowScale, ItemID.TissueSample, ItemID.HallowedBar, ItemID.SoulofMight, ItemID.SoulofSight, ItemID.SoulofFright,
@@ -20,12 +22,24 @@ namespace UltimateRandomizer.Common.Core
 			ItemID.LightKey, ItemID.NightKey
 		};
 
-		// Boss summons found in the world rather than crafted or dropped: always protected (nothing would guarantee them)
+		// Boss summons found in the world rather than crafted or dropped (caught critters, a crystal growing in the Hallow, the
+		// Temple's chests): randomized like the other summons and guaranteed on enemies of their tier as items
+		// (GuaranteedSources.SummonRequirements); the critters can still be caught and the crystal broken as in vanilla
 		public static readonly int[] WorldSummons = { ItemID.TruffleWorm, ItemID.EmpressButterfly, ItemID.LihzahrdPowerCell, ItemID.QueenSlimeCrystal };
 
+		// Progression tools a boss or a randomized container gives in vanilla (the Pwnhammer for the altars, the Shadow Key for
+		// the Underworld's Shadow Chests, found in the Dungeon's locked chests and Golden Lock Boxes, the Temple Key for the
+		// Jungle Temple's door), at the tier they are needed from: randomized, and guaranteed on the enemies of that tier
+		// (GuaranteedSources.ProgressionToolRequirements). The other openers keep a source of their own: the Golden Key moves
+		// with the Dungeon enemies' drops, the biome keys are global drops (left running), the Light and Night Keys are crafted
+		public static readonly (int item, Tier tier)[] ProgressionTools =
+		{
+			(ItemID.Pwnhammer, Tier.Hardmode), (ItemID.ShadowKey, Tier.PostSkeletron), (ItemID.TempleKey, Tier.PostPlantera)
+		};
+
 		// Sorted with the boss summons (SortingPriorityBossSpawns) without summoning anything: life and mana crystals,
-		// mirrors, phones, conches. They stay protected like before, whatever AutoProtectBossSummons says (except the
-		// upgrades below)
+		// mirrors, phones, conches. Not summons (never guaranteed as one, nor protected by AutoProtectBossSummons); the
+		// mirrors, phones and conches are randomized like any item (the Shellphone's other modes are banned: ItemClassifier)
 		private static readonly HashSet<int> SortedAsSummons = new()
 		{
 			ItemID.LifeCrystal, ItemID.LifeFruit, ItemID.ManaCrystal, ItemID.MagicMirror, ItemID.IceMirror, ItemID.CellPhone, ItemID.Shellphone,
@@ -42,8 +56,8 @@ namespace UltimateRandomizer.Common.Core
 		// The tier an upgrade's recipe is doable from: the Life Fruit after a mechanical boss, like its vanilla jungle plants
 		public static int UpgradeTier(int type) => type == ItemID.LifeFruit ? (int)Tier.PostMechBoss : (int)Tier.PreBoss;
 
-		// Items that summon a boss or an event (the Guide Voodoo Doll is not in the vanilla set)
-		public static bool IsBossSummon(int type) => type == ItemID.GuideVoodooDoll
+		// Items that summon a boss or an event (the Guide Voodoo Doll and the Prismatic Lacewing are not in the vanilla set)
+		public static bool IsBossSummon(int type) => type is ItemID.GuideVoodooDoll or ItemID.EmpressButterfly
 			|| type > ItemID.None && type < ItemID.Sets.SortingPriorityBossSpawns.Length && ItemID.Sets.SortingPriorityBossSpawns[type] >= 0 && !SortedAsSummons.Contains(type);
 
 		// The boss each vanilla summon calls
@@ -88,13 +102,9 @@ namespace UltimateRandomizer.Common.Core
 			}
 			if (cfg.ProtectProgressionMaterials) set.UnionWith(ProgressionMaterials);
 			int count = ItemLoader.ItemCount;
-			// Off: crafted and dropped vanilla summons are randomized, with guaranteed drops (GuaranteedSources.SummonRequirements);
-			// modded ones keep their own sources (their recipes and drops may hold rules the planners don't know)
-			set.UnionWith(WorldSummons);
-			foreach (int type in SortedAsSummons)
-			{
-				if (!IsUpgrade(type)) set.Add(type);
-			}
+			// Off: vanilla summons (crafted, dropped or found in the world) are randomized, with guaranteed drops
+			// (GuaranteedSources.SummonRequirements); modded ones keep their own sources (their recipes and drops may hold rules
+			// the planners don't know)
 			for (int type = 1; type < count; type++)
 			{
 				if (IsBossSummon(type) && (cfg.AutoProtectBossSummons || type >= ItemID.Count)) set.Add(type);

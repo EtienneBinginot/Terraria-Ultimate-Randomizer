@@ -118,7 +118,9 @@ namespace UltimateRandomizer.Common.Codex
 			"Name.Hosts/2", "Kind.Hosts.Roaming/2", "Where.Hosts.Roaming/2", "Shape.Hosts.Roaming/2", "Name.Hosts.Roaming/2", "Name.HostsTimed/2"
 		};
 
-		// Vanilla summons found in the world rather than dropped or crafted (Protection.WorldSummons): (item, text key, critter to show)
+		// Vanilla summons found in the world rather than dropped or crafted (Protection.WorldSummons): (item, text key, critter to
+		// show). The critters are caught and the crystal broken as in vanilla, whatever the settings; the Power Cells of the
+		// Temple's chests only while they are kept (WorldSourceKept)
 		private static readonly (int item, string key, int npc)[] WorldSources =
 		{
 			(ItemID.TruffleWorm, "TruffleWorm", NPCID.TruffleWorm),
@@ -126,6 +128,9 @@ namespace UltimateRandomizer.Common.Codex
 			(ItemID.LihzahrdPowerCell, "PowerCell", 0),
 			(ItemID.QueenSlimeCrystal, "GelatinCrystal", 0)
 		};
+
+		// The Lihzahrd Power Cells of the Temple's chests stay there when protected or when chests are not randomized
+		private static bool WorldSourceKept(int item) => item != ItemID.LihzahrdPowerCell || !LootConfig.Instance.RandomizeChests || DropHelper.KeepOriginal(item);
 
 		// Texts of the world sources: "Codex.Hint.World." + key + "." + one of these
 		public static readonly string[] WorldTextParts = { "Kind", "Where", "Shape", "Name" };
@@ -355,7 +360,8 @@ namespace UltimateRandomizer.Common.Codex
 					if (done.Add(npc)) enemies.Add((npc, t));
 				}
 			}
-			foreach (int boss in NpcTiers.BossTypes)
+			// Not the evil boss this world lacks (as Findability)
+			foreach (int boss in NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, BiomeSlots.CurrentEvil)))
 			{
 				if (done.Add(boss)) enemies.Add((boss, NpcTiers.BaseTier(boss)));
 			}
@@ -563,7 +569,7 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			foreach ((int worldItem, string key, int npc) in WorldSources)
 			{
-				if (worldItem == item) options.Add(new HintFact { Item = item, Kind = HintKind.World, World = key, Npc = npc, Tier = ItemPool.TierOf(item) });
+				if (worldItem == item && WorldSourceKept(item)) options.Add(new HintFact { Item = item, Kind = HintKind.World, World = key, Npc = npc, Tier = ItemPool.TierOf(item) });
 			}
 			// The source reached first; between equal tiers, the preferred kind (chests and pots only when nothing else gives
 			// it at that tier), then the easiest, then a fixed key

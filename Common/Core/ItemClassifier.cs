@@ -87,7 +87,11 @@ namespace UltimateRandomizer.Common.Core
 		{
 			ItemID.DontHurtCrittersBookInactive, ItemID.DontHurtNatureBookInactive, ItemID.DontHurtComboBookInactive,
 			// The Lunatic Cultist has a bag sprite but never drops it
-			ItemID.CultistBossBag
+			ItemID.CultistBossBag,
+			// The Shellphone's other modes (switched to by using it) and its crafting display: the Shellphone itself is enough
+			ItemID.ShellphoneDummy, ItemID.ShellphoneSpawn, ItemID.ShellphoneOcean, ItemID.ShellphoneHell,
+			// Part of the Jungle Temple, never obtainable in vanilla
+			ItemID.LihzahrdAltar
 		};
 
 		// Never given at random (they stay replaceable when something gives them): the items of pure utility mods (tModLoader's

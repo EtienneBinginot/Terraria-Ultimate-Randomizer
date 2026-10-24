@@ -113,7 +113,7 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// When an ingredient of a recipe is had with this plan (a group slot: its best member)
-		private static int IngredientAvail(RecipePlan plan, int i, int type)
+		internal static int IngredientAvail(RecipePlan plan, int i, int type)
 		{
 			foreach (int id in RecipePlanner.GroupsOf(plan, i))
 			{

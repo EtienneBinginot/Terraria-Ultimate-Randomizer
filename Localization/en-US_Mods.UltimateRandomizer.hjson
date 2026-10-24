@@ -153,7 +153,7 @@ Tests: {
 	EaterOfWorldsParts: The Eater of Worlds' body and tail segments drop from the head's table, with the boss floor
 	BossGroupsMerge: Small consecutive boss tiers group together first, and the Moon Lord's loot stays with the late bosses
 	CodexShowsLocked: Codex interface: locked drops are greyed with the boss that unlocks them, with no chance
-	ProtectedDropsKept: Progression drops are kept
+	ProtectedDropsKept: Protected drops, coins, bags and upgrades are kept
 	NoMinionFarms: Boss minions and town NPCs get no random drops
 	EventItemsKept: Old One's Army items and boss segments are handled
 	SwapSurvivesVariantSetDefaults: Enemy variants (Pinky, zombie variants) are still swapped
@@ -199,7 +199,10 @@ Tests: {
 	BasicStationsUnprotected: Basic stations (work bench, furnace, anvil...) are left to the randomizer
 	ProgressionStationsProtected: Progression and themed stations are protected unless station protection is None
 	ProgressionStationsGuaranteed: Unprotected progression stations and boss summons drop from frequent enemies of their tier (1 % or more)
-	WorldSummonsProtected: The summons found in the world stay protected, crafted ones are randomized
+	ProtectionsRemoved: Progression materials, mirrors, summons and progression tools are randomized, still found at their tier, and no permutation moves a hard gate below its tier
+	AbsentEvilBoss: The evil boss a world lacks takes no part in the boss permutation and is no source
+	TempleKeyOutsideTemple: The Temple Key is never guaranteed in the Temple nor on enemies met only there
+	ConfigMigration: Old saved settings: an old default list of protected items is removed, the player's choices kept
 	UpgradesOutOfPools: Life and mana upgrades are never rolled, guaranteed or used as ingredients, and drops keep them
 	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier, or by the progression bosses of its tier
@@ -237,7 +240,7 @@ Tests: {
 	NoSelfIngredient: No recipe uses its own result
 	ResultNotInGroup: No randomized recipe gives an item its own ingredient group accepts
 	IngredientValueCoherent: Rebuilt recipes keep about the value of the vanilla ingredients
-	ProtectedIngredientsKept: Protected ingredients (progression materials...) are never replaced
+	ProtectedIngredientsKept: Protected ingredients are never replaced
 	RecipeGroupsSane: Every recipe group (any wood, any iron bar...) still has its ingredient
 	RecipePlanDeterminism: Ingredients and stations are the same after a rebuild
 	UntouchedRecipesIntact: Protected recipes keep their ingredients and stations
@@ -307,7 +310,6 @@ Tests: {
 	WildTail: The madness tail gives the expected share above the limit, rarer for each tier
 	PlansIgnoreWild: Plans, findability and guarantees don't depend on the madness tail
 	RecipesSafe: Recipes: no self-ingredient, value guard respected
-	MiningProtected: Pickaxe and bar recipes are unchanged
 	DecraftSafe: Shimmer decrafting can't duplicate items
 	ShimmerCoherent: Shimmer transformations keep category and value
 	ShopSimulation: Simulated shop: no duplicates, fair prices, special slots untouched
@@ -1316,27 +1318,22 @@ Configs: {
 
 		ProtectedItems: {
 			Label: Protected items
-			Tooltip: Never replaced (drops, recipes...) and never given as a random item. Keeps progression possible. Crafted boss summons are no longer in the default list: they are guaranteed on common enemies (reset the list to get the new default).
+			Tooltip: Never replaced (drops, recipes...) and never given as a random item. Empty by default: boss summons, the Pwnhammer and the Temple Key are randomized and dropped by common enemies of their tier instead (reset the list to get the new default).
 		}
 
 		ProtectProgressionMaterials: {
 			Label: Protect progression materials
-			Tooltip: Shadow Scales, Tissue Samples, Hallowed Bars, mechanical souls, lunar fragments, Luminite, Ectoplasm and biome keys are never randomized.
+			Tooltip: On: Shadow Scales, Tissue Samples, Hallowed Bars, mechanical souls, lunar fragments, Luminite, Ectoplasm and biome keys are never randomized. Off (default): they are; recipes still need a key of their tier, and Luminite, mechanical souls or Ectoplasm never drop before their tier.
 		}
 
 		AutoProtectBossSummons: {
 			Label: Protect all boss summons
-			Tooltip: Off: crafted and dropped boss summons (Suspicious Looking Eye, Guide Voodoo Doll, mechanical summons...) are randomized and dropped by common enemies of their tier instead. The summons found in the world (Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) stay protected, and so do the summons of other mods. On: every boss summon is protected.
+			Tooltip: Off: boss summons (crafted, dropped, or found in the world: Truffle Worm, Lihzahrd Power Cell, Gelatin Crystal, Prismatic Lacewing) are randomized and dropped by common enemies of their tier instead; the critters can still be caught. The summons of other mods stay protected. On: every boss summon is protected.
 		}
 
 		StationProtection: {
 			Label: Crafting station protection
 			Tooltip: None: every station is randomized, progression ones too (Hellforge, hardmode anvils and forges, Tinkerer's Workshop, Ancient Manipulator...); each one is dropped by common enemies of its tier. Progression only: only basic stations (work bench, furnace, anvil, table, chair, sawmill, loom...) are randomized; they are also found in pots and wooden chests. A station of another mod that many recipes need stays protected; the others are treated like the themed stations (Glass Kiln, Bone Welder...).
-		}
-
-		ProtectPickaxeProgression: {
-			Label: Protect the mining progression
-			Tooltip: On: pickaxe and bar recipes are never randomized. Off: they are, and a pickaxe strong enough for each new ore is guaranteed on common enemies when the recipes don't give one in time. Mined ores only turn into other ores of the same tier.
 		}
 
 		GuaranteedDropMultiplier: {

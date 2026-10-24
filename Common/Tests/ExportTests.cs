@@ -220,14 +220,14 @@ namespace UltimateRandomizer.Common.Tests
 					plan.PlannedKeys != null && plan.PlannedKeys[i] > 0 ? Internal(plan.PlannedKeys[i]) : "",
 					RecipeSystem.IsRandomized(i), plan.IngredientTiers != null && plan.IngredientTiers[i] >= 0, partner >= 0, partner >= 0 ? partner : "",
 					shell, shell && Protection.IsUpgrade(result.type), !modded && !shell && !RecipeSystem.Touchable(i), RecipeSystem.HouseRecipe(i),
-					RecipeSystem.KeptForMining(i), twin ? "twin" : loopOff ? "loopoff" : "", plan.Repaired != null && plan.Repaired[i], plan.ValueShort != null && plan.ValueShort[i],
+					twin ? "twin" : loopOff ? "loopoff" : "", plan.Repaired != null && plan.Repaired[i], plan.ValueShort != null && plan.ValueShort[i],
 					RecipeSystem.OriginalIngredientValue(i), plan.IngredientValues != null ? plan.IngredientValues[i] : 0,
 					twin || loopOff ? "off" : Show(doable),
 					plan.IngredientTiers != null ? plan.IngredientTiers[i] : -1, plan.LockKeys != null && plan.LockKeys[i] > 0 ? Internal(plan.LockKeys[i]) : "",
 					vanillaResult > 0 ? Internal(vanillaResult) : ""));
 			}
 			return ("index\tmod\tresult\tstack\tresult item tier\tvanilla ingredients\tvanilla stations\tplanned ingredients\tplanned stations\tkey ingredient\t" +
-				"randomized\trebuilt\tswapped\tswap partner\tshell\tupgrade shell\tprotected\thouse\tmining chain\tswitched off\trepaired\tvalue short\t" +
+				"randomized\trebuilt\tswapped\tswap partner\tshell\tupgrade shell\tprotected\thouse\tswitched off\trepaired\tvalue short\t" +
 				"vanilla value\tplanned value\tplanned doable tier\tingredient tier T\tlock key\tvanilla result", rows);
 		}
 

@@ -19,8 +19,9 @@ namespace UltimateRandomizer.Common.Features
 			{
 				case EntitySource_Loot loot when loot.Context != DropHelper.ExtraDropContext && loot.Entity is NPC npc:
 					if (!cfg.RandomizeMobDrops || !IsDeathLoot(npc, item.type)) return;
-					// Permutation: the rules still dropping on their own (per-player drops, kept items) stay as they are
-					if (DropPermutation.Active(npc.netID) || BossPermutation.Active(npc.netID)) return;
+					// Permutation: the rules still dropping on their own (per-player drops, kept items) stay as they are, and
+					// the whole table of the evil boss this world lacks (BossPermutation.LeftVanilla)
+					if (DropPermutation.Active(npc.netID) || BossPermutation.Active(npc.netID) || BossPermutation.LeftVanilla(npc.netID)) return;
 					int owner = BossParts.Owner(npc.type);
 					bool isBoss = NpcTiers.IsBoss(owner);
 					System.Random dropRng = new(Main.rand.Next());
@@ -80,8 +81,9 @@ namespace UltimateRandomizer.Common.Features
 		public static bool IsBag(int itemType) =>
 			ItemID.Sets.BossBag[itemType] || ItemID.Sets.IsFishingCrate[itemType] || ItemID.Sets.OpenableBag[itemType];
 
+		// Not the bag of the evil boss this world lacks in the permutation style (BossPermutation.BagLeftVanilla): opened as vanilla
 		public static bool BagEnabled(int bagType, LootConfig cfg) =>
-			ItemID.Sets.BossBag[bagType] ? cfg.RandomizeBossBags
+			ItemID.Sets.BossBag[bagType] ? cfg.RandomizeBossBags && !BossPermutation.BagLeftVanilla(bagType)
 			: ItemID.Sets.IsFishingCrate[bagType] ? cfg.RandomizeCrates
 			: cfg.RandomizeOtherBags;
 	}

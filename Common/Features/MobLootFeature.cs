@@ -434,7 +434,8 @@ namespace UltimateRandomizer.Common.Features
 				int min = entry.stackMin;
 				int max = entry.stackMax;
 				int lockGap = 0;
-				if (LootConfig.Instance.RandomizeMobDrops)
+				// The evil boss this world lacks in the permutation style drops its vanilla table (BossPermutation.LeftVanilla)
+				if (LootConfig.Instance.RandomizeMobDrops && !BossPermutation.LeftVanilla(netId, style))
 				{
 					item = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(type), entry.itemId, NpcTiers.EffectiveTier(type), minLimit, true);
 					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);

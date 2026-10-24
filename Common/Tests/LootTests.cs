@@ -1296,7 +1296,8 @@ namespace UltimateRandomizer.Common.Tests
 					if (replacement != entry.itemId) failures.Add($"{NpcName(netId)}: {Lang.GetItemNameValue(entry.itemId)} replaced");
 				}
 			}
-			int[] mustKeep = { ItemID.Pwnhammer, ItemID.TempleKey, ItemID.CopperCoin, ItemID.EyeOfCthulhuBossBag };
+			// Coins, bags and upgrades (the Pwnhammer and the Temple Key are randomized and guaranteed: ProtectionsRemoved)
+			int[] mustKeep = { ItemID.CopperCoin, ItemID.EyeOfCthulhuBossBag, ItemID.LifeCrystal };
 			foreach (int item in mustKeep)
 			{
 				if (!DropHelper.KeepOriginal(item)) failures.Add($"{Lang.GetItemNameValue(item)} is not kept");
