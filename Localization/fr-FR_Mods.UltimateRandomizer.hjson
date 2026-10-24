@@ -134,6 +134,7 @@ Tests: {
 	ModdedDropsPermuted: Les butins des ennemis et boss des autres mods sont permutés avec ceux de tout le monde, à leur palier estimé
 	ModdedStationsTiered: Les stations des autres mods prennent le palier de leur objet, ne sont données qu'aux recettes de leur palier, et les thématiques sont garanties quand elles ne sont pas protégées
 	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
+	TiersConsistent: Le tier de chaque objet est son vrai tier, et les erreurs de tier relevées par l'audit restent corrigées
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
 	LockedVanillaDropRemoved: Un butin d'origine remplacé encore verrouillé par la progression ne tombe pas ; un butin débloqué tombe comme prévu
@@ -189,6 +190,7 @@ Tests: {
 	OreMappingBijective: Chaque minerai du monde existe encore, comme drop d'un seul autre minerai du monde ; les minerais absents restent eux-mêmes, et le choix d'une paire hardmode ne change aucun minerai d'un autre palier ; un pour un même quand les deux minerais d'une paire sont présents
 	TreeShakeReplacement: Les arbres secoués donnent des objets aléatoires et gardent les glands
 	HerbReplacementTable: Chaque herbe a un ensemble fixe de remplaçants valides
+	HerbTableDistinct: La table de remplacement d'une herbe ne contient jamais deux fois le même objet
 	ExtractinatorRules: L'Extractinator garde les pièces et échange les minerais contre des minerais
 	AnglerRewardsValid: Les récompenses du Pêcheur sont des objets valides, pièces conservées
 	TreeCritterSwap: Les critters qui tombent des arbres sont aussi remplacés

@@ -24,6 +24,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			TestRunner.Register("TreeShakeReplacement", TreeShakeReplacement);
 			TestRunner.Register("HerbReplacementTable", HerbReplacementTable);
+			TestRunner.Register("HerbTableDistinct", HerbTableDistinct);
 			TestRunner.Register("ExtractinatorRules", ExtractinatorRules);
 			TestRunner.Register("AnglerRewardsValid", AnglerRewardsValid);
 			TestRunner.Register("TreeCritterSwap", TreeCritterSwap);
@@ -66,6 +67,35 @@ namespace UltimateRandomizer.Common.Tests
 				}
 			}
 			Check.All(failures, "Herb tables");
+		}
+
+		// A herb's table never holds the same item twice (Fireblossom: Bass, Bass, Glowstick in the 1.6.4 audit): an index whose
+		// roll repeats an earlier entry is re-rolled, and only such an index changes (the first rolls keep their keys)
+		private static void HerbTableDistinct()
+		{
+			if (Math.Max(1, LootConfig.Instance.HerbVariety) < 2) Check.Skip("a single replacement per herb");
+			List<string> failures = new();
+			int rerolled = 0;
+			foreach (int herb in Herbs.Where(ItemPool.IsRandomizable))
+			{
+				List<int> table = WorldSources.HerbTable(herb);
+				string name = Lang.GetItemNameValue(herb);
+				if (table.Distinct().Count() != table.Count) failures.Add($"{name}: the same item twice ({string.Join(", ", table.Select(Lang.GetItemNameValue))})");
+				for (int index = 0; index < table.Count; index++)
+				{
+					// The raw roll of this index (the keys before the de-duplication)
+					int raw = ItemPool.Roll(new RollRequest
+					{
+						Keys = new[] { RollKey.Herb, DetRandom.ItemKey(herb), index }, SourceTier = ItemPool.TierOf(herb), OriginalItem = herb,
+						Policy = CategoryPolicy.SameAsOriginal, IgnoreGating = true
+					});
+					bool repeated = table.Take(index).Contains(raw);
+					if (!repeated && table[index] != raw) failures.Add($"{name}: index {index} changed ({Lang.GetItemNameValue(raw)} -> {Lang.GetItemNameValue(table[index])}) without a duplicate");
+					if (repeated) rerolled++;
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Herb tables: {rerolled} duplicated indexes re-rolled");
+			Check.All(failures, "Herb tables with duplicates");
 		}
 
 		private static void ExtractinatorRules()
