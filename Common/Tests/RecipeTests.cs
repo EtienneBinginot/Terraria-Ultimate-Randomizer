@@ -1342,7 +1342,8 @@ namespace UltimateRandomizer.Common.Tests
 					foreach (int x in set)
 					{
 						if (x == to) return true;
-						if (seen.Add(x)) todo.Push(x);
+						// An item found without crafting breaks the chain (Wood needing a Bottle made of Wood is no deadlock)
+						if (seen.Add(x) && Findability.Tier(x) >= Findability.Never) todo.Push(x);
 					}
 				}
 				return false;
@@ -1365,7 +1366,7 @@ namespace UltimateRandomizer.Common.Tests
 					string where = $"{Name(result)} needs {Name(station)}";
 					if (RecipePlanner.StationRecipe(i) || RecipeSystem.HouseRecipe(i)) failures.Add($"{where} (a station's or a house's recipe)");
 					if (plan.PlannedKeys[i] == station) failures.Add($"{where} as its key");
-					if (Leads(result, station)) failures.Add($"{where}, which needs it back");
+					if (Findability.Tier(result) >= Findability.Never && Leads(result, station)) failures.Add($"{where}, which needs it back");
 				}
 			}
 			foreach ((int station, int n) in uses)
