@@ -827,7 +827,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (GuaranteedSources.ExcludedHost(item, npc)) return;
 				foreach (PlannedDrop drop in RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false).Where(d => d.Item == item && Findability.WorldAllows(d.Conditions)))
 				{
-					best = Math.Min(best, Findability.ConditionTier(drop.Conditions, tier));
+					best = Math.Min(best, Findability.SourceConditionTier(drop.Conditions, tier));
 				}
 			}
 			for (int t = 0; t < Tiers.Count && t < best; t++)

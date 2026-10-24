@@ -241,7 +241,8 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Other mods' boss summons and stations are treated like the vanilla ones: a summon whose tier is estimated
 		// (Protection.ModdedSummonTierKnown) is unprotected unless AutoProtectBossSummons, and when randomizable it is a
-		// guarantee at its summon tier with hosts; one whose tier is unknown stays protected. A modded progression or themed
+		// guarantee at its summon tier with hosts, never before the tier before its boss's when that boss is known
+		// (Protection.ModdedSummonedBoss); one whose tier is unknown stays protected. A modded progression or themed
 		// station is protected only by StationProtection, else a guarantee (a station quest with randomized recipes)
 		private static void ModdedProgressionGuaranteed()
 		{
@@ -266,7 +267,9 @@ namespace UltimateRandomizer.Common.Tests
 				if (info.Protected) failures.Add($"{Name(item)}: protected although its tier is estimated");
 				if (!ItemPool.IsRandomizable(item)) continue;
 				GuaranteedSources.Requirement r = GuaranteedSources.Requirements.FirstOrDefault(x => x.Item == item);
+				int boss = Protection.ModdedSummonedBoss(item);
 				if (r.Item != item) failures.Add($"{Name(item)}: not guaranteed");
+				else if (boss > 0 && r.Tier < Tiers.Clamp(NpcTiers.BaseTier(boss) - 1)) failures.Add($"{Name(item)}: guaranteed at tier {r.Tier}, before its boss {Lang.GetNPCNameValue(boss)} (tier {NpcTiers.BaseTier(boss)})");
 				else if (!GuaranteedSources.HostsOf(item).Any()) failures.Add($"{Name(item)}: guaranteed at tier {r.Tier} without a host");
 				else if (shown.Count < 8) shown.Add($"{Name(item)} (tier {r.Tier}, {GuaranteedSources.HostsOf(item).Count()} hosts)");
 			}

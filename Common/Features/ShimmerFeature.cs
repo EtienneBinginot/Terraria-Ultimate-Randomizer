@@ -68,10 +68,17 @@ namespace UltimateRandomizer.Common.Features
 		// Pure (seed, settings, the given progression): the original result's tier or one above, gated like any roll (the
 		// progression limit and its allowance, never below the original result's own tier: the player already holds an item
 		// of that level), never above the hardmode wall before hardmode, never worth more than MaxValue. A surprise
-		// (surpriseChance) draws its category with the loot weights; when none of its attempts fits, the same category is tried
-		public static int PickTransformation(int type, int target, float surpriseChance, int unlockedTier, bool hardMode)
+		// (surpriseChance) draws its category with the loot weights; when none of its attempts fits, the same category is tried.
+		// A stackable result stays stackable (a stack of ammo or blocks shimmered into one sword each)
+		public static int PickTransformation(int type, int target, float surpriseChance, int unlockedTier, bool hardMode) =>
+			PickTransformation(type, target, surpriseChance, unlockedTier, hardMode, out _);
+
+		// fromSurprise: the result came from the surprise draw (pass 0), not from the same-category fallback
+		public static int PickTransformation(int type, int target, float surpriseChance, int unlockedTier, bool hardMode, out bool fromSurprise)
 		{
+			fromSurprise = false;
 			long maxValue = MaxValue(type, target);
+			bool stackable = StackRules.MaxStackOf(target) > 1;
 			bool surprise = IsSurprise(type, target, surpriseChance);
 			int targetTier = ItemPool.Info[target].Tier;
 			for (int pass = surprise ? 0 : 1; pass < 2; pass++)
@@ -97,7 +104,12 @@ namespace UltimateRandomizer.Common.Features
 					int replacement = ItemPool.Roll(request);
 					// A surprise never gives a bag (a cheap item shimmered into a boss bag would be a loot machine)
 					if (pass == 0 && ItemPool.IsValid(replacement) && ItemPool.Info[replacement].Category == ItemCategory.Bag) continue;
-					if (replacement != type && replacement > ItemID.None && StackRules.ValueOf(replacement) <= maxValue) return replacement;
+					if (stackable && replacement > ItemID.None && StackRules.MaxStackOf(replacement) <= 1) continue;
+					if (replacement != type && replacement > ItemID.None && StackRules.ValueOf(replacement) <= maxValue)
+					{
+						fromSurprise = pass == 0;
+						return replacement;
+					}
 				}
 			}
 			return target;

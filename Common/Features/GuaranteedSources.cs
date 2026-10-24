@@ -1412,18 +1412,25 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Pick power needed to mine an item: its tile's (RecipePlanner.PickToMine). A randomized ore may come from any ore tile
-		// of its tier (OreMap: a permutation inside the tier), so the strongest of them, as RecipePlanner.OresFrom counts them
+		// of its tier (OreMap: a permutation inside the tier), so the strongest of them, as RecipePlanner.OresFrom counts them;
+		// each of those tiles is a mining level of that tier or earlier (RecipePlanner.WorldMiningLevels), a modded one too. A
+		// need no pickaxe can meet (a modded tile above every pickaxe) counts as the strongest pickaxe's, never as Never
 		public static int MiningNeed(int item)
 		{
 			int need = RecipePlanner.PickToMine(item);
-			if (!OreMap.IsOre(item) || !LootConfig.Instance.RandomizeOreDrops || !ItemPool.IsRandomizable(item)) return need;
-			int tier = ItemPool.Info[item].Tier;
-			for (int type = 1; type < ItemPool.Info.Length; type++)
+			if (OreMap.IsOre(item) && LootConfig.Instance.RandomizeOreDrops && ItemPool.IsRandomizable(item))
 			{
-				if (OreMap.IsOre(type) && ItemPool.IsRandomizable(type) && ItemPool.Info[type].Tier == tier && OreMap.IsFindable(type)) need = Math.Max(need, RecipePlanner.PickToMine(type));
+				int tier = ItemPool.Info[item].Tier;
+				for (int type = 1; type < ItemPool.Info.Length; type++)
+				{
+					if (OreMap.IsOre(type) && ItemPool.IsRandomizable(type) && ItemPool.Info[type].Tier == tier && OreMap.IsFindable(type)) need = Math.Max(need, RecipePlanner.PickToMine(type));
+				}
 			}
-			return need;
+			if (strongestPick < 0) strongestPick = RecipePlanner.GuaranteeablePickaxes().Select(RecipePlanner.PickPower).DefaultIfEmpty(0).Max();
+			return strongestPick > 0 ? Math.Min(need, strongestPick) : need;
 		}
+
+		private static int strongestPick = -1;
 
 		// Without the guaranteed sources (used to decide what must be guaranteed)
 		public static int BaseTier(int item)
@@ -1453,6 +1460,7 @@ namespace UltimateRandomizer.Common.Features
 			baseMined = null;
 			tiers = null;
 			nonMinedTiers = null;
+			strongestPick = -1;
 			// The shop-only items are the ones not found in time
 			ShopPermutation.Reset();
 		}
@@ -1523,7 +1531,7 @@ namespace UltimateRandomizer.Common.Features
 					// The Temple Key on a Temple enemy or Golem: behind the door it opens (GuaranteedSources.ExcludedHost)
 					if (drop.Chance < minChance || !WorldAllows(drop.Conditions) || GuaranteedSources.ExcludedHost(drop.Item, npc)) continue;
 					// The conditions of the place (permuted drops take the receiving enemy's: hardmode, Plantera...)
-					int from = ConditionTier(drop.Conditions, sourceTier);
+					int from = SourceConditionTier(drop.Conditions, sourceTier);
 					if (from == Never) continue;
 					Add(drop.Item, Math.Max(from, Gated(drop.Item)), SourceKind.Npc, npc);
 				}
@@ -1557,7 +1565,7 @@ namespace UltimateRandomizer.Common.Features
 					{
 						if (drop.Chance < minChance || drop.Item <= 0 || drop.Item >= result.Length || !WorldAllows(drop.Conditions)) continue;
 						if (unit > 0 && GuaranteedSources.ExcludedHost(drop.Item, unit)) continue;
-						int from = ConditionTier(drop.Conditions, tier);
+						int from = SourceConditionTier(drop.Conditions, tier);
 						if (from == Never) continue;
 						int dropTier = Math.Max(from, Gated(drop.Item));
 						if (dropTier < result[drop.Item])
@@ -1593,8 +1601,8 @@ namespace UltimateRandomizer.Common.Features
 		// The tier from which a drop of a source of this tier can happen, given the progression conditions of the entry
 		// (hardmode, mechanical bosses, Plantera; the remix seed's hardmode drops, such as the pre-hardmode Mimic's). Never:
 		// a pre-hardmode only drop of a hardmode source. Other conditions (events, biomes...) are left to the drop chance; so is
-		// a boss fight condition kept on a permuted place (a genuinely enraged Empress: reachable at the boss's tier). Seasonal
-		// conditions never move (DropPermutation.KeptVanilla), the first-Plantera-kill one is dropped by the boss permutation
+		// a boss fight condition kept on a permuted place (a genuinely enraged Empress: reachable at the boss's tier). The
+		// first-Plantera-kill one is dropped by the boss permutation. As a findability source, see SourceConditionTier
 		public static int ConditionTier(List<IItemDropRuleCondition> conditions, int sourceTier)
 		{
 			int tier = sourceTier;
@@ -1613,6 +1621,16 @@ namespace UltimateRandomizer.Common.Features
 			}
 			return tier;
 		}
+
+		// ConditionTier for a findability source: a date-bound entry (Christmas, Halloween: Main.xMas, Main.halloween) is no
+		// reliable source, Never. Seasonal entries are permuted among the seasonal places (DropPermutation.Seasonal) and keep
+		// their place's condition, so wherever they land they only drop on those dates
+		public static int SourceConditionTier(List<IItemDropRuleCondition> conditions, int sourceTier) =>
+			conditions != null && conditions.Any(DateBound) ? Never : ConditionTier(conditions, sourceTier);
+
+		// Conditions true only on some dates (Christmas, Halloween, or their forced events)
+		public static bool DateBound(IItemDropRuleCondition condition) =>
+			condition is Conditions.IsChristmas or Conditions.XmasPresentDrop or Conditions.HalloweenWeapons or Conditions.HalloweenGoodieBagDrop;
 
 		// Drop conditions fixed by the world (difficulty, world evil, special seeds): an expert-only treasure bag is no source
 		// in Classic. Their CanDrop only reads Main.expertMode, Main.masterMode (here the planned ones, ProgressionSystem), WorldGen.crimson and the special seed flags

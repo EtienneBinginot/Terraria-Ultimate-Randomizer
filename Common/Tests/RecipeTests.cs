@@ -731,35 +731,44 @@ namespace UltimateRandomizer.Common.Tests
 			List<int> pickaxes = ContentSamples.ItemsByType.Where(pair => pair.Value.pick > 0).Select(pair => pair.Key).ToList();
 			List<string> failures = new();
 			int levels = 0;
-			foreach ((int pick, int[] ores) level in RecipePlanner.MiningLevels)
+			int strongest = RecipePlanner.GuaranteeablePickaxes().Select(RecipePlanner.PickPower).DefaultIfEmpty(0).Max();
+			List<(int pick, int tier, int[] items)> worldLevels = RecipePlanner.WorldMiningLevels();
+			foreach ((int pick, int tier, int[] items) level in worldLevels)
 			{
-				int oreTier = RecipePlanner.MiningTier(level);
-				if (oreTier < 0) continue;
+				// A modded tile no pickaxe mines: nothing to give
+				if (level.pick > strongest) continue;
+				int oreTier = level.tier;
 				levels++;
 				HashSet<int> unmined = RecipePlanner.OresFrom(level.pick);
+				unmined.UnionWith(worldLevels.Where(l => l.pick >= level.pick).SelectMany(l => l.items));
 				int[] avail = RecipePlanner.Availability(item => unmined.Contains(item) || Findability.MiningNeed(item) >= level.pick ? Findability.NonMiningTier(item) : Findability.Tier(item),
 					results, new int[results.Length], ingredients, tiles, out _, plan.Twin, Enumerable.Range(0, results.Length).Select(i => RecipePlanner.GroupsOf(plan, i)).ToArray());
 				int best = pickaxes.Where(p => RecipePlanner.PickPower(p) >= level.pick && p < avail.Length).Select(p => avail[p]).DefaultIfEmpty(Findability.Never).Min();
-				if (best > oreTier) failures.Add($"pick power {level.pick} ({string.Join("/", level.ores.Select(Name))}, tier {oreTier}): first pickaxe at {Show(best)}");
+				if (best > oreTier) failures.Add($"pick power {level.pick} ({string.Join("/", level.items.Take(4).Select(Name))}, tier {oreTier}): first pickaxe at {Show(best)}");
 			}
 			Check.That(levels > 0, "no mining level in this world");
 			Check.All(failures, "Mining levels without a pickaxe in time");
 		}
 
-		// The mining chain needs no recipe: every mining level whose ores this world has gets a guaranteed pickaxe of its power
-		// by the tier of its ores (RecipePlanner.MiningRequirements), found without crafting (it has hosts). A mined ore or block
-		// never counts as found before a pickaxe that mines it is found, unless something else gives it (Findability.Tier)
+		// The mining chain needs no recipe: every mining level of this world (RecipePlanner.WorldMiningLevels: its mined
+		// materials' pick powers, each at its lowest tier) gets a guaranteed pickaxe of its power by its tier, found without
+		// crafting (it has hosts), and no level is guaranteed again when a stronger one already is by its tier. Checked against
+		// values computed here from the guarantees and the non-mining tiers (pickaxes are never mined): a mined ore or block is
+		// never found before its mined tier, and when mining is what finds it (earlier than its other sources) a pickaxe of its
+		// mining need is found by then; it is found exactly at the earlier of the two
 		private static void MiningPickaxeGuaranteed()
 		{
 			if (!ItemPool.Ready || RecipeSystem.RecipeCount == 0) Check.Skip("no recipes");
 			List<string> failures = new();
 			List<string> found = new();
-			foreach ((int pick, int[] ores) level in RecipePlanner.MiningLevels)
+			List<GuaranteedSources.Requirement> tools = GuaranteedSources.Requirements.Where(r => r.Tool && RecipePlanner.PickPower(r.Item) > 0).ToList();
+			int strongest = RecipePlanner.GuaranteeablePickaxes().Select(RecipePlanner.PickPower).DefaultIfEmpty(0).Max();
+			List<(int pick, int tier, int[] items)> levels = RecipePlanner.WorldMiningLevels();
+			foreach ((int pick, int tier, int[] items) level in levels)
 			{
-				int oreTier = RecipePlanner.MiningTier(level);
-				if (oreTier < 0) continue;
-				string what = $"pick power {level.pick} ({string.Join("/", level.ores.Select(Name))}, tier {oreTier})";
-				GuaranteedSources.Requirement guaranteed = GuaranteedSources.Requirements.FirstOrDefault(r => r.Tool && RecipePlanner.PickPower(r.Item) >= level.pick && r.Tier <= oreTier);
+				if (level.pick > strongest) continue;
+				string what = $"pick power {level.pick} ({string.Join("/", level.items.Take(4).Select(Name))}, tier {level.tier})";
+				GuaranteedSources.Requirement guaranteed = tools.Where(r => RecipePlanner.PickPower(r.Item) >= level.pick && r.Tier <= level.tier).OrderBy(r => r.Tier).FirstOrDefault();
 				if (guaranteed.Item <= 0)
 				{
 					failures.Add($"{what}: no guaranteed pickaxe");
@@ -768,19 +777,36 @@ namespace UltimateRandomizer.Common.Tests
 				int foundAt = GuaranteedSources.FoundTier(guaranteed);
 				found.Add($"{level.pick}: {Name(guaranteed.Item)} at {Show(foundAt)}");
 				if (foundAt == Findability.Never) failures.Add($"{what}: {Name(guaranteed.Item)} has no host");
-				if (Findability.PickaxeTier(level.pick) > foundAt) failures.Add($"{what}: first pickaxe found at {Show(Findability.PickaxeTier(level.pick))}, after the guaranteed one");
 			}
-			int mined = 0;
+			// No redundant guarantee: a mining pickaxe whose power a stronger one guaranteed no later already covers
+			foreach (GuaranteedSources.Requirement weak in tools)
+			{
+				if (tools.Any(r => r.Item != weak.Item && RecipePlanner.PickPower(r.Item) > RecipePlanner.PickPower(weak.Item) && r.Tier <= weak.Tier))
+					failures.Add($"{Name(weak.Item)} guaranteed at {weak.Tier} although a stronger pickaxe is guaranteed by then");
+			}
+			// Independent pickaxe tiers: each found pickaxe's tier without mining (drops, bags, guarantees)
+			List<(int power, int tier)> pickTiers = ContentSamples.ItemsByType.Where(pair => pair.Value.pick > 0)
+				.Select(pair => (power: pair.Value.pick, tier: Findability.NonMiningTier(pair.Key))).Where(p => p.tier < Findability.Never).ToList();
+			int mined = 0, byMining = 0;
 			for (int type = 1; type < ItemPool.Info.Length; type++)
 			{
-				if (Findability.MinedTier(type) == Findability.Never) continue;
+				int minedTier = Findability.MinedTier(type);
+				if (minedTier == Findability.Never) continue;
 				int need = Findability.MiningNeed(type);
 				if (need <= 0) continue;
 				mined++;
-				int earliest = Math.Min(Findability.NonMiningTier(type), Math.Max(Findability.MinedTier(type), Findability.PickaxeTier(need)));
-				if (Findability.Tier(type) < earliest) failures.Add($"{Name(type)} (pick {need}) found at {Show(Findability.Tier(type))}, before a pickaxe mines it ({Show(earliest)})");
+				int tier = Findability.Tier(type), other = Findability.NonMiningTier(type);
+				int pickTier = pickTiers.Where(p => p.power >= need).Select(p => p.tier).DefaultIfEmpty(Findability.Never).Min();
+				int expected = Math.Min(other, Math.Max(minedTier, pickTier));
+				if (tier < other)
+				{
+					byMining++;
+					if (tier < minedTier) failures.Add($"{Name(type)} found at {Show(tier)}, before its mined tier {minedTier}");
+					if (pickTier > tier) failures.Add($"{Name(type)} (pick {need}) found at {Show(tier)} by mining, first pickaxe of that power at {Show(pickTier)}");
+				}
+				if (tier != expected) failures.Add($"{Name(type)} (pick {need}) found at {Show(tier)}, expected {Show(expected)} (mined {minedTier}, pickaxe {Show(pickTier)}, other sources {Show(other)})");
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"MiningPickaxeGuaranteed: {mined} mined materials need a pickaxe; guaranteed pickaxes {string.Join(", ", found)}");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"MiningPickaxeGuaranteed: {levels.Count} mining levels, {mined} mined materials need a pickaxe ({byMining} found by mining first); guaranteed pickaxes {string.Join(", ", found)}");
 			Check.That(mined > 0, "no mined material needs a pickaxe");
 			Check.All(failures, "Mining chain");
 		}
@@ -1228,14 +1254,15 @@ namespace UltimateRandomizer.Common.Tests
 		// sells for at most the input's value, and an item without crafted value gives vanilla-valued items. Pure
 		// The shimmer plan (ShimmerSystem.PickTransformation) of every vanilla transmutation, at several progressions, with
 		// explicit chances: never worth more than its value cap, never above the original result's tier + the jitter, nothing
-		// above the hardmode wall before hardmode, no bag from a surprise, the same result twice; at 0 % no surprise and (almost)
-		// always the original result's category; at 25 % about that share of surprises, most of them in another category
+		// above the hardmode wall before hardmode, no bag from a surprise, a stackable result stays stackable, the same result
+		// twice; at 0 % no surprise and (almost) always the original result's category; at 25 % about that share of surprises,
+		// most of those that kept their surprise draw (not the same-category fallback) in another category
 		private static void ShimmerTransmutationRules()
 		{
 			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("shuffle or chaos mode");
 			List<string> failures = new();
-			int pairs = 0, surprises = 0, surpriseChanged = 0, plainChanged = 0, plain = 0;
+			int pairs = 0, surprises = 0, surpriseKept = 0, surpriseChanged = 0, plainChanged = 0, plain = 0;
 			for (int type = 1; type < ItemPool.Info.Length; type++)
 			{
 				int target = ShimmerSystem.OriginalTransform(type);
@@ -1251,9 +1278,10 @@ namespace UltimateRandomizer.Common.Tests
 					string where = $"{Name(type)} at tier {tier}";
 					foreach (float chance in new[] { 0f, 25f })
 					{
-						int result = ShimmerSystem.PickTransformation(type, target, chance, tier, hardMode);
+						int result = ShimmerSystem.PickTransformation(type, target, chance, tier, hardMode, out bool fromSurprise);
 						if (result != ShimmerSystem.PickTransformation(type, target, chance, tier, hardMode)) failures.Add($"{where}: not the same result twice");
 						if (result == target) continue;
+						if (StackRules.MaxStackOf(target) > 1 && StackRules.MaxStackOf(result) <= 1) failures.Add($"{where}: the stackable {Name(target)} gives the unstackable {Name(result)}");
 						if (StackRules.ValueOf(result) > cap) failures.Add($"{where}: {Name(result)} worth {StackRules.ValueOf(result)}, cap {cap}");
 						if (ItemPool.TierOf(result) > tierCap) failures.Add($"{where}: {Name(result)} of tier {ItemPool.TierOf(result)}, above {tierCap}");
 						if (!hardMode && ItemPool.TrueTierOf(result) > ItemPool.PreHardmodeCap) failures.Add($"{where}: {Name(result)} of true tier {ItemPool.TrueTierOf(result)} before hardmode");
@@ -1261,7 +1289,12 @@ namespace UltimateRandomizer.Common.Tests
 						if (chance > 0 && surprise)
 						{
 							if (ItemPool.Info[result].Category == ItemCategory.Bag) failures.Add($"{where}: the bag {Name(result)}");
-							if (tier == 0 && changed) surpriseChanged++;
+							// Only the surprises that kept their own draw (not the same-category fallback) say how often the category changes
+							if (tier == 0 && fromSurprise)
+							{
+								surpriseKept++;
+								if (changed) surpriseChanged++;
+							}
 						}
 						else if (tier == 0)
 						{
@@ -1274,9 +1307,10 @@ namespace UltimateRandomizer.Common.Tests
 			if (pairs == 0) Check.Skip("no randomizable transmutation");
 			double share = surprises / (double)pairs;
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ShimmerTransmutationRules: {pairs} transmutations, {surprises} surprises at 25 % ({share:P1}), " +
-				$"{surpriseChanged} in another category at tier 0; {plainChanged} of {plain} plain ones in another category; setting {CraftingConfig.Instance.ShimmerSurpriseChance} %");
+				$"{surpriseKept} kept their surprise draw at tier 0, {surpriseChanged} of them in another category ({(surpriseKept > 0 ? surpriseChanged / (double)surpriseKept : 0):P1}); " +
+				$"{plainChanged} of {plain} plain ones in another category; setting {CraftingConfig.Instance.ShimmerSurpriseChance} %");
 			if (pairs >= 60 && (share < 0.10 || share > 0.40)) failures.Add($"{share:P1} of the transmutations are surprises at 25 %");
-			if (surprises >= 20 && surpriseChanged < surprises / 2) failures.Add($"only {surpriseChanged} of {surprises} surprises in another category");
+			if (surpriseKept >= 20 && surpriseChanged < surpriseKept / 2) failures.Add($"only {surpriseChanged} of {surpriseKept} kept surprise draws in another category");
 			if (plain > 0 && plainChanged > Math.Max(3, plain / 20)) failures.Add($"{plainChanged} of {plain} plain transmutations in another category");
 			Check.All(failures, "Shimmer transmutations");
 		}

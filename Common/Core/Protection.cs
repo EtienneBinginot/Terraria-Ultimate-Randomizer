@@ -94,6 +94,9 @@ namespace UltimateRandomizer.Common.Core
 		public static int SummonTier(int item)
 		{
 			int tier = SummonedBoss.TryGetValue(item, out int boss) ? NpcTiers.BaseTier(boss) - 1 : ItemPool.TierOf(item);
+			// A modded summon whose boss is known: not before the tier before its boss's (its rarity may say less)
+			int moddedBoss = ModdedSummonedBoss(item);
+			if (moddedBoss > 0) tier = Math.Max(tier, NpcTiers.BaseTier(moddedBoss) - 1);
 			if (Array.IndexOf(WorldSummons, item) >= 0 && ItemPool.IsValid(item)) tier = Math.Min(tier, ItemPool.TierOf(item));
 			if (NeededFrom.TryGetValue(item, out Tier from)) tier = Math.Max(tier, (int)from);
 			return Tiers.Clamp(tier);
@@ -106,8 +109,53 @@ namespace UltimateRandomizer.Common.Core
 		{
 			if (type < ItemID.Count) return true;
 			if (ProgressionConfig.Instance.TierOverrides.Any(o => o?.Item != null && !o.Item.IsUnloaded && o.Item.Type == type)) return true;
+			if (ModdedSummonedBoss(type) > 0) return true;
 			if (!ContentSamples.ItemsByType.TryGetValue(type, out Item item)) return false;
 			return item.rare >= ItemRarityID.White && item.rare <= ItemRarityID.Purple;
+		}
+
+		// The boss a modded summon calls, when it can be told (no generic link exists between a summon and its boss): the only
+		// boss of its mod, else the bosses whose internal name shares a word with the summon's ("MechanicalSkullOfDoom" and
+		// "SkullOfDoomBoss"), when they all have one tier (a worm's parts); 0 when unknown. Its tier then comes from NpcTiers (the boss's estimate). Load-time content only
+		private static readonly Dictionary<int, int> moddedSummonBoss = new();
+		private static readonly HashSet<string> SummonWords = new(StringComparer.OrdinalIgnoreCase) { "summon", "summoner", "spawn", "spawner", "item", "boss", "calling" };
+
+		public static int ModdedSummonedBoss(int item)
+		{
+			if (item < ItemID.Count || !ContentSamples.ItemsByType.TryGetValue(item, out Item sample) || sample.ModItem == null) return 0;
+			lock (moddedSummonBoss)
+			{
+				if (moddedSummonBoss.TryGetValue(item, out int known)) return known;
+				Mod mod = sample.ModItem.Mod;
+				List<NPC> bosses = ContentSamples.NpcsByNetId.Values.Where(n => n.type >= NPCID.Count && n.ModNPC?.Mod == mod && NpcTiers.IsBoss(n.type))
+					.GroupBy(n => n.type).Select(g => g.First()).OrderBy(n => n.type).ToList();
+				int boss = 0;
+				if (bosses.Count == 1) boss = bosses[0].type;
+				else if (bosses.Count > 1)
+				{
+					HashSet<string> words = Words(sample.ModItem.Name);
+					List<NPC> named = bosses.Where(n => Words(n.ModNPC.Name).Overlaps(words)).ToList();
+					// The parts of one boss (a worm's segments) share its name and its tier
+					if (named.Count > 0 && named.Select(n => NpcTiers.BaseTier(n.type)).Distinct().Count() == 1) boss = named[0].type;
+				}
+				moddedSummonBoss[item] = boss;
+				return boss;
+			}
+		}
+
+		// The CamelCase words of an internal name, 4 letters or more, generic summon words apart
+		private static HashSet<string> Words(string name)
+		{
+			HashSet<string> words = new(StringComparer.OrdinalIgnoreCase);
+			int start = 0;
+			for (int i = 1; i <= name.Length; i++)
+			{
+				if (i < name.Length && !(char.IsUpper(name[i]) || name[i] == '_' || char.IsDigit(name[i]) != char.IsDigit(name[i - 1]))) continue;
+				string word = name.Substring(start, i - start).Trim('_');
+				if (word.Length >= 4 && !SummonWords.Contains(word)) words.Add(word);
+				start = i;
+			}
+			return words;
 		}
 
 		public static HashSet<int> BuildProtectedSet()

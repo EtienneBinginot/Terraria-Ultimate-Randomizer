@@ -240,10 +240,11 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// May a station's recipe take this new ingredient? A critical station: a start material; any other: a material had by
-		// its tier in the biomes open then
+		// its tier in the biomes open then. Never an ore asked as a pair (OreMap.AskedAsPair): a station takes plain items
 		public static bool StationMaterialAllowed(int station, int item)
 		{
 			if (!StationPlacer(station, out int tier)) return true;
+			if (OreMap.AskedAsPair(item)) return false;
 			if (CriticalPlacer(station)) return StartMaterials(station != ItemID.WorkBench).Contains(item);
 			return StationMaterialTier(item) <= tier;
 		}
@@ -2637,8 +2638,9 @@ namespace UltimateRandomizer.Common.Features
 						int originalResult = RecipeSystem.OriginalResult(i);
 						// A station's recipe keeps found materials, and its tier (never T + 1: it must be craftable by then)
 						bool station = StationPlacer(results[i], out _);
+						// A station is never a key (the key decides when the recipe is doable)
 						bool Usable(int x) => x != results[i] && x != originalResult && !current.Any(p => p.type == x) && !below.Contains(x) && !RecipeSystem.InGroups(recipeGroups, x)
-							&& (!station || source[x] < 0 && StationMaterialAllowed(results[i], x));
+							&& !stationItems.Contains(x) && (!station || source[x] < 0 && StationMaterialAllowed(results[i], x));
 						Random rng = DetRandom.Get(RollKey.RecipeIngredient, RecipeSystem.RecipeKey(i), RollKey.KeyIngredient);
 						long others = current.Where((p, k) => k != slot).Sum(p => UnitValue(p.type) * p.stack);
 						long budget = Math.Max(1, (long)(RecipeSystem.OriginalIngredientValue(Proxy(i)) * MaxValueFactor) + Item.silver - others);
@@ -2977,7 +2979,8 @@ namespace UltimateRandomizer.Common.Features
 				HashSet<int> taken = kept.Select(p => p.type).ToHashSet();
 				// A house item: a start material (StartMaterials: wood, stone, dirt, clay, sand, gel, an acorn, a cobweb, a
 				// daybloom, a mushroom...; never a fish, a critter nor anything crafted), not one of its vanilla ones
-				bool HouseFits(int x) => StartMaterials(true).Contains(x) && Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category);
+				// An ore asked as a pair (OreMap.AskedAsPair) is never one: a house takes plain items only
+				bool HouseFits(int x) => StartMaterials(true).Contains(x) && Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category) && !OreMap.AskedAsPair(x);
 				bool Usable(int x) => x != result0 && x != originalResult && !taken.Contains(x) && !below.Contains(x) && !RecipeSystem.InGroups(chosenGroups, x)
 					&& (!house || HouseFits(x) && !originalTypes.Contains(x))
 					&& (!station || source[x] < 0 && StationMaterialAllowed(result0, x))
@@ -3444,17 +3447,6 @@ namespace UltimateRandomizer.Common.Features
 			return TileLoader.GetTile(tile)?.MinPick ?? 0;
 		}
 
-		// The tier at which the ores of a level are mined (-1: none of them in this world)
-		public static int MiningTier((int pick, int[] ores) level)
-		{
-			int tier = int.MaxValue;
-			foreach (int ore in level.ores)
-			{
-				if (ItemPool.IsValid(ore) && OreMap.IsFindable(ore)) tier = Math.Min(tier, ItemPool.TierOf(ore));
-			}
-			return tier == int.MaxValue ? -1 : tier;
-		}
-
 		// Ores that need at least this pick power: not mined before such a pickaxe exists. Randomized ores are a permutation
 		// inside each tier (OreMap: the Cobalt item may come from the Adamantite tile), so then every ore of such a tier counts
 		public static HashSet<int> OresFrom(int pick)
@@ -3475,25 +3467,51 @@ namespace UltimateRandomizer.Common.Features
 		// Every ore of a mining level, and Obsidian (55)
 		private static readonly HashSet<int> MiningOres = MiningLevels.SelectMany(l => l.ores).Append(ItemID.Obsidian).ToHashSet();
 
-		// A pickaxe (or drill) for each mining level whose ores this world has, by the tier of its ores, whatever the recipes
+		// A pickaxe (or drill) for each mining level of this world (WorldMiningLevels), by the tier of its ores, whatever the recipes
 		// and the other sources give: the cheapest vanilla one of that level, placed on common enemies (and pots). Found without
 		// crafting, it is what Findability counts the level's ores from, so the mining chain never depends on a recipe nor on
 		// luck, and a planned pickaxe may need an ore of its own level without a cycle. A spare pickaxe is harmless
 		public static IEnumerable<GuaranteedSources.Requirement> MiningRequirements()
 		{
 			if (RecipeSystem.RecipeCount == 0 || !ItemPool.Ready) yield break;
-			List<int> pickaxes = ContentSamples.ItemsByType.Where(pair => pair.Value.pick > 0 && ItemPool.IsValid(pair.Key) && !ItemPool.Info[pair.Key].Excluded).Select(pair => pair.Key).OrderBy(t => t).ToList();
-			foreach ((int pick, int[] ores) level in MiningLevels)
+			List<int> pickaxes = GuaranteeablePickaxes();
+			// From the strongest level down: a level whose ores a stronger level's pickaxe already reaches in time (Meteorite
+			// at tier 2 under the tier 0 level 55, Cobalt and Mythril under Adamantite when all are hardmode) needs none
+			int covered = int.MaxValue;
+			foreach ((int pick, int tier, int[] items) level in WorldMiningLevels().OrderByDescending(l => l.pick))
 			{
-				int oreTier = MiningTier(level);
-				if (oreTier < 0) continue;
+				if (covered <= level.tier) continue;
 				// The weakest vanilla pickaxe of that level, then the cheapest (a modded one only when no vanilla one is left), a
 				// randomizable one first (a protected one keeps its vanilla sources)
-				int chosen = pickaxes.Where(p => PickPower(p) >= level.pick && !ItemPool.IsBanned(p))
+				int chosen = pickaxes.Where(p => PickPower(p) >= level.pick)
 					.OrderBy(p => ItemPool.IsRandomizable(p) ? 0 : 1).ThenBy(p => p < ItemID.Count ? 0 : 1).ThenBy(PickPower).ThenBy(StackRules.ValueOf).ThenBy(p => p).DefaultIfEmpty(0).First();
 				if (chosen <= 0) continue;
-				yield return new GuaranteedSources.Requirement { Item = chosen, Tier = oreTier, Tool = true };
+				covered = level.tier;
+				yield return new GuaranteedSources.Requirement { Item = chosen, Tier = level.tier, Tool = true };
 			}
+		}
+
+		// The pickaxes (and drills) a mining guarantee may give
+		public static List<int> GuaranteeablePickaxes() => ContentSamples.ItemsByType
+			.Where(pair => pair.Value.pick > 0 && ItemPool.IsValid(pair.Key) && !ItemPool.Info[pair.Key].Excluded && !ItemPool.IsBanned(pair.Key))
+			.Select(pair => pair.Key).OrderBy(t => t).ToList();
+
+		// The mining levels of this world, generic: every distinct pick power its mined materials need (the ores it has,
+		// modded ones included, and the world blocks behind a pickaxe: Findability.MinedTier), each at the lowest tier one of
+		// them is mined at (Obsidian makes 55 a tier 0 level, a Gold Pickaxe from the start as in vanilla)
+		public static List<(int pick, int tier, int[] items)> WorldMiningLevels()
+		{
+			Dictionary<int, (int tier, List<int> items)> levels = new();
+			for (int type = 1; type < ItemPool.Info.Length; type++)
+			{
+				int tier = Findability.MinedTier(type);
+				int pick = PickToMine(type);
+				if (tier == Findability.Never || pick <= 0) continue;
+				if (!levels.TryGetValue(pick, out var level)) level = (int.MaxValue, new List<int>());
+				level.items.Add(type);
+				levels[pick] = (Math.Min(level.tier, tier), level.items);
+			}
+			return levels.OrderBy(l => l.Key).Select(l => (l.Key, l.Value.tier, l.Value.items.ToArray())).ToList();
 		}
 	}
 }
