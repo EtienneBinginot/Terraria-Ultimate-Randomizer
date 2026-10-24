@@ -825,14 +825,30 @@ namespace UltimateRandomizer.Common.Tests
 			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) Check.Skip("shuffle mode has no extra drops");
 			List<string> permuted = new();
 			int slots = Math.Clamp(cfg.PermutationExtraSlots, 0, 3);
-			float cap = Math.Min(1f, cfg.DropRateMultiplier * Math.Max(0f, cfg.CritterDropFactor)) + 1e-4f;
+			float factor = Math.Max(0f, cfg.CritterDropFactor);
 			foreach (int npc in new[] { NPCID.Bunny, NPCID.Mouse, NPCID.Butterfly })
 			{
 				foreach (float abundance in new[] { 1f, 3f })
 				{
 					List<PlannedDrop> extras = RandomNpcDropRule.ExtraDrops(npc, npc, Main.expertMode, abundance, style: DropTableStyle.Permutation);
 					if (extras.Count != slots) permuted.Add($"{NpcName(npc)}: {extras.Count} random drops in the permutation style at abundance {abundance}, {slots} expected");
-					foreach (PlannedDrop extra in extras.Where(d => d.Chance > cap)) permuted.Add($"{NpcName(npc)}: extra drop at {extra.Chance:P1}, at most {cap:P1}");
+					// Each slot is the same roll as without the factor (same item), at CritterDropFactor times its chance (capped at
+					// 100 %: a sure slot without the factor stays at least min(1, factor))
+					List<PlannedDrop> unscaled = RandomNpcDropRule.ExtraDrops(npc, npc, Main.expertMode, abundance, style: DropTableStyle.Permutation, critterFactor: 1f);
+					for (int s = 0; s < Math.Min(extras.Count, unscaled.Count); s++)
+					{
+						PlannedDrop with = extras[s];
+						PlannedDrop without = unscaled[s];
+						if (with.Item != without.Item)
+						{
+							permuted.Add($"{NpcName(npc)} slot {s}: {Lang.GetItemNameValue(with.Item)} with the critter factor, {Lang.GetItemNameValue(without.Item)} without");
+							continue;
+						}
+						bool ok = without.Chance < 1f - 1e-4f
+							? Math.Abs(with.Chance - Math.Min(1f, without.Chance * factor)) < 1e-4f
+							: with.Chance >= Math.Min(1f, factor) - 1e-4f;
+						if (!ok) permuted.Add($"{NpcName(npc)} slot {s} at abundance {abundance}: {with.Chance:P2}, {without.Chance:P2} without the factor {factor}");
+					}
 				}
 			}
 			if (cfg.DropTableStyle == DropTableStyle.Permutation)

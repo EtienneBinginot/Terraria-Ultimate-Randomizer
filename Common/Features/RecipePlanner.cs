@@ -85,7 +85,15 @@ namespace UltimateRandomizer.Common.Features
 			WorldCaches.Reset += Reset;
 		}
 
-		public static RecipePlan Get() => plan ??= Build(CraftingConfig.Instance.RecipesForUncraftable, PlanSettings.FromConfig());
+		// Not kept when findability was reset while it was built (Findability.Version): it read the old tiers
+		public static RecipePlan Get()
+		{
+			if (plan != null) return plan;
+			int started = Findability.Version;
+			RecipePlan built = Build(CraftingConfig.Instance.RecipesForUncraftable, PlanSettings.FromConfig());
+			if (started == Findability.Version) plan = built;
+			return built;
+		}
 
 		// A plan built with explicit settings, not cached (tests: the config is never changed). null = the setting
 		public static RecipePlan BuildWith(bool shells, float? reusePenalty = null, float? swapChance = null, float? surpriseChance = null)

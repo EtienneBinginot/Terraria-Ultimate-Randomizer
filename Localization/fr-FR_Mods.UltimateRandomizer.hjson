@@ -264,6 +264,7 @@ Tests: {
 	IngredientReuse: La pénalité de réutilisation répartit les matériaux sur plus de recettes
 	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement
 	ShimmerNoMoneyLoop: Un objet fabriqué à bas prix ne donne jamais plus d'argent qu'il n'en valait en passant dans le Shimmer
+	ShimmerLiveNoMoneyLoop: Un vrai passage dans le Shimmer d'objets fabriqués à bas prix ne rend jamais plus de valeur qu'il n'en a consommé
 	ProtectedRecipesDoable: Les recettes des stations de progression et des objets protégés sont faisables à leur niveau
 	RecipeKeyIngredient: Les recettes randomisées ne sont pas faisables avant le tier de leur résultat (ingrédient clé)
 	RecipeNoStationTwins: Une même recette (résultat et ingrédients) n'apparaît jamais sur deux stations différentes

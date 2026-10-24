@@ -20,9 +20,9 @@ namespace UltimateRandomizer.Common.Features
 	// reforging) call SetDefaults, then Prefix, then the globals' LoadData/NetReceive, where the value is set again with
 	// the multiplier of the item's prefix. Item.Prefix multiplies the current value, so a reforge (ResetPrefix ->
 	// Refresh -> our NetReceive at prefix 0, then Prefix) also ends on the right value.
-	// Shimmer: what a crafted-value item shimmers into keeps the discount (ShimmerUnit), else crafting cheaply then shimmering
+	// Shimmer: what a crafted-value item shimmers into keeps the discount (CapShimmer), else crafting cheaply then shimmering
 	// would sell for the full price (randomized shimmer results are also capped relative to the vanilla values, ShimmerFeature).
-	// Shimmering runs in single player or on the server: the changed item is synced again with its value.
+	// Shimmering runs in single player or on the server: the outputs are synced again with their value.
 	public class CraftedValueItem : GlobalItem
 	{
 		public override bool InstancePerEntity => true;
@@ -75,55 +75,60 @@ namespace UltimateRandomizer.Common.Features
 			return (int)Math.Floor(outputVanilla * Math.Max(0, share));
 		}
 
-		// While an item with a crafted value shimmers: the share the items it gives keep (-1: none shimmering)
-		private static double shimmerShare = -1;
+		// While an item with a crafted value shimmers: every item spawned meanwhile (decrafted ingredients, the extra stack of a
+		// transformation beyond the new max stack, special results); null: none shimmering
+		private static List<Item> shimmerOutputs;
 
 		public override void Load() => On_Item.GetShimmered += CapShimmer;
 
+		// Measured, not predicted (vanilla has special results: Rod of Discord, Clentaminator, Bottomless Bucket, Lunar Bricks,
+		// music boxes; partial decrafts, RecipeLoader.ConsumeIngredient, modded results): what the shimmer consumed (the unit
+		// value times the stack it took, the whole stack when the item changed) over the vanilla value of everything it gave
+		// (the spawned items, and the item itself when its type changed). Every output keeps that share of its vanilla value.
+		// Runs where the shimmer runs (single player, server): vanilla synced the outputs inside orig (message 145), they are
+		// synced again with their value the same way (number2 = 1: the shimmer state kept on the clients)
 		private static void CapShimmer(On_Item.orig_GetShimmered orig, Item item)
 		{
-			int before = item.type;
 			int unit = UnitValueOf(item);
-			if (unit < 0 || shimmerShare >= 0)
+			if (unit < 0 || shimmerOutputs != null)
 			{
 				orig(item);
 				return;
 			}
-			double share = ShimmerShare((long)unit * Math.Max(1, item.stack), ShimmerOutputValue(item));
-			shimmerShare = share;
+			int typeBefore = item.type;
+			int stackBefore = Math.Max(0, item.stack);
+			List<Item> outputs = new();
+			shimmerOutputs = outputs;
 			try
 			{
 				orig(item);
 			}
 			finally
 			{
-				shimmerShare = -1;
+				shimmerOutputs = null;
 			}
-			if (item.IsAir || item.type == before) return;
-			SetUnitValue(item, ShimmerUnit(share, VanillaValue(item.type)));
-			if (Main.netMode == NetmodeID.Server) NetMessage.SendData(MessageID.SyncItem, -1, -1, null, item.whoAmI);
+			bool changed = item.type != typeBefore;
+			long consumed = (long)unit * (changed ? stackBefore : Math.Max(0, stackBefore - Math.Max(0, item.stack)));
+			List<(Item item, bool self)> given = outputs.Where(o => o != null && !o.IsAir).Select(o => (o, false)).ToList();
+			if (changed && !item.IsAir && item.active) given.Add((item, true));
+			long vanilla = given.Sum(g => (long)VanillaValue(g.item.type) * Math.Max(1, g.item.stack));
+			if (given.Count == 0 || vanilla <= 0) return;
+			double share = ShimmerShare(consumed, vanilla);
+			foreach ((Item output, bool self) in given)
+			{
+				int outputUnit = ShimmerUnit(share, VanillaValue(output.type));
+				if (outputUnit < 0 && UnitValueOf(output) < 0) continue;
+				SetUnitValue(output, outputUnit);
+				if (Main.netMode == NetmodeID.Server && output.whoAmI >= 0 && output.whoAmI < Main.maxItems && Main.item[output.whoAmI] == output)
+				{
+					NetMessage.SendData(MessageID.SyncItemsWithShimmer, -1, -1, null, output.whoAmI, 1f);
+				}
+			}
 		}
 
-		// The vanilla value of what a stack shimmers into: its transformation one for one (vanilla tries it before decrafting),
-		// else its decrafted ingredients
-		private static long ShimmerOutputValue(Item item)
-		{
-			int equivalent = ItemID.Sets.ShimmerCountsAsItem[item.type] != -1 ? ItemID.Sets.ShimmerCountsAsItem[item.type] : item.type;
-			int stack = Math.Max(1, item.stack);
-			int target = ItemID.Sets.ShimmerTransformToItem[equivalent];
-			if (target > 0) return (long)VanillaValue(target) * stack;
-			int index = Terraria.GameContent.ShimmerTransforms.GetDecraftingRecipeIndex(equivalent);
-			if (index < 0 || index >= Recipe.numRecipes) return 0;
-			Recipe recipe = Main.recipe[index];
-			long crafts = stack / Math.Max(1, recipe.createItem.stack);
-			return crafts * recipe.requiredItem.Sum(i => (long)VanillaValue(i.type) * i.stack);
-		}
-
-		// The extra stack of a transformation beyond the new item's max stack, and decrafted ingredients
 		public override void OnSpawn(Item item, IEntitySource source)
 		{
-			if (shimmerShare < 0 || item.IsAir) return;
-			SetUnitValue(item, ShimmerUnit(shimmerShare, VanillaValue(item.type)));
+			if (shimmerOutputs != null && !item.IsAir) shimmerOutputs.Add(item);
 		}
 
 		// Sets the unit value of an instance (-1: back to vanilla)

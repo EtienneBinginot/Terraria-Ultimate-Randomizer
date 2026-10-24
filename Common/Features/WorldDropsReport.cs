@@ -38,11 +38,12 @@ namespace UltimateRandomizer.Common.Features
 			plan.Where(d => d.Item > ItemID.None && (d.Rolled || d.Extra || d.Guaranteed));
 
 		// The final plan (everything unlocked: a locked entry still drops on a lucky kill), stable through progression so
-		// that the snapshots don't need rebuilding at each boss
+		// that the snapshots don't need rebuilding at each boss; rolled at the tier kills roll at now (planning false), which
+		// moves with progression only with ScaleWeakEnemiesWithProgression (the report is then rebuilt at each new tier)
 		public static IEnumerable<PlannedDrop> NpcPlan(int netId)
 		{
 			if (plans != null && plans.TryGetValue(netId, out List<PlannedDrop> plan)) return plan;
-			plan = Reported(RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true)).ToList();
+			plan = Reported(RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true, planning: false)).ToList();
 			if (plans != null) plans[netId] = plan;
 			return plan;
 		}
@@ -249,7 +250,7 @@ namespace UltimateRandomizer.Common.Features
 		// player and server: PostWorldLoad; clients: when the seed arrives)
 		public static void Warm()
 		{
-			// Single player: the shops too. A client waits for the tiles (WorldDropsReportSystem), the server opens no shop
+			// Single player: the shops too (a client warms them once in the world, WorldDropsReportSystem; the server opens none)
 			if (Main.netMode == NetmodeID.SinglePlayer) WarmShops();
 			if (!SeedSystem.WorldReady || !ItemPool.Ready || !LootConfig.Instance.RandomizeMobDrops) return;
 			try
@@ -268,19 +269,31 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
+		// What the shop permutation is built from is there and won't move: the world (seed, world evil, so the spawn map, and the
+		// settings: all synced with the world data), the original recipes (the recipe plan), no world cache reset waiting
+		// (SeedSystem.ResetPending: the world evil arrived) and no difficulty change waiting (ProgressionSystem). A client is
+		// also in the world (Main.gameMenu false: the join is over, the Journey slider synced)
+		public static bool ShopInputsReady() => SeedSystem.WorldReady && ItemPool.Ready && RecipeSystem.RecipeCount > 0 && !SeedSystem.ResetPending
+			&& ProgressionSystem.DifficultySettled && (Main.netMode != NetmodeID.MultiplayerClient || !Main.gameMenu);
+
 		// The shop permutation reads the recipe plan and findability (the whole planning chain): built here, not on the first
-		// shop click
-		public static void WarmShops()
+		// shop click. False when its inputs are not ready yet (ShopInputsReady)
+		public static bool WarmShops()
 		{
-			if (!SeedSystem.WorldReady || !ItemPool.Ready || !EconomyConfig.Instance.RandomizeShops) return;
+			if (!EconomyConfig.Instance.RandomizeShops) return true;
+			if (!ShopInputsReady()) return false;
 			try
 			{
+				// The chain in order: the recipe plan, findability, then the permutation reading both
+				_ = RecipePlanner.Get();
+				_ = Findability.Tier(ItemID.WoodenSword);
 				_ = ShopPermutation.Current;
 			}
 			catch (Exception e)
 			{
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Could not prepare the shop permutation: {e}");
 			}
+			return true;
 		}
 
 		public static void Unload()
@@ -302,13 +315,17 @@ namespace UltimateRandomizer.Common.Features
 
 		public static void MarkDirty() => dirty = true;
 
-		// Client: ticks since the world plans changed, the shop permutation is warmed a few seconds later (the spawn map and
-		// the guaranteed sources it reads need the world's tiles); -1 once done
-		private static int shopWarmTicks = -1;
+		// The world plans changed: the shop permutation is warmed again once its inputs are ready (WorldDropsReport.ShopInputsReady,
+		// checked each tick: no fixed delay). Left set across a world unload, it waits for the next world's inputs (WorldReady)
+		private static bool shopsCold;
 
-		private static void ShopsCold() => shopWarmTicks = 0;
+		private static void ShopsCold() => shopsCold = true;
 
-		private const int ShopWarmDelay = 180;
+		// With ScaleWeakEnemiesWithProgression the reported plans follow the unlocked tier (NpcPlan: kill-time tiers)
+		private static void FollowTier()
+		{
+			if (ProgressionConfig.Instance.ScaleWeakEnemiesWithProgression) dirty = true;
+		}
 
 		private static bool expert;
 
@@ -322,6 +339,7 @@ namespace UltimateRandomizer.Common.Features
 			SeedSystem.OnSeedChanged += ShopsCold;
 			WorldCaches.Reset += MarkDirty;
 			WorldCaches.Reset += ShopsCold;
+			ProgressionSystem.OnTierChanged += FollowTier;
 		}
 
 		public override void Unload()
@@ -331,17 +349,15 @@ namespace UltimateRandomizer.Common.Features
 			SeedSystem.OnSeedChanged -= ShopsCold;
 			WorldCaches.Reset -= MarkDirty;
 			WorldCaches.Reset -= ShopsCold;
+			ProgressionSystem.OnTierChanged -= FollowTier;
+			shopsCold = false;
 			WorldDropsReport.Unload();
 		}
 
 		public override void PostUpdateEverything()
 		{
 			if (Main.dedServ || Main.gameMenu) return;
-			if (shopWarmTicks >= 0 && Main.netMode == NetmodeID.MultiplayerClient && SeedSystem.WorldReady && ++shopWarmTicks >= ShopWarmDelay)
-			{
-				shopWarmTicks = -1;
-				WorldDropsReport.WarmShops();
-			}
+			if (shopsCold && WorldDropsReport.WarmShops()) shopsCold = false;
 			bool wanted = WorldDropsReport.Wanted();
 			// The extra drops depend on the game mode (journey mode can change it in a world)
 			if (expert != Main.expertMode)
@@ -361,7 +377,6 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (WorldDropsReport.Showing || WorldDropsReport.Pending) WorldDropsReport.Rebuild(false);
 			dirty = false;
-			shopWarmTicks = -1;
 		}
 	}
 }

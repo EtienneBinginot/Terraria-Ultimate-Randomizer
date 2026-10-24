@@ -106,7 +106,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			if (!luckyPlans.TryGetValue(netId, out List<PlannedDrop> plan))
 			{
 				if (luckyPlans.Count > 500) luckyPlans.Clear();
-				luckyPlans[netId] = plan = RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true);
+				luckyPlans[netId] = plan = RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true, planning: false);
 			}
 			return plan;
 		}

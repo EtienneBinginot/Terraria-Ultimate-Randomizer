@@ -65,11 +65,12 @@ namespace UltimateRandomizer.Common.Core
 			EconomyConfig.Instance, EnemiesConfig.Instance);
 
 		// What the world caches (findability, guaranteed sources, recipe plan, ore map, shuffle) are built from: enemy
-		// stats and the extras don't count, except the spawn settings: the swap pool the guaranteed hosts are taken from, the
-		// spawn map (BiomeSlots: mode, extras) and the swap chances the pacing model weighs the critical-station hosts with
+		// stats and the extras don't count, except the spawn settings: the swap pool the guaranteed hosts are taken from and
+		// the spawn map (BiomeSlots: mode, extras). Not the swap chances: the plans read them at their defaults
+		// (BiomeSlots.PlannedSwapChance), tuning them only changes the real spawns
 		public static string CacheSignature(GeneralConfig general, LootConfig loot, CraftingConfig crafting, ProgressionConfig progression, EconomyConfig economy, EnemiesConfig enemies) =>
 			string.Join("|", Json(general), Json(loot), Json(crafting), CacheJson(progression), Json(economy), enemies.SwapModdedEnemies, enemies.SwapEventEnemies, enemies.SwapCritters,
-				enemies.RandomizeEnemySpawns, enemies.EnemySwapMode, enemies.BiomeExtraEnemies, enemies.EnemySwapChance, enemies.BiomeVanillaChance);
+				enemies.RandomizeEnemySpawns, enemies.EnemySwapMode, enemies.BiomeExtraEnemies);
 
 		// Adaptive power only changes enemies at spawn: its settings don't rebuild the world caches
 		private static string CacheJson(ProgressionConfig progression)
@@ -87,14 +88,15 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		// Something the world caches depend on changed (ore choices of the world, the difficulty): recompute everything.
-		// Never inside itself (a cache noticing a change while the reset rebuilds it): that request waits for the next tick
-		public static void NotifyConfigChanged()
+		// Never inside itself (a cache noticing a change while the reset rebuilds it): that request waits for the next tick.
+		// False when nothing was recomputed (no world, item pool not ready, or postponed)
+		public static bool NotifyConfigChanged()
 		{
-			if (!WorldReady || !ItemPool.Ready) return;
+			if (!WorldReady || !ItemPool.Ready) return false;
 			if (changing)
 			{
 				resetPending = true;
-				return;
+				return false;
 			}
 			changing = true;
 			try
@@ -105,6 +107,7 @@ namespace UltimateRandomizer.Common.Core
 			{
 				changing = false;
 			}
+			return true;
 		}
 
 		private static bool changing;
@@ -114,11 +117,15 @@ namespace UltimateRandomizer.Common.Core
 		// recomputed on the next tick, not in the middle of that build
 		public static void RequestCacheReset() => resetPending = true;
 
+		public static bool ResetPending => resetPending;
+
+		// The request stays until the reset really ran (the item pool may not be ready yet); a request made during it (set
+		// again inside) waits for the next tick
 		public override void PostUpdateEverything()
 		{
 			if (!resetPending || changing) return;
 			resetPending = false;
-			NotifyConfigChanged();
+			if (!NotifyConfigChanged()) resetPending = true;
 		}
 
 		// A config was saved: features refresh only when a value changed, and the world caches (findability, recipe
@@ -142,6 +149,7 @@ namespace UltimateRandomizer.Common.Core
 		public override void PreWorldGen()
 		{
 			WorldReady = false;
+			resetPending = false;
 			WorldSeed = ChooseNewSeed();
 			ItemPool.OnSeedChanged();
 		}

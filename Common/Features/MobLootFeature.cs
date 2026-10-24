@@ -392,11 +392,15 @@ namespace UltimateRandomizer.Common.Features
 		// are left out (includeLocked: kept, flagged, for the codex) and their chances go to the others (Redistribute)
 		// abundance: LootConfig.LootAbundance when null (tests pass an explicit value)
 		// style: the configured one when null (the pacing model compares both)
-		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true, float? abundance = null, bool includeLocked = false, DropTableStyle? style = null)
+		// planning: rolled at the base tier (SourceTier); lucky when null. The world caches (findability, guarantees, recipe
+		// availability) plan; what is shown (bestiary, codex, hints) passes false: the tier the enemy's kills roll at now
+		public static List<PlannedDrop> Plan(int netId, bool expert, bool lucky = false, bool guaranteed = true, float? abundance = null, bool includeLocked = false, DropTableStyle? style = null,
+			bool? planning = null)
 		{
 			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.type : netId);
-			List<PlannedDrop> drops = OriginalDrops(netId, type, style, planning: lucky);
-			drops.AddRange(ExtraDrops(netId, type, expert, abundance, style: style, planning: lucky));
+			bool atBase = planning ?? lucky;
+			List<PlannedDrop> drops = OriginalDrops(netId, type, style, planning: atBase);
+			drops.AddRange(ExtraDrops(netId, type, expert, abundance, style: style, planning: atBase));
 			if (guaranteed) drops.AddRange(GuaranteedSources.For(type));
 			if (lucky)
 			{
@@ -506,9 +510,9 @@ namespace UltimateRandomizer.Common.Features
 		// wildRng: at kill time only, the madness tail (WildDropChance) may replace an unlocked item by one above the limit;
 		// the chance stays the one of the planned item, so the setting really is a share of the drops. wildMultiplier: scales
 		// that chance (JackpotWorth), 0 = no madness
-		// style: the configured one when null
+		// style: the configured one when null. critterFactor: CritterDropFactor when null (the CrittersDrop test compares)
 		public static List<PlannedDrop> ExtraDrops(int netId, int type, bool expert, float? abundance = null, Random wildRng = null, float wildMultiplier = 1f, DropTableStyle? style = null,
-			bool planning = false)
+			bool planning = false, float? critterFactor = null)
 		{
 			if (wildMultiplier <= 0f) wildRng = null;
 			List<PlannedDrop> drops = new();
@@ -536,7 +540,7 @@ namespace UltimateRandomizer.Common.Features
 			bool critter = NPCID.Sets.CountsAsCritter[type];
 			bool critterSlots = critter && tableStyle == DropTableStyle.Permutation;
 			bool permutationSlots = permutation || critterSlots;
-			float critterFactor = critterSlots ? Math.Max(0f, cfg.CritterDropFactor) : 1f;
+			float slotCritterFactor = critterSlots ? Math.Max(0f, critterFactor ?? cfg.CritterDropFactor) : 1f;
 			int npcKey = DetRandom.NpcKey(permutation && isBoss ? BossPermutation.ExtrasOwner(type) : type);
 			int sourceTier = SourceTier(type, planning);
 			int minLimit = MinLimit(type);
@@ -571,7 +575,7 @@ namespace UltimateRandomizer.Common.Features
 				{
 					// A boss always drops its first extra slot
 					int denominator = isBoss && slot == 0 ? 1 : DropRates.Denominator(item, tier, sourceTier, isBoss, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item, 7));
-					chance = Math.Min(1f, cfg.DropRateMultiplier * (permutationSlots ? 1f : slotFactor) * critterFactor / denominator);
+					chance = Math.Min(1f, cfg.DropRateMultiplier * (permutationSlots ? 1f : slotFactor) * slotCritterFactor / denominator);
 				}
 				int lockGap = DropHelper.LockGap(item, minLimit);
 				item = Wild(request, item, lockGap, wildRng, wildMultiplier, out int gap);

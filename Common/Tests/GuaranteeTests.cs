@@ -324,7 +324,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			int band = BiomeSlots.BandOf(tier);
 			BiomeSlotMap map = BiomeSlots.Active ? BiomeSlots.Current : BiomeSlots.Vanilla;
-			double keep = BiomeSlots.Active ? EnemiesConfig.Instance.BiomeVanillaChance / 100.0 : 0;
+			double keep = BiomeSlots.VanillaKeep;
 			double share = (1 - keep) * (PeriodShares(map, band, period).TryGetValue(biome, out Dictionary<int, double> planned) ? planned.GetValueOrDefault(type) : 0);
 			if (keep > 0 && PeriodShares(BiomeSlots.Vanilla, band, period).TryGetValue(biome, out Dictionary<int, double> vanilla)) share += keep * vanilla.GetValueOrDefault(type);
 			return share;
@@ -463,7 +463,7 @@ namespace UltimateRandomizer.Common.Tests
 			const int Seeds = 4;
 			List<string> failures = new();
 			int placed = 0;
-			bool mixed = BiomeSlots.Active && EnemiesConfig.Instance.BiomeVanillaChance > 0;
+			bool mixed = BiomeSlots.VanillaKeep > 0;
 			for (int i = -1; i < Seeds; i++)
 			{
 				// -1: this world

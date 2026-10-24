@@ -264,6 +264,7 @@ Tests: {
 	IngredientReuse: The reuse penalty spreads the materials over more recipes
 	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks
 	ShimmerNoMoneyLoop: A cheaply crafted item never shimmers into more money than it was worth
+	ShimmerLiveNoMoneyLoop: A real shimmer of cheaply crafted items never gives more value than it consumed
 	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
 	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
 	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
