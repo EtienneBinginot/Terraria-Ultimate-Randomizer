@@ -100,7 +100,8 @@ namespace UltimateRandomizer.Common.Tests
 			int lowered = 0;
 			for (int item = 1; item < ItemPool.Info.Length && item < tiers.Length; item++)
 			{
-				if (!ItemPool.IsValid(item)) continue;
+				// An excluded item has an empty info (no rarity tier)
+				if (!ItemPool.IsValid(item) || ItemPool.Info[item].Excluded) continue;
 				// The classification tier (AllTiers: before the sources; the bucket is the final true tier)
 				ItemInfo info = ItemPool.Info[item];
 				int tier = tiers[item];

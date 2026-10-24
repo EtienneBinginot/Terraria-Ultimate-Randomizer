@@ -190,7 +190,7 @@ namespace UltimateRandomizer.Common.Features
 			ItemID.Wood, ItemID.StoneBlock, ItemID.DirtBlock, ItemID.ClayBlock, ItemID.SandBlock, ItemID.Daybloom, ItemID.Mushroom, ItemID.Acorn, ItemID.Cobweb
 		};
 		private static readonly int[] StartOres = { ItemID.CopperOre, ItemID.TinOre, ItemID.IronOre, ItemID.LeadOre };
-		private static readonly int[] StartDrops = { ItemID.Gel, ItemID.Lens };
+		public static readonly int[] StartDrops = { ItemID.Gel, ItemID.Lens };
 		public const double StartDropKills = 60;
 
 		// Read for every candidate of a critical station's slots: cached (do not modify the set)

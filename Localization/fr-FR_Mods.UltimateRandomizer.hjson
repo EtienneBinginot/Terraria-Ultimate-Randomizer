@@ -1911,18 +1911,18 @@ Configs: {
 		}
 
 		MinimumPrice: {
-			Label: "Prix minimum (pièces de cuivre)"
-			Tooltip: "Pour les objets non empilables. 100 cuivre = 1 argent."
+			Label: Prix minimum (pièces de cuivre)
+			Tooltip: Pour les objets non empilables. 100 cuivre = 1 argent.
 		}
 
 		MinimumStackablePrice: {
-			Label: "Prix minimum des objets empilables (pièces de cuivre)"
-			Tooltip: "Les munitions, blocs, potions et autres objets empilables s'achètent un par un : ils gardent leur petit prix, jusqu'à ce minimum."
+			Label: Prix minimum des objets empilables (pièces de cuivre)
+			Tooltip: Les munitions, blocs, potions et autres objets empilables s'achètent un par un : ils gardent leur petit prix, jusqu'à ce minimum.
 		}
 
 		PriceCeiling: {
-			Label: "Plafond de prix (par palier)"
-			Tooltip: "Aucun prix au-dessus d'un prix de base du palier de l'objet x cette valeur (armes, armures, accessoires et outils : 4 fois plus), pour qu'un objet en boutique reste abordable quand il est vendu. Les objets qui valent plus (hors équipement : cosmétiques, meubles, familiers...) sont rarement vendus. Jamais moins de la moitié de la valeur de l'objet. 0 : pas de plafond."
+			Label: Plafond de prix (par palier)
+			Tooltip: Aucun prix au-dessus d'un prix de base du palier de l'objet x cette valeur (armes, armures, accessoires et outils : 4 fois plus), pour qu'un objet en boutique reste abordable quand il est vendu. Les objets qui valent plus (hors équipement : cosmétiques, meubles, familiers...) sont rarement vendus. Jamais moins de la moitié de la valeur de l'objet. 0 : pas de plafond.
 		}
 
 		NoDuplicatesInShop: {
@@ -1931,8 +1931,8 @@ Configs: {
 		}
 
 		MaxShopsPerItem: {
-			Label: "Nombre maximum de marchands vendant le même objet"
-			Tooltip: "Dans tout le monde, un objet tiré au hasard est vendu par ce nombre de marchands au plus, pour que les boutiques restent variées. Chaque marchand ne le vend que dans un de ses onglets. 0 : pas de limite."
+			Label: Nombre maximum de marchands vendant le même objet
+			Tooltip: Dans tout le monde, un objet tiré au hasard est vendu par ce nombre de marchands au plus, pour que les boutiques restent variées. Chaque marchand ne le vend que dans un de ses onglets. 0 : pas de limite.
 		}
 
 		ShopsFollowProgression: {
@@ -2106,18 +2106,18 @@ Configs: {
 		}
 
 		IngredientStackCap: {
-			Label: "Quantité maximale d'un ingrédient"
-			Tooltip: "Quantité maximale d'un nouvel ingrédient courant (blocs, bois, gel, butins courants). Les quantités suivent à peu près la valeur des ingrédients vanilla, dans cette limite et les deux suivantes."
+			Label: Quantité maximale d'un ingrédient
+			Tooltip: Quantité maximale d'un nouvel ingrédient courant (blocs, bois, gel, butins courants). Les quantités suivent à peu près la valeur des ingrédients vanilla, dans cette limite et les deux suivantes.
 		}
 
 		CraftedIngredientStackCap: {
-			Label: "Quantité maximale d'un ingrédient fabriqué"
-			Tooltip: "Quantité maximale d'un nouvel ingrédient qui ne s'obtient qu'en le fabriquant (jamais trouvé). Chacun demande sa propre fabrication, et les quantités s'additionnent vite. Un peu plus est permis quand sa propre recette est bon marché."
+			Label: Quantité maximale d'un ingrédient fabriqué
+			Tooltip: Quantité maximale d'un nouvel ingrédient qui ne s'obtient qu'en le fabriquant (jamais trouvé). Chacun demande sa propre fabrication, et les quantités s'additionnent vite. Un peu plus est permis quand sa propre recette est bon marché.
 		}
 
 		SlowIngredientStackCap: {
-			Label: "Quantité maximale d'un ingrédient lent"
-			Tooltip: "Quantité maximale d'un nouvel ingrédient qui s'obtient lentement : gemmes, étoiles filantes, herbes, poissons, créatures, éclats, âmes, butins peu courants."
+			Label: Quantité maximale d'un ingrédient lent
+			Tooltip: Quantité maximale d'un nouvel ingrédient qui s'obtient lentement : gemmes, étoiles filantes, herbes, poissons, créatures, éclats, âmes, butins peu courants.
 		}
 
 		IngredientReusePenalty: {

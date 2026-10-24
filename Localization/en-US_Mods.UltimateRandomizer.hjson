@@ -1911,18 +1911,18 @@ Configs: {
 		}
 
 		MinimumPrice: {
-			Label: "Minimum price (copper coins)"
-			Tooltip: "For the items that don't stack. 100 copper = 1 silver."
+			Label: Minimum price (copper coins)
+			Tooltip: For the items that don't stack. 100 copper = 1 silver.
 		}
 
 		MinimumStackablePrice: {
-			Label: "Minimum price of stackable items (copper coins)"
-			Tooltip: "Ammo, blocks, potions and other stackable items are bought one at a time: they keep their own small price down to this one."
+			Label: Minimum price of stackable items (copper coins)
+			Tooltip: Ammo, blocks, potions and other stackable items are bought one at a time: they keep their own small price down to this one.
 		}
 
 		PriceCeiling: {
-			Label: "Price ceiling (by tier)"
-			Tooltip: "No price above a base price of the item's tier x this value (weapons, armor, accessories and tools: 4 times more), so a shop item stays affordable when it is sold. Items worth more than that, other than gear (vanity, furniture, pets...), are seldom sold. Never below half the item's value. 0: no ceiling."
+			Label: Price ceiling (by tier)
+			Tooltip: No price above a base price of the item's tier x this value (weapons, armor, accessories and tools: 4 times more), so a shop item stays affordable when it is sold. Items worth more than that, other than gear (vanity, furniture, pets...), are seldom sold. Never below half the item's value. 0: no ceiling.
 		}
 
 		NoDuplicatesInShop: {
@@ -1931,8 +1931,8 @@ Configs: {
 		}
 
 		MaxShopsPerItem: {
-			Label: "Most merchants selling the same item"
-			Tooltip: "Across the whole world, a randomized item is sold by this many merchants at most, so that the shops stay varied. Each merchant sells it in one of its tabs only. 0: no limit."
+			Label: Most merchants selling the same item
+			Tooltip: Across the whole world, a randomized item is sold by this many merchants at most, so that the shops stay varied. Each merchant sells it in one of its tabs only. 0: no limit.
 		}
 
 		ShopsFollowProgression: {
@@ -2106,18 +2106,18 @@ Configs: {
 		}
 
 		IngredientStackCap: {
-			Label: "Maximum amount of an ingredient"
-			Tooltip: "Largest amount of a new common ingredient (blocks, wood, gel, common drops). The amounts loosely follow the value of the vanilla ingredients, within this limit and the two below."
+			Label: Maximum amount of an ingredient
+			Tooltip: Largest amount of a new common ingredient (blocks, wood, gel, common drops). The amounts loosely follow the value of the vanilla ingredients, within this limit and the two below.
 		}
 
 		CraftedIngredientStackCap: {
-			Label: "Maximum amount of a crafted-only ingredient"
-			Tooltip: "Largest amount of a new ingredient that can only be crafted (never found). Each one is a craft of its own, so large amounts add up fast. A little more is allowed when its own recipe is cheap."
+			Label: Maximum amount of a crafted-only ingredient
+			Tooltip: Largest amount of a new ingredient that can only be crafted (never found). Each one is a craft of its own, so large amounts add up fast. A little more is allowed when its own recipe is cheap.
 		}
 
 		SlowIngredientStackCap: {
-			Label: "Maximum amount of a slow ingredient"
-			Tooltip: "Largest amount of a new ingredient that is gathered slowly: gems, Fallen Stars, herbs, fish, critters, shards, souls, uncommon drops."
+			Label: Maximum amount of a slow ingredient
+			Tooltip: Largest amount of a new ingredient that is gathered slowly: gems, Fallen Stars, herbs, fish, critters, shards, souls, uncommon drops.
 		}
 
 		IngredientReusePenalty: {

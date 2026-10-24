@@ -498,6 +498,9 @@ namespace UltimateRandomizer.Common.Features
 		public static int CopyCap(int item, int duplicateCopies, int materialCopies)
 		{
 			if (!ItemPool.IsValid(item) || FoundInWorld(item) || OreMap.IsOre(item)) return 0;
+			// The start drops keep every copy: the critical stations' recipes count on them in the first kills (1.7.0 kept four
+			// Lens copies on rare enemies, and the Lens was no start material any more)
+			if (Array.IndexOf(RecipePlanner.StartDrops, item) >= 0) return 0;
 			return ItemPool.Info[item].Category switch
 			{
 				ItemCategory.OreBar => 0,
