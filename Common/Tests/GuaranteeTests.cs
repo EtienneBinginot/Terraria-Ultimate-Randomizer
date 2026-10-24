@@ -102,13 +102,16 @@ namespace UltimateRandomizer.Common.Tests
 					if (open < 0 || open > place.Tier) failures.Add($"{name}: in {BiomeSlots.BiomeName(place.Biome)}, open from tier {open}");
 				}
 			}
-			// Distinct guardians: a second station on one enemy only when its tier has fewer common enemies than stations
+			// Distinct guardians: a second station on one enemy only once every enemy that may guard one at its tier (met
+			// steadily in an open biome: GuardianCandidates, not every enemy of the tier) guards one. Critical stations
+			// keep to the early slots, so their tier may share guardians while others are left
 			foreach ((int guardian, int count) in guarding.Where(g => g.Value > 1))
 			{
+				if (NpcTiers.IsBoss(guardian)) continue;
 				int tier = GuaranteedSources.HostTier(guardian);
-				int stationsOfTier = stations.Count(r => Tiers.Clamp(r.Tier) == tier);
-				int enemies = EnemySwapPool.NaturalEnemies(tier).Count(n => !GuaranteedSources.IsEventEnemy(n) && GuaranteedSources.HostTier(n) == tier);
-				if (!NpcTiers.IsBoss(guardian) && enemies >= 2 * stationsOfTier) failures.Add($"{Lang.GetNPCNameValue(guardian)} guards {count} stations ({enemies} enemies of tier {tier} for {stationsOfTier} stations)");
+				if (stations.Any(r => Tiers.Clamp(r.Tier) == tier && r.Critical)) continue;
+				List<int> idle = GuaranteedSources.GuardianCandidates(tier).Where(n => !guarding.ContainsKey(n)).ToList();
+				if (idle.Count > 0) failures.Add($"{Lang.GetNPCNameValue(guardian)} guards {count} stations while {idle.Count} enemies of tier {tier} guard none ({string.Join(", ", idle.Take(4).Select(Lang.GetNPCNameValue))})");
 			}
 			// Other seeds: one host each too
 			for (int i = 0; i < 3; i++)
