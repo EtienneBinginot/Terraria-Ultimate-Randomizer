@@ -38,7 +38,8 @@ namespace UltimateRandomizer.Common.Core
 		// or its recipes settled after them (ItemClassifier.SettleByRecipes): it may be below its classification tier (AllTiers)
 		public bool Corrected;
 		// A hard progression gate (ItemClassifier.HardGates: luminite, chlorophyte, ectoplasm, mechanical souls... and what is only
-		// made from them): no TierAllowance (UnlockTierOf, GatingLimitFor)
+		// made from them), and every material or bar of true tier HighMaterialTier or more (HighMaterial): no TierAllowance
+		// (UnlockTierOf, GatingLimitFor), never rolled nor permuted onto a source of a lower tier
 		public bool HardGate;
 		public bool Excluded;
 		public bool Protected;
@@ -249,7 +250,7 @@ namespace UltimateRandomizer.Common.Core
 				int trueTier = trueTiers[type];
 				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = trueTier, Banned = isBanned, Protected = isProtected,
 					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fixedTier[type] && trueTier > Math.Max(tiers[type], beforeSources[type]),
-					FromTable = fromTable[type], FromWorldChest = fromChest[type], Corrected = corrected[type] && !fromChest[type], HardGate = hardGates[type],
+					FromTable = fromTable[type], FromWorldChest = fromChest[type], Corrected = corrected[type] && !fromChest[type], HardGate = hardGates[type] || HighMaterial(category, trueTier),
 					Special = special };
 				// Upgrades stay out of the buckets: the buckets (and every plan rolled from them) are the same as when they were protected
 				if (!isProtected && !special) lists[(int)category, tier].Add(type);
@@ -446,6 +447,14 @@ namespace UltimateRandomizer.Common.Core
 			IsHardGate(type) ? GatingLimit(ProgressionSystem.UnlockedTier, Main.hardMode, minLimit, 0) : GatingLimit(minLimit);
 
 		public static bool IsHardGate(int type) => IsValid(type) && Info[type].HardGate;
+
+		// High-tier materials never come down (user decision): a material or a bar of the mechanical bosses' tier or later
+		// (Hallowed Bars, Chlorophyte, Ectoplasm, Spectre Bars, Beetle Husks, fragments...) is a hard gate wherever it is placed:
+		// extras, surprises, permutations, bags and shops give it from its true tier only. The Turtle Shell (Giant Tortoise,
+		// any hardmode jungle: https://terraria.wiki.gg/wiki/Turtle_Shell) stays a hardmode material (ItemClassifier.KnownTiers)
+		public const int HighMaterialTier = (int)Tier.PostMechBoss;
+
+		public static bool HighMaterial(ItemCategory category, int trueTier) => category is ItemCategory.Material or ItemCategory.OreBar && trueTier >= HighMaterialTier;
 
 		// Tests only (PlanDiff, restored in finally): the planning rules of worlds made before the hardmode wall (allowance
 		// 2, no wall in GatingLimit and UnlockTier), to measure how much of a world's plan the wall changes

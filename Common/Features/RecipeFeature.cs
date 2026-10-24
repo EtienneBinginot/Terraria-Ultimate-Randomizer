@@ -383,7 +383,7 @@ namespace UltimateRandomizer.Common.Features
 		public static bool IsModded(int i) => modded != null && i >= 0 && i < modded.Length && modded[i];
 
 		// Another mod's recipe that stays exactly as its mod made it (RandomizeModdedRecipes off; never a shell). On, other mods'
-		// recipes are planned like the vanilla ones everywhere (results, swaps, ingredients, groups, stations, twins, house
+		// recipes are planned like the vanilla ones everywhere (ingredients, groups, stations, twins, house
 		// rules): their items' tiers come from these recipes too (ItemClassifier.IsTierRecipe), so each keeps a key of its
 		// result's tier. Accepted limitation: a mod's own recipe callbacks (OnCraft, consume hooks) still run for its recipe,
 		// whatever it makes now. Always left alone: a recipe with a condition of its mod (Magic Storage's Cooked Marshmallow

@@ -270,19 +270,21 @@ Tests: {
 	StationTierRespected: Les recettes ne demandent jamais de station au-dessus de leur niveau, ni de station thématique
 	HandCraftKept: Les recettes à la main restent à la main
 	StationsVaried: Une bonne part des recettes a changé de station
-	AppliedResultsMatchPlan: Les recettes donnent leur résultat vanilla ou celui de leur partenaire d'échange, comme prévu, et la disponibilité correspond aux recettes en jeu
+	AppliedResultsMatchPlan: Les recettes donnent leur résultat vanilla, comme prévu, et la disponibilité correspond aux recettes en jeu
 	StationPlanFromOriginals: Le choix des stations ne dépend que des recettes d'origine, pas de celles déjà randomisées
 	RealCrafting: Le menu d'artisanat propose une recette avec ses nouveaux ingrédients, et plus avec les anciens
 	PickaxePerMiningLevel: Chaque niveau de minage a une pioche au tier de ses minerais (fabriquée, trouvée ou garantie)
 	MiningPickaxeGuaranteed: Chaque niveau de minage a une pioche garantie trouvée sans fabrication, et aucun minerai miné ne compte avant qu'une pioche puisse le miner
 	OresAsIngredients: Les minerais et blocs qui demandent une pioche redeviennent de nouveaux ingrédients (seuls ou par groupe de paire)
 	OrePairGroupsUsed: Les groupes de paires de minerais (cobalt ou palladium...) existent, servent dans des recettes et acceptent l'un ou l'autre minerai
-	RecipeRandomizationShare: Presque toutes les recettes vanilla changent (95 %), peu échangent leur résultat (environ la chance d'échange) ; les raisons sont journalisées
+	RecipeRandomizationShare: Presque toutes les recettes vanilla changent (95 %) et aucune ne change de résultat ; les raisons sont journalisées
 	RecipeEveryItemKept: Chaque objet fait par une recette vanilla reste fabricable, et rien de ce qu'on obtient en vanilla n'est perdu (Zénith)
 	RecipeNoCycles: Aucun objet n'est fabriqué à partir de lui-même par un nouvel ingrédient, directement ou via d'autres recettes
-	RecipeKeyed: Chaque recette reconstruite au-dessus du tier 0 a une clé et n'est pas faisable avant son tier
-	RecipeSwapsShare: Environ la chance d'échange des recettes échangent leur résultat, par paires du même tier, surtout de types différents
-	RecipeSwapCancelClean: Une paire d'échange annulée laisse les candidats exactement comme avant, et ses recettes redonnent leur propre résultat
+	RecipeKeyed: Chaque recette reconstruite au-dessus du tier 0 a une clé ou est verrouillée par sa station, et n'est pas faisable avant son tier
+	RecipeMinIngredients: Une recette reconstruite au-dessus du tier 0 a au moins deux nouveaux ingrédients : sa clé et un ingrédient aléatoire
+	RecipeKeyShare: La clé représente environ un tiers des quantités d'une recette reconstruite, les ingrédients aléatoires le reste
+	RecipeStationLocks: Une recette verrouillée par sa station n'a pas de clé, et sa station n'est obtenue qu'à partir du palier de la recette
+	HighMaterialsGated: Les matériaux et lingots du palier des boss mécaniques ou après ne viennent jamais d'une source d'un palier inférieur (verrous stricts)
 	ZenithWeapons: Le Zénith garde des armes parmi ses ingrédients
 	IngredientReuse: La pénalité de réutilisation répartit les matériaux sur plus de recettes
 	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement
@@ -296,7 +298,7 @@ Tests: {
 	UpgradeRecipes: Chaque amélioration de vie ou de mana a sa propre recette, faisable dès son tier, avec un ingrédient clé et des ingrédients valant au moins l'amélioration
 	HouseItemsObtainable: La porte, la plateforme et la torche sont des cibles d'indices, et leurs recettes changent mais restent fabricables dès le début (ingrédients de palier 0, station de base)
 	RecipesRebuilt: Au moins 90 % des recettes aux ingrédients remplaçables reçoivent de nouveaux ingrédients
-	RecipeIngredientCount: Une recette reconstruite a le nombre d'ingrédients vanilla, à l'écart réglé près, sans dépasser le maximum réglé
+	RecipeIngredientCount: Une recette reconstruite a le nombre d'ingrédients vanilla, à l'écart réglé près (au moins deux nouveaux au-dessus du tier 0), sans dépasser le maximum réglé
 	RecipeIngredientTiers: Une recette reconstruite n'a aucun ingrédient au-dessus de son palier, et la plupart en ont un exactement de son palier
 	IngredientTierSpread: Les nouveaux ingrédients des recettes avancées reconstruites viennent aussi des paliers précédents (au moins 20 % deux paliers ou plus en dessous)
 	RecipeIngredientsAcyclic: Chaque ingrédient fabriqué d'une recette reconstruite est donné par une recette planifiée avant elle
@@ -304,11 +306,11 @@ Tests: {
 	RecipeExamples: Journalise 10 recettes reconstruites (dont le Zénith et l'armure de chlorophyte), réellement changées
 	UncraftableRecipesValid: Les objets qu'aucune recette ne fabrique reçoivent une recette active, faisable à partir de leur palier et jamais avant, qui ne se décompose jamais au miroitement ; journalise des exemples
 	UncraftableRecipesOff: Réglage désactivé (planificateur appelé avec des paramètres explicites) : aucune recette coquille n'est planifiée et les autres recettes sont planifiées à l'identique
-	UncraftableNoSpecials: Les recettes coquilles gardent leur objet (une amélioration seulement la sienne), ne sont jamais échangées ni désactivées comme copies
+	UncraftableNoSpecials: Les recettes coquilles gardent leur objet (une amélioration seulement la sienne) et ne sont jamais désactivées comme copies
 	UncraftablePricedByIngredients: Les recettes coquilles actives comptent comme randomisées : ce qu'elles fabriquent se vend au prix de ses ingrédients, pas à son prix d'origine
 	RecipePickaxeMineable: Aucune recette reconstruite de pioche ou de foreuse ne reçoit un nouvel ingrédient dont le minage exige une puissance de pioche au moins égale à la sienne
-	RecipeNotBeforeItsTier: Aucune recette reconstruite ou échangée n'est faisable avant le palier de l'objet qu'elle donne (son palier, ou son vrai palier s'il est plus tard) : pas de pioche en chlorophyte en début de mode difficile
-	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent au plus le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana, pas de fragment de nébuleuse gardé pour un objet bon marché échangé
+	RecipeNotBeforeItsTier: Aucune recette reconstruite n'est faisable avant le palier de l'objet qu'elle donne (son palier, ou son vrai palier s'il est plus tard) : pas de pioche en chlorophyte en début de mode difficile
+	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent au plus le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana
 	ProtectedRecipesGated: Un résultat protégé dont les ingrédients sont reconstruits attend le palier débloqué de son vrai palier comme les autres : ni clé de nuit ni clé de lumière avant le mode difficile
 	PickaxeIngredientsBelowLevel: Une recette de pioche ou de foreuse ne reçoit jamais de minerai ni de lingot (ni rien qui en soit fait) dont le minage exige sa propre puissance de pioche ou plus : pas de pioche en orichalque faite de lingots de chlorophyte
 	StationsCraftable: Chaque station d'artisanat a une recette refaite avec des matériaux trouvés, faisable à son palier sans son gardien ; l'établi à la main dès le début
@@ -317,7 +319,6 @@ Tests: {
 	IngredientCountsFromVanilla: Les nouveaux ingrédients d'une recette reconstruite totalisent au plus deux fois et demie les ingrédients vanilla qu'ils remplacent (note la part des quantités au plafond et la recette de la barre de météorite)
 	NoNeverIngredients: Aucune recette planifiée active ne demande un ingrédient impossible à obtenir (un miroir de glace, une guimauve) ; une recette gardée vanilla le voit remplacé, et les ingrédients d'une recette d'un autre mod laissée intacte s'obtiennent quelque part (boutiques comprises)
 	NoEmptyLiveRecipes: Aucune recette active n'a une liste d'ingrédients vide (une fabrication gratuite)
-	SwapStationsInTime: Un résultat échangé n'arrive jamais sur une station plus tardive que son propre palier plus la tolérance (pas d'arc en tungstène à l'établi lunaire)
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares
@@ -2071,12 +2072,12 @@ Configs: {
 
 		RandomizeRecipes: {
 			Label: Randomiser les recettes
-			Tooltip: Reconstruit les recettes selon la graine : chacune garde son objet (quelques-unes l'échangent, voir plus bas) mais reçoit de nouveaux ingrédients et de nouvelles stations, faisables à son niveau. Les recettes redeviennent normales quand tu quittes le monde.
+			Tooltip: Reconstruit les recettes selon la graine : chacune garde son objet mais reçoit de nouveaux ingrédients et de nouvelles stations, faisables à son niveau. Au-delà du premier palier, une recette a au moins deux nouveaux ingrédients, dont une clé de son niveau, sauf si sa station n'est elle-même disponible qu'à partir de ce niveau. Les recettes redeviennent normales quand tu quittes le monde.
 		}
 
 		RandomizeModdedRecipes: {
 			Label: Randomiser les recettes des autres mods
-			Tooltip: Les recettes ajoutées par d'autres mods (Magic Storage...) sont randomisées comme celles du jeu : nouveaux ingrédients et stations, et parfois un résultat échangé. Chacune garde un ingrédient clé du niveau de son objet : une amélioration de stockage attend toujours ses lingots. Désactivé : elles restent telles que leur mod les a faites. Ajouter ou retirer des mods, ou changer ce réglage, modifie les résultats aléatoires de ce monde ; le désactiver ensuite ne rétablit pas les anciens.
+			Tooltip: Les recettes ajoutées par d'autres mods (Magic Storage...) sont randomisées comme celles du jeu : nouveaux ingrédients et stations. Chacune garde un ingrédient clé du niveau de son objet : une amélioration de stockage attend toujours ses lingots. Désactivé : elles restent telles que leur mod les a faites. Ajouter ou retirer des mods, ou changer ce réglage, modifie les résultats aléatoires de ce monde ; le désactiver ensuite ne rétablit pas les anciens.
 		}
 
 		LimitRecipeValue: {
@@ -2097,11 +2098,6 @@ Configs: {
 		DisableDecraftOfRandomizedResults: {
 			Label: Pas de décraft Shimmer des résultats aléatoires
 			Tooltip: Empêche de dupliquer des objets en craftant un résultat aléatoire puis en le décraftant dans le Shimmer.
-		}
-
-		RecipeResultSwapChance: {
-			Label: Chance d'échange de résultat (%)
-			Tooltip: Part des recettes randomisées qui échangent leur résultat avec une autre recette du même palier, par paires (chaque objet reste fabricable, souvent par une recette inattendue). Une recette échangée reçoit des ingrédients dignes de l'objet qu'elle donne (son niveau, sa valeur), surtout des types qu'utilisait sa propre recette, avec une touche de ceux de l'objet.
 		}
 
 		IngredientMode: {

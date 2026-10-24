@@ -199,7 +199,8 @@ namespace UltimateRandomizer.Common.Tests
 				int[] vanillaTiles = RecipeSystem.OriginalTiles(i);
 				var planned = plan.Ingredients[i] ?? vanillaIngredients;
 				int[] plannedTiles = plan.Tiles?[i] ?? vanillaTiles;
-				int partner = plan.SwapPartner != null ? plan.SwapPartner[i] : -1;
+				// No result swap since 1.8.0: the swap columns stay, empty
+				int partner = -1;
 				bool shell = RecipeSystem.IsShell(i);
 				bool modded = RecipeSystem.IsModded(i);
 				bool twin = plan.Twin != null && plan.Twin[i];

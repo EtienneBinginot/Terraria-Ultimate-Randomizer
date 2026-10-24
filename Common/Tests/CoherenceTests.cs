@@ -19,6 +19,7 @@ namespace UltimateRandomizer.Common.Tests
 		public static void Register()
 		{
 			TestRunner.Register("TierCoherence", TierCoherence);
+			TestRunner.Register("HighMaterialsGated", HighMaterialsGated);
 			TestRunner.Register("TierAudit", TierAudit);
 			TestRunner.Register("ItemTierDump", ItemTierDump);
 			TestRunner.Register("WorldChestTrueTiers", WorldChestTrueTiers);
@@ -204,6 +205,61 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			List<int> placers = Stations.Placers(tile);
 			return placers.Count > 0 ? Name(placers.Min()) : Stations.Name(tile);
+		}
+
+		// High-tier materials never come down (ItemPool.HighMaterial): every material or bar of true tier HighMaterialTier or
+		// more is a hard gate (no allowance, never found before its true tier), and gated rolls of material (the extras, the
+		// surprises, bags and shops roll that way) from a source and a progression below its true tier never give it, whatever
+		// the tier jitter. The Turtle Shell stays a hardmode material (Giant Tortoise, any hardmode jungle)
+		private static void HighMaterialsGated()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			if (!ProgressionConfig.Instance.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("no tier gating");
+			HashSet<int> overridden = ProgressionConfig.Instance.TierOverrides.Where(o => o?.Item != null && !o.Item.IsUnloaded).Select(o => o.Item.Type).ToHashSet();
+			List<string> failures = new();
+			List<int> high = new();
+			for (int item = 1; item < ItemPool.Info.Length; item++)
+			{
+				if (!ItemPool.IsValid(item) || ItemPool.Info[item].Excluded || overridden.Contains(item)) continue;
+				if (!ItemPool.HighMaterial(ItemPool.Info[item].Category, ItemPool.TrueTierOf(item))) continue;
+				high.Add(item);
+				if (!ItemPool.IsHardGate(item)) failures.Add($"{Name(item)} (true tier {ItemPool.TrueTierOf(item)}) is no hard gate");
+				if (ItemPool.UnlockTierOf(item) != ItemPool.TrueTierOf(item)) failures.Add($"{Name(item)}: unlocked at {ItemPool.UnlockTierOf(item)}, true tier {ItemPool.TrueTierOf(item)}");
+				if (SeedSystem.WorldReady && Findability.Tier(item) < ItemPool.TrueTierOf(item)) failures.Add($"{Name(item)}: found at {Findability.Tier(item)}, true tier {ItemPool.TrueTierOf(item)}");
+			}
+			if (ItemPool.IsValid(ItemID.TurtleShell) && !overridden.Contains(ItemID.TurtleShell) && ItemPool.TrueTierOf(ItemID.TurtleShell) != (int)Tier.Hardmode)
+				failures.Add($"{Name(ItemID.TurtleShell)}: true tier {ItemPool.TrueTierOf(ItemID.TurtleShell)}, {(int)Tier.Hardmode} expected");
+			if (high.Count == 0) Check.Skip("no high-tier material");
+			// Rolls of material from sources below the high tiers, at their own progression: the jitter and the allowance may
+			// reach the high tiers, the hard ceiling never
+			int rolls = 0, highRolled = 0;
+			int sample = high[0];
+			for (int tier = 0; tier < ItemPool.HighMaterialTier; tier++)
+			{
+				for (int k = 0; k < 150; k++)
+				{
+					RollRequest request = new()
+					{
+						Keys = new[] { 0x4d415447, tier, k },
+						SourceTier = tier,
+						OriginalItem = sample,
+						Policy = CategoryPolicy.SameAsOriginal,
+						TierJitterDown = 0,
+						TierJitterUp = 2,
+						AllowJackpot = false,
+						MinLimit = tier,
+						GatingTier = tier,
+						GatingHardMode = tier >= (int)Tier.Hardmode
+					};
+					int rolled = ItemPool.Roll(request);
+					rolls++;
+					if (rolled <= 0 || !ItemPool.IsValid(rolled) || !ItemPool.HighMaterial(ItemPool.Info[rolled].Category, ItemPool.TrueTierOf(rolled))) continue;
+					highRolled++;
+					if (ItemPool.TrueTierOf(rolled) > tier && failures.Count < 30) failures.Add($"a material roll at tier {tier} gave {Name(rolled)} (true tier {ItemPool.TrueTierOf(rolled)})");
+				}
+			}
+			Log($"HighMaterialsGated: {high.Count} high-tier materials (e.g. {string.Join(", ", high.Take(8).Select(Name))}); {rolls} material rolls below tier {ItemPool.HighMaterialTier}, {highRolled} gave a high-tier one");
+			Check.All(failures, "High-tier materials below their tier");
 		}
 
 		private static void TierCoherence()
@@ -547,7 +603,7 @@ namespace UltimateRandomizer.Common.Tests
 				}
 			}
 			Log($"recipes: {total.Sum()} randomizable vanilla recipes (Touchable), {needing.Sum()} still doable before U, {noSlot.Sum()} without a replaceable slot " +
-				$"(all kept, recipe groups, bags or summons); plan: {plan.KeyIngredient.Count(k => k)} key ingredients, {plan.SwapPartner.Count(r => r >= 0)} results swapped");
+				$"(all kept, recipe groups, bags or summons); plan: {plan.KeyIngredient.Count(k => k)} key ingredients, {plan.StationLocks.Count(r => r)} recipes locked by their station");
 			// Spread of the ingredients (every planned recipe, kept originals too): the busiest material of each findability tier
 			for (int t = 0; t < Tiers.Count; t++)
 			{

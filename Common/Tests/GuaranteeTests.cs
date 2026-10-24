@@ -795,8 +795,9 @@ namespace UltimateRandomizer.Common.Tests
 						continue;
 					}
 					if (plan.IngredientTiers[i] < (int)Core.Tier.PostMoonLord) Fail($"{where} rebuilt for tier {plan.IngredientTiers[i]}");
-					if (plan.PlannedKeys[i] == 0 && !plan.KeyIngredient[i]) Fail($"{where} has no key");
-					int highest = plan.Ingredients[i].Select(x => RecipeTests.IngredientAvail(plan, i, x.type)).DefaultIfEmpty(0).Max();
+					if (plan.PlannedKeys[i] == 0 && !plan.KeyIngredient[i] && !plan.StationLocks[i]) Fail($"{where} has no key");
+					// A station lock counts as the key: its station is had no earlier than the recipe's tier
+					int highest = Math.Max(RecipeTests.LockTier(plan, i), plan.Ingredients[i].Select(x => RecipeTests.IngredientAvail(plan, i, x.type)).DefaultIfEmpty(0).Max());
 					if (highest < (int)Core.Tier.PostMoonLord) Fail($"{where}: its ingredients are all had at tier {highest}");
 				}
 				if (lunar == 0) Fail("no lunar recipe found");

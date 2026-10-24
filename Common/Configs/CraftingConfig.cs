@@ -34,7 +34,7 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(true)]
 		public bool RandomizeRecipes;
 
-		// Other mods' recipes are randomized like vanilla ones (results, ingredients, stations, swaps), each keeping a key
+		// Other mods' recipes are randomized like vanilla ones (ingredients, stations), each keeping a key
 		// ingredient of its result's tier (RecipeSystem.LeftAlone). Off: they stay as their mod made them
 		[DefaultValue(true)]
 		public bool RandomizeModdedRecipes;
@@ -56,13 +56,6 @@ namespace UltimateRandomizer.Common.Configs
 
 		[DefaultValue(true)]
 		public bool DisableDecraftOfRandomizedResults;
-
-		// Share of the randomized recipes that swap their result with another recipe of the same tier (by pairs: every item
-		// stays craftable), their ingredients rebuilt for the item they now give. Each recipe otherwise keeps its own result
-		[Range(0f, 100f)]
-		[Increment(1f)]
-		[DefaultValue(10f)]
-		public float RecipeResultSwapChance;
 
 		[Header("Ingredients")]
 		[DefaultValue(IngredientMode.Randomized)]

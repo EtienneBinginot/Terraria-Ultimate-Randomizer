@@ -118,9 +118,9 @@ namespace UltimateRandomizer.Common.Tests
 				rebuilt++;
 				if (!plan.Twin[i] && !Main.recipe[i].requiredItem.Select(x => (x.type, x.stack)).SequenceEqual(plan.Ingredients[i])) failures.Add($"{where}: live ingredients are not the planned ones");
 				int t = Math.Max(0, plan.IngredientTiers[i]);
-				int highest = plan.Ingredients[i].Select(x => IngredientAvail(plan, i, x.type)).DefaultIfEmpty(0).Max();
+				int highest = Math.Max(RecipeTests.LockTier(plan, i), plan.Ingredients[i].Select(x => IngredientAvail(plan, i, x.type)).DefaultIfEmpty(0).Max());
 				int original = OriginalTier(i);
-				if (t > 0 && plan.PlannedKeys[i] == 0 && !plan.KeyIngredient[i]) failures.Add($"{where}: rebuilt for tier {t} without a key");
+				if (t > 0 && plan.PlannedKeys[i] == 0 && !plan.KeyIngredient[i] && !plan.StationLocks[i]) failures.Add($"{where}: rebuilt for tier {t} without a key nor a station lock");
 				// The key is found at the recipe's tier T (vanilla doable tier of its original ingredients); a tier of allowance
 				if (coherent && highest < Math.Min(original, t) - 1) failures.Add($"{where}: original tier {original}, rebuilt for {t}, its ingredients all had at {highest}");
 				if (examples.Count < 8) examples.Add($"{Name(plan.Results[i].type)} T{t} (was {original}, key {(plan.PlannedKeys[i] > 0 ? Name(plan.PlannedKeys[i]) : "-")})");

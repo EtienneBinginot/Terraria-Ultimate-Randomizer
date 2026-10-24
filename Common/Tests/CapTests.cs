@@ -238,7 +238,7 @@ namespace UltimateRandomizer.Common.Tests
 
 		// The same rolls with and without the re-pick: every difference is an item the re-pick had to replace, so every other
 		// roll (mob plans, chest slots, gated rolls) gives exactly what it gave before the re-pick existed. Recipe results never
-		// roll (vanilla results and swaps, RecipePlanner.SwappedResults: banned items are never swapped)
+		// roll (vanilla results)
 		private static void RepickOnlyChangesFlagged()
 		{
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("only in Coherent mode");
