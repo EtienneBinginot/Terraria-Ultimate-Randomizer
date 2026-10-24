@@ -1290,7 +1290,7 @@ namespace UltimateRandomizer.Common.Tests
 			Check.Equal(5f, Default("WildDropChance"), "default WildDropChance");
 			Check.Equal(2f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
 			Check.Equal(4f, Default("WildTierDecay"), "default WildTierDecay");
-			Check.Equal(1.2f, Default("KillJackpotChance"), "default KillJackpotChance");
+			Check.Equal(0.8f, Default("KillJackpotChance"), "default KillJackpotChance");
 			Check.Equal(1f, Default("TierAllowance"), "default TierAllowance");
 		}
 

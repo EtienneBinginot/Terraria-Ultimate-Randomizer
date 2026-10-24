@@ -56,9 +56,9 @@ namespace UltimateRandomizer.Common.Tests
 		// Jackpots of a simulated early hour before the first boss with the default settings: luck and madness of the kills,
 		// the per-kill jackpot, giants and minis. 1.3.4 had 6 with about 0.9 % of jackpot chances early; the permutation style
 		// fell to about 0.4 (0.75 with giants and minis); 0.20.0 aims at about 2 with the per-kill jackpot (KillJackpotChance).
-		// Not measured yet: a sanity range only; tune KillJackpotChance from the logged "Jackpots:" value
-		public const double MinJackpotsPerHour = 0.8;
-		public const double MaxJackpotsPerHour = 5;
+		// Measured: 2.71 at 1.2 % (0.20.0); about 2.2 at 0.8 % (0.20.1). Tune KillJackpotChance from the logged "Jackpots:" value
+		public const double MinJackpotsPerHour = 1.5;
+		public const double MaxJackpotsPerHour = 3;
 
 		private static void Log(string text) => ModContent.GetInstance<UltimateRandomizer>().Logger.Info(text);
 

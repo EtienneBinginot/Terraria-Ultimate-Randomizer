@@ -86,11 +86,11 @@ namespace UltimateRandomizer.Common.Configs
 		public float WildTierDecay;
 
 		// Per-kill jackpot (%): on top of the drops, whatever the drop style, one useful item above the progression limit
-		// (the madness tail: WildTierDecay), scaled by RandomNpcDropRule.JackpotWorth. Runtime only, never planned. 1.2 % gives
-		// about 2 jackpots per early hour in total with the other defaults (PacingModel.JackpotsPer100Kills)
+		// (the madness tail: WildTierDecay), scaled by RandomNpcDropRule.JackpotWorth. Runtime only, never planned. 0.20.0 had 1.2 %:
+		// 2.71 jackpots per early hour measured (1.51 from this roll, PacingModel.JackpotsPer100Kills); 0.8 % gives about 2.2
 		[Range(0f, 20f)]
 		[Increment(0.1f)]
-		[DefaultValue(1.2f)]
+		[DefaultValue(0.8f)]
 		public float KillJackpotChance;
 
 		[DefaultValue(false)]
