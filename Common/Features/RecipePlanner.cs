@@ -699,7 +699,8 @@ namespace UltimateRandomizer.Common.Features
 					if (StationShell(i) || handled.Contains(i)) continue;
 					// The upgrades: LockSpecials
 					if (!NeedsLock(result, i, doable) || ItemPool.IsSpecial(results[i])) continue;
-					int key = PlaceKey(result, results, i, result.ResultTiers[i], buckets, weights, avail, uses, graph, out bool later, append: true);
+					// A new ingredient only while the recipe has room for it (a recipe keyed in an earlier round already took its +1)
+					int key = PlaceKey(result, results, i, result.ResultTiers[i], buckets, weights, avail, uses, graph, out bool later, append: RoomForKey(result, i, 1));
 					if (key <= 0)
 					{
 						unlocked++;
@@ -768,12 +769,15 @@ namespace UltimateRandomizer.Common.Features
 				}
 				int t = result.IngredientTiers[i];
 				int slot = Array.FindIndex(result.Ingredients[i], p => p.type == result.PlannedKeys[i]);
-				int newKey = PlaceKey(result, results, i, t, buckets, weights, avail, uses, graph, out bool later,
-					DetRandom.Get(RollKey.KeyIngredient, RecipeSystem.RecipeKey(i), RollKey.Fallback), append: true, replace: slot);
-				if (newKey <= 0) continue;
-				result.PlannedKeys[i] = newKey;
 				// A station lock that did not hold: keyed now
 				bool wasLock = result.StationLocks[i];
+				// Appended, the key of a former station lock counts as a plain ingredient (no KeyIngredient): within the recipe's
+				// count, else a free slot takes it (a Bone Candelabra of 4 got a fifth)
+				int extra = wasLock && !result.KeyIngredient[i] ? 0 : 1;
+				int newKey = PlaceKey(result, results, i, t, buckets, weights, avail, uses, graph, out bool later,
+					DetRandom.Get(RollKey.KeyIngredient, RecipeSystem.RecipeKey(i), RollKey.Fallback), append: RoomForKey(result, i, extra), replace: slot);
+				if (newKey <= 0) continue;
+				result.PlannedKeys[i] = newKey;
 				result.StationLocks[i] = false;
 				// Only an appended key is a LockResults key (KeyIngredient: doable by U + 1); a replaced one keeps the recipe's T,
 				// and so does a former station lock (no key slot, but planned at its T like any rebuilt recipe)
@@ -1799,6 +1803,23 @@ namespace UltimateRandomizer.Common.Features
 		// A rebuilt recipe above tier 0 has at least this many new ingredients: its key and a random one at least (44 % of them
 		// had the key alone, so high-tier gear looked vanilla: Hallowed gear of 12 to 30 Hallowed Bars)
 		public const int MinRebuiltIngredients = 2;
+
+		// The most ingredients a rebuilt recipe may have (RecipeIngredientCount): its vanilla count plus the spread within
+		// IngredientMax, or its protected ones and MinRebuiltIngredients new ones above tier 0
+		public static int MaxRebuiltIngredients(RecipePlan plan, int i)
+		{
+			CraftingConfig cfg = CraftingConfig.Instance;
+			(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
+			int max = Math.Max(1, cfg.IngredientMax);
+			int kept = original.Count(x => !IngredientReplaceable(x.type));
+			int least = plan.IngredientTiers[i] > 0 && !RecipeSystem.HouseRecipe(i) ? Math.Min(MinRebuiltIngredients, max) : 1;
+			return Math.Max(Math.Clamp(original.Length + cfg.IngredientCountSpread, 1, max), kept + least);
+		}
+
+		// May a key be appended to this recipe? Always to one on its vanilla ingredients (not rebuilt); to a rebuilt one while
+		// it stays within MaxRebuiltIngredients plus extra (1 for a LockResults key, KeyIngredient)
+		private static bool RoomForKey(RecipePlan plan, int i, int extra) =>
+			plan.IngredientTiers[i] < 0 || plan.Ingredients[i] == null || plan.Ingredients[i].Length < MaxRebuiltIngredients(plan, i) + extra;
 
 		// The key's share of the count budget (at least 1): the random slots share the rest
 		public const double KeyCountShare = 1 / 3.0;
