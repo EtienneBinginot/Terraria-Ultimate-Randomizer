@@ -243,7 +243,7 @@ Tests: {
 	AvailabilityConsistent: The planned item availability matches an independent recomputation over the applied recipes
 	NoSelfIngredient: No recipe uses its own result
 	ResultNotInGroup: No randomized recipe gives an item its own ingredient group accepts
-	IngredientValueCoherent: Rebuilt recipes keep about the value of the vanilla ingredients
+	IngredientValueCoherent: Rebuilt recipes are worth at most twice the vanilla ingredients, and at least a quarter unless a count cap holds them
 	ProtectedIngredientsKept: Protected ingredients are never replaced
 	RecipeGroupsSane: Every recipe group (any wood, any iron bar...) still has its ingredient
 	RecipePlanDeterminism: Ingredients and stations are the same after a rebuild
@@ -286,10 +286,15 @@ Tests: {
 	UncraftablePricedByIngredients: Live shell recipes count as randomized: what they make sells for its ingredients' value, not its vanilla price
 	RecipePickaxeMineable: No rebuilt pickaxe or drill recipe gets a new ingredient that needs at least that pick power to be mined
 	RecipeNotBeforeItsTier: No rebuilt or swapped recipe is doable before the tier of the item it gives (its own tier, or its true tier when later): no Chlorophyte Pickaxe in early hardmode
-	RecipeValueSane: Planned recipes ask for sane stacks (the stack cap, or three times a vanilla stack) and rebuilt ones are worth half to twice their vanilla recipe (value-0 items count their own recipe): no 9999 Ruby Walls for a Mana Crystal, no Nebula Fragment kept for a cheap swapped item
+	RecipeValueSane: Planned recipes ask for sane stacks (their count cap, or three times a vanilla stack) and rebuilt ones are worth a quarter to twice their vanilla recipe (value-0 items count their own recipe): no 9999 Ruby Walls for a Mana Crystal, no Nebula Fragment kept for a cheap swapped item
 	ProtectedRecipesGated: A protected result whose ingredients are rebuilt waits for the unlocked tier of its true tier like any other: no Key of Night or Key of Light before hardmode
 	PickaxeIngredientsBelowLevel: A pickaxe or drill recipe never gets an ore or bar (or anything made of one) that needs its own pick power or more to be mined: no Orichalcum Pickaxe made of Chlorophyte Bars
 	StationsCraftable: Every crafting station has a rebuilt recipe of found materials, doable by its tier without its guardian; the Work Bench by hand at the start
+	HouseRecipesSimple: Torch, Wood Platform and Wooden Door have a simple random recipe: one or two start materials, a few of each, worth at most twice the vanilla recipe, at a basic station or by hand
+	IngredientCountCaps: No new ingredient asks for more than its count cap: a few of a crafted-only item, about ten of a slow one (gems, Fallen Stars, fish, critters, shards, souls)
+	NoNeverIngredients: No live planned recipe needs an ingredient that is never had (an Ice Mirror, a Marshmallow); a recipe kept vanilla gets a replacement for it
+	NoEmptyLiveRecipes: No live recipe has an empty ingredient list (a free craft)
+	SwapStationsInTime: A swapped result never lands on a station later than its own tier and the allowance (no Tungsten Bow at the Lunar Crafting Station)
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
@@ -2074,8 +2079,18 @@ Configs: {
 		}
 
 		IngredientStackCap: {
-			Label: Maximum amount of an ingredient
-			Tooltip: The amounts are set so the ingredients are worth roughly what the vanilla ones were, up to this limit per ingredient.
+			Label: "Maximum amount of an ingredient"
+			Tooltip: "Largest amount of a new common ingredient (blocks, wood, gel, common drops). The amounts loosely follow the value of the vanilla ingredients, within this limit and the two below."
+		}
+
+		CraftedIngredientStackCap: {
+			Label: "Maximum amount of a crafted-only ingredient"
+			Tooltip: "Largest amount of a new ingredient that can only be crafted (never found). Each one is a craft of its own, so large amounts add up fast. A little more is allowed when its own recipe is cheap."
+		}
+
+		SlowIngredientStackCap: {
+			Label: "Maximum amount of a slow ingredient"
+			Tooltip: "Largest amount of a new ingredient that is gathered slowly: gems, Fallen Stars, fish, critters, shards, souls, uncommon drops."
 		}
 
 		IngredientReusePenalty: {
