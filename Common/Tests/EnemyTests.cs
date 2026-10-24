@@ -126,11 +126,19 @@ namespace UltimateRandomizer.Common.Tests
 		private static void SwapKeepsOriginal()
 		{
 			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only");
-			NPC npc = TestRunner.SpawnNear(NPCID.GoblinPeon);
-			Check.That(npc != null, "could not spawn a goblin");
+			// A stale original in every free slot (a previous NPC's): the new NPC's OnSpawn must clear its own
+			int[] saved = (int[])EnemySwapSystem.Originals.Clone();
+			for (int i = 0; i < Main.maxNPCs; i++)
+			{
+				if (!Main.npc[i].active) EnemySwapSystem.Originals[i] = NPCID.Skeleton;
+			}
+			int flagged = EnemySwapSystem.Stats.Flagged, swapped = EnemySwapSystem.Stats.SwappedEnemies;
+			NPC npc = null;
 			try
 			{
-				Check.Equal(0, EnemySwapSystem.Originals[npc.whoAmI], "original of a new NPC");
+				npc = TestRunner.SpawnNear(NPCID.GoblinPeon);
+				Check.That(npc != null, "could not spawn a goblin");
+				Check.Equal(0, EnemySwapSystem.Originals[npc.whoAmI], "original of a new NPC in a slot with a stale one");
 				EnemySwapSystem.ApplySwap(npc, NPCID.Zombie);
 				Check.Equal(NPCID.GoblinPeon, EnemySwapSystem.Originals[npc.whoAmI], "original after the swap");
 				npc.SetDefaults(NPCID.Zombie);
@@ -140,6 +148,9 @@ namespace UltimateRandomizer.Common.Tests
 			finally
 			{
 				TestRunner.RemoveNpc(npc);
+				System.Array.Copy(saved, EnemySwapSystem.Originals, saved.Length);
+				EnemySwapSystem.Stats.Flagged = flagged;
+				EnemySwapSystem.Stats.SwappedEnemies = swapped;
 			}
 		}
 

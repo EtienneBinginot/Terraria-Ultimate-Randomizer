@@ -268,6 +268,17 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (GuaranteedSources.IsEventEnemy(type)) failures.Add($"{Lang.GetNPCNameValue(type)} seen as an event enemy");
 			}
+			// Checked from the spawn map itself, not through MetOnlyInEvents: the event enemies that spawn as an owner, an extra or a
+			// shared owner in a slot open every day (no critter, rare or conditional slot), outside the Graveyard and the Meteor
+			// (made by the player or an event)
+			HashSet<int> steady = new();
+			foreach (BiomeSlot slot in BiomeSlots.SpawnMap.Slots)
+			{
+				if (slot.Critter || slot.Rare || slot.Conditional || slot.Biome == (int)SpawnBiome.Graveyard || slot.Biome == (int)SpawnBiome.Meteor) continue;
+				if (!slot.AbsentEvil) steady.Add(BiomeSlots.TypeOf(slot.Owner));
+				if (slot.Extra != 0) steady.Add(BiomeSlots.TypeOf(slot.Extra));
+				if (slot.EvilShared != null) steady.UnionWith(slot.EvilShared.Select(BiomeSlots.TypeOf));
+			}
 			int hosts = 0;
 			foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements)
 			{
@@ -276,8 +287,7 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int host in GuaranteedSources.HostsOf(requirement.Item))
 				{
 					hosts++;
-					// An event enemy holding ordinary slots (an extra by biome) spawns outside its event: a normal host
-					if (GuaranteedSources.MetOnlyInEvents(host)) failures.Add($"{Name(requirement.Item)} on {Lang.GetNPCNameValue(host)}");
+					if (GuaranteedSources.IsEventEnemy(host) && !steady.Contains(host)) failures.Add($"{Name(requirement.Item)} on {Lang.GetNPCNameValue(host)}");
 				}
 			}
 			if (GuaranteedSources.Requirements.Count > 0) Check.That(hosts > 0, "no guaranteed host at all");

@@ -108,7 +108,9 @@ namespace UltimateRandomizer.Common.Features
 		// AI styles that depend on a parent, an anchor tile or a boss: plants, boss hands, the Hungry, Creepers...
 		private static readonly HashSet<int> ExcludedAiStyles = new() { 12, 13, 28, 29, 47, 55 };
 
+		// Swap targets by movement and tier (never rare enemies); nightBuckets: every natural enemy (NaturalEnemies)
 		private static List<int>[,] dayBuckets;
+		private static List<int>[,] nightTargets;
 		private static List<int>[,] nightBuckets;
 		private static Dictionary<int, Movement> movements;
 
@@ -125,8 +127,9 @@ namespace UltimateRandomizer.Common.Features
 				if (stats != null) stats.NotInPool++;
 				return npc.netID;
 			}
-			// Event spawns have their own share (their event stays recognisable)
-			float chance = forceChance ?? (IsEventEnemy(npcType) ? cfg.EventSpawnSwapChance : cfg.EnemySwapChance);
+			// Event spawns have their own share, as by biome: invaders, moon and eclipse enemies, and with SwapEventEnemies the
+			// enemies without a natural biome (Blood Moon, rain, windy day, Halloween, Christmas)
+			float chance = forceChance ?? (IsEventEnemy(npcType) || EventSpawnSwappable(npcType) ? cfg.EventSpawnSwapChance : cfg.EnemySwapChance);
 			Random rng;
 			if (cfg.EnemySwapMode == EnemySwapMode.PerType && forceChance == null)
 			{
@@ -148,7 +151,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 			// On the surface by day, enemies that flee daylight (zombies, demon eyes...) would vanish at once
 			bool daylight = Main.dayTime && npc.position.Y < Main.worldSurface * 16;
-			List<int>[,] buckets = daylight ? dayBuckets : nightBuckets;
+			List<int>[,] buckets = daylight ? dayBuckets : nightTargets;
 			int tier = PoolTier(npcType);
 			for (int t = tier; t >= 0; t--)
 			{
@@ -326,6 +329,7 @@ namespace UltimateRandomizer.Common.Features
 			if (movements != null) return;
 			EnemiesConfig cfg = EnemiesConfig.Instance;
 			dayBuckets = NewBuckets();
+			nightTargets = NewBuckets();
 			nightBuckets = NewBuckets();
 			movements = new Dictionary<int, Movement>();
 			List<int> types = new(ContentSamples.NpcsByNetId.Keys);
@@ -338,6 +342,10 @@ namespace UltimateRandomizer.Common.Features
 				movements[type] = movement.Value;
 				int tier = PoolTier(type);
 				nightBuckets[(int)movement.Value, tier].Add(type);
+				// Rare enemies (moon minibosses, Tim, Nymph...) may be swapped but are never targets, as in EventTargets: a Scarecrow
+				// never becomes a Headless Horseman. Gold critters stay, picked less often (Pick)
+				if (npc.rarity > 0 && !NPCID.Sets.CountsAsCritter[npc.type]) continue;
+				nightTargets[(int)movement.Value, tier].Add(type);
 				if (!DaylightIntolerant(type)) dayBuckets[(int)movement.Value, tier].Add(type);
 			}
 		}
@@ -498,6 +506,7 @@ namespace UltimateRandomizer.Common.Features
 			eventTargets.Clear();
 			eventTargetsMap = null;
 			dayBuckets = null;
+			nightTargets = null;
 			nightBuckets = null;
 			movements = null;
 		}
@@ -527,6 +536,13 @@ namespace UltimateRandomizer.Common.Features
 			Array.Clear(Pending);
 			Array.Clear(Originals);
 			Stats = new SwapStats();
+		}
+
+		// Nothing of a world's slots may leak into the next one (EventProgress would credit a stale original)
+		public override void OnWorldUnload()
+		{
+			Array.Clear(Pending);
+			Array.Clear(Originals);
 		}
 
 		public override void PostUpdateNPCs() => ProcessPending(null);

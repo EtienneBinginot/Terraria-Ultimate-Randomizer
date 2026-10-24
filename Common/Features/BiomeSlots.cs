@@ -964,14 +964,15 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Spawns in an ordinary slot of the spawn map (neither rare nor conditional, in this world), as its owner, its extra or a
-		// shared owner: met there outside any event. An event enemy that does is a reliable source (GuaranteedSources.MetOnlyInEvents)
+		// shared owner: met there outside any event. An event enemy that does is a reliable source (GuaranteedSources.MetOnlyInEvents).
+		// Not in the Graveyard nor the Meteor (AllowedTier < 0: made by the player or an event): a Raven stays an event enemy
 		public static bool HasSteadySlot(int type)
 		{
 			BiomeSlotMap map = SpawnMap;
 			if (map.SteadyTypes == null)
 			{
 				HashSet<int> types = new();
-				foreach (BiomeSlot slot in map.Slots.Where(s => !s.Critter && !s.Rare && !s.Conditional))
+				foreach (BiomeSlot slot in map.Slots.Where(s => !s.Critter && !s.Rare && !s.Conditional && GuaranteedSources.AllowedTier(s.Biome) >= 0))
 				{
 					// An absent-evil owner spawns through the present-evil slot it shares
 					foreach (int id in Spawners(slot).Where(id => !slot.AbsentEvil || id != slot.Owner)) types.Add(TypeOf(id));

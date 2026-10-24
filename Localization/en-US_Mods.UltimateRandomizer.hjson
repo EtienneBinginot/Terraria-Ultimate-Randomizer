@@ -2401,12 +2401,12 @@ Configs: {
 
 		SwapEventEnemies: {
 			Label: "Also swap event enemies"
-			Tooltip: "Goblin army, Frost Legion, pirates, Pumpkin and Frost Moons: their enemies can take other enemies' places (never before their event can come) and their own spawns can be replaced. A replaced invader or moon enemy still counts for its event's progress. Martians, the Old One's Army and event bosses are never swapped."
+			Tooltip: "Goblin army, Frost Legion, pirates, Pumpkin and Frost Moons: their enemies can take other enemies' places (never before their event can come) and their own spawns can be replaced, as can those of the eclipse, the Blood Moon and the weather or season enemies (see 'Event spawns replaced'). A replaced invader or moon enemy still counts for its event's progress. Martians, the Old One's Army and event bosses are never swapped."
 		}
 
 		EventSpawnSwapChance: {
 			Label: "Event spawns replaced (%)"
-			Tooltip: "Share of the enemies spawned by an invasion, a moon, an eclipse or a Blood Moon that become another enemy of their level. Needs 'Also swap event enemies'. The others stay as they are, so events stay recognisable."
+			Tooltip: "Share of the enemies of an invasion, a moon or an eclipse, and of the enemies that only come with an event, a weather or a season (Blood Moon, rain, windy day, Halloween, Christmas), that become another enemy of their level. Needs 'Also swap event enemies'. Replaced enemies still count for their event's progress; lower it to keep events recognisable."
 		}
 
 		SwapModdedEnemies: {

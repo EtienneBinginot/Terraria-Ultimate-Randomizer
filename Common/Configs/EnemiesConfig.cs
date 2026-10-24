@@ -225,10 +225,12 @@ namespace UltimateRandomizer.Common.Configs
 		[ReloadRequired]
 		public bool SwapEventEnemies;
 
-		// Share of the event spawns (invasions, moons, eclipse, Blood Moon) turned into another enemy (%)
+		// Share of the event spawns turned into another enemy (%): invaders, moon and eclipse enemies, and the enemies without a
+		// natural biome (Blood Moon, rain, windy day, Halloween, Christmas) in both modes. Every one by default: progress is
+		// credited anyway (EventProgress)
 		[Range(0f, 100f)]
 		[Increment(5f)]
-		[DefaultValue(50f)]
+		[DefaultValue(100f)]
 		public float EventSpawnSwapChance;
 
 		[DefaultValue(true)]
