@@ -263,6 +263,8 @@ Tests: {
 	ZenithWeapons: The Zenith keeps weapons among its ingredients
 	IngredientReuse: The reuse penalty spreads the materials over more recipes
 	CraftedValueFromIngredients: An item crafted through a randomized recipe sells for at most its ingredients, through saves, network, splits and stacks
+	ShimmerNoMoneyLoop: A cheaply crafted item never shimmers into more money than it was worth
+	ShimmerLiveNoMoneyLoop: A real shimmer of cheaply crafted items never gives more value than it consumed
 	ProtectedRecipesDoable: Recipes making progression stations and protected items can be made at their level
 	RecipeKeyIngredient: Randomized recipes can't be made before the tier of their result (key ingredient)
 	RecipeNoStationTwins: The same recipe (result and ingredients) never shows on two different stations
@@ -322,6 +324,7 @@ Tests: {
 	ConfigRanges: Settings are consistent
 	DebugToolsDefaultOff: Debug tools are off by default
 	CacheSignatureScope: Saving an enemy stat setting keeps findability and the recipe plan; loot and swap pool settings rebuild them
+	CacheSignatureCovers: Every spawn setting the plans read (spawn mode, biome extras, swap chances) and progression scaling rebuild the world caches
 	ConfigResetDefaults: Settings: the reset button restores every default and covers every config
 	HintFactsTrue: Hints say what the planners do: the host carries the item, the recipe makes it
 	HintPriceScales: Hint prices follow the formula and rise with the level and the tier
@@ -1438,7 +1441,7 @@ Configs: {
 
 		CritterDropFactor: {
 			Label: Critter frequent drop share
-			Tooltip: Share of the small frequent drop (material, potion, ammo...) that critters get, compared with other enemies. They come in swarms and die in one hit: 0.5 = half as often, 0 = never.
+			Tooltip: Share of the small frequent drop (material, potion, ammo...) that critters get, compared with other enemies. They come in swarms and die in one hit: 0.5 = half as often, 0 = never. In the permutation drop style (no small frequent drop), critters get the same random extra slots as enemies, each at this share of its chance.
 		}
 
 		DropRateMultiplier: {

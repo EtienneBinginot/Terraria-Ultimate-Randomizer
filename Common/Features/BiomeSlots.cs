@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using System.Reflection;
 using Terraria;
 using Terraria.GameContent.Bestiary;
 using Terraria.ID;
@@ -791,7 +793,18 @@ namespace UltimateRandomizer.Common.Features
 		private static double ShareIn(BiomeSlotMap map, int band, int biome, int type, bool steady = false) =>
 			(steady ? Table(map, band).Steady : Table(map, band).ByBiome).TryGetValue(biome, out Dictionary<int, double> byType) && byType.TryGetValue(type, out double share) ? share : 0;
 
-		private static double VanillaKeep => Active ? Math.Clamp(EnemiesConfig.Instance.BiomeVanillaChance / 100.0, 0, 1) : 0;
+		// The planned spawn model (the guaranteed hosts, findability and everything planned from them: the planned shares here,
+		// PacingModel.EarlyKillShare) reads EnemySwapChance and BiomeVanillaChance at their defaults ([DefaultValue]), so
+		// tuning them changes the real spawns only: they are no world cache setting (SeedSystem.CacheSignature) and a world
+		// in progress keeps its plans
+		private static float DefaultChance(string field) =>
+			Convert.ToSingle(typeof(EnemiesConfig).GetField(field).GetCustomAttribute<DefaultValueAttribute>().Value);
+
+		public static readonly float PlannedSwapChance = DefaultChance(nameof(EnemiesConfig.EnemySwapChance));
+		public static readonly float PlannedVanillaChance = DefaultChance(nameof(EnemiesConfig.BiomeVanillaChance));
+
+		// The vanilla share mixed in the planned shares (at PlannedVanillaChance)
+		public static double VanillaKeep => Active ? Math.Clamp(PlannedVanillaChance / 100.0, 0, 1) : 0;
 
 		// Are the planned shares where enemies really spawn? Yes when spawns are redistributed by biome or not randomized;
 		// other swap modes put any enemy anywhere: hints and guarantees then judge enemies by their rarity only

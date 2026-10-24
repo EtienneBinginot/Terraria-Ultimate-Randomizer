@@ -115,7 +115,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 			int unit = BossPermutation.BagUnit(bagType);
 			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? sample.type : unit);
-			List<PlannedDrop> extras = RandomNpcDropRule.ExtraDrops(unit, type, false);
+			List<PlannedDrop> extras = RandomNpcDropRule.ExtraDrops(unit, type, false, planning: lucky);
 			if (lucky)
 			{
 				for (int i = 0; i < extras.Count; i++)

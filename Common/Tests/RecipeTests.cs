@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -47,6 +48,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ZenithWeapons", ZenithWeapons);
 			TestRunner.Register("IngredientReuse", IngredientReuse);
 			TestRunner.Register("CraftedValueFromIngredients", CraftedValueFromIngredients);
+			TestRunner.Register("ShimmerNoMoneyLoop", ShimmerNoMoneyLoop);
+			TestRunner.Register("ShimmerLiveNoMoneyLoop", ShimmerLiveNoMoneyLoop);
 			TestRunner.Register("ProtectedRecipesDoable", ProtectedRecipesDoable);
 			TestRunner.Register("RecipeKeyIngredient", RecipeKeyIngredient);
 			TestRunner.Register("RecipeNoStationTwins", RecipeNoStationTwins);
@@ -1001,6 +1004,115 @@ namespace UltimateRandomizer.Common.Tests
 
 		// An item made through a randomized recipe sells for at most its ingredients' value, and keeps that value through
 		// a save/load, a network round trip, a split and a stack
+		// An item crafted cheaply (a crafted unit value) never shimmers into more money than it was worth: whatever the vanilla
+		// value of what it gives (a randomized transformation up to 3 times its own, decrafted ingredients), the stack it gives
+		// sells for at most the input's value, and an item without crafted value gives vanilla-valued items. Pure
+		private static void ShimmerNoMoneyLoop()
+		{
+			List<string> failures = new();
+			foreach (int inputUnit in new[] { 0, 1, 7, 50, 999, 25000 })
+			{
+				foreach (int stack in new[] { 1, 3, 99, 9999 })
+				{
+					foreach (int outputVanilla in new[] { 1, 13, 100, 5000, 300000 })
+					{
+						foreach (int count in new[] { 1, 2, 5 })
+						{
+							// count output items per input item (decrafting), one for one for a transformation
+							long input = (long)inputUnit * stack;
+							long outputs = (long)stack * count;
+							double share = CraftedValueItem.ShimmerShare(input, outputVanilla * outputs);
+							int unit = CraftedValueItem.ShimmerUnit(share, outputVanilla);
+							long sold = (unit < 0 ? outputVanilla : unit) * outputs;
+							if (sold > input) failures.Add($"unit {inputUnit} x{stack} into {outputs} items of vanilla value {outputVanilla}: sells for {sold}, input worth {input}");
+							if (unit > outputVanilla) failures.Add($"unit {unit} above the vanilla value {outputVanilla}");
+						}
+					}
+				}
+			}
+			if (CraftedValueItem.ShimmerShare(0, 0) != 1 || CraftedValueItem.ShimmerUnit(1, 100) != -1) failures.Add("nothing to cap: the vanilla value should stay");
+			Check.All(failures, "Shimmer money loops");
+		}
+
+		// The real shimmer (Item.GetShimmered on a world item) of cheap crafted-value items: a transformation, a whole decraft
+		// and a partial one (a stack that is no multiple of the recipe's). What comes out never sells for more than what the
+		// shimmer consumed. The spawned items are removed
+		private static void ShimmerLiveNoMoneyLoop()
+		{
+			if (Main.netMode != NetmodeID.SinglePlayer) Check.Skip("single player only (the shimmer runs on the server)");
+			List<(string what, int type, int stack)> cases = new();
+			bool Cheapable(int type) => type > ItemID.None && CraftedValueItem.VanillaValue(type) >= 10 && ItemID.Sets.CoinLuckValue[type] <= 0
+				&& ContentSamples.ItemsByType.TryGetValue(type, out Item sample) && sample.makeNPC <= 0 && ItemID.Sets.ShimmerCountsAsItem[type] == -1;
+			int transform = Enumerable.Range(1, ItemLoader.ItemCount - 1).FirstOrDefault(type => type < ItemID.Count && Cheapable(type)
+				&& ItemID.Sets.ShimmerTransformToItem[type] > 0 && CraftedValueItem.VanillaValue(ItemID.Sets.ShimmerTransformToItem[type]) > 0);
+			if (transform > 0) cases.Add(("transformation", transform, 3));
+			foreach (bool partial in new[] { false, true })
+			{
+				int decraft = Enumerable.Range(1, ItemID.Count - 1).FirstOrDefault(type =>
+				{
+					if (!Cheapable(type) || ItemID.Sets.ShimmerTransformToItem[type] > 0) return false;
+					int index = Terraria.GameContent.ShimmerTransforms.GetDecraftingRecipeIndex(type);
+					if (index < 0 || index >= Recipe.numRecipes) return false;
+					Recipe recipe = Main.recipe[index];
+					return (!partial || recipe.createItem.stack > 1) && recipe.requiredItem.Sum(i => (long)CraftedValueItem.VanillaValue(i.type) * i.stack) > 0;
+				});
+				if (decraft <= 0) continue;
+				int made = Math.Max(1, Main.recipe[Terraria.GameContent.ShimmerTransforms.GetDecraftingRecipeIndex(decraft)].createItem.stack);
+				cases.Add((partial ? "partial decraft" : "decraft", decraft, partial ? made * 2 + 1 : made * 2));
+			}
+			if (cases.Count == 0) Check.Skip("no shimmer transformation nor decraft found");
+			List<string> failures = new();
+			int given = 0;
+			foreach ((string what, int type, int stack) in cases)
+			{
+				bool[] before = Main.item.Select(i => i.active).ToArray();
+				int slot = Item.NewItem(new EntitySource_Misc("UltimateRandomizer test"), Main.LocalPlayer.Center, Vector2.Zero, type, stack);
+				try
+				{
+					if (slot < 0 || slot >= Main.maxItems || !Main.item[slot].active)
+					{
+						failures.Add($"{Name(type)}: could not spawn the item");
+						continue;
+					}
+					Item item = Main.item[slot];
+					item.stack = stack;
+					int unit = Math.Max(1, CraftedValueItem.VanillaValue(type) / 10);
+					CraftedValueItem.SetUnitValue(item, unit);
+					if (CraftedValueItem.UnitValueOf(item) != unit)
+					{
+						failures.Add($"{Name(type)}: the crafted value did not stick");
+						continue;
+					}
+					// Private: called as Item.Update calls it (the detour applies to the method itself)
+					typeof(Item).GetMethod("GetShimmered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public).Invoke(item, null);
+					bool changed = item.type != type;
+					long consumed = (long)unit * (changed ? stack : stack - Math.Max(0, item.active ? item.stack : 0));
+					long sold = 0;
+					int outputs = 0;
+					for (int i = 0; i < Main.maxItems; i++)
+					{
+						Item output = Main.item[i];
+						if (!output.active || output.IsAir || (i < before.Length && before[i] && i != slot)) continue;
+						if (i == slot && !changed) continue;
+						sold += (long)Math.Max(0, output.value) * output.stack;
+						outputs++;
+					}
+					if (outputs == 0) continue;
+					given++;
+					if (sold > consumed) failures.Add($"{what} of {stack} {Name(type)} at {unit} each: the outputs sell for {sold}, the shimmer consumed {consumed}");
+				}
+				finally
+				{
+					for (int i = 0; i < Main.maxItems; i++)
+					{
+						if (Main.item[i].active && (i == slot || i >= before.Length || !before[i])) Main.item[i].TurnToAir();
+					}
+				}
+			}
+			if (given == 0) Check.Skip("none of the shimmers gave anything");
+			Check.All(failures, "Shimmering crafted-value items gives money");
+		}
+
 		private static void CraftedValueFromIngredients()
 		{
 			if (!CraftingConfig.Instance.CraftedValueFromIngredients) Check.Skip("crafted items keep their vanilla value");

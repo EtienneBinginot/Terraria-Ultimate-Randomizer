@@ -939,6 +939,10 @@ namespace UltimateRandomizer.Common.Features
 				placements = null;
 				// The shop-only places too (Findability.Reset)
 				Findability.Reset();
+				// The world's own map changed (the world evil arrived; a test map has this world's evil): everything planned
+				// from the old one (recipe plan, applied recipes, shop permutation, decraft rules) is rebuilt too, on the next
+				// tick, not inside the build that noticed it. The reset clears frequentMap: no loop
+				if (frequentMap.Evil != map.Evil) SeedSystem.RequestCacheReset();
 			}
 			hostTiers = null;
 			frequentMap = map;
@@ -1075,6 +1079,11 @@ namespace UltimateRandomizer.Common.Features
 
 		private static int[] baseTiers;
 		private static int[] tiers;
+		// Moved by each reset: a result computed across one (a reset during the computation) is returned but not kept. The
+		// caches built from findability (RecipePlanner, ShopPermutation) check it the same way before storing theirs
+		private static int version;
+
+		public static int Version => version;
 
 		static Findability()
 		{
@@ -1109,16 +1118,18 @@ namespace UltimateRandomizer.Common.Features
 		// Including the guaranteed sources (GuaranteedSources.FoundTier)
 		public static int Tier(int item)
 		{
-			if (tiers == null)
+			int[] values = tiers;
+			if (values == null)
 			{
-				int[] result = (int[])BaseTiers().Clone();
+				int started = version;
+				values = (int[])BaseTiers().Clone();
 				foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements)
 				{
-					result[requirement.Item] = Math.Min(result[requirement.Item], GuaranteedSources.FoundTier(requirement));
+					values[requirement.Item] = Math.Min(values[requirement.Item], GuaranteedSources.FoundTier(requirement));
 				}
-				tiers = result;
+				if (started == version) tiers = values;
 			}
-			return item > 0 && item < tiers.Length ? tiers[item] : Never;
+			return item > 0 && item < values.Length ? values[item] : Never;
 		}
 
 		// Without the guaranteed sources (used to decide what must be guaranteed)
@@ -1130,6 +1141,7 @@ namespace UltimateRandomizer.Common.Features
 
 		public static void Reset()
 		{
+			version++;
 			baseTiers = null;
 			tiers = null;
 			// The shop-only items are the ones not found in time
@@ -1139,6 +1151,7 @@ namespace UltimateRandomizer.Common.Features
 		private static int[] BaseTiers()
 		{
 			if (baseTiers != null) return baseTiers;
+			int started = version;
 			int[] result = new int[ItemPool.Info.Length];
 			Array.Fill(result, Never);
 			void Add(int item, int tier)
@@ -1182,12 +1195,12 @@ namespace UltimateRandomizer.Common.Features
 			for (int t = 0; t < Tiers.Count; t++)
 			{
 				// Event, moon and seasonal enemies (in the pool when SwapEventEnemies is on) are no reliable source
-				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) AddPlan(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false), t, npc);
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) AddPlan(RandomNpcDropRule.Plan(npc, ProgressionSystem.PlannedExpert, lucky: true, guaranteed: false), t, npc);
 			}
 			// Not the evil boss this world lacks (BossPermutation.AbsentEvil): its summon needs its biome
 			foreach (int boss in NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, BiomeSlots.CurrentEvil)))
 			{
-				AddPlan(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss), boss);
+				AddPlan(RandomNpcDropRule.Plan(boss, ProgressionSystem.PlannedExpert, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss), boss);
 			}
 			// A bag's content is found once the bag is (bags may hold bags: repeat until nothing changes)
 			Dictionary<int, List<PlannedDrop>> bagPlans = LootSnapshot.Items.Keys.Where(b => !SeasonalBags.Contains(b)).OrderBy(b => b)
@@ -1216,7 +1229,7 @@ namespace UltimateRandomizer.Common.Features
 					}
 				}
 			}
-			baseTiers = result;
+			if (started == version) baseTiers = result;
 			return result;
 		}
 
@@ -1245,7 +1258,7 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Drop conditions fixed by the world (difficulty, world evil, special seeds): an expert-only treasure bag is no source
-		// in Classic. Their CanDrop only reads Main.expertMode, Main.masterMode, WorldGen.crimson and the special seed flags
+		// in Classic. Their CanDrop only reads Main.expertMode, Main.masterMode (here the planned ones, ProgressionSystem), WorldGen.crimson and the special seed flags
 		// (tenthAnniversaryWorld, dontStarveWorld, remixWorld: all synced in message 7), plus npc.boss for the legacy boss
 		// checks (their drops are a boss's); in drunk worlds both evils exist. The remix seed's easy and hard mode drops count
 		// in a remix world (each in its part of the game). Other conditions (events, biomes...) are left to the drop chance.
@@ -1262,16 +1275,16 @@ namespace UltimateRandomizer.Common.Features
 		// What the world (difficulty, evil, secret seeds) decides about a drop condition; null when it does not decide it
 		public static bool? WorldVerdict(IItemDropRuleCondition condition) => condition switch
 		{
-			Conditions.IsExpert => Main.expertMode,
-			Conditions.NotExpert => !Main.expertMode,
-			Conditions.IsMasterMode => Main.masterMode,
-			Conditions.NotMasterMode => !Main.masterMode,
+			Conditions.IsExpert => ProgressionSystem.PlannedExpert,
+			Conditions.NotExpert => !ProgressionSystem.PlannedExpert,
+			Conditions.IsMasterMode => ProgressionSystem.PlannedMaster,
+			Conditions.NotMasterMode => !ProgressionSystem.PlannedMaster,
 			Conditions.IsCrimson => HasEvil(true),
 			Conditions.IsCorruption => HasEvil(false),
-			Conditions.IsCrimsonAndNotExpert => HasEvil(true) && !Main.expertMode,
-			Conditions.IsCorruptionAndNotExpert => HasEvil(false) && !Main.expertMode,
-			Conditions.LegacyHack_IsBossAndExpert => Main.expertMode,
-			Conditions.LegacyHack_IsBossAndNotExpert => !Main.expertMode,
+			Conditions.IsCrimsonAndNotExpert => HasEvil(true) && !ProgressionSystem.PlannedExpert,
+			Conditions.IsCorruptionAndNotExpert => HasEvil(false) && !ProgressionSystem.PlannedExpert,
+			Conditions.LegacyHack_IsBossAndExpert => ProgressionSystem.PlannedExpert,
+			Conditions.LegacyHack_IsBossAndNotExpert => !ProgressionSystem.PlannedExpert,
 			Conditions.TenthAnniversaryIsUp => Main.tenthAnniversaryWorld,
 			Conditions.TenthAnniversaryIsNotUp => !Main.tenthAnniversaryWorld,
 			Conditions.DontStarveIsUp => Main.dontStarveWorld,

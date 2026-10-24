@@ -367,7 +367,7 @@ namespace UltimateRandomizer.Common.Codex
 			}
 			foreach ((int npc, int tier) in enemies)
 			{
-				foreach (PlannedDrop drop in RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false))
+				foreach (PlannedDrop drop in RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false, planning: false))
 				{
 					if (drop.Chance >= minChance && Findability.WorldAllows(drop.Conditions)) Add(drops, drop.Item, npc, Math.Max(tier, Gated(drop.Item)), drop.Chance);
 				}
@@ -590,8 +590,8 @@ namespace UltimateRandomizer.Common.Codex
 			List<PlannedDrop> plan = fact.Kind switch
 			{
 				// A guaranteed item's enemies carry it without a condition
-				HintKind.Creature when fact.Hosts.Count == 0 => RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true),
-				HintKind.Boss => RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true),
+				HintKind.Creature when fact.Hosts.Count == 0 => RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true, planning: false),
+				HintKind.Boss => RandomNpcDropRule.Plan(fact.Npc, Main.expertMode, lucky: true, planning: false),
 				HintKind.Bag => BagPlan.Plan(fact.Bag, lucky: true),
 				_ => null
 			};

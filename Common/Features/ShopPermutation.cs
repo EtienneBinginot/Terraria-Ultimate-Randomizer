@@ -361,7 +361,10 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (cached != null) return cached;
 				if (!ItemPool.Ready || !SeedSystem.WorldReady) return null;
+				int started = Findability.Version;
 				WorldPlan plan = Build(SeedSystem.WorldSeed, RecipeSystem.RecipeCount > 0 ? RecipePlanner.Get() : null);
+				// Findability was reset while it was built (the world evil arrived): used once, built again next time
+				if (started != Findability.Version) return plan;
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Shop-only items: {plan.ShopOnly.Count} obtainable nowhere else (added slots), "
 					+ $"{plan.LateSource.Count} other rolled shop items found or crafted only later than their tier + 1 (no slot)");
 				if (plan.OutOfWindow.Count + plan.OverCapacity.Count > 0)

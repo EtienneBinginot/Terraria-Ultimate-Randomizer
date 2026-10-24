@@ -79,9 +79,11 @@ namespace UltimateRandomizer.Common.Features
 		// The share of the early kills (as Killed draws them, without randomness) that are of the types accepted (types: a
 		// Green Slime is a Blue Slime). Same on every machine: spawn map, synced settings. Hardmode slots count as open (the
 		// early slots always are), so planning before or after hardmode gives the same chances
+		// The swap chances at their defaults (BiomeSlots.PlannedSwapChance): the guaranteed hosts are ranked with it, and
+		// tuning those chances must not move the plans of a world
 		public static double EarlyKillShare(Func<int, bool> isType)
 		{
-			float swapChance = SwapChance();
+			float swapChance = SwapChance(planned: true);
 			List<int> pool = BiomeSlots.Active ? null : EnemySwapPool.NaturalEnemies(0);
 			double poolShare = pool == null || pool.Count == 0 ? 0 : pool.Count(n => isType(BiomeSlots.TypeOf(n))) / (double)pool.Count;
 			double total = 0;
@@ -102,11 +104,14 @@ namespace UltimateRandomizer.Common.Features
 			}
 			return total / TotalKills;
 		}
-		private static float SwapChance()
+		// planned: the chances' defaults (EarlyKillShare); else the settings (the simulations of the real early game)
+		private static float SwapChance(bool planned = false)
 		{
 			EnemiesConfig enemies = EnemiesConfig.Instance;
 			if (!enemies.RandomizeEnemySpawns) return 0f;
-			return BiomeSlots.Active ? 1f - enemies.BiomeVanillaChance / 100f : enemies.EnemySwapChance / 100f;
+			float vanilla = planned ? BiomeSlots.PlannedVanillaChance : enemies.BiomeVanillaChance;
+			float swap = planned ? BiomeSlots.PlannedSwapChance : enemies.EnemySwapChance;
+			return BiomeSlots.Active ? 1f - vanilla / 100f : swap / 100f;
 		}
 
 		public const int Pots = 60;
@@ -208,7 +213,7 @@ namespace UltimateRandomizer.Common.Features
 				int owner = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(killed, out NPC sample) ? sample.type : killed);
 				// Weak enemies get a share of the jackpot chances, critters none (as at kill time)
 				float worth = RandomNpcDropRule.JackpotWorth(killed);
-				foreach (PlannedDrop drop in RandomNpcDropRule.KillDrops(killed, owner, Main.expertMode, rng.NextDouble() < luckyChance * worth, new Random(rng.Next()), worth))
+				foreach (PlannedDrop drop in RandomNpcDropRule.KillDrops(killed, owner, ProgressionSystem.PlannedExpert, rng.NextDouble() < luckyChance * worth, new Random(rng.Next()), worth))
 				{
 					if (drop.JackpotGap > 0) jackpots += Math.Clamp(drop.Chance, 0f, 1f);
 				}
@@ -286,7 +291,7 @@ namespace UltimateRandomizer.Common.Features
 						int killed = Killed(Kind(npcs, rng), biome, rng, swapChance, pool);
 						if (!plans.TryGetValue(killed, out List<PlannedDrop> plan))
 						{
-							plan = loot.RandomizeMobDrops ? RandomNpcDropRule.Plan(killed, Main.expertMode, style: style) : new List<PlannedDrop>();
+							plan = loot.RandomizeMobDrops ? RandomNpcDropRule.Plan(killed, ProgressionSystem.PlannedExpert, style: style) : new List<PlannedDrop>();
 							plans[killed] = plan;
 						}
 						kills++;

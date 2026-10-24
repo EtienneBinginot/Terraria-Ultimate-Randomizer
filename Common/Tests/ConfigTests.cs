@@ -46,12 +46,51 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(Core.SeedSystem.CacheSignature(general, loot, crafting, allowance, economy, EnemiesConfig.Instance) != current, "the tier allowance does not rebuild the world caches");
 		}
 
+		// Every spawn setting the plans read (the spawn map, the swap pool's natural enemies) and the progression scaling move
+		// the world caches' signature; the swap chances don't (planned at their defaults). Checked on clones
+		private static void CacheSignatureCovers()
+		{
+			T Clone<T>(T config) where T : ModConfig => (T)ConfigManager.GeneratePopulatedClone(config);
+			GeneralConfig general = GeneralConfig.Instance;
+			LootConfig loot = LootConfig.Instance;
+			CraftingConfig crafting = CraftingConfig.Instance;
+			ProgressionConfig progression = ProgressionConfig.Instance;
+			EconomyConfig economy = EconomyConfig.Instance;
+			string current = Core.SeedSystem.CacheSignature(general, loot, crafting, progression, economy, EnemiesConfig.Instance);
+			List<string> failures = new();
+			void Expect(string setting, Action<EnemiesConfig> change)
+			{
+				EnemiesConfig copy = Clone(EnemiesConfig.Instance);
+				change(copy);
+				if (Core.SeedSystem.CacheSignature(general, loot, crafting, progression, economy, copy) == current) failures.Add(setting);
+			}
+			Expect(nameof(EnemiesConfig.RandomizeEnemySpawns), e => e.RandomizeEnemySpawns = !e.RandomizeEnemySpawns);
+			Expect(nameof(EnemiesConfig.EnemySwapMode), e => e.EnemySwapMode = e.EnemySwapMode == EnemySwapMode.ByBiome ? EnemySwapMode.PerType : EnemySwapMode.ByBiome);
+			Expect(nameof(EnemiesConfig.BiomeExtraEnemies), e => e.BiomeExtraEnemies += 5);
+			Expect(nameof(EnemiesConfig.SwapEventEnemies), e => e.SwapEventEnemies = !e.SwapEventEnemies);
+			ProgressionConfig scaled = Clone(progression);
+			scaled.ScaleWeakEnemiesWithProgression = !scaled.ScaleWeakEnemiesWithProgression;
+			if (Core.SeedSystem.CacheSignature(general, loot, crafting, scaled, economy, EnemiesConfig.Instance) == current) failures.Add(nameof(ProgressionConfig.ScaleWeakEnemiesWithProgression));
+			foreach ((string setting, Action<EnemiesConfig> change) in new (string, Action<EnemiesConfig>)[]
+			{
+				(nameof(EnemiesConfig.EnemySwapChance), e => e.EnemySwapChance += 5),
+				(nameof(EnemiesConfig.BiomeVanillaChance), e => e.BiomeVanillaChance += 5)
+			})
+			{
+				EnemiesConfig copy = Clone(EnemiesConfig.Instance);
+				change(copy);
+				if (Core.SeedSystem.CacheSignature(general, loot, crafting, progression, economy, copy) != current) failures.Add($"{setting} (planned at its default, must not rebuild)");
+			}
+			Check.All(failures, "Settings the plans read that do not rebuild the world caches");
+		}
+
 		public static void Register()
 		{
 			TestRunner.Register("ConfigTexts", ConfigTexts);
 			TestRunner.Register("OtherTexts", OtherTexts);
 			TestRunner.Register("ConfigRanges", ConfigRanges);
 			TestRunner.Register("CacheSignatureScope", CacheSignatureScope);
+			TestRunner.Register("CacheSignatureCovers", CacheSignatureCovers);
 			TestRunner.Register("ConfigResetDefaults", ConfigResetDefaults);
 			TestRunner.Register("DebugToolsDefaultOff", DebugToolsDefaultOff);
 		}

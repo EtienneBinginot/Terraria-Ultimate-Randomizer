@@ -263,6 +263,8 @@ Tests: {
 	ZenithWeapons: Le Zénith garde des armes parmi ses ingrédients
 	IngredientReuse: La pénalité de réutilisation répartit les matériaux sur plus de recettes
 	CraftedValueFromIngredients: Un objet fabriqué avec une recette randomisée se revend au plus au prix de ses ingrédients, même après sauvegarde, réseau, division et empilement
+	ShimmerNoMoneyLoop: Un objet fabriqué à bas prix ne donne jamais plus d'argent qu'il n'en valait en passant dans le Shimmer
+	ShimmerLiveNoMoneyLoop: Un vrai passage dans le Shimmer d'objets fabriqués à bas prix ne rend jamais plus de valeur qu'il n'en a consommé
 	ProtectedRecipesDoable: Les recettes des stations de progression et des objets protégés sont faisables à leur niveau
 	RecipeKeyIngredient: Les recettes randomisées ne sont pas faisables avant le tier de leur résultat (ingrédient clé)
 	RecipeNoStationTwins: Une même recette (résultat et ingrédients) n'apparaît jamais sur deux stations différentes
@@ -322,6 +324,7 @@ Tests: {
 	ConfigRanges: Les réglages sont cohérents
 	DebugToolsDefaultOff: Les outils de débogage sont désactivés par défaut
 	CacheSignatureScope: Sauvegarder un réglage de stats d'ennemis garde la trouvabilité et le plan des recettes ; les réglages de butin et du pool d'échanges les recalculent
+	CacheSignatureCovers: Chaque réglage d'apparition lu par les plans (mode d'échange, extras par biome, chances d'échange) et la montée avec la progression recalculent les caches du monde
 	ConfigResetDefaults: Réglages : le bouton de réinitialisation remet chaque valeur par défaut, sur toutes les pages
 	HintFactsTrue: Les indices disent ce que prévoient les planificateurs : l'hôte porte l'objet, la recette le fabrique
 	HintPriceScales: Le prix des indices suit la formule et monte avec le niveau et le palier
@@ -1438,7 +1441,7 @@ Configs: {
 
 		CritterDropFactor: {
 			Label: Part du drop fréquent des critters
-			Tooltip: Part du petit drop fréquent (matériau, potion, munitions...) que reçoivent les critters par rapport aux autres ennemis. Ils arrivent en nuées et meurent en un coup : 0,5 = deux fois moins souvent, 0 = jamais.
+			Tooltip: Part du petit drop fréquent (matériau, potion, munitions...) que reçoivent les critters par rapport aux autres ennemis. Ils arrivent en nuées et meurent en un coup : 0,5 = deux fois moins souvent, 0 = jamais. En style de drops par permutation (sans petit drop fréquent), les critters ont les mêmes emplacements de drops aléatoires que les ennemis, chacun avec cette part de sa chance.
 		}
 
 		DropRateMultiplier: {

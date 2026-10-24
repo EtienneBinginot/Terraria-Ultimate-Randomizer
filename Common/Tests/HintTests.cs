@@ -218,7 +218,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			List<HintFact> facts = CreatureFacts().Where(f => !f.Fallback).ToList();
 			if (facts.Count == 0) Check.Skip("no creature hint in this world");
-			bool shares = BiomeSlots.SpawnsPlanned && !(BiomeSlots.Active && EnemiesConfig.Instance.BiomeVanillaChance > 0);
+			bool shares = BiomeSlots.SpawnsPlanned && BiomeSlots.VanillaKeep <= 0;
 			List<string> failures = new();
 			foreach (HintFact fact in facts)
 			{
