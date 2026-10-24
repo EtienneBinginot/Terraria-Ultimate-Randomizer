@@ -243,7 +243,8 @@ Tests: {
 	WorldMaterialsFindable: Wood, stone, gems and early ores are findable from the start
 	BagContentFindable: Bag contents count as found only once the bag can be obtained (never seasonal bags, treasure bags only in expert mode)
 	CrateAccessWorld: Crates the world cannot give (other evil, pre-hardmode Hallowed crate) are no source
-	HardmodeOresOfWorld: Hardmode pair ores always count as findable and are never new ingredients
+	HardmodeOresOfWorld: Hardmode pair ores always count as findable and are new ingredients only through their pair group
+	NoFishingSource: No fishing crate is ever the source of a findable item (fishing is only a bonus)
 	AltarDecisionKeepsCaches: An altar choosing a hardmode ore changes neither the guaranteed sources nor findability
 	PotOnlyUnfound: Pots only give guaranteed items nobody has found yet
 	GuaranteesNotBelowTier: No guaranteed item comes before its tier (Ancient Manipulator and Celestial Sigil from the Lunatic Cultist on)
@@ -270,6 +271,9 @@ Tests: {
 	StationPlanFromOriginals: The station plan depends only on the original recipes, not on the already randomized ones
 	RealCrafting: The crafting menu offers a recipe with its new ingredients, and no longer with its old ones
 	PickaxePerMiningLevel: Each mining level has a pickaxe by the tier of its ores (crafted, found or guaranteed)
+	MiningPickaxeGuaranteed: Every mining level gets a guaranteed pickaxe found without crafting, and no mined ore counts before a pickaxe mines it
+	OresAsIngredients: Ores and blocks that need a pickaxe are new recipe ingredients again (as items or ore pair groups)
+	OrePairGroupsUsed: The ore pair groups (Cobalt or Palladium...) exist, are used by recipes, and accept either ore
 	RecipeRandomizationShare: Nearly every vanilla recipe changes (95%), few swap their result (about the swap chance); logs the reasons
 	RecipeEveryItemKept: Every item a vanilla recipe makes is still made by a recipe, and nothing had in vanilla is lost (Zenith)
 	RecipeNoCycles: No item is made from itself through a new ingredient, directly or through other recipes
@@ -364,6 +368,19 @@ Tests: {
 }
 
 Journal.Description: Opens the randomizer codex (also the J key)
+
+RecipeGroups: {
+	CopperOre: Any Copper or Tin Ore
+	IronOre: Any Iron or Lead Ore
+	SilverOre: Any Silver or Tungsten Ore
+	GoldOre: Any Gold or Platinum Ore
+	CobaltOre: Any Cobalt or Palladium Ore
+	MythrilOre: Any Mythril or Orichalcum Ore
+	AdamantiteOre: Any Adamantite or Titanium Ore
+	CobaltBar: Any Cobalt or Palladium Bar
+	MythrilBar: Any Mythril or Orichalcum Bar
+	AdamantiteBar: Any Adamantite or Titanium Bar
+}
 
 Jackpot: {
 	Popup: Jackpot! +{0}

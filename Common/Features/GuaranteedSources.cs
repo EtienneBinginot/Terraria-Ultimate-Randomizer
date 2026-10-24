@@ -1275,7 +1275,12 @@ namespace UltimateRandomizer.Common.Features
 
 		private static int[] baseTiers;
 		private static (SourceKind kind, int id)[] baseSources;
+		// BaseTiers without mining (ores, blocks that need a pickaxe), and what mining alone gives (no pickaxe considered)
+		private static int[] baseNonMined;
+		private static int[] baseMined;
 		private static int[] tiers;
+		// Tier without mining (guaranteed sources included)
+		private static int[] nonMinedTiers;
 		// Moved by each reset: a result computed across one (a reset during the computation) is returned but not kept. The
 		// caches built from findability (RecipePlanner, ShopPermutation) check it the same way before storing theirs
 		private static int version;
@@ -1333,21 +1338,90 @@ namespace UltimateRandomizer.Common.Features
 			};
 		}
 
-		// Including the guaranteed sources (GuaranteedSources.FoundTier)
+		// Including the guaranteed sources (GuaranteedSources.FoundTier). A mined ore or block counts from its tier once a
+		// pickaxe of the power it needs is found (dropped, in a bag, guaranteed: RecipePlanner.MiningRequirements gives one for
+		// every mining level), or from its other sources if earlier. Never from a crafted pickaxe: a pickaxe recipe may then
+		// need that ore without a cycle (its level's ore always comes from a pickaxe found without crafting)
 		public static int Tier(int item)
 		{
 			int[] values = tiers;
 			if (values == null)
 			{
 				int started = version;
-				values = (int[])BaseTiers().Clone();
+				BaseTiers(out int[] baseOnly, out int[] mined);
+				values = (int[])baseOnly.Clone();
 				foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements)
 				{
 					values[requirement.Item] = Math.Min(values[requirement.Item], GuaranteedSources.FoundTier(requirement));
 				}
-				if (started == version) tiers = values;
+				int[] nonMined = (int[])values.Clone();
+				List<(int power, int tier)> pickaxes = PickaxeTiers(values);
+				for (int type = 1; type < values.Length; type++)
+				{
+					if (mined[type] >= Never) continue;
+					int need = MiningNeed(type);
+					int pick = need <= 0 ? 0 : pickaxes.Where(p => p.power >= need).Select(p => p.tier).DefaultIfEmpty(Never).Min();
+					values[type] = Math.Min(values[type], Math.Max(mined[type], pick));
+				}
+				if (started == version)
+				{
+					nonMinedTiers = nonMined;
+					tiers = values;
+				}
 			}
 			return item > 0 && item < values.Length ? values[item] : Never;
+		}
+
+		// Tier without mining: drops, bags and guaranteed sources only
+		public static int NonMiningTier(int item)
+		{
+			Tier(item);
+			int[] values = nonMinedTiers;
+			if (values == null) BaseTiers(out values, out _);
+			return item > 0 && item < values.Length ? values[item] : Never;
+		}
+
+		// The tier mining alone gives an item (its ore's or block's tier, no pickaxe considered; Never: not mined)
+		public static int MinedTier(int item)
+		{
+			BaseTiers(out _, out int[] values);
+			return item > 0 && item < values.Length ? values[item] : Never;
+		}
+
+		// The first tier a pickaxe (or drill) of at least this power is found at without crafting (Never: none)
+		public static int PickaxeTier(int power)
+		{
+			int best = Never;
+			foreach ((int item, Item sample) in ContentSamples.ItemsByType)
+			{
+				if (sample.pick >= power) best = Math.Min(best, Tier(item));
+			}
+			return best;
+		}
+
+		// Each found pickaxe's power and tier
+		private static List<(int power, int tier)> PickaxeTiers(int[] values)
+		{
+			List<(int, int)> list = new();
+			foreach ((int item, Item sample) in ContentSamples.ItemsByType)
+			{
+				if (sample.pick > 0 && item > 0 && item < values.Length && values[item] < Never) list.Add((sample.pick, values[item]));
+			}
+			return list;
+		}
+
+		// Pick power needed to mine an item: its tile's (RecipePlanner.PickToMine). A randomized ore may come from any ore tile
+		// of its tier (OreMap: a permutation inside the tier), so the strongest of them, as RecipePlanner.OresFrom counts them
+		public static int MiningNeed(int item)
+		{
+			int need = RecipePlanner.PickToMine(item);
+			if (!OreMap.IsOre(item) || !LootConfig.Instance.RandomizeOreDrops || !ItemPool.IsRandomizable(item)) return need;
+			int tier = ItemPool.Info[item].Tier;
+			for (int type = 1; type < ItemPool.Info.Length; type++)
+			{
+				if (OreMap.IsOre(type) && ItemPool.IsRandomizable(type) && ItemPool.Info[type].Tier == tier && OreMap.IsFindable(type)) need = Math.Max(need, RecipePlanner.PickToMine(type));
+			}
+			return need;
 		}
 
 		// Without the guaranteed sources (used to decide what must be guaranteed)
@@ -1374,18 +1448,36 @@ namespace UltimateRandomizer.Common.Features
 			version++;
 			baseTiers = null;
 			baseSources = null;
+			baseNonMined = null;
+			baseMined = null;
 			tiers = null;
+			nonMinedTiers = null;
 			// The shop-only items are the ones not found in time
 			ShopPermutation.Reset();
 		}
 
-		private static int[] BaseTiers()
+		private static int[] BaseTiers() => BaseTiers(out _, out _);
+
+		// nonMinedOut, minedOut: the parts without mining and of mining alone
+		private static int[] BaseTiers(out int[] nonMinedOut, out int[] minedOut)
 		{
-			if (baseTiers != null) return baseTiers;
+			if (baseTiers != null && baseNonMined != null && baseMined != null)
+			{
+				nonMinedOut = baseNonMined;
+				minedOut = baseMined;
+				return baseTiers;
+			}
 			int started = version;
 			int[] result = new int[ItemPool.Info.Length];
 			Array.Fill(result, Never);
 			(SourceKind kind, int id)[] sources = new (SourceKind, int)[result.Length];
+			// Mining, apart (Tier counts it once a pickaxe of the power needed is found)
+			int[] mined = new int[result.Length];
+			Array.Fill(mined, Never);
+			void Mine(int item, int tier)
+			{
+				if (item > 0 && item < mined.Length) mined[item] = Math.Min(mined[item], Math.Max(0, tier));
+			}
 			void Add(int item, int tier, SourceKind kind = SourceKind.World, int id = 0)
 			{
 				if (item <= 0 || item >= result.Length) return;
@@ -1399,8 +1491,13 @@ namespace UltimateRandomizer.Common.Features
 			// checks. Mined ores keep their tier: mining is not gated, and the mining levels use it (RecipePlanner.MiningTier)
 			int Gated(int item) => ItemPool.UnlockTierOf(item);
 
-			// A herb only when a plant still gives it (HerbTier: its own plant may give other items only)
-			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, Array.IndexOf(Herbs, item) >= 0 ? HerbTier(item) : tier);
+			// A herb only when a plant still gives it (HerbTier: its own plant may give other items only). A block that needs a
+			// pickaxe (Obsidian 55, Ebonstone and Pearlstone 65) is mined
+			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item)))
+			{
+				if (RecipePlanner.PickToMine(item) >= RecipePlanner.MiningLevels[0].pick) Mine(item, tier);
+				else Add(item, Array.IndexOf(Herbs, item) >= 0 ? HerbTier(item) : tier);
+			}
 			if (loot.RandomizeHerbs)
 			{
 				// The plants of this world only (no Vile Mushroom in a crimson world)
@@ -1414,7 +1511,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				// Only the ores of this world can be mined (Tin is not in a Copper world). Randomized or not, mining gives
 				// the ores of the world of each tier (a permutation inside the tier), so the mapping itself doesn't matter.
-				if (OreMap.IsOre(type) && OreMap.IsFindable(type)) Add(type, ItemPool.TierOf(type));
+				if (OreMap.IsOre(type) && OreMap.IsFindable(type)) Mine(type, ItemPool.TierOf(type));
 			}
 
 			float minChance = ProgressionConfig.Instance.MinFindableChance / 100f;
@@ -1440,8 +1537,9 @@ namespace UltimateRandomizer.Common.Features
 			{
 				AddPlan(RandomNpcDropRule.Plan(boss, ProgressionSystem.PlannedExpert, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss), boss);
 			}
-			// A bag's content is found once the bag is (bags may hold bags: repeat until nothing changes)
-			Dictionary<int, List<PlannedDrop>> bagPlans = LootSnapshot.Items.Keys.Where(b => !SeasonalBags.Contains(b)).OrderBy(b => b)
+			// A bag's content is found once the bag is (bags may hold bags: repeat until nothing changes). Never a fishing crate:
+			// fishing is a bonus, nothing relies on it (BagContentTier still tells when a crate's content can be had)
+			Dictionary<int, List<PlannedDrop>> bagPlans = LootSnapshot.Items.Keys.Where(b => !SeasonalBags.Contains(b) && !ItemID.Sets.IsFishingCrate[b]).OrderBy(b => b)
 				.ToDictionary(b => b, b => BagPlan.Plan(b, lucky: true));
 			bool changed = true;
 			for (int pass = 0; pass < 8 && changed; pass++)
@@ -1470,11 +1568,24 @@ namespace UltimateRandomizer.Common.Features
 					}
 				}
 			}
+			// Bags are never mined: what is had without mining is complete here. Mining then counts as a world source (it came
+			// first, so it keeps a tie)
+			int[] nonMined = (int[])result.Clone();
+			for (int item = 1; item < result.Length; item++)
+			{
+				if (mined[item] >= Never || mined[item] > result[item]) continue;
+				result[item] = mined[item];
+				sources[item] = (SourceKind.World, 0);
+			}
 			if (started == version)
 			{
 				baseSources = sources;
+				baseNonMined = nonMined;
+				baseMined = mined;
 				baseTiers = result;
 			}
+			nonMinedOut = nonMined;
+			minedOut = mined;
 			return result;
 		}
 
