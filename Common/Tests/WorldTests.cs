@@ -140,7 +140,8 @@ namespace UltimateRandomizer.Common.Tests
 
 		private static void EnemySwapPoolValid()
 		{
-			int[] never = { NPCID.Creeper, NPCID.SkeletronHand, NPCID.ServantofCthulhu, NPCID.TheHungry, NPCID.DungeonGuardian, NPCID.MartianProbe, NPCID.ManEater, NPCID.SolarSolenian, NPCID.Splinterling };
+			int[] never = { NPCID.Creeper, NPCID.SkeletronHand, NPCID.ServantofCthulhu, NPCID.TheHungry, NPCID.DungeonGuardian, NPCID.MartianProbe, NPCID.ManEater, NPCID.SolarSolenian,
+				NPCID.MartianWalker, NPCID.DD2GoblinT1, NPCID.Pumpking, NPCID.IceQueen };
 			List<string> failures = new();
 			foreach (int type in never)
 			{
@@ -150,6 +151,8 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (!EnemySwapPool.IsSwappable(type)) failures.Add($"{ContentSamples.NpcsByNetId[type].TypeName} can't be swapped");
 			}
+			// Moon enemies follow SwapEventEnemies
+			if (EnemySwapPool.IsSwappable(NPCID.Splinterling) != EnemiesConfig.Instance.SwapEventEnemies) failures.Add($"Splinterling swappable: {EnemySwapPool.IsSwappable(NPCID.Splinterling)}");
 			Check.All(failures, "Enemy swap pool");
 		}
 

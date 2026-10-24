@@ -108,6 +108,7 @@ namespace UltimateRandomizer.Common.Features
 		// Planned spawn shares by band (BiomeSlots.PlannedShare), and the types with any slot at all
 		internal readonly Dictionary<int, ShareTable> Shares = new();
 		internal HashSet<int> SlotTypes;
+		internal HashSet<int> SteadyTypes;
 		internal Dictionary<int, int> MeetTiers;
 		// Steady shares by (tier, period): biome, then type (BiomeSlots.SteadyShareAt)
 		internal readonly Dictionary<(int tier, SlotTime period), Dictionary<int, Dictionary<int, double>>> PeriodShares = new();
@@ -292,6 +293,7 @@ namespace UltimateRandomizer.Common.Features
 			vanilla = null;
 			catalog = null;
 			extras = null;
+			extraIds = null;
 			tiers = null;
 		}
 
@@ -961,6 +963,24 @@ namespace UltimateRandomizer.Common.Features
 			return map.SlotTypes.Contains(type);
 		}
 
+		// Spawns in an ordinary slot of the spawn map (neither rare nor conditional, in this world), as its owner, its extra or a
+		// shared owner: met there outside any event. An event enemy that does is a reliable source (GuaranteedSources.MetOnlyInEvents)
+		public static bool HasSteadySlot(int type)
+		{
+			BiomeSlotMap map = SpawnMap;
+			if (map.SteadyTypes == null)
+			{
+				HashSet<int> types = new();
+				foreach (BiomeSlot slot in map.Slots.Where(s => !s.Critter && !s.Rare && !s.Conditional))
+				{
+					// An absent-evil owner spawns through the present-evil slot it shares
+					foreach (int id in Spawners(slot).Where(id => !slot.AbsentEvil || id != slot.Owner)) types.Add(TypeOf(id));
+				}
+				map.SteadyTypes = types;
+			}
+			return map.SteadyTypes.Contains(type);
+		}
+
 		// Has slots, but none that ever opens in this world (only in the absent evil): never met
 		public static bool NeverSpawns(int type) => HasAnySlot(type) && !Table(SpawnMap, 2).Types.Contains(type);
 
@@ -1191,9 +1211,11 @@ namespace UltimateRandomizer.Common.Features
 					if (!extraEvent || id < 0 || ExtraDenied.Contains(type)) continue;
 					int? extraMovement = EnemySwapPool.ExtraMovement(type, sample, cfg);
 					if (extraMovement == null) continue;
+					// Never in a slot that opens before its event can come (goblins after the Eye, the moons after Plantera...)
 					extraList.Add(new Natural
 					{
-						Id = id, Biomes = new List<int>(), Movement = extraMovement.Value, Tier = tier, Rare = sample.rarity > 0, Intolerant = EnemySwapPool.DaylightIntolerant(id)
+						Id = id, Biomes = new List<int>(), Movement = extraMovement.Value, Tier = Math.Max(tier, EnemySwapPool.EventTier(type)), Rare = sample.rarity > 0,
+						Intolerant = EnemySwapPool.DaylightIntolerant(id)
 					});
 					continue;
 				}
@@ -1213,7 +1235,17 @@ namespace UltimateRandomizer.Common.Features
 			usedModdedBiomes = naturals.SelectMany(n => n.Biomes).Where(b => b >= ModdedBiomeStart).ToHashSet();
 			catalog = naturals;
 			extras = extraList;
+			extraIds = extraList.Select(e => e.Id).ToHashSet();
 			return catalog;
+		}
+
+		private static HashSet<int> extraIds;
+
+		// An event enemy that works outside its event (an extra candidate): its event spawns may be replaced too
+		public static bool IsExtraCandidate(int id)
+		{
+			Catalog();
+			return extraIds.Contains(id);
 		}
 
 		// Enemies without a natural biome that may take slots: event enemies that work outside their event
@@ -1293,11 +1325,12 @@ namespace UltimateRandomizer.Common.Features
 				Tags.Invasions.PumpkinMoon, Tags.Invasions.FrostMoon, Tags.Invasions.FrostLegion,
 				Tags.Biomes.SolarPillar, Tags.Biomes.VortexPillar, Tags.Biomes.NebulaPillar, Tags.Biomes.StardustPillar
 			};
-			// Events whose enemies still work elsewhere (the moons, Martians, the Old One's Army and the pillars are scripted)
+			// Events whose enemies still work elsewhere (Martians, the Old One's Army and the pillars are scripted); the invaders
+			// and the moons' enemies with SwapEventEnemies only (EnemySwapPool.ExtraMovement)
 			extraEventTags = new HashSet<IBestiaryInfoElement>
 			{
 				Tags.Events.BloodMoon, Tags.Events.Eclipse, Tags.Invasions.Goblins, Tags.Invasions.Pirates, Tags.Invasions.FrostLegion,
-				Tags.Events.Rain, Tags.Events.WindyDay, Tags.Events.Halloween, Tags.Events.Christmas
+				Tags.Invasions.PumpkinMoon, Tags.Invasions.FrostMoon, Tags.Events.Rain, Tags.Events.WindyDay, Tags.Events.Halloween, Tags.Events.Christmas
 			};
 			// Biomes that only exist in hardmode
 			hardmodeTags = new HashSet<IBestiaryInfoElement>

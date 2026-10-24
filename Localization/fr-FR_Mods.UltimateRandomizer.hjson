@@ -175,6 +175,11 @@ Tests: {
 	CritterHabitat: Les critters aquatiques, volants et terrestres restent dans leur habitat
 	SwapStatsCount: Les apparitions naturelles sont comptées, celles des statues ignorées
 	NpcTiersNormalStats: Les tiers des ennemis viennent des stats du mode normal, quel que soit le monde joué avant un rechargement
+	EventEnemiesJoinPool: Envahisseurs, ennemis de lune et d'éclipse entrent dans les remplacements, jamais avant que leur événement puisse arriver
+	EventEnemiesNeverSwapped: Les Martiens, l'Armée de l'Ancien et les boss d'événement ne sont jamais remplacés
+	SwapKeepsOriginal: Le type d'origine d'un PNJ remplacé survit à SetDefaults et Transform
+	EventCreditInvasion: Un envahisseur remplacé compte toujours, une seule fois, pour son invasion
+	EventCreditMoon: Un ennemi de lune remplacé donne toujours ses points, une seule fois, à sa lune
 	CodexRecordsLoot: Le codex enregistre les ennemis tués et chaque objet lâché par un ennemi courant qui a un drop assuré (un slime à défaut)
 	CodexRecipesFromGuide: Le Guide fait découvrir les recettes qui utilisent l'objet et celles qui le donnent
 	CodexSaveLoad: Le codex est sauvegardé et rechargé avec le monde sans rien perdre
@@ -2395,8 +2400,13 @@ Configs: {
 		}
 
 		SwapEventEnemies: {
-			Label: Remplacer aussi les ennemis d'invasion
-			Tooltip: Armée gobeline, pirates, Légion du givre, Martiens, Armée de l'Ancien.
+			Label: "Remplacer aussi les ennemis d'événement"
+			Tooltip: "Armée gobeline, Légion du givre, pirates, lunes citrouille et de givre : leurs ennemis peuvent prendre la place d'autres ennemis (jamais avant que leur événement puisse arriver) et leurs propres apparitions peuvent être remplacées. Un envahisseur ou un ennemi de lune remplacé compte quand même pour la progression de son événement. Les Martiens, l'Armée de l'Ancien et les boss d'événement ne sont jamais remplacés."
+		}
+
+		EventSpawnSwapChance: {
+			Label: "Apparitions d'événement remplacées (%)"
+			Tooltip: "Part des ennemis amenés par une invasion, une lune, une éclipse ou une lune de sang qui deviennent un autre ennemi de leur niveau. Nécessite « Remplacer aussi les ennemis d'événement ». Les autres restent tels quels, pour que les événements restent reconnaissables."
 		}
 
 		SwapModdedEnemies: {

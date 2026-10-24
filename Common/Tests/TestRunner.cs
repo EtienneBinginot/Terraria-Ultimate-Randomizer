@@ -76,6 +76,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			if (npc == null) return;
 			EnemySwapSystem.Pending[npc.whoAmI] = false;
+			EnemySwapSystem.Originals[npc.whoAmI] = 0;
 			MobLootSystem.SpawnedByNpc[npc.whoAmI] = false;
 			CodexSystem.ClearSighting(npc.whoAmI);
 			npc.active = false;

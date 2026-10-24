@@ -403,7 +403,7 @@ namespace UltimateRandomizer.Common.Codex
 			HashSet<int> done = new();
 			for (int t = 0; t < Tiers.Count; t++)
 			{
-				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n)))
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.MetOnlyInEvents(n)))
 				{
 					if (done.Add(npc)) enemies.Add((npc, t));
 				}

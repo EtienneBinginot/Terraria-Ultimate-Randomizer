@@ -20,6 +20,8 @@ namespace UltimateRandomizer.Common.Features
 		public override void OnSpawn(NPC npc, IEntitySource source)
 		{
 			if (Main.netMode == NetmodeID.MultiplayerClient || npc.whoAmI < 0 || npc.whoAmI >= Main.maxNPCs) return;
+			// A new NPC in the slot: the original of the previous one no longer applies (EventProgress)
+			EnemySwapSystem.Originals[npc.whoAmI] = 0;
 			bool swap = ShouldSwap(npc, source);
 			EnemySwapSystem.Pending[npc.whoAmI] = swap;
 			if (swap) EnemySwapSystem.Stats.Flagged++;
@@ -30,13 +32,16 @@ namespace UltimateRandomizer.Common.Features
 			if (!EnemiesConfig.Instance.RandomizeEnemySpawns || !SeedSystem.WorldReady || npc.SpawnedFromStatue) return false;
 			// Critters also come out of shaken trees
 			bool natural = source is EntitySource_SpawnNPC || (source is EntitySource_ShakeTree && NPCID.Sets.CountsAsCritter[npc.type]);
-			// Events count their own enemies (pillar shields, moon waves, invasions): never touch their spawns
-			return natural && !EventInProgress(npc);
+			return natural && !SwapsBlocked(npc);
 		}
 
-		private static bool EventInProgress(NPC npc)
+		// Events that count their own enemies in a way a swap can't follow: the pillar shields, the Old One's Army, Martian
+		// Madness and other mods' invasions. The goblins, the Frost Legion, the pirates and both moons are swapped when
+		// SwapEventEnemies is on: a swapped spawn still counts for its event (EventProgress)
+		public static bool SwapsBlocked(NPC npc)
 		{
-			if (Main.pumpkinMoon || Main.snowMoon || Main.invasionType > 0 || DD2Event.Ongoing) return true;
+			if (DD2Event.Ongoing || Main.invasionType >= InvasionID.MartianMadness) return true;
+			if (!EnemiesConfig.Instance.SwapEventEnemies && (Main.pumpkinMoon || Main.snowMoon || Main.invasionType > 0)) return true;
 			int closest = npc.FindClosestPlayer();
 			if (closest < 0 || closest >= Main.maxPlayers) return false;
 			Player player = Main.player[closest];
@@ -72,13 +77,12 @@ namespace UltimateRandomizer.Common.Features
 			NPCID.VortexHornet, NPCID.VortexHornetQueen, NPCID.VortexLarva, NPCID.VortexRifleman, NPCID.VortexSoldier,
 			NPCID.NebulaBrain, NPCID.NebulaHeadcrab, NPCID.NebulaBeast, NPCID.NebulaSoldier,
 			NPCID.StardustCellBig, NPCID.StardustCellSmall, NPCID.StardustJellyfishBig, NPCID.StardustSoldier, NPCID.StardustSpiderBig, NPCID.StardustSpiderSmall,
-			// Pumpkin Moon
-			NPCID.Scarecrow1, NPCID.Scarecrow2, NPCID.Scarecrow3, NPCID.Scarecrow4, NPCID.Scarecrow5, NPCID.Scarecrow6, NPCID.Scarecrow7,
-			NPCID.Scarecrow8, NPCID.Scarecrow9, NPCID.Scarecrow10, NPCID.Splinterling, NPCID.Hellhound, NPCID.Poltergeist, NPCID.HeadlessHorseman,
-			// Frost Moon
-			NPCID.ZombieElf, NPCID.ZombieElfBeard, NPCID.ZombieElfGirl, NPCID.PresentMimic, NPCID.GingerbreadMan, NPCID.ElfArcher,
-			NPCID.Nutcracker, NPCID.NutcrackerSpinning, NPCID.Yeti, NPCID.ElfCopter, NPCID.Krampus, NPCID.Flocko,
-			NPCID.Mothron, NPCID.MothronSpawn, NPCID.MothronEgg
+			// Event bosses and minibosses, and their parts (the moons' other enemies are swapped with SwapEventEnemies)
+			NPCID.MourningWood, NPCID.Pumpking, NPCID.PumpkingBlade, NPCID.Everscream, NPCID.SantaNK1, NPCID.IceQueen, NPCID.PirateShip,
+			NPCID.PirateShipCannon, NPCID.Mothron, NPCID.MothronSpawn, NPCID.MothronEgg,
+			// AIs that read their event: outside it the Poltergeist and the Reaper fly away, the Present Mimic stays a present
+			// (VanillaAI_Inner checks Main.pumpkinMoon, Main.eclipse, Main.snowMoon for them); the spinning Nutcracker is a state
+			NPCID.Poltergeist, NPCID.Reaper, NPCID.PresentMimic, NPCID.NutcrackerSpinning
 		};
 
 		// Solar eclipse: not natural, but they work outside the eclipse (extras of the by-biome mode)
@@ -121,7 +125,8 @@ namespace UltimateRandomizer.Common.Features
 				if (stats != null) stats.NotInPool++;
 				return npc.netID;
 			}
-			float chance = forceChance ?? cfg.EnemySwapChance;
+			// Event spawns have their own share (their event stays recognisable)
+			float chance = forceChance ?? (IsEventEnemy(npcType) ? cfg.EventSpawnSwapChance : cfg.EnemySwapChance);
 			Random rng;
 			if (cfg.EnemySwapMode == EnemySwapMode.PerType && forceChance == null)
 			{
@@ -144,7 +149,7 @@ namespace UltimateRandomizer.Common.Features
 			// On the surface by day, enemies that flee daylight (zombies, demon eyes...) would vanish at once
 			bool daylight = Main.dayTime && npc.position.Y < Main.worldSurface * 16;
 			List<int>[,] buckets = daylight ? dayBuckets : nightBuckets;
-			int tier = NpcTiers.BaseTier(npcType);
+			int tier = PoolTier(npcType);
 			for (int t = tier; t >= 0; t--)
 			{
 				if (buckets[(int)movement, t].Count > 0) return Own(Pick(buckets[(int)movement, t], rng));
@@ -168,6 +173,7 @@ namespace UltimateRandomizer.Common.Features
 			BiomeSlot slot = BiomeSlots.SlotFor(map, npc, original);
 			if (slot == null)
 			{
+				if (EventSpawnSwappable(npc.type)) return EventReplacement(map, npc, forceChance, stats);
 				if (stats != null) stats.NotInPool++;
 				return npc.netID;
 			}
@@ -192,6 +198,66 @@ namespace UltimateRandomizer.Common.Features
 				return npc.netID;
 			}
 			return owner;
+		}
+
+		// By biome, an event spawn (no slot: invaders, moon and eclipse enemies, Blood Moon ones) is replaced EventSpawnSwapChance
+		// of the time by an enemy of its movement that spawns somewhere in this world's map at its event's tier (one tier below at
+		// most, lower only if none). It still counts for its event (EventProgress)
+		private static int EventReplacement(BiomeSlotMap map, NPC npc, float? forceChance, SwapStats stats)
+		{
+			float chance = forceChance ?? EnemiesConfig.Instance.EventSpawnSwapChance;
+			if (Main.rand.NextFloat() * 100 >= chance)
+			{
+				if (stats != null) stats.ChanceFailed++;
+				return npc.netID;
+			}
+			bool daylight = Main.dayTime && npc.position.Y < Main.worldSurface * 16;
+			List<int> targets = EventTargets(map, npc.type, daylight);
+			if (targets.Count == 0)
+			{
+				if (stats != null) stats.NoTarget++;
+				return npc.netID;
+			}
+			return Pick(targets, new Random(Main.rand.Next()));
+		}
+
+		// Event spawns that may be replaced by biome: the extra candidates (event enemies that work outside their event)
+		public static bool EventSpawnSwappable(int type) => EnemiesConfig.Instance.SwapEventEnemies && BiomeSlots.IsExtraCandidate(type);
+
+		private static BiomeSlotMap eventTargetsMap;
+		private static readonly Dictionary<(int type, bool daylight), List<int>> eventTargets = new();
+
+		// What an event spawn may become by biome: enemies (no critter, no rare one) of its movement met in the map's slots from
+		// its event's tier or the one below; the closest lower tiers if there are none. Never daylight-intolerant ones by day
+		public static List<int> EventTargets(BiomeSlotMap map, int type, bool daylight)
+		{
+			if (eventTargetsMap != map)
+			{
+				eventTargets.Clear();
+				eventTargetsMap = map;
+			}
+			if (eventTargets.TryGetValue((type, daylight), out List<int> cached)) return cached;
+			List<int> result = new();
+			if (ContentSamples.NpcsByNetId.TryGetValue(type, out NPC source))
+			{
+				Movement movement = MovementOf(source);
+				int tier = PoolTier(type);
+				List<(int type, int tier)> options = new();
+				foreach ((int candidate, int from) in map.SpawnTier)
+				{
+					if (candidate == type || from > tier || NPCID.Sets.CountsAsCritter[candidate] || !ContentSamples.NpcsByNetId.TryGetValue(candidate, out NPC sample)) continue;
+					if (sample.rarity > 0 || MovementOf(sample) != movement || (daylight && DaylightIntolerant(candidate))) continue;
+					options.Add((candidate, from));
+				}
+				if (options.Count > 0)
+				{
+					int top = options.Max(o => o.tier);
+					int low = Math.Min(top, tier) - 1;
+					result = options.Where(o => o.tier >= low).Select(o => o.type).OrderBy(t => t).ToList();
+				}
+			}
+			eventTargets[(type, daylight)] = result;
+			return result;
 		}
 
 		// What a spawn becomes by biome without the vanilla chance and the extra, for the tests (its own net ID if it stays)
@@ -270,7 +336,7 @@ namespace UltimateRandomizer.Common.Features
 				Movement? movement = Classify(type, npc, cfg);
 				if (movement == null) continue;
 				movements[type] = movement.Value;
-				int tier = NpcTiers.BaseTier(type);
+				int tier = PoolTier(type);
 				nightBuckets[(int)movement.Value, tier].Add(type);
 				if (!DaylightIntolerant(type)) dayBuckets[(int)movement.Value, tier].Add(type);
 			}
@@ -289,22 +355,23 @@ namespace UltimateRandomizer.Common.Features
 		// Movement of a natural enemy that owns biome slots (net IDs: slime colours), null if it is never swapped
 		internal static int? SlotMovement(int type, NPC sample, EnemiesConfig cfg) => (int?)Classify(type, sample, cfg);
 
-		// Movement of an event enemy that may take a biome slot as an extra (no critters; scripted invasions excluded)
+		// Movement of an event enemy that may take a biome slot as an extra (no critters; Martians and the Old One's Army never;
+		// invaders and moon enemies with SwapEventEnemies only)
 		internal static int? ExtraMovement(int type, NPC npc, EnemiesConfig cfg)
 		{
-			if (Excluded.Contains(type) || NPCID.Sets.CountsAsCritter[type]) return null;
-			if (NPCID.Sets.BelongsToInvasionOldOnesArmy[type] || NPCID.Sets.BelongsToInvasionMartianMadness[type]) return null;
+			if (Excluded.Contains(type) || NPCID.Sets.CountsAsCritter[type] || NeverSwapped(type)) return null;
+			if (InvasionGroup(type) != 0 && !cfg.SwapEventEnemies) return null;
 			if (!Swappable(type, npc, cfg)) return null;
 			return (int)MovementOf(npc);
 		}
 
 		private static Movement? Classify(int type, NPC npc, EnemiesConfig cfg)
 		{
-			if (Excluded.Contains(type) || EclipseEnemies.Contains(type)) return null;
+			if (Excluded.Contains(type) || NeverSwapped(type)) return null;
 			if (npc.boss || NPCID.Sets.ShouldBeCountedAsBoss[type] || npc.townNPC || NPCID.Sets.ActsLikeTownNPC[type] || NPCID.Sets.IsTownPet[type]) return null;
 			if (ExcludedAiStyles.Contains(npc.aiStyle) || NPCID.Sets.ProjectileNPC[type]) return null;
 			if (npc.ModNPC != null && !cfg.SwapModdedEnemies) return null;
-			if (IsEventEnemy(type)) return cfg.SwapEventEnemies ? MovementOf(npc) : null;
+			if (IsEventEnemy(type)) return cfg.SwapEventEnemies && Swappable(type, npc, cfg) ? MovementOf(npc) : null;
 			if (NPCID.Sets.CountsAsCritter[type]) return cfg.SwapCritters ? CritterMovement(type, npc) : null;
 			return Swappable(type, npc, cfg) ? MovementOf(npc) : null;
 		}
@@ -391,13 +458,45 @@ namespace UltimateRandomizer.Common.Features
 			return movements.Keys;
 		}
 
-		private static bool IsEventEnemy(int type) =>
-			NPCID.Sets.BelongsToInvasionOldOnesArmy[type] || NPCID.Sets.BelongsToInvasionGoblinArmy[type] || NPCID.Sets.BelongsToInvasionFrostLegion[type]
-			|| NPCID.Sets.BelongsToInvasionPirate[type] || NPCID.Sets.BelongsToInvasionMartianMadness[type];
+		// Vanilla's invasion group of a type (NPC.GetNPCInvasionGroup): 1 goblins, 2 Frost Legion, 3 pirates, 4 Martians,
+		// -1 Pumpkin Moon, -2 Frost Moon, -3 Old One's Army, 0 none
+		public const int PumpkinMoonGroup = -1, FrostMoonGroup = -2, OldOnesArmyGroup = -3;
+
+		public static int InvasionGroup(int type) => type > 0 && type < NPCID.Sets.BelongsToInvasionGoblinArmy.Length ? NPC.GetNPCInvasionGroup(type) : 0;
+
+		// Invaders, moon and eclipse enemies (the Blood Moon's are natural enemies of the pool)
+		public static bool IsEventEnemy(int type) => InvasionGroup(type) != 0 || EclipseEnemies.Contains(type);
+
+		// Martian Madness and the Old One's Army are scripted (probes, the crystal, waves): never swapped either way
+		public static bool NeverSwapped(int type) => InvasionGroup(type) == InvasionID.MartianMadness || InvasionGroup(type) == OldOnesArmyGroup
+			|| (type > 0 && type < NPCID.Sets.BelongsToInvasionOldOnesArmy.Length && (NPCID.Sets.BelongsToInvasionOldOnesArmy[type] || NPCID.Sets.BelongsToInvasionMartianMadness[type]));
+
+		// The tier from which an event enemy's event comes in vanilla (0 for the others): the goblins after the Eye of Cthulhu,
+		// the Frost Legion and the pirates in hardmode, the eclipse after a mechanical boss, the moons after Plantera; the later
+		// stage of NpcTiers.SpawnTier when it says more (the Goblin Summoner: hardmode; the eclipse's late enemies: Plantera)
+		public static int EventTier(int type)
+		{
+			if (!IsEventEnemy(type)) return 0;
+			int byEvent = InvasionGroup(type) switch
+			{
+				InvasionID.GoblinArmy => (int)Tier.PostEyeOfCthulhu,
+				InvasionID.SnowLegion or InvasionID.PirateInvasion => (int)Tier.Hardmode,
+				InvasionID.MartianMadness => (int)Tier.PostGolem,
+				PumpkinMoonGroup or FrostMoonGroup => (int)Tier.PostPlantera,
+				OldOnesArmyGroup => (int)Tier.PostEvilBoss,
+				_ => (int)Tier.PostMechBoss
+			};
+			return Tiers.Clamp(Math.Max(byEvent, type < NPCID.Count ? NpcTiers.SpawnTier(type) : -1));
+		}
+
+		// Tier of a type in the swap pool: its own, never below its event's
+		public static int PoolTier(int type) => Tiers.Clamp(Math.Max(NpcTiers.BaseTier(type), EventTier(type)));
 
 		public static void Reset()
 		{
 			intolerance.Clear();
+			eventTargets.Clear();
+			eventTargetsMap = null;
 			dayBuckets = null;
 			nightBuckets = null;
 			movements = null;
@@ -407,6 +506,10 @@ namespace UltimateRandomizer.Common.Features
 	public class EnemySwapSystem : ModSystem
 	{
 		public static readonly bool[] Pending = new bool[Main.maxNPCs + 1];
+
+		// The type each slot's NPC spawned as before its swap (0: not swapped), kept by slot like Pending: Transform and
+		// SetDefaults recreate the globals. Server side only (EventProgress credits its event on death)
+		public static readonly int[] Originals = new int[Main.maxNPCs + 1];
 
 		public static SwapStats Stats { get; private set; } = new();
 
@@ -422,6 +525,7 @@ namespace UltimateRandomizer.Common.Features
 			EnemySwapPool.Reset();
 			BiomeSlots.Reset();
 			Array.Clear(Pending);
+			Array.Clear(Originals);
 			Stats = new SwapStats();
 		}
 
@@ -452,6 +556,7 @@ namespace UltimateRandomizer.Common.Features
 			if (!ContentSamples.NpcsByNetId.TryGetValue(target, out NPC sample)) return;
 			if (NPCID.Sets.CountsAsCritter[sample.type]) Stats.SwappedCritters++;
 			else Stats.SwappedEnemies++;
+			if (npc.whoAmI >= 0 && npc.whoAmI < Main.maxNPCs && Originals[npc.whoAmI] == 0) Originals[npc.whoAmI] = npc.type;
 			npc.Transform(target);
 			// Transform gives the NPC new globals: its individual stats (giant, mini...) are rolled again
 			EnemyIndividualNPC.RollAndApply(npc);

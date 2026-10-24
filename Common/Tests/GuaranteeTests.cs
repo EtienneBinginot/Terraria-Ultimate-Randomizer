@@ -101,7 +101,7 @@ namespace UltimateRandomizer.Common.Tests
 					}
 				}
 				if (place.Boss ? !NpcTiers.IsBoss(guardian) : !EnemySwapPool.IsSwappable(guardian)) failures.Add($"{name}: {Lang.GetNPCNameValue(guardian)} is not a natural enemy");
-				if (GuaranteedSources.IsEventEnemy(guardian)) failures.Add($"{name}: on {Lang.GetNPCNameValue(guardian)}, an event enemy");
+				if (GuaranteedSources.MetOnlyInEvents(guardian)) failures.Add($"{name}: on {Lang.GetNPCNameValue(guardian)}, an event enemy met only in its event");
 				if (!place.Boss && ContentSamples.NpcsByNetId.TryGetValue(guardian, out NPC sample) && sample.rarity > 0) failures.Add($"{name}: on {Lang.GetNPCNameValue(guardian)}, a rare enemy");
 				float planned = GuaranteedSources.For(guardian).Where(d => d.Item == station.Item).Sum(d => d.Chance);
 				float expected = place.Boss ? 1f : chance;
@@ -249,7 +249,8 @@ namespace UltimateRandomizer.Common.Tests
 
 		private static string Name(int item) => Lang.GetItemNameValue(item);
 
-		// Guaranteed drops are never on event, moon, seasonal or weather enemies, whatever the swap settings
+		// Guaranteed drops are never on event, moon, seasonal or weather enemies met only then, whatever the swap settings (an
+		// event enemy holding ordinary biome slots spawns there outside its event)
 		private static void GuaranteedHostsNotEvents()
 		{
 			int[] events =
@@ -275,7 +276,8 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int host in GuaranteedSources.HostsOf(requirement.Item))
 				{
 					hosts++;
-					if (events.Contains(host) || GuaranteedSources.IsEventEnemy(host)) failures.Add($"{Name(requirement.Item)} on {Lang.GetNPCNameValue(host)}");
+					// An event enemy holding ordinary slots (an extra by biome) spawns outside its event: a normal host
+					if (GuaranteedSources.MetOnlyInEvents(host)) failures.Add($"{Name(requirement.Item)} on {Lang.GetNPCNameValue(host)}");
 				}
 			}
 			if (GuaranteedSources.Requirements.Count > 0) Check.That(hosts > 0, "no guaranteed host at all");
@@ -348,7 +350,7 @@ namespace UltimateRandomizer.Common.Tests
 					// A progression boss of the item's tier gives it at every kill
 					if (onBoss) return NpcTiers.IsBoss(host) && GuaranteedSources.HostTier(host) == Tiers.Clamp(MaxHostTier(item, tier))
 						&& RandomNpcDropRule.Plan(host, Main.expertMode).Any(d => d.Guaranteed && d.Item == item && d.Chance >= 1f - 1e-6f);
-					if (GuaranteedSources.HostTier(host) > MaxHostTier(item, tier) || GuaranteedSources.IsEventEnemy(host) || ContentSamples.NpcsByNetId[host].rarity > 0) return false;
+					if (GuaranteedSources.HostTier(host) > MaxHostTier(item, tier) || GuaranteedSources.MetOnlyInEvents(host) || ContentSamples.NpcsByNetId[host].rarity > 0) return false;
 					return RandomNpcDropRule.Plan(host, Main.expertMode).Any(d => d.Guaranteed && d.Item == item && d.Chance >= 0.01f - 1e-6f);
 				}
 				List<int> bad = hosts.Where(h => !Good(h)).ToList();
@@ -833,7 +835,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			for (int t = 0; t < Tiers.Count && t < best; t++)
 			{
-				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) From(npc, t);
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.MetOnlyInEvents(n))) From(npc, t);
 			}
 			foreach (int boss in NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, BiomeSlots.CurrentEvil) && NpcTiers.BaseTier(b) < best)) From(boss, NpcTiers.BaseTier(boss));
 			return best;
@@ -1535,7 +1537,7 @@ namespace UltimateRandomizer.Common.Tests
 			}
 			for (int t = 0; t < Tiers.Count; t++)
 			{
-				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) Add(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false));
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.MetOnlyInEvents(n))) Add(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false));
 			}
 			foreach (int boss in NpcTiers.BossTypes) Add(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false));
 			foreach (int bag in LootSnapshot.Items.Keys.Where(b => !Findability.SeasonalBags.Contains(b))) Add(BagPlan.Plan(bag, lucky: true));

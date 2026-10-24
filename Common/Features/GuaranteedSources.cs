@@ -1153,7 +1153,7 @@ namespace UltimateRandomizer.Common.Features
 
 		private static bool IsNaturalHost(int npc, int tier)
 		{
-			if (NPCID.Sets.CountsAsCritter[npc] || IsEventEnemy(npc) || NeverMet(npc)) return false;
+			if (NPCID.Sets.CountsAsCritter[npc] || MetOnlyInEvents(npc) || NeverMet(npc)) return false;
 			return HostTiers().TryGetValue(npc, out int from) && from <= Tiers.Clamp(tier);
 		}
 
@@ -1192,7 +1192,7 @@ namespace UltimateRandomizer.Common.Features
 
 		// Natural enemies that may carry a guaranteed drop from a tier on (no critter, no event enemy, met in this world)
 		private static List<int> NaturalHosts(int tier) => HostTiers().Where(pair => pair.Value == Tiers.Clamp(tier)).Select(pair => pair.Key)
-			.Where(n => !NPCID.Sets.CountsAsCritter[n] && !IsEventEnemy(n) && !NeverMet(n)).OrderBy(n => n).ToList();
+			.Where(n => !NPCID.Sets.CountsAsCritter[n] && !MetOnlyInEvents(n) && !NeverMet(n)).OrderBy(n => n).ToList();
 
 		// Common natural enemies of a tier (bestiary rarity 1, else 2...). Never a rare enemy (NPC.rarity: the Rune Wizard, the
 		// biome mimics): met a few times per world at best. A tier with only rare natural enemies (a world whose tier 8 slots
@@ -1230,6 +1230,10 @@ namespace UltimateRandomizer.Common.Features
 			List<IBestiaryInfoElement> info = Main.BestiaryDB?.FindEntryByNPCID(npcType)?.Info;
 			return info != null && info.Any(eventTags.Contains);
 		}
+
+		// An event enemy met only during its event: no reliable source. One that holds ordinary slots of the spawn map (an extra
+		// by biome: goblins, moon enemies... with SwapEventEnemies) spawns there every day like a natural enemy
+		public static bool MetOnlyInEvents(int npcType) => IsEventEnemy(npcType) && !BiomeSlots.HasSteadySlot(npcType);
 
 		private static int Stars(int npcType) => ContentSamples.NpcBestiaryRarityStars.TryGetValue(npcType, out int stars) ? stars : 1;
 	}
@@ -1537,8 +1541,8 @@ namespace UltimateRandomizer.Common.Features
 			}
 			for (int t = 0; t < Tiers.Count; t++)
 			{
-				// Event, moon and seasonal enemies (in the pool when SwapEventEnemies is on) are no reliable source
-				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n) && !AbsentEvilSource(n))) AddPlan(RandomNpcDropRule.Plan(npc, ProgressionSystem.PlannedExpert, lucky: true, guaranteed: false), t, npc);
+				// Event, moon and seasonal enemies met only during their event are no reliable source (those holding ordinary slots are)
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.MetOnlyInEvents(n) && !AbsentEvilSource(n))) AddPlan(RandomNpcDropRule.Plan(npc, ProgressionSystem.PlannedExpert, lucky: true, guaranteed: false), t, npc);
 			}
 			// Not the evil boss this world lacks (BossPermutation.AbsentEvil): its summon needs its biome
 			foreach (int boss in NpcTiers.BossTypes.Where(b => !AbsentEvilSource(b)))

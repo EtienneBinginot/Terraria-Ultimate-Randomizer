@@ -220,9 +220,16 @@ namespace UltimateRandomizer.Common.Configs
 		[ReloadRequired]
 		public bool SwapCritters;
 
-		[DefaultValue(false)]
+		// Invaders and moon enemies join the swaps both ways (EventProgress keeps their events counting)
+		[DefaultValue(true)]
 		[ReloadRequired]
 		public bool SwapEventEnemies;
+
+		// Share of the event spawns (invasions, moons, eclipse, Blood Moon) turned into another enemy (%)
+		[Range(0f, 100f)]
+		[Increment(5f)]
+		[DefaultValue(50f)]
+		public float EventSpawnSwapChance;
 
 		[DefaultValue(true)]
 		[ReloadRequired]
