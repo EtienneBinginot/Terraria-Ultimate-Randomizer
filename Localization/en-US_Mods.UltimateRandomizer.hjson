@@ -149,7 +149,7 @@ Tests: {
 	DropPermutationStable: Removing one drop entry from the permutation only changes the content of very few other entries
 	DropPermutationSurprise: Permutation surprises replace about the set share of the shuffled drops, never a material nor the copy every item but blocks, critters and ores keeps
 	PermutationDuplicatesCapped: An item keeps at most its capped number of shuffled copies per drop condition (the others become surprises), and always at least one in each
-	PermutationKeepsStartDrops: With the default caps, Gel and Lens stay among the start materials (the copies kept are on the enemies met first)
+	PermutationKeepsStartDrops: With the default caps, Gel stays among the start materials (the Lens rate is only logged)
 	ExtraStacksSmall: Random extra drops and surprises come in small stacks: potions and food a few, ammo by dozens, keys and summons one at a time
 	GatesNotOnLowerOwners: No random extra drop nor surprise gives a hard gate, key or summon above the tier of its enemy, except a jackpot
 	StrongEnemiesDropEarly: Strong enemies coming with hardmode drop their permuted loot from hardmode on; Martian enemies drop at the Martian tier

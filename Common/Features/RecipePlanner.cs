@@ -780,7 +780,8 @@ namespace UltimateRandomizer.Common.Features
 			{
 				// Everything else was planned without the shells (keys, locks): what that plan relies on, the shells
 				// left out, must stay as it is with them
-				int[] baseAvail = Availability(Findability.Tier, results, new int[count], PlannedIngredients(), PlannedTiles(), out int[] baseDoable, ShellMask(result.Twin), PlannedGroups(result));
+				// (the shells planned whatever the setting, upgrades' and stations', are part of that plan: LockMask)
+				int[] baseAvail = Availability(Findability.Tier, results, new int[count], PlannedIngredients(), PlannedTiles(), out int[] baseDoable, LockMask(result, results), PlannedGroups(result));
 				// Each round drops at least one shell; dropping one only delays the others (one of them may become never doable)
 				for (int round = 0; ; round++)
 				{
@@ -800,6 +801,8 @@ namespace UltimateRandomizer.Common.Features
 				}
 			}
 			else FinalAvailability();
+			// Keys made earlier by the shells kept (a crafted key's own recipe, a station shell): replaced, then the availability again
+			if (cfg.RandomizeRecipes && FixEarlyKeys(result, results, ingredients, tiles, graph) > 0) FinalAvailability();
 			if (cfg.RandomizeRecipes && !settings.CheckRestore) LogStationRecipes(result);
 			return result;
 		}
@@ -936,32 +939,36 @@ namespace UltimateRandomizer.Common.Features
 		// (ResultTier). A rebuilt recipe has a key of its tier T >= U (Rebuilder); one still doable earlier (no key found, a
 		// random station on vanilla ingredients, only protected ingredients) gets a key material found exactly at U (U + 1
 		// when U has none), in a replaceable slot or as a new ingredient. Checked again against the live recipes: a key placed
-		// later may make another recipe doable earlier
+		// later may make another recipe doable earlier, and a rebuilt recipe doable before its T (its planned key, a crafted one,
+		// turned earlier: its recipe at a station whose shell was planned after it, StationShells) gets a found key of T in that
+		// key's slot, its count kept (RekeyEarly)
 		private static void LockResults(RecipePlan result, int[] results, (int, int)[][] ingredients, int[][] tiles, ItemGraph graph)
 		{
 			int count = Count;
 			(int, int)[][] Planned() => Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
 			int[][] plannedTiles = Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray();
-			// The shells are left out: the locks are the same with the setting on or off; the recipes switched off too. Not the
-			// upgrades' shells, planned whatever the setting: a Life Crystal made at 0 makes a Repaired Life Crystal doable then
-			bool[] noShells = ShellMask(result.Twin);
-			for (int i = 0; i < count; i++)
-			{
-				if (ShellActive(result, i) && ItemPool.IsSpecial(results[i])) noShells[i] = false;
-			}
+			bool[] noShells = LockMask(result, results);
 			List<int>[,] buckets = FindableBuckets();
 			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
 			Dictionary<int, int> uses = new();
-			int keys = 0, late = 0, rekeyed = 0, unlocked = 0;
+			int keys = 0, late = 0, rekeyed = 0, unlocked = 0, replaced = 0;
 			SortedSet<int> noMaterial = new();
+			// A chain of crafted keys is fixed from its root, one link a round (a new key at its root may be enough for the rest);
+			// when nothing else is left to place, the links waiting are fixed too
+			bool waitChains = true;
 			// First with every result had from its U (what the plan was built on), then with the live recipes
-			for (int round = 0; round < 4; round++)
+			for (int round = 0; round < LockRounds; round++)
 			{
 				int[] avail = Availability(Findability.Tier, results, round == 0 ? LockTiers(result) : new int[count], Planned(), plannedTiles, out int[] doable, noShells, PlannedGroups(result));
-				int placed = 0;
+				int placed = 0, waiting = 0;
 				unlocked = 0;
+				HashSet<int> handled = RekeyEarly(result, results, avail, doable, buckets, weights, uses, graph, waitChains, ref placed, ref waiting);
+				replaced += placed;
 				for (int i = 0; i < count; i++)
 				{
+					// A station's shell is its recipe, planned for the station's tier (ShellBreaksPlan); a recipe re-keyed above
+					// is not doable before its T any more, or waits for a link of its chain
+					if (StationShell(i) || handled.Contains(i)) continue;
 					// The upgrades: LockSpecials
 					if (!NeedsLock(result, i, doable) || ItemPool.IsSpecial(results[i])) continue;
 					int key = PlaceKey(result, results, i, result.ResultTiers[i], buckets, weights, avail, uses, graph, out bool later, append: true);
@@ -980,12 +987,106 @@ namespace UltimateRandomizer.Common.Features
 						if (later) late++;
 					}
 				}
+				if (placed == 0 && waiting > 0 && waitChains)
+				{
+					waitChains = false;
+					continue;
+				}
 				if (placed == 0) break;
 			}
 			string topKeys = string.Join(", ", uses.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(5).Select(p => $"{DetRandom.ItemName(p.Key)} x{p.Value}"));
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {keys} key ingredients added ({late} from U+1, {rekeyed} chosen again), {unlocked} recipes left doable before their tier; " +
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {keys} key ingredients added ({late} from U+1, {rekeyed} chosen again), {replaced} planned keys turned earlier replaced, {unlocked} recipes left doable before their tier; " +
 				$"tiers without a key material: {(noMaterial.Count == 0 ? "none" : string.Join(", ", noMaterial))}; most used keys: {topKeys}; {result.UnfitKeys} keys in all not fitting progression for lack of another");
 		}
+
+		private const int LockRounds = 8;
+
+		// Weight of a crafted key candidate against a found one (Rebuilder.PickKey): crafted keys stay rare
+		private const float CraftedKeyWeight = 0.1f;
+
+		// What the locks read the availability without: every shell (the locks are the same with RecipesForUncraftable on or
+		// off) and the recipes switched off, but the shells planned whatever the setting: the upgrades' (a Life Crystal made at
+		// 0 makes a Repaired Life Crystal doable then) and the stations' (a Bone Welder's shell at 2 made every shelf crafted at
+		// it, a tier-3 key planned as had at 3, doable at 2)
+		private static bool[] LockMask(RecipePlan result, int[] results)
+		{
+			bool[] mask = ShellMask(result.Twin);
+			for (int i = 0; i < mask.Length; i++)
+			{
+				if (ShellActive(result, i) && (ItemPool.IsSpecial(results[i]) || StationShell(i))) mask[i] = false;
+			}
+			return mask;
+		}
+
+		// One round of re-keying: each rebuilt recipe doable before its T (KeyTurnedEarly) gets in its planned key's slot a
+		// found key had exactly at T (FindableBuckets: its tier can't move, so the rounds converge; T + 1 when T has none),
+		// the slot's count kept (KeyStack, no value raise). waitChains: a recipe one of whose ingredients is made by another
+		// such recipe waits (a new key at the root may be enough). Returns the recipes re-keyed or waiting
+		private static HashSet<int> RekeyEarly(RecipePlan result, int[] results, int[] avail, int[] doable, List<int>[,] buckets, WeightTable weights, Dictionary<int, int> uses,
+			ItemGraph graph, bool waitChains, ref int placed, ref int waiting)
+		{
+			HashSet<int> handled = new();
+			HashSet<int> early = Enumerable.Range(0, Count).Where(i => KeyTurnedEarly(result, i, doable)).ToHashSet();
+			if (early.Count == 0) return handled;
+			HashSet<int> earlyResults = early.Select(i => results[i]).ToHashSet();
+			foreach (int i in early.OrderBy(i => i))
+			{
+				if (waitChains && result.Ingredients[i].Any(p => p.type != results[i] && earlyResults.Contains(p.type)))
+				{
+					waiting++;
+					handled.Add(i);
+					continue;
+				}
+				int t = result.IngredientTiers[i];
+				int slot = Array.FindIndex(result.Ingredients[i], p => p.type == result.PlannedKeys[i]);
+				int newKey = PlaceKey(result, results, i, t, buckets, weights, avail, uses, graph, out bool later,
+					DetRandom.Get(RollKey.KeyIngredient, RecipeSystem.RecipeKey(i), RollKey.Fallback), append: true, replace: slot);
+				if (newKey <= 0) continue;
+				result.PlannedKeys[i] = newKey;
+				result.KeyIngredient[i] = true;
+				if (later) result.IngredientTiers[i] = Math.Min(t + 1, Tiers.Max);
+				placed++;
+				handled.Add(i);
+			}
+			return handled;
+		}
+
+		// The last word on the keys, after the shells are settled: with every recipe on (the active shells included), a rebuilt
+		// recipe doable before its T gets a found key of T (RekeyEarly), until none is left. Nothing earlier comes of it (a key
+		// only delays its recipe). Returns how many keys were replaced
+		private static int FixEarlyKeys(RecipePlan result, int[] results, (int, int)[][] ingredients, int[][] tiles, ItemGraph graph)
+		{
+			int count = Count;
+			List<int>[,] buckets = FindableBuckets();
+			WeightTable weights = CraftingConfig.Instance.IngredientWeights;
+			Dictionary<int, int> uses = new();
+			int[][] plannedTiles = Enumerable.Range(0, count).Select(i => result.Tiles[i] ?? tiles[i]).ToArray();
+			int replaced = 0, left = 0;
+			bool waitChains = true;
+			for (int round = 0; round < LockRounds; round++)
+			{
+				(int, int)[][] planned = Enumerable.Range(0, count).Select(i => result.Ingredients[i] ?? ingredients[i]).ToArray();
+				int[] avail = Availability(Findability.Tier, results, new int[count], planned, plannedTiles, out int[] doable, result.Twin, PlannedGroups(result));
+				int placed = 0, waiting = 0;
+				RekeyEarly(result, results, avail, doable, buckets, weights, uses, graph, waitChains, ref placed, ref waiting);
+				replaced += placed;
+				left = Enumerable.Range(0, count).Count(i => KeyTurnedEarly(result, i, doable)) - placed;
+				if (placed == 0 && waiting > 0 && waitChains)
+				{
+					waitChains = false;
+					continue;
+				}
+				if (placed == 0) break;
+			}
+			if (replaced > 0 || left > 0)
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Recipe plan: {replaced} keys made earlier than their tier by the shells replaced at the end; {left} recipes still doable before their tier (no found key left)");
+			return replaced;
+		}
+
+		// A rebuilt recipe with a planned key, doable before its T: that key (a crafted one) is made earlier than planned. A station's recipe keeps its found materials (StationMaterialAllowed); houses and upgrades have no T to keep
+		private static bool KeyTurnedEarly(RecipePlan result, int i, int[] doable) =>
+			result.PlannedKeys[i] > 0 && result.IngredientTiers[i] > 0 && result.Ingredients[i] != null && !result.Repaired[i] && !result.Twin[i]
+			&& !RecipeSystem.IsShell(i) && !RecipeSystem.HouseRecipe(i) && !StationRecipe(i) && !ItemPool.IsSpecial(result.Results[i].type) && doable[i] < result.IngredientTiers[i];
 
 		// The recipes of the life and mana upgrades (SpecialRecipe), last (nothing else is planned around them): each one always
 		// has a key ingredient (of the upgrade's tier U; at tier 0, an uncommon material, so a cheap recipe is no free crystal),
@@ -1370,9 +1471,9 @@ namespace UltimateRandomizer.Common.Features
 		// rng: RollKey.KeyIngredient of the recipe when null; uncommon: an uncommon material when the tier has one; append: a
 		// recipe without a replaceable material slot gets the key as a new ingredient (a Zenith keeps its swords), else any
 		// replaceable slot takes it. The key takes the count of the slot it replaces (KeyStack); byValue (an upgrade): the
-		// value that slot was missing instead
+		// value that slot was missing instead; replace: that slot takes the key (a planned key that turned earlier)
 		private static int PlaceKey(RecipePlan result, int[] results, int i, int u, List<int>[,] buckets, WeightTable weights, int[] avail, Dictionary<int, int> uses, ItemGraph graph,
-			out bool later, Random rng = null, bool uncommon = false, bool append = false, bool byValue = false)
+			out bool later, Random rng = null, bool uncommon = false, bool append = false, bool byValue = false, int replace = -1)
 		{
 			later = false;
 			int[] groups = GroupsOf(result, i);
@@ -1385,7 +1486,8 @@ namespace UltimateRandomizer.Common.Features
 			rng ??= DetRandom.Get(RollKey.KeyIngredient, RecipeSystem.RecipeKey(i));
 			int slot = -1;
 			List<int> materialSlots = slots.Where(k => MaterialLike(ItemPool.Info[current[k].type].Category)).ToList();
-			if (materialSlots.Count > 0) slot = materialSlots[rng.Next(materialSlots.Count)];
+			if (replace >= 0 && replace < current.Length) slot = replace;
+			else if (materialSlots.Count > 0) slot = materialSlots[rng.Next(materialSlots.Count)];
 			// Without a material slot, a new ingredient rather than one of the shape's (a Zenith keeps its swords)
 			else if (slots.Count > 0 && !append) slot = slots[rng.Next(slots.Count)];
 			int originalResult = RecipeSystem.OriginalResult(i);
@@ -3051,6 +3153,9 @@ namespace UltimateRandomizer.Common.Features
 			// alike) and commonness (common keys far more often), real materials first; each one keys at most KeyUseCap recipes
 			// while others are left, and the reuse penalty spreads them further
 			// fits: progression (Fits) preferred; budget: the most one unit may be worth, preferred (a Pink Pearl keys no banner)
+			// A crafted candidate (made by a planned recipe) is a link between two recipes, and its tier moves with its recipe:
+			// it may key for diversity, with a low weight (CraftedKeyWeight), never when its own recipe has a crafted key (no
+			// chains of crafted keys). FixEarlyKeys replaces one that ends up had before T
 			private int PickKey(int t, double[] catWeight, Func<int, bool> usable, Random rng, Func<int, bool> fits, long budget)
 			{
 				List<(int item, float weight)> options = new();
@@ -3060,7 +3165,7 @@ namespace UltimateRandomizer.Common.Features
 					if (weight <= 0) continue;
 					foreach (int x in pool[c, t])
 					{
-						if (real[x] == t && usable(x)) options.Add((x, (float)weight));
+						if (real[x] == t && !CraftedKeyChain(x) && usable(x)) options.Add((x, (float)(source[x] >= 0 ? weight * CraftedKeyWeight : weight)));
 					}
 				}
 				if (options.Count == 0) return 0;
@@ -3079,12 +3184,20 @@ namespace UltimateRandomizer.Common.Features
 				return WeightedPick(fresh.Select(o => (o.item, o.weight * KeyCommonnessWeight(o.item) * KeyPenalty(o.item))).ToList(), rng);
 			}
 
+			// A crafted item whose recipe is keyed by a crafted item: never a key (a chain of crafted keys)
+			private bool CraftedKeyChain(int x)
+			{
+				if (x <= 0 || x >= source.Length || source[x] < 0) return false;
+				int key = result.PlannedKeys[source[x]];
+				return key > 0 && key < source.Length && source[key] >= 0;
+			}
+
 			// A vanilla ingredient (of the recipe, or of the item's own recipe for a swap) had exactly at tier t, kept as the key
 			private int VanillaKey(IEnumerable<(int type, int stack)> ingredients, int t, Func<int, bool> usable)
 			{
 				foreach ((int type, _) in ingredients)
 				{
-					if (type > 0 && type < real.Length && real[type] == t && IngredientReplaceable(type) && !Tainted(type) && usable(type)) return type;
+					if (type > 0 && type < real.Length && real[type] == t && !CraftedKeyChain(type) && IngredientReplaceable(type) && !Tainted(type) && usable(type)) return type;
 				}
 				return 0;
 			}

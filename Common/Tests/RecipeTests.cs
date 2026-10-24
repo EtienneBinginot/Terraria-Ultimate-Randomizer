@@ -1504,7 +1504,9 @@ namespace UltimateRandomizer.Common.Tests
 
 		// A rebuilt recipe has its vanilla count of ingredients (a swapped one too: the host's count, so the swap shows), give
 		// or take IngredientCountSpread, within [1, IngredientMax] (its protected ingredients always stay, with at least one new
-		// one). A recipe keyed by LockResults may get one more (its key added as a new ingredient)
+		// one). A recipe keyed by LockResults may get one more (its key added as a new ingredient). A vanilla recipe above
+		// IngredientMax (a music box of 12) is planned with IngredientMax, and a slot that finds no candidate stays empty: the
+		// spread is counted down from IngredientMax then
 		private static void RecipeIngredientCount()
 		{
 			RequireRandomIngredients();
@@ -1521,7 +1523,7 @@ namespace UltimateRandomizer.Common.Tests
 				int vanilla = original.Length;
 				int kept = original.Count(x => !RecipePlanner.IngredientReplaceable(x.type));
 				int max = Math.Max(1, cfg.IngredientMax);
-				int low = Math.Clamp(vanilla - cfg.IngredientCountSpread, 1, max);
+				int low = Math.Clamp(Math.Min(vanilla, max) - cfg.IngredientCountSpread, 1, max);
 				int high = Math.Max(Math.Clamp(vanilla + cfg.IngredientCountSpread, 1, max), kept + 1) + (plan.KeyIngredient[i] ? 1 : 0);
 				int n = plan.Ingredients[i].Length;
 				deltas[n - vanilla] = deltas.GetValueOrDefault(n - vanilla) + 1;

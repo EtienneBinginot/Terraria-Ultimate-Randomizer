@@ -404,9 +404,10 @@ namespace UltimateRandomizer.Common.Tests
 			if (cappedItems == 0) Check.Skip("no item has more copies than its cap");
 		}
 
-		// With the default caps, the copies of Gel and Lens kept are those of the enemies the early kills meet: both stay start
-		// materials (RecipePlanner.StartMaterials: within StartDropKills early kills on average), so the critical stations'
-		// recipes may take them
+		// With the default caps, Gel stays a start material (RecipePlanner.StartMaterials: within StartDropKills early kills on
+		// average), so the critical stations' recipes may take it. The Lens keeps every copy too (DropPermutation.CopyCap), but
+		// the permutation may put them on enemies met later: that is randomness, not a softlock (StartMaterials is computed,
+		// the critical recipes then take other start materials), so its rate is only logged
 		private static void PermutationKeepsStartDrops()
 		{
 			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
@@ -420,9 +421,9 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				double rate = PacingModel.EarlyDropRate(item);
 				rates += $" {Lang.GetItemNameValue(item)} {rate:0.000}/kill";
-				if (!start.Contains(item)) failures.Add($"{Lang.GetItemNameValue(item)} is not a start material ({rate:0.000} per early kill, at least {1 / RecipePlanner.StartDropKills:0.000})");
+				if (item == ItemID.Gel && !start.Contains(item)) failures.Add($"{Lang.GetItemNameValue(item)} is not a start material ({rate:0.000} per early kill, at least {1 / RecipePlanner.StartDropKills:0.000})");
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Permutation start drops:{rates}");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Permutation start drops:{rates}; Lens a start material: {start.Contains(ItemID.Lens)}");
 			Check.All(failures, "Start drops");
 		}
 

@@ -149,7 +149,7 @@ Tests: {
 	DropPermutationStable: Retirer un drop de la permutation ne change le contenu que de très peu d'autres drops
 	DropPermutationSurprise: Les surprises de la permutation remplacent à peu près la part réglée des drops mélangés, jamais un matériau ni l'exemplaire que garde chaque objet (sauf blocs, créatures et minerais)
 	PermutationDuplicatesCapped: Un objet garde au plus son nombre limité d'exemplaires mélangés par condition de drop (les autres deviennent des surprises), et toujours au moins un dans chacune
-	PermutationKeepsStartDrops: Avec les limites par défaut, le gel et la lentille restent des matériaux de départ (les exemplaires gardés sont sur les premiers ennemis rencontrés)
+	PermutationKeepsStartDrops: Avec les limites par défaut, le gel reste un matériau de départ (le taux de la lentille est seulement noté dans le journal)
 	ExtraStacksSmall: Les drops bonus et surprises aléatoires viennent en petites piles : quelques potions ou plats, des dizaines de munitions, clés et invocations une par une
 	GatesNotOnLowerOwners: Aucun drop bonus ni surprise aléatoire ne donne un verrou de progression, une clé ou une invocation au-dessus du palier de son ennemi, sauf un jackpot
 	StrongEnemiesDropEarly: Les ennemis puissants qui arrivent avec le mode difficile donnent leur butin permuté dès le mode difficile ; les ennemis martiens, au palier martien
