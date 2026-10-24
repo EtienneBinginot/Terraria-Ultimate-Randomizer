@@ -232,10 +232,9 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Hardmode wall");
 		}
 
-		// An item that may be re-picked: banned, or given later than its bucket's tier (a re-pick only happens when the true
-		// tier is above the roll's ceiling, which is never below the bucket it picked from), or a hard gate (its ceiling has no
-		// allowance: it may be below the bucket)
-		private static bool Flagged(int item) => ItemPool.IsBanned(item) || ItemPool.TrueTierOf(item) > ItemPool.TierOf(item) || ItemPool.IsHardGate(item);
+		// An item that may be re-picked: banned, or a hard gate (its ceiling has no allowance: it may be below the bucket). The
+		// bucket tier is the true tier now (TierOf == TrueTierOf), so no other item is ever above the ceiling of its own bucket
+		private static bool Flagged(int item) => ItemPool.IsBanned(item) || ItemPool.IsHardGate(item);
 
 		// The same rolls with and without the re-pick: every difference is an item the re-pick had to replace, so every other
 		// roll (mob plans, chest slots, gated rolls) gives exactly what it gave before the re-pick existed. Recipe results never
@@ -301,8 +300,10 @@ namespace UltimateRandomizer.Common.Tests
 				if (info.Excluded) continue;
 				// The hand-reviewed materials (MaterialTiers) take the table's tier exactly, lower too; world-generated chests
 				// lower what they hold (Band of Regeneration: a gold chest item, found at 1)
-				if (info.TrueTier < info.Tier && !info.FromTable && !info.FromWorldChest && !info.Corrected) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {info.Tier}");
-				if (info.TrueTier > info.Tier) raised++;
+				// Against the classification tier (AllTiers: the bucket is the final true tier itself)
+				int tier = ItemPool.AllTiers[type];
+				if (info.TrueTier < tier && !info.FromTable && !info.FromWorldChest && !info.Corrected) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {tier}");
+				if (info.TrueTier > tier) raised++;
 			}
 			foreach (int item in new[] { ItemID.PearlwoodSword, ItemID.PearlwoodWorkBench })
 			{
@@ -331,9 +332,9 @@ namespace UltimateRandomizer.Common.Tests
 			};
 			foreach (int item in kept)
 			{
-				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.TrueTierOf(item) > ItemPool.TierOf(item))
+				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.TrueTierOf(item) > ItemPool.AllTiers[item])
 				{
-					failures.Add($"{Name(item)}: raised from {ItemPool.TierOf(item)} to {ItemPool.TrueTierOf(item)}");
+					failures.Add($"{Name(item)}: raised from {ItemPool.AllTiers[item]} to {ItemPool.TrueTierOf(item)}");
 				}
 			}
 			Log($"Raised tiers: {raised} items");

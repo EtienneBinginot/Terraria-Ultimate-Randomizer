@@ -230,7 +230,8 @@ namespace UltimateRandomizer.Common.Features
 				ItemCategory category = ItemClassifier.Classify(type, item);
 				if (category == ItemCategory.Misc && materials.Contains(type)) category = ItemCategory.Material;
 				// The life and mana upgrades get theirs whatever their category: it is their recipe (RecipePlanner.SpecialRecipe)
-				if (Array.IndexOf(ShellRegistered, category) < 0 && !Protection.IsUpgrade(type)) continue;
+				// So do the mirrors and conches no recipe makes (RecipePlanner.ShellTool)
+				if (Array.IndexOf(ShellRegistered, category) < 0 && !Protection.IsUpgrade(type) && !RecipePlanner.ShellTool(type)) continue;
 				Recipe recipe = Recipe.Create(type, ShellStack(item));
 				// Never shimmered back into its (random) ingredients
 				recipe.DisableDecraft();

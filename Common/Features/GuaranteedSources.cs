@@ -36,6 +36,8 @@ namespace UltimateRandomizer.Common.Features
 			public bool Tool;
 			// A biome whose enemies never carry it (ExcludedBiomeOf: the Temple for the Temple Key, which opens it); null: none
 			public SpawnBiome? ExcludedBiome;
+			// The biomes whose enemies carry it when one of them can (BiomeKeyRequirements: a biome key in its own biome); null: any
+			public SpawnBiome[] Biomes;
 		}
 
 		// The biome an item can't come from: the Temple Key opens the Jungle Temple, so a Temple enemy (or Golem, summoned
@@ -143,6 +145,39 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// The guaranteed drops of an enemy type
+		// Vanilla turns some enemies into another type during a fight (NPC.AI_003_Fighters: a Lihzahrd under 55 % of its life
+		// becomes a Lihzahrd Crawler, the wall crawlers switch between their ground and wall forms; NPC.VanillaAI_Inner): a
+		// kill of either form gives the guaranteed drops of both, else a Lihzahrd host almost never gave its item
+		private static readonly Dictionary<int, int[]> OtherForms = new()
+		{
+			[NPCID.LihzahrdCrawler] = new int[] { NPCID.Lihzahrd },
+			[NPCID.NutcrackerSpinning] = new int[] { NPCID.Nutcracker },
+			[NPCID.WallCreeper] = new int[] { NPCID.WallCreeperWall }, [NPCID.WallCreeperWall] = new int[] { NPCID.WallCreeper },
+			[NPCID.JungleCreeper] = new int[] { NPCID.JungleCreeperWall }, [NPCID.JungleCreeperWall] = new int[] { NPCID.JungleCreeper },
+			[NPCID.BlackRecluse] = new int[] { NPCID.BlackRecluseWall }, [NPCID.BlackRecluseWall] = new int[] { NPCID.BlackRecluse },
+			[NPCID.BloodCrawler] = new int[] { NPCID.BloodCrawlerWall }, [NPCID.BloodCrawlerWall] = new int[] { NPCID.BloodCrawler },
+			[NPCID.DesertScorpionWalk] = new int[] { NPCID.DesertScorpionWall }, [NPCID.DesertScorpionWall] = new int[] { NPCID.DesertScorpionWalk }
+		};
+
+		public static IEnumerable<int> FormsOf(int npcType) => OtherForms.TryGetValue(npcType, out int[] forms) ? forms : Array.Empty<int>();
+
+		// The guaranteed drops a kill of this type rolls (server): its own, and those of its other forms (OtherForms) for the
+		// items it does not carry itself. Plans, hints and findability read For: the host stays the planned type
+		public static List<PlannedDrop> ForKill(int npcType)
+		{
+			List<PlannedDrop> own = For(npcType);
+			if (!OtherForms.TryGetValue(npcType, out int[] forms)) return own;
+			List<PlannedDrop> all = new(own);
+			foreach (int form in forms)
+			{
+				foreach (PlannedDrop drop in For(form))
+				{
+					if (!all.Any(d => d.Item == drop.Item)) all.Add(drop);
+				}
+			}
+			return all;
+		}
+
 		public static List<PlannedDrop> For(int npcType)
 		{
 			Build();
@@ -332,6 +367,32 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
+		// The biome keys (Jungle, Corruption, Crimson, Hallowed, Frozen and Desert), when unprotected: vanilla only gives them
+		// as a 1 in 2500 global drop of hardmode enemies in their biome, no reliable source. Guaranteed from hardmode, like the
+		// Shadow Key, on the hardmode enemies of their own biome when they can carry them (Requirement.Biomes; else any biome
+		// of the tier). Only the keys of the evils this world has (both in drunk and zenith worlds: BiomeSlots.CurrentEvil),
+		// whose Biome Chest the Dungeon holds (https://terraria.wiki.gg/wiki/Biome_Key)
+		public static IEnumerable<Requirement> BiomeKeyRequirements()
+		{
+			WorldEvil evil = BiomeSlots.CurrentEvil;
+			foreach ((int item, SpawnBiome[] biomes) in BiomeKeys)
+			{
+				if (!ItemPool.IsRandomizable(item)) continue;
+				if (item == ItemID.CorruptionKey && evil == WorldEvil.Crimson || item == ItemID.CrimsonKey && evil == WorldEvil.Corruption) continue;
+				yield return new Requirement { Item = item, Tier = (int)Core.Tier.Hardmode, Station = true, Biomes = biomes };
+			}
+		}
+
+		public static readonly (int item, SpawnBiome[] biomes)[] BiomeKeys =
+		{
+			(ItemID.JungleKey, new[] { SpawnBiome.Jungle, SpawnBiome.UndergroundJungle }),
+			(ItemID.CorruptionKey, new[] { SpawnBiome.Corruption, SpawnBiome.UndergroundCorruption }),
+			(ItemID.CrimsonKey, new[] { SpawnBiome.Crimson, SpawnBiome.UndergroundCrimson }),
+			(ItemID.HallowedKey, new[] { SpawnBiome.Hallow, SpawnBiome.UndergroundHallow }),
+			(ItemID.FrozenKey, new[] { SpawnBiome.Snow, SpawnBiome.UndergroundSnow }),
+			(ItemID.DungeonDesertKey, new[] { SpawnBiome.Desert, SpawnBiome.UndergroundDesert })
+		};
+
 		// Items a pot may also give, among those already unlocked: tools and early materials (never a station: each one is a
 		// small quest, its recipe or its guardian; nor the summons)
 		// Read per pot broken: cached per tier for the requirements it was built from. Do not modify the list
@@ -424,21 +485,24 @@ namespace UltimateRandomizer.Common.Features
 		// Every requirement once: the earliest tier, keeping every flag (a pickaxe also needed as an ingredient stays a tool)
 		private static List<Requirement> CollectRequirements()
 		{
-			List<Requirement> all = StationRequirements().Concat(OtherStationRequirements()).Concat(SummonRequirements()).Concat(ProgressionToolRequirements()).ToList();
+			List<Requirement> all = StationRequirements().Concat(OtherStationRequirements()).Concat(SummonRequirements()).Concat(ProgressionToolRequirements())
+				.Concat(BiomeKeyRequirements()).ToList();
 			foreach (Func<IEnumerable<Requirement>> provider in ExtraRequirements) all.AddRange(provider());
 			// A hard gate (no allowance) is never required before its true tier
 			return all.GroupBy(r => r.Item).Select(g => new Requirement
 			{
 				Item = g.Key, Tier = ItemPool.IsHardGate(g.Key) ? Math.Max(g.Min(r => r.Tier), ItemPool.TrueTierOf(g.Key)) : g.Min(r => r.Tier), Station = g.Any(r => r.Station), Placer = g.Any(r => r.Placer),
 				Critical = g.Any(r => r.Critical), Tool = g.Any(r => r.Tool),
-				ExcludedBiome = ExcludedBiomeOf(g.Key)
+				ExcludedBiome = ExcludedBiomeOf(g.Key), Biomes = g.Select(r => r.Biomes).FirstOrDefault(b => b != null)
 			}).OrderBy(r => r.Tier).ThenBy(r => DetRandom.ItemKey(r.Item)).ToList();
 		}
 
 		// Who picks its biome first (biomes holding fewer items are preferred): the critical stations, the other basic
-		// stations, the pickaxes, the materials, the progression and themed stations, then the summons
+		// stations, the pickaxes, the materials, the progression and themed stations, the summons, then the biome keys (added
+		// later: last, so that the hosts of everything else stay as they were)
 		private static int Priority(Requirement r)
 		{
+			if (r.Biomes != null) return 6;
 			// The work bench first: it takes the Forest enemy the early kills meet most (PlaceGuardian)
 			if (r.Critical && r.Item == ItemID.WorkBench) return -1;
 			if (r.Critical) return 0;
@@ -530,12 +594,19 @@ namespace UltimateRandomizer.Common.Features
 				List<float> chances = null;
 				BiomeHosts? picked = null;
 				{
-					// A biome of the item's own tier, never a lower one (the guaranteed drop has no progression lock)
+					// A biome of the item's own tier, never a lower one (the guaranteed drop has no progression lock); one of its
+					// own biomes first (Requirement.Biomes), else any
 					int t = Tiers.Clamp(requirement.Tier);
-					List<BiomeEligible> eligible = Eligible(t).Where(b => excluded is not SpawnBiome biome || b.Biome != (int)biome).ToList();
-					List<BiomeHosts> candidates = eligible.Select(b => ChooseHosts(b, perItem, load, false)).Where(c => c != null).Select(c => c.Value).ToList();
-					// Full hosts only when no biome of the tier works without them
-					if (candidates.Count == 0) candidates = eligible.Select(b => ChooseHosts(b, perItem, load, true)).Where(c => c != null).Select(c => c.Value).ToList();
+					List<BiomeHosts> candidates = new();
+					foreach (bool own in requirement.Biomes != null ? new[] { true, false } : new[] { false })
+					{
+						List<BiomeEligible> eligible = Eligible(t).Where(b => (excluded is not SpawnBiome biome || b.Biome != (int)biome)
+							&& (!own || requirement.Biomes.Any(x => (int)x == b.Biome))).ToList();
+						candidates = eligible.Select(b => ChooseHosts(b, perItem, load, false)).Where(c => c != null).Select(c => c.Value).ToList();
+						// Full hosts only when no biome of the tier works without them
+						if (candidates.Count == 0) candidates = eligible.Select(b => ChooseHosts(b, perItem, load, true)).Where(c => c != null).Select(c => c.Value).ToList();
+						if (candidates.Count > 0) break;
+					}
 					if (candidates.Count > 0)
 					{
 						int index = PickWeighted(Enumerable.Range(0, candidates.Count).ToList(), i => BiomeWeight(biomeItems.GetValueOrDefault(candidates[i].Biome)), rng);
@@ -641,9 +712,11 @@ namespace UltimateRandomizer.Common.Features
 			bool Excluded(int host) => excluded is SpawnBiome biome && OnlyIn(host, biome);
 			// Hosts guarding no station first, then the hosts not full yet
 			int Rank(int host) => guardians.GetValueOrDefault(host) * 2 + (load.Full(host) ? 1 : 0);
+			// Never an enemy this world never spawns (only in the absent evil's slots): the biome options read the spawn shares,
+			// the fallbacks below too
 			List<int> Best(IEnumerable<int> hosts)
 			{
-				List<int> list = hosts.Where(h => !Excluded(h)).Distinct().ToList();
+				List<int> list = hosts.Where(h => !Excluded(h) && !BiomeSlots.NeverSpawns(BiomeSlots.TypeOf(h))).Distinct().ToList();
 				if (list.Count == 0) return list;
 				int best = list.Min(Rank);
 				return list.Where(h => Rank(h) == best).ToList();
@@ -1218,8 +1291,29 @@ namespace UltimateRandomizer.Common.Features
 			return set;
 		}
 
-		// Gathered directly in this world (blocks, wood, gems, herbs...), ores apart
-		public static bool IsWorldMaterial(int item) => WorldMaterials.Any(m => m.item == item) && InThisWorld(item);
+		// Gathered directly in this world (blocks, wood, gems, herbs a plant still gives...), ores apart
+		public static bool IsWorldMaterial(int item) => WorldMaterials.Any(m => m.item == item) && InThisWorld(item) && (Array.IndexOf(Herbs, item) < 0 || HerbTier(item) < Never);
+
+		// The tier from which the plants of this world give a herb (Never: none). Herbs not randomized: its plant's tier. Randomized:
+		// its own plant when it keeps it often enough (HerbKeepChance, read as a drop chance against MinFindableChance), or any
+		// plant whose table holds it, from that plant's tier and gated like the other table items. Fireblossom is craft-only
+		// when no plant gives it (the craft-only caps of the recipes then apply)
+		public static int HerbTier(int herb)
+		{
+			int index = Array.FindIndex(WorldMaterials, m => m.item == herb);
+			if (index < 0 || Array.IndexOf(Herbs, herb) < 0) return Never;
+			int own = WorldMaterials[index].tier;
+			LootConfig loot = LootConfig.Instance;
+			if (!loot.RandomizeHerbs || !ItemPool.IsRandomizable(herb)) return InThisWorld(herb) ? own : Never;
+			int tier = InThisWorld(herb) && loot.HerbKeepChance >= ProgressionConfig.Instance.MinFindableChance ? own : Never;
+			foreach (int plant in Herbs.Where(p => ItemPool.IsRandomizable(p) && InThisWorld(p)))
+			{
+				if (!WorldSources.HerbTable(plant).Contains(herb)) continue;
+				int plantTier = WorldMaterials.First(m => m.item == plant).tier;
+				tier = Math.Min(tier, Math.Max(plantTier, ItemPool.UnlockTierOf(herb)));
+			}
+			return tier;
+		}
 
 		// The materials of one evil only grow in its worlds (both in drunk worlds), until hardmode spreads them
 		private static bool InThisWorld(int item)
@@ -1280,10 +1374,12 @@ namespace UltimateRandomizer.Common.Features
 			// checks. Mined ores keep their tier: mining is not gated, and the mining levels use it (RecipePlanner.MiningTier)
 			int Gated(int item) => ItemPool.UnlockTierOf(item);
 
-			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, tier);
+			// A herb only when a plant still gives it (HerbTier: its own plant may give other items only)
+			foreach ((int item, int tier) in WorldMaterials.Where(m => InThisWorld(m.item))) Add(item, Array.IndexOf(Herbs, item) >= 0 ? HerbTier(item) : tier);
 			if (loot.RandomizeHerbs)
 			{
-				foreach (int herb in Herbs.Where(ItemPool.IsRandomizable))
+				// The plants of this world only (no Vile Mushroom in a crimson world)
+				foreach (int herb in Herbs.Where(h => ItemPool.IsRandomizable(h) && InThisWorld(h)))
 				{
 					int herbTier = WorldMaterials.First(m => m.item == herb).tier;
 					foreach (int item in WorldSources.HerbTable(herb)) Add(item, Math.Max(herbTier, Gated(item)));

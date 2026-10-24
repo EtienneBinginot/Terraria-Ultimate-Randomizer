@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Terraria;
+using Terraria.DataStructures;
 using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
@@ -16,7 +18,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (entry?.Item == null || entry.Item.IsAir) continue;
 				Obtainability.ShopItems.Add(entry.Item.type);
-				Obtainability.ShopEntries.Add((shop.NpcType, entry.Item.type, System.Linq.Enumerable.ToArray(entry.Conditions)));
+				Obtainability.ShopEntries.Add((shop.NpcType, entry.Item.type, entry.Conditions.ToArray()));
 			}
 		}
 
@@ -39,7 +41,7 @@ namespace UltimateRandomizer.Common.Features
 			ShopPermutation.WorldPlan permutation = ShopPermutation.Current;
 			IReadOnlyList<int> shopOnly = ShopPermutation.ItemsOf(permutation, shopName);
 			ShopSlot[] plan = ShopPlanner.PlanShop(npc.type, shopName, originals, ProgressionSystem.UnlockedTier, Main.hardMode, cfg.ShopsFollowProgression, cfg.NoDuplicatesInShop,
-				shopOnly);
+				ShopPermutation.ItemsOfNpc(permutation, npc.type));
 			bool[] rolled = new bool[items.Length];
 			for (int i = 0; i < items.Length; i++)
 			{
@@ -55,6 +57,17 @@ namespace UltimateRandomizer.Common.Features
 		}
 	}
 
+	// A bought item forgets its shop price (vanilla only clears it for special currencies, ItemSlot.HandleShopSlot): kept, it
+	// would stack with the items of the same type and sell back at a fifth of the shop price instead of their value. Runs on
+	// the buying client, on the clone before it reaches the mouse
+	public class BoughtItem : GlobalItem
+	{
+		public override void OnCreated(Item item, ItemCreationContext context)
+		{
+			if (context is BuyItemCreationContext) item.shopCustomPrice = null;
+		}
+	}
+
 	// One shop slot as planned: the original item, what replaces it (0 when left as it is), its price, and whether it is an
 	// added slot selling a shop-only item (ShopPermutation, Original 0) rather than a roll
 	public readonly record struct ShopSlot(int Original, int Replacement, int Price, bool Guaranteed = false)
@@ -66,18 +79,39 @@ namespace UltimateRandomizer.Common.Features
 	// and the tests see what a player would see at any progression
 	public static class ShopPlanner
 	{
+		// Rolls tried for one slot before falling back to another item of its category
+		public const int Attempts = 12;
+
 		// originalTypes in slot order (0: slot left alone). The duplicate check follows that order, as the shop fills its slots:
 		// the result for a slot depends on the items sold before it (only those whose conditions are met in game).
-		// shopOnly: the shop-only items added to the shop, which no roll gives with noDuplicates (whether or not they are
-		// unlocked yet)
+		// avoid: the shop-only items added to the merchant's shops (ShopPermutation.ItemsOfNpc), which no roll gives with
+		// noDuplicates (whether or not they are unlocked yet). Each roll avoids, in this order: a duplicate (or an item that
+		// another tab of the merchant sells, OwnTab), a merchant beyond the item's share of shops (Spread), an item worth more
+		// than its tier affords (PriceRules.Overpriced); when every roll breaks a rule, another item of its category that
+		// breaks fewer. Weapons, armor, accessories and tools never go above the unlocked tier (no post-Moon Lord hamaxe
+		// before the Moon Lord), unless the vanilla entry itself is of a later tier
 		public static ShopSlot[] PlanShop(int npcType, string shopName, IList<int> originalTypes, int unlockedTier, bool hardMode, bool followProgression, bool noDuplicates,
-			IEnumerable<int> shopOnly = null)
+			IEnumerable<int> avoid = null)
 		{
 			int npcKey = DetRandom.NpcKey(npcType);
 			int shopKey = DetRandom.StableHash(shopName ?? "");
+			// Shuffle mode: the permutation keeps every item somewhere, only the duplicates are re-rolled (as they always were)
+			bool shuffle = GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle;
 			ShopSlot[] slots = new ShopSlot[originalTypes.Count];
 			HashSet<int> used = new();
-			if (noDuplicates && shopOnly != null) used.UnionWith(shopOnly);
+			if (noDuplicates && avoid != null) used.UnionWith(avoid);
+			// A real duplicate weighs more than every other rule together (8 > 4 + 2 + 1): the last fallback level (7) only
+			// forbids that
+			int Penalty(int item)
+			{
+				int penalty = 0;
+				if (noDuplicates && used.Contains(item)) penalty += 8;
+				else if (noDuplicates && !shuffle && !OwnTab(item, npcType, shopName)) penalty += 4;
+				if (shuffle) return penalty;
+				if (!Spread(item, npcType)) penalty += 2;
+				if (PriceRules.Overpriced(item)) penalty += 1;
+				return penalty;
+			}
 			for (int i = 0; i < originalTypes.Count; i++)
 			{
 				int original = originalTypes[i];
@@ -86,8 +120,10 @@ namespace UltimateRandomizer.Common.Features
 
 				int originalTier = ItemPool.Info[original].Tier;
 				int sourceTier = followProgression ? Math.Max(originalTier, unlockedTier - 1) : originalTier;
+				int? maxTier = followProgression && WithinUnlockedTier(ItemPool.Info[original].Category) ? Math.Max(unlockedTier, originalTier) : null;
 				int replacement = original;
-				for (int attempt = 0; attempt < 8; attempt++)
+				int penalty = int.MaxValue;
+				for (int attempt = 0; attempt < Attempts; attempt++)
 				{
 					RollRequest request = new()
 					{
@@ -99,23 +135,39 @@ namespace UltimateRandomizer.Common.Features
 						TierJitterUp = TierJitterUp,
 						AllowJackpot = false,
 						GatingTier = unlockedTier,
-						GatingHardMode = hardMode
+						GatingHardMode = hardMode,
+						MaxTier = maxTier
 					};
-					replacement = ItemPool.Roll(request);
-					if (!noDuplicates || !used.Contains(replacement)) break;
+					int rolled = ItemPool.Roll(request);
+					int p = Penalty(rolled);
+					if (p < penalty)
+					{
+						replacement = rolled;
+						penalty = p;
+					}
+					if (penalty == 0) break;
 				}
-				// The progression limits leave few items of a category (late potions): the re-rolls all came back to an item
-				// already sold. Another unused item of its category, no later than it, from its tier down
-				if (noDuplicates && used.Contains(replacement))
+				// The progression limits leave few items of a category (late potions, late furniture): another item of its
+				// category, no later than it, from its tier down, that breaks no rule, else fewer rules, else no duplicate (another
+				// tab's item, a crowded or overpriced one may be kept then)
+				foreach (int allowed in new[] { 0, 1, 3, 7 })
 				{
-					int other = Unused(replacement, used, DetRandom.Get(RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), RollKey.Fallback));
-					if (other > 0) replacement = other;
+					if (penalty <= allowed) break;
+					int other = Unused(replacement, item => Penalty(item) <= allowed,
+						DetRandom.Get(RollKey.Shop, npcKey, shopKey, DetRandom.ItemKey(original), RollKey.Fallback, allowed));
+					if (other <= 0) continue;
+					replacement = other;
+					penalty = Penalty(other);
 				}
 				used.Add(replacement);
 				slots[i] = new ShopSlot(original, replacement, Price(npcKey, shopKey, replacement));
 			}
 			return slots;
 		}
+
+		// The categories a shop never sells above the unlocked tier: what makes a fight easier
+		public static bool WithinUnlockedTier(ItemCategory category) => category is ItemCategory.Tool or ItemCategory.Armor or ItemCategory.Accessory
+			or ItemCategory.WeaponMelee or ItemCategory.WeaponRanged or ItemCategory.WeaponMagic or ItemCategory.WeaponSummon or ItemCategory.WeaponOther;
 
 		private static int Price(int npcKey, int shopKey, int item) => PriceRules.Price(item, DetRandom.Get(RollKey.Price, npcKey, shopKey, DetRandom.ItemKey(item)));
 
@@ -136,9 +188,9 @@ namespace UltimateRandomizer.Common.Features
 
 		public const int TierJitterUp = 1;
 
-		// An item of the same category as taken, not in used, whose true tier is no later than taken's (never a hard gate
-		// unless taken is one), from taken's tier down, each bucket read from a random start; 0 when there is none
-		private static int Unused(int taken, HashSet<int> used, Random rng)
+		// An item of the same category as taken, accepted, whose true tier is no later than taken's (never a hard gate unless
+		// taken is one), from taken's tier down, each bucket read from a random start; 0 when there is none
+		private static int Unused(int taken, Func<int, bool> accept, Random rng)
 		{
 			if (!ItemPool.IsValid(taken)) return 0;
 			ItemCategory category = ItemPool.Info[taken].Category;
@@ -152,10 +204,73 @@ namespace UltimateRandomizer.Common.Features
 				for (int k = 0; k < bucket.Length; k++)
 				{
 					int item = bucket[(start + k) % bucket.Length];
-					if (!used.Contains(item) && ItemPool.Allowed(item, ceiling, hardCeiling)) return item;
+					if (ItemPool.Allowed(item, ceiling, hardCeiling) && accept(item)) return item;
 				}
 			}
 			return 0;
+		}
+
+		// World-wide spread of the rolls. Each item has its share of merchants (MaxShopsPerItem of the merchants with a shop,
+		// modded ones too, ranked by a hash of the seed, the item and the merchant) and, at a merchant with several tabs (the
+		// Painter's decor), one tab: a pure function of the seed, the setting and the loaded shops, the same on every machine
+		private const int SpreadKey = 0x5B2E;
+		private static int[] merchants;
+		private static Dictionary<int, string[]> tabs;
+		private static readonly Dictionary<int, HashSet<int>> shares = new();
+		private static int sharesSeed;
+		private static int sharesLimit = -1;
+
+		public static void ResetSpread()
+		{
+			merchants = null;
+			tabs = null;
+			shares.Clear();
+			sharesLimit = -1;
+		}
+
+		private static void EnsureMerchants()
+		{
+			if (merchants != null) return;
+			tabs = NPCShopDatabase.AllShops.Where(s => s != null && s.NpcType > 0).GroupBy(s => s.NpcType)
+				.ToDictionary(g => g.Key, g => g.Select(s => s.FullName).Distinct().OrderBy(n => n, StringComparer.Ordinal).ToArray());
+			merchants = tabs.Keys.OrderBy(DetRandom.NpcKey).ThenBy(n => n).ToArray();
+		}
+
+		// The merchants that may roll this item (null: every merchant)
+		public static HashSet<int> ShareOf(int item)
+		{
+			int limit = EconomyConfig.Instance.MaxShopsPerItem;
+			if (limit <= 0) return null;
+			EnsureMerchants();
+			if (merchants.Length <= limit) return null;
+			int seed = SeedSystem.WorldSeed;
+			if (seed != sharesSeed || limit != sharesLimit)
+			{
+				shares.Clear();
+				sharesSeed = seed;
+				sharesLimit = limit;
+			}
+			if (shares.TryGetValue(item, out HashSet<int> share)) return share;
+			int key = DetRandom.ItemKey(item);
+			share = merchants.OrderBy(n => DetRandom.Hash(seed, SpreadKey, key, DetRandom.NpcKey(n))).ThenBy(n => n).Take(limit).ToHashSet();
+			shares[item] = share;
+			return share;
+		}
+
+		// May this merchant roll this item (its share of merchants; a merchant without a registered shop: yes)
+		public static bool Spread(int item, int npcType)
+		{
+			HashSet<int> share = ShareOf(item);
+			return share == null || !tabs.ContainsKey(npcType) || share.Contains(npcType);
+		}
+
+		// Is this the merchant's tab that may roll this item (a merchant with one tab: always)
+		public static bool OwnTab(int item, int npcType, string shopName)
+		{
+			EnsureMerchants();
+			if (shopName == null || !tabs.TryGetValue(npcType, out string[] names) || names.Length <= 1 || Array.IndexOf(names, shopName) < 0) return true;
+			uint pick = (uint)DetRandom.Hash(SeedSystem.WorldSeed, SpreadKey, DetRandom.ItemKey(item), DetRandom.NpcKey(npcType), 1);
+			return names[pick % (uint)names.Length] == shopName;
 		}
 	}
 }

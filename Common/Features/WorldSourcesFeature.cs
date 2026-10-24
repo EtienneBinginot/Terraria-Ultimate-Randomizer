@@ -84,7 +84,7 @@ namespace UltimateRandomizer.Common.Features
 			LootConfig cfg = LootConfig.Instance;
 			if (rng.NextDouble() * 100 < cfg.HerbKeepChance) return original;
 			int index = rng.Next(Math.Max(1, cfg.HerbVariety));
-			RollRequest request = Request(RollKey.Herb, original, index);
+			RollRequest request = HerbRequests(original, out _)[index];
 			request.MaxTier = ItemPool.HardmodeWall;
 			return ItemPool.RollReplacement(request, cfg.SurpriseChance, rng);
 		}
@@ -93,14 +93,41 @@ namespace UltimateRandomizer.Common.Features
 		// findability of items
 		public static List<int> HerbTable(int original)
 		{
-			List<int> table = new();
-			for (int index = 0; index < Math.Max(1, LootConfig.Instance.HerbVariety); index++)
+			HerbRequests(original, out List<int> table);
+			return table;
+		}
+
+		// Re-rolls of one index of a herb's table at most (attempt 0 included)
+		private const int HerbAttempts = 8;
+
+		// The roll of each index of a herb's table: the first one whose item (ignoring progression) is not already in the
+		// earlier entries, so a table of 3 never holds Bass twice (HerbVariety stays the real variety). Attempt 0 keeps the
+		// keys of the tables made before the de-duplication: only a duplicated index changes. Deterministic (world seed and
+		// item keys), so the server's breaks and every machine's findability agree
+		private static List<RollRequest> HerbRequests(int original, out List<int> table)
+		{
+			int variety = Math.Max(1, LootConfig.Instance.HerbVariety);
+			List<RollRequest> requests = new(variety);
+			table = new List<int>(variety);
+			for (int index = 0; index < variety; index++)
 			{
 				RollRequest request = Request(RollKey.Herb, original, index);
-				request.IgnoreGating = true;
-				table.Add(ItemPool.Roll(request));
+				int item = TableRoll(request);
+				for (int attempt = 1; attempt < HerbAttempts && table.Contains(item); attempt++)
+				{
+					request.Keys = new[] { RollKey.Herb, DetRandom.ItemKey(original), index, RollKey.Repick, attempt };
+					item = TableRoll(request);
+				}
+				requests.Add(request);
+				table.Add(item);
 			}
-			return table;
+			return requests;
+		}
+
+		private static int TableRoll(RollRequest request)
+		{
+			request.IgnoreGating = true;
+			return ItemPool.Roll(request);
 		}
 
 		public static int ExtractinatorReplacement(int original, Random surpriseRng)

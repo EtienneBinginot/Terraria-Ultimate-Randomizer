@@ -205,10 +205,8 @@ namespace UltimateRandomizer.Common.Tests
 				bool twin = plan.Twin != null && plan.Twin[i];
 				bool loopOff = plan.LoopOff != null && plan.LoopOff[i];
 				int doable = 0;
-				foreach ((int type, int stack) x in planned ?? Array.Empty<(int, int)>())
-				{
-					if (x.type > 0 && x.type < plan.Availability.Length) doable = Math.Max(doable, plan.Availability[x.type]);
-				}
+				// A group slot (any Dragonfly, shown as its iconic Black Dragonfly) counts its best member
+				foreach ((int type, int stack) x in planned ?? Array.Empty<(int, int)>()) doable = Math.Max(doable, RecipeTests.IngredientAvail(plan, i, x.type));
 				foreach (int tile in plannedTiles ?? Array.Empty<int>())
 				{
 					int station = GuaranteedSources.StationItem(tile);
@@ -222,7 +220,7 @@ namespace UltimateRandomizer.Common.Tests
 					shell, shell && Protection.IsUpgrade(result.type), !modded && !shell && !RecipeSystem.Touchable(i), RecipeSystem.HouseRecipe(i),
 					twin ? "twin" : loopOff ? "loopoff" : "", plan.Repaired != null && plan.Repaired[i], plan.ValueShort != null && plan.ValueShort[i],
 					RecipeSystem.OriginalIngredientValue(i), plan.IngredientValues != null ? plan.IngredientValues[i] : 0,
-					twin || loopOff ? "off" : Show(doable),
+					twin || loopOff || shell && !RecipePlanner.ShellActive(plan, i) ? "off" : Show(doable),
 					plan.IngredientTiers != null ? plan.IngredientTiers[i] : -1, plan.LockKeys != null && plan.LockKeys[i] > 0 ? Internal(plan.LockKeys[i]) : "",
 					vanillaResult > 0 ? Internal(vanillaResult) : ""));
 			}
@@ -278,6 +276,8 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> rows = new();
 			foreach ((int netId, List<PlannedDrop> normal) in npcPlans)
 			{
+				// A boss part that never drops (its plan is its owner's, listed under the owner)
+				if (RandomNpcDropRule.NeverDrops(netId)) continue;
 				DropPermutation.Placed[] table = null;
 				try
 				{
@@ -327,7 +327,7 @@ namespace UltimateRandomizer.Common.Tests
 							// An added slot: a shop-only item of this world, sold from its unlock tier
 							int added = slots[i].Replacement;
 							ItemInfo ainfo = ItemPool.Info[added];
-							rows.Add(Row(NpcInternal(npc), NpcName(npc), shop.Shop.FullName, tier, i, "", "", "", "", "from tier " + ItemPool.UnlockTierOf(added), "added slot",
+							rows.Add(Row(NpcInternal(npc), NpcName(npc), shop.Shop.FullName, tier, i, "", "", "", "", "from tier " + ShopPermutation.UnlockTier(added), "added slot",
 								Internal(added), Name(added), ainfo.Category, ainfo.Tier, ainfo.TrueTier, slots[i].Price, "", true, ShopTests.KeptBy(added, permutation, recipes)));
 							continue;
 						}

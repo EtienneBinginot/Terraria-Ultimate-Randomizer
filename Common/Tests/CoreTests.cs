@@ -47,7 +47,7 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (int item in new[] { ItemID.YellowHorseshoeBalloon, ItemID.BundleofBalloons, ItemID.FrostsparkBoots, ItemID.LightningBoots })
 			{
 				if (overridden.Contains(item) || !ItemPool.IsValid(item)) continue;
-				if (ItemPool.TierOf(item) >= (int)Tier.Hardmode) failures.Add($"{Lang.GetItemNameValue(item)} at tier {ItemPool.TierOf(item)} (rarity {ItemPool.Info[item].RarityTier}), crafted before hardmode");
+				if (tiers[item] >= (int)Tier.Hardmode) failures.Add($"{Lang.GetItemNameValue(item)} at tier {tiers[item]} (rarity {ItemPool.Info[item].RarityTier}), crafted before hardmode");
 			}
 			// Gear made from late materials stays late (a wrong ingredient tier would pull it to the start)
 			foreach ((int item, Tier floor) in new[] { (ItemID.NecroHelmet, Tier.PostSkeletron), (ItemID.SpookyHelmet, Tier.PostPlantera), (ItemID.SpiderMask, Tier.Hardmode),
@@ -56,7 +56,7 @@ namespace UltimateRandomizer.Common.Tests
 				if (overridden.Contains(item) || !ItemPool.IsValid(item)) continue;
 				// Only a lowering counts: an item whose rarity already gives a lower tier keeps it
 				int expected = System.Math.Min((int)floor, ItemPool.Info[item].RarityTier);
-				if (ItemPool.TierOf(item) < expected) failures.Add($"{Lang.GetItemNameValue(item)} at tier {ItemPool.TierOf(item)}, at least {expected} expected");
+				if (tiers[item] < expected) failures.Add($"{Lang.GetItemNameValue(item)} at tier {tiers[item]}, at least {expected} expected");
 			}
 			// The original recipes (the live ones are randomized), placers of each tile for the stations
 			Dictionary<int, List<int>> placers = new();
@@ -101,19 +101,21 @@ namespace UltimateRandomizer.Common.Tests
 			for (int item = 1; item < ItemPool.Info.Length && item < tiers.Length; item++)
 			{
 				if (!ItemPool.IsValid(item)) continue;
+				// The classification tier (AllTiers: before the sources; the bucket is the final true tier)
 				ItemInfo info = ItemPool.Info[item];
-				if (info.Tier > info.RarityTier) failures.Add($"{Lang.GetItemNameValue(item)} raised from {info.RarityTier} to {info.Tier}");
-				if (info.Tier == info.RarityTier || failures.Count > 20) continue;
+				int tier = tiers[item];
+				if (tier > info.RarityTier) failures.Add($"{Lang.GetItemNameValue(item)} raised from {info.RarityTier} to {tier}");
+				if (tier == info.RarityTier || failures.Count > 20) continue;
 				lowered++;
 				string name = Lang.GetItemNameValue(item);
-				if (overridden.Contains(item) || ItemClassifier.HasKnownTier(item)) failures.Add($"{name}: a fixed tier lowered to {info.Tier}");
-				else if (!best.TryGetValue(item, out int recipeTier)) failures.Add($"{name}: lowered to {info.Tier} without a recipe setting tiers");
-				else if (info.Tier < recipeTier) failures.Add($"{name}: tier {info.Tier} below its best recipe's {recipeTier}");
-				else if (info.Tier > recipeTier) failures.Add($"{name}: tier {info.Tier}, its best recipe allows {recipeTier}");
+				if (overridden.Contains(item) || ItemClassifier.HasKnownTier(item)) failures.Add($"{name}: a fixed tier lowered to {tier}");
+				else if (!best.TryGetValue(item, out int recipeTier)) failures.Add($"{name}: lowered to {tier} without a recipe setting tiers");
+				else if (tier < recipeTier) failures.Add($"{name}: tier {tier} below its best recipe's {recipeTier}");
+				else if (tier > recipeTier) failures.Add($"{name}: tier {tier}, its best recipe allows {recipeTier}");
 			}
 			Terraria.ModLoader.ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Tiers from recipes: {lowered} items lowered");
-			foreach ((int item, string recipe) in bestModded.Where(p => ItemPool.IsValid(p.Key) && ItemPool.Info[p.Key].Tier < ItemPool.Info[p.Key].RarityTier).Take(12))
-				Terraria.ModLoader.ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Tiers from recipes: {Lang.GetItemNameValue(item)} lowered to {ItemPool.Info[item].Tier} by {recipe}");
+			foreach ((int item, string recipe) in bestModded.Where(p => ItemPool.IsValid(p.Key) && tiers[p.Key] < ItemPool.Info[p.Key].RarityTier).Take(12))
+				Terraria.ModLoader.ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Tiers from recipes: {Lang.GetItemNameValue(item)} lowered to {tiers[item]} by {recipe}");
 			if (count == 0) Check.Skip("no recipe stored");
 			Check.All(failures, "Tiers from recipes");
 		}
@@ -276,10 +278,15 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				int price = PriceRules.Price(item, rng);
 				int value = StackRules.ValueOf(item);
-				if (price < value) failures.Add($"{Lang.GetItemNameValue(item)}: price {price} < value {value}");
-				if (price < cfg.MinimumPrice) failures.Add($"{Lang.GetItemNameValue(item)}: price {price} below the minimum");
+				// The best happiness and the Discount Card take 40 % off; reselling pays at most value / 5 / 0.75 (a bought item
+				// forgets its shop price, BoughtItem: it sells for its value like any other)
+				if (price * 0.6 < value / 3.75) failures.Add($"{Lang.GetItemNameValue(item)}: price {price}, value {value}");
+				// The Discount Card's 20 % off a price of 1 copper is free
+				if (price < PriceRules.MinPrice) failures.Add($"{Lang.GetItemNameValue(item)}: price {price}, below {PriceRules.MinPrice} copper");
+				int minimum = StackRules.MaxStackOf(item) > 1 ? cfg.MinimumStackablePrice : cfg.MinimumPrice;
+				if (price < minimum) failures.Add($"{Lang.GetItemNameValue(item)}: price {price} below the minimum {minimum}");
 			}
-			Check.All(failures, "Shop prices below the item value (money exploit)");
+			Check.All(failures, "Shop prices that resell for more (money exploit)");
 		}
 
 		private static void DropRatesValid()

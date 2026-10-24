@@ -31,7 +31,8 @@ namespace UltimateRandomizer.Common.Core
 		// the Underworld's Shadow Chests, found in the Dungeon's locked chests and Golden Lock Boxes, the Temple Key for the
 		// Jungle Temple's door), at the tier they are needed from: randomized, and guaranteed on the enemies of that tier
 		// (GuaranteedSources.ProgressionToolRequirements). The other openers keep a source of their own: the Golden Key moves
-		// with the Dungeon enemies' drops, the biome keys are global drops (left running), the Light and Night Keys are crafted
+		// with the Dungeon enemies' drops, the biome keys are guaranteed from hardmode on the enemies of their own biome
+		// (GuaranteedSources.BiomeKeyRequirements; their vanilla global drop keeps running), the Light and Night Keys are crafted
 		public static readonly (int item, Tier tier)[] ProgressionTools =
 		{
 			(ItemID.Pwnhammer, Tier.Hardmode), (ItemID.ShadowKey, Tier.PostSkeletron), (ItemID.TempleKey, Tier.PostPlantera)
@@ -49,6 +50,8 @@ namespace UltimateRandomizer.Common.Core
 		// Life and mana upgrades: replaceable (the Mana Crystal's vanilla recipe is randomized) but never in a roll's buckets,
 		// never guaranteed on enemies; each one is the result of one random recipe of its own (RecipePlanner.SpecialRecipe), and the
 		// drops and bags that give them keep them (ItemPool.IsSpecial)
+		public static bool SortedAsSummon(int type) => SortedAsSummons.Contains(type);
+
 		public static readonly int[] Upgrades = { ItemID.LifeCrystal, ItemID.ManaCrystal, ItemID.LifeFruit };
 
 		public static bool IsUpgrade(int type) => Array.IndexOf(Upgrades, type) >= 0;

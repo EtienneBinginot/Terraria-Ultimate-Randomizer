@@ -61,6 +61,9 @@ namespace UltimateRandomizer.Common.Features
 		public int[] LockKeys;
 		// Keys that took a material not fitting the progression rules (Fits: tier, pickaxe level) for lack of another
 		public int UnfitKeys;
+		// By item: a craft-only item (CraftOnly) made by a cheap recipe of this plan (CheapRecipe), so a recipe may ask for a few
+		// more of it (CountCap). Only ever set while planning (a cancelled swap puts it back)
+		public bool[] CheapCrafted;
 	}
 
 	// Plans the ingredients and stations of the recipes from the seed and the settings only (the same on every machine,
@@ -150,7 +153,17 @@ namespace UltimateRandomizer.Common.Features
 			HashSet<int> critical = new();
 			foreach (GuaranteedSources.Requirement r in GuaranteedSources.PlacerRequirements())
 			{
-				tiers[r.Item] = Math.Min(tiers.GetValueOrDefault(r.Item, r.Tier), Tiers.Clamp(r.Tier));
+				int tier = Tiers.Clamp(r.Tier);
+				// A pre-hardmode themed station's recipe stays within its classification tier (rarity and vanilla recipes, before
+				// the sources raised it: ItemPool.AllTiers) and the allowance; its guardian keeps the true tier. A Decay Chamber of
+				// tier 1 planned at hardmode left 19 furniture recipes of tier 1 or 2 at hardmode. Never for a hardmode station nor
+				// a hard gate: those are never doable before their true tier
+				if (Stations.PlacedTile(r.Item, out int tile) && Stations.Info(tile).Kind == StationKind.Thematic && ItemPool.IsValid(r.Item)
+					&& tier < (int)Tier.Hardmode && !ItemPool.IsHardGate(r.Item) && r.Item < ItemPool.AllTiers.Length)
+				{
+					tier = Math.Min(tier, Tiers.Clamp(ItemPool.AllTiers[r.Item] + ProgressionConfig.Instance.TierAllowance));
+				}
+				tiers[r.Item] = Math.Min(tiers.GetValueOrDefault(r.Item, tier), tier);
 				if (r.Critical) critical.Add(r.Item);
 			}
 			if (ItemPool.Ready)
@@ -187,7 +200,8 @@ namespace UltimateRandomizer.Common.Features
 			HashSet<int> noOre = startMaterialsNoOre;
 			if (set == null || noOre == null)
 			{
-				set = StartWorldMaterials.ToHashSet();
+				// A herb (Daybloom, Mushroom) only when its plants still give it from the start (herbs randomized: Findability.HerbTier)
+				set = StartWorldMaterials.Where(m => Findability.HerbPlants.Contains(m) ? Findability.HerbTier(m) == 0 : true).ToHashSet();
 				foreach (int ore in StartOres)
 				{
 					if (OreMap.IsFindable(ore)) set.Add(ore);
@@ -463,11 +477,49 @@ namespace UltimateRandomizer.Common.Features
 				// setting: harmless, it can't do better
 				double threshold = chance / 100.0 * eligible / (2.0 * pairs);
 				if (PairDraw(i, j) >= threshold) continue;
+				// Not when a recipe keeps a station later than the item it would give (a Tungsten Bow at the Lunar Crafting
+				// Station): checked last, so refusing a pair moves no other one
+				if (!HostStationsFit(i, j) || !HostStationsFit(j, i)) continue;
 				partners[i] = j;
 				partners[j] = i;
 				(results[i], results[j]) = (results[j], results[i]);
 			}
 			return (results, partners);
+		}
+
+		// The most a swapped recipe's stations may be above the tier of the item it gives: the tier allowance
+		public static int SwapStationCap(int item) =>
+			Tiers.Clamp(Math.Max(ItemPool.TierOf(item), ItemPool.TrueTierOf(item)) + ProgressionConfig.Instance.TierAllowance);
+
+		// The level of a station from static facts: a progression station's tier, a themed one's planned recipe tier (its placer's
+		// true tier when it has none), 0 for a basic or world one
+		public static int StationLevel(int tile)
+		{
+			Stations.StationInfo info = Stations.Info(tile);
+			if (info.World || info.Kind == StationKind.Basic) return 0;
+			if (info.Kind == StationKind.Progression) return info.Tier;
+			int best = int.MaxValue;
+			foreach (int placer in Stations.Placers(tile))
+			{
+				if (!ItemPool.IsValid(placer)) continue;
+				best = Math.Min(best, StationPlacer(placer, out int tier) ? tier : ItemPool.TrueTierOf(placer));
+			}
+			return best == int.MaxValue ? info.Tier : best;
+		}
+
+		// May recipe i give the item of recipe j as far as its stations go? Each station it keeps (all of them when stations are
+		// not randomized; else the ones the station plan never replaces: themed ones, PlanStations moves the others below
+		// SwapStationCap) is no later than the item's tier and the allowance (a Thorn Chakram at a hardmode Crystal Ball,
+		// Glass at the Decay Chamber)
+		private static bool HostStationsFit(int i, int j)
+		{
+			int cap = SwapStationCap(RecipeSystem.OriginalResult(j));
+			bool replaced = CraftingConfig.Instance.RandomizeStations;
+			foreach (int tile in RecipeSystem.OriginalTiles(i))
+			{
+				if ((!replaced || !Assignable(tile)) && StationLevel(tile) > cap) return false;
+			}
+			return true;
 		}
 
 		// A swapped recipe keeps its protected ingredients (Rebuilder): recipe i may give the item of recipe j only when they are
@@ -693,6 +745,7 @@ namespace UltimateRandomizer.Common.Features
 			result.ShellTiers = Enumerable.Repeat(-1, count).ToArray();
 			result.ValueShort = new bool[count];
 			result.LockKeys = new int[count];
+			result.CheapCrafted = new bool[ItemPool.Info.Length];
 			// The vanilla availability (the original recipes as they are): what the ingredient tiers follow; a swapped recipe reads
 			// its partner's, the vanilla recipe of the item it gives
 			int[] vanillaResults = Enumerable.Range(0, count).Select(RecipeSystem.OriginalResult).ToArray();
@@ -844,6 +897,8 @@ namespace UltimateRandomizer.Common.Features
 			result.IngredientValues[i] = 0;
 			result.PlannedKeys[i] = 0;
 			result.ValueShort[i] = false;
+			// Off: not rebuilt (the export showed a dropped shell as rebuilt, with no ingredient)
+			result.IngredientTiers[i] = -1;
 		}
 
 		// Items that may get a shell recipe: randomizable blocks, walls, furniture, vanity, dyes, food and materials that no other
@@ -856,9 +911,15 @@ namespace UltimateRandomizer.Common.Features
 		};
 
 		public static bool ShellEligible(int item, HashSet<int> stationTiles, HashSet<int> guaranteed) =>
-			ItemPool.IsRandomizable(item) && !ItemPool.IsSpecial(item) && !ItemPool.IsBanned(item) && ShellCategories.Contains(ItemPool.Info[item].Category)
+			ItemPool.IsRandomizable(item) && !ItemPool.IsSpecial(item) && !ItemPool.IsBanned(item) && (ShellCategories.Contains(ItemPool.Info[item].Category) || ShellTool(item))
 			&& !Obtainability.RecipeResults.Contains(item) && !Tainted(item) && !OreMap.IsOre(item) && !guaranteed.Contains(item)
 			&& !(Stations.PlacedTile(item, out int tile) && stationTiles.Contains(tile));
+
+		// The mirrors and conches (sorted with the boss summons, summoning nothing: classified Misc) that no recipe makes: their
+		// chests are randomized, and the Ice Mirror had no source left at all (nor the Cell Phone's recipe using it). They get a
+		// shell like a block, whatever their category (read by item, so it holds at load before the item pool exists); the
+		// phones have a recipe of their own, the Shellphone's other modes are banned
+		public static bool ShellTool(int item) => Protection.SortedAsSummon(item) && !Protection.IsUpgrade(item);
 
 		// The tier a shell is doable from: when the item is found (its tier when it never is), and never before the unlocked tier
 		// of its true tier (gated rolls give it from there): crafting it never makes it available earlier
@@ -928,13 +989,13 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// A key placed by LockResults takes the value of the slot it replaced, which may have been most of the recipe: below
-		// MinValueFactor of its vanilla value, richer materials had by the key's tier fill it (RaiseValue; the key and the
+		// RaiseFactor of its vanilla value, richer materials had by the key's tier fill it (RaiseValue; the key and the
 		// planned key stay), else the recipe is ValueShort
 		private static void RaiseAfterKey(RecipePlan result, int[] results, int i, int key, int tier, List<int>[,] buckets, int[] avail, ItemGraph graph)
 		{
 			if (result.Ingredients[i] == null || RecipeSystem.HouseRecipe(i)) return;
 			long vanilla = RecipeSystem.OriginalIngredientValue(result.SwapPartner[i] >= 0 ? result.SwapPartner[i] : i);
-			long want = (long)Math.Ceiling(vanilla * MinValueFactor);
+			long want = (long)Math.Ceiling(vanilla * RaiseFactor);
 			if (result.IngredientValues[i] >= want) return;
 			int top = Tiers.Clamp(tier);
 			long most = (long)(vanilla * MaxValueFactor) + Item.silver;
@@ -1014,16 +1075,16 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// The last word on value: no planned recipe (but an upgrade's, worth its upgrade, and a house's) is worth more than
-		// MaxValueFactor times its vanilla recipe (the item's own for a swap) when stacks can say so: the replaceable ingredients
-		// lose stacks, the most valuable first, never below one (a key placed after the rebuild, LockResults or RecheckKeys,
-		// took the value of the slot it replaced, which may have been most of the recipe)
+		// The last word on value: no planned recipe (but an upgrade's, worth its upgrade) is worth more than MaxValueFactor times
+		// its vanilla recipe (the item's own for a swap) when stacks can say so, a house's included (a Torch was a Platinum Ore
+		// and a Flounder): the replaceable ingredients lose stacks, the most valuable first, never below one (a key placed after
+		// the rebuild, LockResults or RecheckKeys, took the value of the slot it replaced, which may have been most of the recipe)
 		private static void TrimValues(RecipePlan result)
 		{
 			int trimmed = 0;
 			for (int i = 0; i < Count; i++)
 			{
-				if (result.Ingredients[i] == null || RecipeSystem.HouseRecipe(i) || ItemPool.IsSpecial(result.Results[i].type)) continue;
+				if (result.Ingredients[i] == null || ItemPool.IsSpecial(result.Results[i].type)) continue;
 				(int type, int stack)[] current = ((int, int)[])result.Ingredients[i].Clone();
 				long max = (long)(RecipeSystem.OriginalIngredientValue(result.SwapPartner[i] >= 0 ? result.SwapPartner[i] : i) * MaxValueFactor) + Item.silver;
 				long value = current.Sum(p => UnitValue(p.type) * p.stack);
@@ -1103,9 +1164,9 @@ namespace UltimateRandomizer.Common.Features
 			return Value() >= target;
 		}
 
-		// The most of one ingredient a planned recipe asks for: the ingredient stack cap (or three times the item's own vanilla
-		// stack in the recipe, or in the vanilla recipe of the item it gives), never above the item's max stack; an item had
-		// one at a time (OneOff) a few at most
+		// The most of one ingredient a planned recipe asks for: its CountCap (for a plain material, or three times the item's
+		// own vanilla stack in the recipe, or in the vanilla recipe of the item it gives; for a capped one, its vanilla stack at
+		// most), never above the item's max stack
 		public static int StackCap(RecipePlan plan, int i, int type)
 		{
 			int partner = plan?.SwapPartner != null && i >= 0 && i < plan.SwapPartner.Length ? plan.SwapPartner[i] : -1;
@@ -1118,13 +1179,71 @@ namespace UltimateRandomizer.Common.Features
 					if (t == type) vanilla = Math.Max(vanilla, n);
 				}
 			}
-			int cap = Math.Max(CraftingConfig.Instance.IngredientStackCap, vanilla * 3);
-			if (OneOff(type)) cap = Math.Max(vanilla, OneOffCap);
+			int cap = CountCap(plan, type);
+			cap = cap >= CraftingConfig.Instance.IngredientStackCap ? Math.Max(cap, vanilla * 3) : Math.Max(cap, vanilla);
 			return Math.Clamp(cap, 1, StackRules.MaxStackOf(type));
 		}
 
 		// Items had one at a time: a relic, an Expert or Master drop, a rare material (one per bag, a rare drop): a few per recipe
 		private const int OneOffCap = 3;
+
+		// What a craft-only item made by a cheap recipe (CheapRecipe) may add to CraftedIngredientStackCap
+		private const int CheapCraftedBonus = 2;
+
+		// The most of one new ingredient a recipe asks for, by how it is had (counts follow the value, and a craft-only item at
+		// x30 compounded: a Meteorite Bar of 30 Fireblossoms, each one a recipe, 30 Seafood Dinners, 30 storage upgrades): an
+		// item had one at a time a few (OneOffCap); one only crafted (CraftOnly) CraftedIngredientStackCap (a little more when
+		// its recipe is cheap, CheapCrafted); a slow one (SlowIngredient: gems, Fallen Stars, fish, critters, shards, souls)
+		// SlowIngredientStackCap; anything else (blocks, wood, gel, common drops) IngredientStackCap
+		public static int CountCap(RecipePlan plan, int type)
+		{
+			CraftingConfig cfg = CraftingConfig.Instance;
+			int cap = cfg.IngredientStackCap;
+			if (OneOff(type)) cap = Math.Min(cap, OneOffCap);
+			else if (CraftOnly(type))
+			{
+				bool cheap = plan?.CheapCrafted != null && type > 0 && type < plan.CheapCrafted.Length && plan.CheapCrafted[type];
+				cap = Math.Min(cap, cfg.CraftedIngredientStackCap + (cheap ? CheapCraftedBonus : 0));
+			}
+			else if (SlowIngredient(type)) cap = Math.Min(cap, cfg.SlowIngredientStackCap);
+			return Math.Clamp(cap, 1, Math.Max(1, StackRules.MaxStackOf(type)));
+		}
+
+		// Never found (Findability): only had through a recipe (or a shop)
+		public static bool CraftOnly(int type) => Findability.Tier(type) >= Never;
+
+		// Had a few at a time, or only at some moments: an uncommon material (gems, shards, souls, most boss and event drops),
+		// a Fallen Star (nights only), a herb (one per plant, often another item when herbs are randomized), a fish, a critter
+		// or a bait
+		public static bool SlowIngredient(int type)
+		{
+			if (type == ItemID.FallenStar || SlowFish.Contains(type) || SlowHerbs.Contains(type)) return true;
+			if (MaterialTiers.Table.TryGetValue(type, out var entry) && entry.Commonness == Commonness.Uncommon) return true;
+			if (ItemPool.IsValid(type) && ItemPool.Info[type].Category == ItemCategory.Critter) return true;
+			return ContentSamples.ItemsByType.TryGetValue(type, out Item sample) && (sample.makeNPC > 0 || sample.bait > 0);
+		}
+
+		// Until 1.7.0 a Meteorite Bar could ask 30 Fireblossoms
+		private static readonly HashSet<int> SlowHerbs = new()
+		{
+			ItemID.Daybloom, ItemID.Moonglow, ItemID.Blinkroot, ItemID.Deathweed, ItemID.Waterleaf, ItemID.Fireblossom, ItemID.Shiverthorn
+		};
+
+		// The fish of the catch tables (fishing is slow; the Angler's rewards are randomized)
+		private static readonly HashSet<int> SlowFish = new()
+		{
+			ItemID.AtlanticCod, ItemID.Bass, ItemID.Trout, ItemID.Salmon, ItemID.Tuna, ItemID.RedSnapper, ItemID.Flounder, ItemID.NeonTetra,
+			ItemID.ArmoredCavefish, ItemID.Damselfish, ItemID.CrimsonTigerfish, ItemID.FrostMinnow, ItemID.PrincessFish, ItemID.GoldenCarp,
+			ItemID.SpecularFish, ItemID.Prismite, ItemID.VariegatedLardfish, ItemID.FlarefinKoi, ItemID.DoubleCod, ItemID.Honeyfin, ItemID.Obsidifish,
+			ItemID.Shrimp, ItemID.ChaosFish, ItemID.Ebonkoi, ItemID.Hemopiranha, ItemID.Stinkfish, ItemID.BlueJellyfish, ItemID.GreenJellyfish,
+			ItemID.PinkJellyfish, ItemID.BumblebeeTuna, ItemID.TundraTrout, ItemID.RockLobster
+		};
+
+		// A recipe a craft-only item may be asked a few more of: at most two ingredients, each a common material that is found
+		// (a Fleshcatcher may take 5 Spooky Wood made 1:1 from a found block, never 5 bars of 30 herbs each)
+		private static bool CheapRecipe((int type, int stack)[] ingredients) =>
+			ingredients.Length > 0 && ingredients.Length <= 2 && ingredients.All(p => !CraftOnly(p.type) && !SlowIngredient(p.type) && !OneOff(p.type)
+				&& (ItemPool.CommonnessOf(p.type) == Commonness.Common || ItemPool.IsValid(p.type) && ItemPool.Info[p.type].Category == ItemCategory.Block));
 
 		public static bool OneOff(int item)
 		{
@@ -1334,7 +1453,7 @@ namespace UltimateRandomizer.Common.Features
 				options = PreferFits(result, options, x => Fits(x, results[i], tier));
 				options = Prefer(options, x => UnitValue(x) <= budget);
 				// One whose stack can be worth the slot (no 30 walls for an ingot's worth)
-				options = Prefer(options, x => UnitValue(x) * ReplacementStack(long.MaxValue / 4, x) >= need);
+				options = Prefer(options, x => UnitValue(x) * PlainStack(long.MaxValue / 4, x) >= need);
 				if (uncommon)
 				{
 					List<(int item, float weight)> rarer = options.Where(o => ItemPool.CommonnessOf(o.item) == Commonness.Uncommon).ToList();
@@ -1351,7 +1470,7 @@ namespace UltimateRandomizer.Common.Features
 				fresh = fresh.Select(o => (o.item, o.weight / CommonnessWeight(o.item) * KeyCommonnessWeight(o.item))).ToList();
 				int key = WeightedPick(fresh, rng);
 				if (key <= 0) continue;
-				(int, int) placed = (key, ReplacementStack(Math.Max(1, planned - others), key));
+				(int, int) placed = (key, ReplacementStack(result, Math.Max(1, planned - others), key));
 				if (slot >= 0) current[slot] = placed;
 				else current = current.Append(placed).ToArray();
 				result.Ingredients[i] = current;
@@ -1606,8 +1725,8 @@ namespace UltimateRandomizer.Common.Features
 
 		// A station recipe (StationRecipe) only gets stations that can be crafted by its own station's tier (RecipeTier):
 		// with its found ingredients, each station is craftable by its tier, the Work Bench by hand. When none fits, it is
-		// made by hand
-		private static void PlanStations(RecipePlan result, int[] results, int[] avail, StationLayout layout)
+		// made by hand. only: re-plan these recipes alone (a cancelled swap: CancelSwap), with the same keys
+		private static void PlanStations(RecipePlan result, int[] results, int[] avail, StationLayout layout, IEnumerable<int> only = null)
 		{
 			List<int> order = layout.Order;
 			Dictionary<int, int> position = layout.Position;
@@ -1616,8 +1735,9 @@ namespace UltimateRandomizer.Common.Features
 			int[] orderAvail = order.Select(TileAvail).ToArray();
 			int[] orderTier = order.Select(s => Stations.Info(s).Kind == StationKind.Progression ? Stations.Info(s).Tier : -1).ToArray();
 			float keep = CraftingConfig.Instance.StationKeepChance / 100f;
-			for (int i = 0; i < Count; i++)
+			foreach (int i in only ?? Enumerable.Range(0, Count))
 			{
+				result.Tiles[i] = null;
 				int[] original = RecipeSystem.OriginalTiles(i);
 				if (original.Length == 0 || !RecipeSystem.Touchable(i)) continue;
 				int bound = int.MaxValue;
@@ -1629,6 +1749,11 @@ namespace UltimateRandomizer.Common.Features
 				bool station = StationPlacer(RecipeSystem.OriginalResult(i), out int stationTier);
 				// A station's own stations: craftable by its tier, placed before it
 				bool StationFits(int tile) => !station || layout.RecipeTier.TryGetValue(tile, out int t) && t <= stationTier && layout.PositionOf(tile) < bound;
+				// A swapped result only gets stations had by its own tier and the allowance (SwapStationCap): a host recipe on the
+				// Lunar Crafting Station gave a Tungsten Bow there
+				bool swapped = results[i] != RecipeSystem.OriginalResult(i);
+				int swapCap = swapped ? SwapStationCap(results[i]) : int.MaxValue;
+				bool SwapFitsStation(int k) => !swapped || orderAvail[k] <= swapCap && orderTier[k] <= swapCap;
 				List<int> tiles = new();
 				foreach (int tile in original)
 				{
@@ -1643,12 +1768,13 @@ namespace UltimateRandomizer.Common.Features
 						List<int> allowed = new();
 						for (int k = 0; k < order.Count && k < bound; k++)
 						{
-							if (orderAvail[k] <= limit && orderTier[k] <= recipeTier && (!house || Stations.Info(order[k]).Kind == StationKind.Basic) && StationFits(order[k])) allowed.Add(order[k]);
+							if (orderAvail[k] <= limit && orderTier[k] <= recipeTier && (!house || Stations.Info(order[k]).Kind == StationKind.Basic) && StationFits(order[k])
+								&& SwapFitsStation(k)) allowed.Add(order[k]);
 						}
 						bool keepOwn = allowed.Contains(tile) && rng.NextDouble() < keep;
 						if (!keepOwn && allowed.Count > 0) chosen = allowed[rng.Next(allowed.Count)];
-						// Nothing fits a station's recipe: by hand
-						else if (!keepOwn && !StationFits(tile)) chosen = -1;
+						// Nothing fits a station's recipe (or a swapped result's level): by hand
+						else if (!keepOwn && (!StationFits(tile) || swapped && (StationLevel(tile) > swapCap || TileAvail(tile) > swapCap))) chosen = -1;
 					}
 					if (chosen >= 0 && !tiles.Contains(chosen)) tiles.Add(chosen);
 				}
@@ -1677,9 +1803,10 @@ namespace UltimateRandomizer.Common.Features
 		public static bool IngredientReplaceable(int item) =>
 			ItemPool.IsRandomizable(item) && !ItemPool.IsSpecial(item) && !Unusable.Contains(ItemPool.Info[item].Category);
 
-		// May this item be a new ingredient at all (found or crafted)?
+		// May this item be a new ingredient at all (found or crafted)? Never a mirror, phone or conch (Misc since they are no
+		// summons): a recipe must not consume a Cell Phone
 		private static bool Eligible(int item, HashSet<int> stationItems) =>
-			item > 0 && item < ItemPool.Info.Length && IngredientReplaceable(item) && !ItemPool.IsBanned(item) && !stationItems.Contains(item);
+			item > 0 && item < ItemPool.Info.Length && IngredientReplaceable(item) && !ItemPool.IsBanned(item) && !stationItems.Contains(item) && !Protection.SortedAsSummon(item);
 
 		// Hardmode pair ores (present or not depending on the altars: the plan must not depend on them), ores and blocks that need
 		// a strong pickaxe (Obsidian, Ebonstone, dungeon bricks...: a pickaxe chain could otherwise need its own block): never a
@@ -1747,9 +1874,15 @@ namespace UltimateRandomizer.Common.Features
 		private const float BelowTopWeight = 1.5f;
 		private const float AnyTierWeight = 0.25f;
 
-		// The new ingredients are worth the vanilla ones times a factor in [0.6, 1.6] (soft: stacks stay within their caps)
+		// The new ingredients are worth the vanilla ones times a factor in [0.6, 1.6] (soft: stacks stay within their caps,
+		// CountCap). It only shapes the counts: a recipe cheaper than vanilla is fine (money loops come with the randomness)
 		private const double MinValueFactor = 0.6;
 		private const double ValueFactorRange = 1.0;
+
+		// Only a recipe worth less than this share of its vanilla value is raised (RaiseValue: richer materials, stacks up to
+		// their caps), else it is ValueShort. It was MinValueFactor: every capped recipe was raised, stacks went to 30 and slots
+		// took bars and fish for a torch's worth
+		public const double RaiseFactor = 0.25;
 
 		// Never more than this many times the vanilla value in all (no "25 arrows for a Hallowed Bar's recipe"), and the least
 		// weight a candidate keeps when its unit value suits its slot badly
@@ -1764,6 +1897,10 @@ namespace UltimateRandomizer.Common.Features
 
 		// Ingredients of a shell recipe before the spread (IngredientCountSpread 2: 1 to 4)
 		private const int ShellIngredientCount = 2;
+
+		// A house item (Torch, Wood Platform, Wooden Door) is simple: at most this many ingredients, a few of each
+		public const int HouseIngredientMax = 2;
+		public const int HouseStackMax = 5;
 
 		private static bool MaterialLike(ItemCategory category) => category is ItemCategory.Material or ItemCategory.OreBar or ItemCategory.Block;
 
@@ -1790,8 +1927,16 @@ namespace UltimateRandomizer.Common.Features
 			return WeightedPick(options, rng);
 		}
 
-		// Stack of a new ingredient worth a value (rounded up), within the stack caps
-		private static int ReplacementStack(long value, int x)
+		// Stack of a new ingredient worth a value (rounded up), within its count cap (CountCap)
+		private static int ReplacementStack(RecipePlan plan, long value, int x)
+		{
+			long unit = UnitValue(x);
+			return (int)Math.Clamp((value + unit - 1) / unit, 1, CountCap(plan, x));
+		}
+
+		// The same within the plain stack caps only (IngredientStackCap, OneOffCap): what the candidates' choices weigh (which
+		// key can be worth its slot, what room a surprise has left), so the count caps change counts, not which items are picked
+		private static int PlainStack(long value, int x)
 		{
 			long unit = UnitValue(x);
 			int cap = OneOff(x) ? Math.Min(OneOffCap, CraftingConfig.Instance.IngredientStackCap) : CraftingConfig.Instance.IngredientStackCap;
@@ -2022,7 +2167,8 @@ namespace UltimateRandomizer.Common.Features
 				Dictionary<int, int> usesBefore = new(uses), keyUsesBefore = new(keyUses);
 				SortedSet<int> noKeyBefore = new(noKey);
 				int item = results[i];
-				(int real, int clean, int source, int index) itemBefore = item > 0 && item < real.Length ? (real[item], clean[item], source[item], PoolIndex(item, clean[item])) : (Never, Never, -1, -1);
+				(int real, int clean, int source, int index, bool cheap) itemBefore = item > 0 && item < real.Length
+					? (real[item], clean[item], source[item], PoolIndex(item, clean[item]), result.CheapCrafted[item]) : (Never, Never, -1, -1, false);
 				Snapshot snapshot = settings.CheckRestore ? TakeSnapshot() : null;
 				graph.Mark();
 				if (Rebuild(i))
@@ -2067,7 +2213,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 
 			// Puts back what Made gave an item (when it is had, and as which candidate, at its place in the list)
-			private void RestoreItem(int item, (int real, int clean, int source, int index) before)
+			private void RestoreItem(int item, (int real, int clean, int source, int index, bool cheap) before)
 			{
 				if (item <= 0 || item >= real.Length) return;
 				real[item] = before.real;
@@ -2083,6 +2229,7 @@ namespace UltimateRandomizer.Common.Features
 				}
 				clean[item] = before.clean;
 				source[item] = before.source;
+				result.CheapCrafted[item] = before.cheap;
 			}
 
 			// Tests: the candidates and when each item is had, to check that a cancelled pair leaves them as they were
@@ -2090,6 +2237,7 @@ namespace UltimateRandomizer.Common.Features
 			{
 				private readonly int[] real, clean, source;
 				private readonly int[][] pool;
+				private readonly bool[] cheap;
 
 				public Snapshot(Rebuilder r)
 				{
@@ -2097,10 +2245,11 @@ namespace UltimateRandomizer.Common.Features
 					clean = (int[])r.clean.Clone();
 					source = (int[])r.source.Clone();
 					pool = r.pool.Cast<List<int>>().Select(l => l.ToArray()).ToArray();
+					cheap = (bool[])r.result.CheapCrafted.Clone();
 				}
 
 				public bool Matches(Rebuilder r) => real.SequenceEqual(r.real) && clean.SequenceEqual(r.clean) && source.SequenceEqual(r.source)
-					&& pool.Zip(r.pool.Cast<List<int>>(), (a, b) => a.SequenceEqual(b)).All(x => x);
+					&& pool.Zip(r.pool.Cast<List<int>>(), (a, b) => a.SequenceEqual(b)).All(x => x) && cheap.SequenceEqual(r.result.CheapCrafted);
 			}
 
 			private Snapshot TakeSnapshot() => new(this);
@@ -2115,6 +2264,8 @@ namespace UltimateRandomizer.Common.Features
 					result.SwapPartner[r] = -1;
 					result.ResultTiers[r] = ResultTier(r, results[r]);
 				}
+				// Their stations were chosen for the swapped results (SwapStationCap): chosen again for their own, as if never swapped
+				if (cfg.RandomizeStations) PlanStations(result, results, vanillaAvail, layout, new[] { i, j });
 				// Their kept ingredients already lead to their own results (Run)
 				foreach (int r in new[] { i, j }) targets[r] = TargetTier(r);
 				cancelled++;
@@ -2137,7 +2288,10 @@ namespace UltimateRandomizer.Common.Features
 					int group = GroupOf(recipeGroups, type);
 					return group < 0 ? new[] { type } : (IEnumerable<int>)RecipeGroup.recipeGroups[group].ValidItems;
 				}
-				List<int> looping = Enumerable.Range(0, current.Length).Where(k => Members(current[k].type).Any(below.Contains) && !Members(current[k].type).Any(vanillaBelow.Contains)).ToList();
+				// The ingredients nothing gives (NeverHad: a Marshmallow whose shops are randomized) are replaced the same way: a
+				// recipe kept as it is would never be made
+				List<int> looping = Enumerable.Range(0, current.Length).Where(k => Members(current[k].type).Any(below.Contains) && !Members(current[k].type).Any(vanillaBelow.Contains)
+					|| NeverHad(current[k].type, recipeGroups)).ToList();
 				if (looping.Count == 0) return;
 				Random rng = DetRandom.Get(RollKey.RecipeIngredient, RecipeSystem.RecipeKey(i), RollKey.Fallback);
 				int top = Math.Max(targets[i], 0);
@@ -2146,7 +2300,7 @@ namespace UltimateRandomizer.Common.Features
 				{
 					(int type, int stack) = current[k];
 					int replacement = 0;
-					if (IngredientReplaceable(type))
+					if (IngredientReplaceable(type) || NeverHad(type, recipeGroups))
 					{
 						// A material of the tier the vanilla one was had at first, else any tier up to T
 						int wanted = type < vanillaAvail.Length && vanillaAvail[type] < Never ? Math.Min(vanillaAvail[type], top) : top;
@@ -2185,7 +2339,7 @@ namespace UltimateRandomizer.Common.Features
 					}
 					int group = GroupOf(recipeGroups, type);
 					if (group >= 0) recipeGroups.Remove(group);
-					current[k] = (replacement, ReplacementStack(UnitValue(type) * stack, replacement));
+					current[k] = (replacement, ReplacementStack(result, UnitValue(type) * stack, replacement));
 					picked.Add(replacement);
 				}
 				foreach (int x in picked) uses[x] = uses.GetValueOrDefault(x) + 1;
@@ -2262,7 +2416,7 @@ namespace UltimateRandomizer.Common.Features
 							failed.Add(i);
 							continue;
 						}
-						current[slot] = (newKey, ReplacementStack(UnitValue(key) * current[slot].stack, newKey));
+						current[slot] = (newKey, ReplacementStack(result, UnitValue(key) * current[slot].stack, newKey));
 						keyUses[key] = Math.Max(0, keyUses.GetValueOrDefault(key) - 1);
 						keyUses[newKey] = keyUses.GetValueOrDefault(newKey) + 1;
 						graph.Add(newKey, results[i]);
@@ -2272,7 +2426,7 @@ namespace UltimateRandomizer.Common.Features
 						result.IngredientTiers[i] = newTier;
 						// A cheaper key (held by its stack cap) may leave the recipe short of its value: richer materials of its tier
 						long vanilla = RecipeSystem.OriginalIngredientValue(Proxy(i));
-						long want = (long)Math.Ceiling(vanilla * MinValueFactor);
+						long want = (long)Math.Ceiling(vanilla * RaiseFactor);
 						if (result.IngredientValues[i] < want)
 						{
 							long most = (long)(vanilla * MaxValueFactor) + Item.silver;
@@ -2427,6 +2581,7 @@ namespace UltimateRandomizer.Common.Features
 				int old = clean[item];
 				clean[item] = tier;
 				source[item] = i;
+				if (CraftOnly(item) && CheapRecipe(ingredients)) result.CheapCrafted[item] = true;
 				if (!Eligible(item, stationItems)) return;
 				int category = (int)ItemPool.Info[item].Category;
 				if (old < Tiers.Count) pool[category, old].Remove(item);
@@ -2496,6 +2651,9 @@ namespace UltimateRandomizer.Common.Features
 						shape.Add(g);
 						continue;
 					}
+					// A randomizable item nothing gives (an Ice Mirror, whose chests are randomized) is no kept ingredient: its slot
+					// gets a new one, or the recipe could never be made
+					if (NeverHad(g, originalGroups)) continue;
 					kept.Add((g, n));
 					int group = GroupOf(originalGroups, g);
 					if (group >= 0 && !chosenGroups.Contains(group)) chosenGroups.Add(group);
@@ -2503,6 +2661,8 @@ namespace UltimateRandomizer.Common.Features
 				(int type, int stack)[] proxyOriginal = RecipeSystem.OriginalIngredients(proxy);
 				List<int> itemShape = isSwapped ? proxyOriginal.Select(o => o.type).Where(IngredientReplaceable).ToList() : shape;
 				int n0 = Math.Clamp((isShell ? ShellIngredientCount : original.Length) + CountDelta(rng, cfg.IngredientCountSpread), 1, Math.Max(1, cfg.IngredientMax));
+				// A house item is simple: one or two ingredients
+				if (house) n0 = Math.Min(n0, HouseIngredientMax);
 				int slots = Math.Max(1, n0 - kept.Count);
 
 				// Value: the vanilla value times a random factor, the kept ingredients' value first, the rest split unevenly; never
@@ -2514,8 +2674,9 @@ namespace UltimateRandomizer.Common.Features
 				double[] shares = Enumerable.Range(0, slots).Select(_ => 0.5 + rng.NextDouble()).ToArray();
 				double shareSum = shares.Sum();
 				long maxValue = (long)(vanillaValue * MaxValueFactor) + Item.silver;
-				// Above what the whole recipe may be worth, an item is no candidate (a house is built of anything found at once)
-				bool Affordable(int x) => house || UnitValue(x) <= Math.Max(1, maxValue - keptValue);
+				// Above what the whole recipe may be worth, an item is no candidate (a house's too: a Torch was 2250 copper of
+				// Platinum Ore and a Flounder)
+				bool Affordable(int x) => UnitValue(x) <= Math.Max(1, maxValue - keptValue);
 
 				// What is had by T, by category and tier (items and groups)
 				int[] groupTiers = groups.Select(g => GroupTier(g.group)).ToArray();
@@ -2572,8 +2733,11 @@ namespace UltimateRandomizer.Common.Features
 				// Never the result, nor anything the result already leads to (a loop through other recipes)
 				HashSet<int> below = graph.From(result0);
 				HashSet<int> taken = kept.Select(p => p.type).ToHashSet();
+				// A house item: a start material (StartMaterials: wood, stone, dirt, clay, sand, gel, an acorn, a cobweb, a
+				// daybloom, a mushroom...; never a fish, a critter nor anything crafted), not one of its vanilla ones
+				bool HouseFits(int x) => StartMaterials(true).Contains(x) && Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category);
 				bool Usable(int x) => x != result0 && x != originalResult && !taken.Contains(x) && !below.Contains(x) && !RecipeSystem.InGroups(chosenGroups, x)
-					&& (!house || (Findability.Tier(x) == 0 && MaterialLike(ItemPool.Info[x].Category) && !originalTypes.Contains(x)))
+					&& (!house || HouseFits(x) && !originalTypes.Contains(x))
 					&& (!station || source[x] < 0 && StationMaterialAllowed(result0, x));
 				bool Stackable(int x) => !stackableResult || StackRules.MaxStackOf(x) > 1;
 				// Progression (Fits) for every new ingredient: required of the slots, preferred for the key
@@ -2646,7 +2810,7 @@ namespace UltimateRandomizer.Common.Features
 				double spent = 0;
 				int firstSlot = planned.Count;
 				bool anySurprise = false;
-				if (key > 0) spent += UnitValue(key) * ReplacementStack((long)Math.Ceiling(remaining * shares[0] / shareSum), key);
+				if (key > 0) spent += UnitValue(key) * PlainStack((long)Math.Ceiling(remaining * shares[0] / shareSum), key);
 				for (int slot = planned.Count; slot < slots; slot++)
 				{
 					double slotShare = remaining * shares[slot] / shareSum;
@@ -2714,8 +2878,12 @@ namespace UltimateRandomizer.Common.Features
 					}
 					// A house is built at once: any material found at tier 0 then, whatever its uses; so is a critical station,
 					// from the start materials
-					if (picked == 0 && (house || critical) && needsNew) picked = HouseMaterial(x => Usable(x) && NewType(x), rng);
-					if (picked == 0 && (house || critical)) picked = HouseMaterial(Usable, rng);
+					if (picked == 0 && (house || critical) && needsNew) picked = HouseMaterial(x => Usable(x) && NewType(x) && (!house || Affordable(x)), rng);
+					if (picked == 0 && (house || critical)) picked = HouseMaterial(x => Usable(x) && (!house || Affordable(x)), rng);
+					// Still nothing: any start material outside its vanilla types, whatever it costs; then, when its vanilla
+					// ingredients are all the start materials left, one of them rather than none (another stack below)
+					if (picked == 0 && house) picked = HouseMaterial(x => x != result0 && !taken.Contains(x) && !below.Contains(x) && HouseFits(x) && !vanillaTypes.Contains(x), rng);
+					if (picked == 0 && house) picked = HouseMaterial(x => x != result0 && !taken.Contains(x) && !below.Contains(x) && HouseFits(x) && Affordable(x), rng);
 					if (picked == 0) continue;
 					if (wasSurprise && !isShell)
 					{
@@ -2724,7 +2892,7 @@ namespace UltimateRandomizer.Common.Features
 						anySurprise = true;
 					}
 					int added = picked < 0 ? groups[-picked - 1].group.IconicItemId : picked;
-					spent += UnitValue(added) * ReplacementStack((long)Math.Ceiling(slotShare), added);
+					spent += UnitValue(added) * PlainStack((long)Math.Ceiling(slotShare), added);
 					if (picked < 0)
 					{
 						(int id, RecipeGroup group, _) = groups[-picked - 1];
@@ -2752,20 +2920,24 @@ namespace UltimateRandomizer.Common.Features
 				}
 				// The value goes to the slots filled (a slot left empty gives its share to the others)
 				double shareTotal = shares.Take(planned.Count).Sum();
-				(int type, int stack)[] ingredients = planned.Select((type, k) => (type, ReplacementStack((long)Math.Ceiling(remaining * shares[k] / shareTotal), type)))
+				(int type, int stack)[] ingredients = planned.Select((type, k) => (type, ReplacementStack(result, (long)Math.Ceiling(remaining * shares[k] / shareTotal), type)))
 					.Concat(kept).ToArray();
-				if (!house) CapValue(ingredients, planned.Count, maxValue);
+				// A house item takes about its vanilla amounts (a Wooden Door 6 Wood: 2 to 6 of one or two materials), not a value
+				if (house) HouseStacks(ingredients, planned.Count, original, rng);
+				CapValue(ingredients, planned.Count, maxValue);
+				// A house item rebuilt from its own vanilla types only never comes back as its vanilla recipe: another stack
+				if (house && SameIngredients(ingredients, original)) OtherStack(ingredients, planned.Count);
 				int[] plannedGroups = chosenGroups.ToArray();
 				result.Ingredients[i] = ingredients;
 				result.Groups[i] = plannedGroups.SequenceEqual(originalGroups) ? null : plannedGroups;
 				result.IngredientValues[i] = ingredients.Sum(p => UnitValue(p.type) * p.stack);
 				result.IngredientTiers[i] = keyTier;
-				// Worth at least MinValueFactor of the vanilla recipe (30 walls are no Molten Fury); with the value cap, the result is
+				// Worth at least RaiseFactor of the vanilla recipe (30 walls are no Molten Fury); with the value cap, the result is
 				// weighed against the vanilla ingredients' value: the new ones are worth at least that (a shell's item is worth
 				// vanillaValue: it still sells for its ingredients only, CraftedValueFeature)
 				if (!house)
 				{
-					long want = (long)Math.Ceiling(vanillaValue * MinValueFactor);
+					long want = (long)Math.Ceiling(vanillaValue * RaiseFactor);
 					if (cfg.LimitRecipeValue && !isShell && (long)StackRules.ValueOf(result.Results[i].type) * result.Results[i].stack > RecipeSystem.MaxResultValue(proxy, result.IngredientValues[i], cfg.RecipeValueGuard)) want = vanillaValue;
 					if (cfg.LimitRecipeValue && isShell && vanillaValue > (long)(result.IngredientValues[i] * cfg.RecipeValueGuard) + Item.silver) want = vanillaValue;
 					// A station's richer materials are new types: the raise never brings it back to its vanilla ingredients
@@ -2808,6 +2980,47 @@ namespace UltimateRandomizer.Common.Features
 				HashSet<int> after = result.Ingredients[i].Select(p => p.type).ToHashSet();
 				foreach (int x in before.Except(after)) uses[x] = Math.Max(0, uses.GetValueOrDefault(x) - 1);
 				foreach (int x in after.Except(before)) uses[x] = uses.GetValueOrDefault(x) + 1;
+			}
+
+			// The new ingredients of a house item (the first planned ones): its vanilla amount shared between them, give or take
+			// one, from 1 to HouseStackMax (more only when its vanilla slot alone needed more)
+			// The same types in the same amounts, whatever the order
+			private static bool SameIngredients((int type, int stack)[] a, (int type, int stack)[] b) =>
+				a.Length == b.Length && a.OrderBy(p => p.type).ThenBy(p => p.stack).SequenceEqual(b.OrderBy(p => p.type).ThenBy(p => p.stack));
+
+			// One planned ingredient one fewer (or one more when it is a single one), the first that can change
+			private static void OtherStack((int type, int stack)[] ingredients, int planned)
+			{
+				for (int k = 0; k < planned; k++)
+				{
+					(int type, int stack) = ingredients[k];
+					if (stack > 1) ingredients[k] = (type, stack - 1);
+					else if (StackRules.MaxStackOf(type) > 1) ingredients[k] = (type, stack + 1);
+					else continue;
+					return;
+				}
+			}
+
+			private static void HouseStacks((int type, int stack)[] ingredients, int planned, (int type, int stack)[] original, Random rng)
+			{
+				if (planned <= 0) return;
+				int each = Math.Max(1, (int)Math.Round(original.Sum(o => o.stack) / (double)planned));
+				for (int k = 0; k < planned; k++)
+				{
+					int stack = Math.Clamp(each + rng.Next(-1, 2), 1, Math.Max(HouseStackMax, each));
+					ingredients[k] = (ingredients[k].type, Math.Clamp(stack, 1, Math.Max(1, StackRules.MaxStackOf(ingredients[k].type))));
+				}
+			}
+
+			// A randomizable ingredient no source gives, nor any vanilla recipe (a chest-only Ice Mirror, chests being randomized),
+			// had by nothing planned so far either: replaced, even when it would be kept (its category is never a new ingredient).
+			// A group slot counts its best member
+			private bool NeverHad(int type, IEnumerable<int> recipeGroups)
+			{
+				if (!ItemPool.IsRandomizable(type) || ItemPool.IsSpecial(type)) return false;
+				int group = GroupOf(recipeGroups, type);
+				IEnumerable<int> members = group < 0 ? new[] { type } : (IEnumerable<int>)RecipeGroup.recipeGroups[group].ValidItems;
+				return members.All(m => m <= 0 || m >= real.Length || real[m] >= Never && (m >= vanillaAvail.Length || vanillaAvail[m] >= Never));
 			}
 
 			// The new ingredients (the first planned ones) lose stacks, the most valuable first, until the recipe is worth at most

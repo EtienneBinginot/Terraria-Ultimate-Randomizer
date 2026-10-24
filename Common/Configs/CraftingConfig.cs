@@ -96,6 +96,16 @@ namespace UltimateRandomizer.Common.Configs
 		[DefaultValue(30)]
 		public int IngredientStackCap;
 
+		// Largest amount of a new ingredient only had through a recipe (each one is a craft: the costs compound)
+		[Range(1, 30)]
+		[DefaultValue(3)]
+		public int CraftedIngredientStackCap;
+
+		// Largest amount of a new ingredient had slowly: gems, Fallen Stars, fish, critters, shards, souls, uncommon drops
+		[Range(1, 99)]
+		[DefaultValue(10)]
+		public int SlowIngredientStackCap;
+
 		// A material already used by n recipes is picked with weight w / (1 + k * n): 0 = no penalty
 		[Range(0f, 5f)]
 		[Increment(0.1f)]

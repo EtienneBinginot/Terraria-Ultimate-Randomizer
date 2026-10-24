@@ -132,7 +132,8 @@ namespace UltimateRandomizer.Common.Core
 
 		public static ItemCategory Classify(int type, Item item)
 		{
-			if (ItemID.Sets.SortingPriorityBossSpawns[type] >= 0) return ItemCategory.BossSummon;
+			// Mirrors, phones and conches are sorted with the summons but summon nothing (Protection.SortedAsSummon)
+			if (ItemID.Sets.SortingPriorityBossSpawns[type] >= 0 && !Protection.SortedAsSummon(type)) return ItemCategory.BossSummon;
 			if (ItemID.Sets.BossBag[type] || ItemID.Sets.IsFishingCrate[type] || ItemID.Sets.OpenableBag[type]) return ItemCategory.Bag;
 			if (item.makeNPC > 0) return ItemCategory.Critter;
 			if (item.dye > 0 || item.hairDye >= 0) return ItemCategory.Dye;
@@ -658,9 +659,9 @@ namespace UltimateRandomizer.Common.Core
 		};
 
 		// World-generated chests are a source too: they lower the true tier of what they hold (Trident: rarity 2, a water chest
-		// item), never Tier nor the buckets, like MaterialTiers. Config overrides and the reviewed materials keep theirs.
-		// exact[t]: trueTiers[t] is final even below tiers[t] (lowered by a reliable source). lowered[t]: lowered here (its true
-		// tier may then be below Tier). Returns how many, and examples
+		// item), like MaterialTiers (the bucket follows: ItemPool.Build fills it from the final true tier). Config overrides and
+		// the reviewed materials keep theirs. exact[t]: trueTiers[t] is final even below tiers[t] (lowered by a reliable
+		// source). lowered[t]: lowered here (its true tier may then be below its classification tier). Returns how many, and examples
 		public static int LowerByWorldChests(int[] trueTiers, int[] tiers, bool[] fromTable, bool[] exact, Dictionary<int, Tier> overrides, bool[] lowered, int[] sourceTiers, string[] sources, out string examples)
 		{
 			List<string> shown = new();
@@ -688,8 +689,8 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		// Hand corrections of true tiers from the tier audits (terraria.wiki.gg), for items the material table does not list:
-		// set exactly like the table's (lower too), before the recipes settle the crafted items again; Tier and the buckets never
-		// change. Config overrides still win
+		// set exactly like the table's (lower too), before the recipes settle the crafted items again; the bucket follows (the
+		// final true tier). Config overrides still win
 		public static readonly Dictionary<int, Tier> TrueTierFixes = new()
 		{
 			// Dropped by the Lunatic Cultist (Stations says 8 too); rarity 9
@@ -750,7 +751,18 @@ namespace UltimateRandomizer.Common.Core
 			[ItemID.Stopwatch] = Tier.PreBoss,
 			[ItemID.DPSMeter] = Tier.PreBoss,
 			// The Skeleton Merchant, underground from the start (moon phase shop conditions are not read)
-			[ItemID.MagicLantern] = Tier.PreBoss
+			[ItemID.MagicLantern] = Tier.PreBoss,
+			// Hornets of the underground Jungle (1 %): a reliable source says 0, but the jungle is a step after the Eye (audit 1.6.4)
+			[ItemID.Bezoar] = Tier.PostEyeOfCthulhu,
+			// Pedguin's set: 1 in 150 from Corrupt and Vicious Penguins (pre-hardmode snow), too rare to count as reliable; its
+			// rarity (9) would say post-Cultist
+			[ItemID.PedguinHat] = Tier.PreBoss,
+			[ItemID.PedguinShirt] = Tier.PreBoss,
+			[ItemID.PedguinPants] = Tier.PreBoss,
+			// Lava fishing in the Underworld, before hardmode (a lava-proof hook or bait): not its rarity's. The Shellphone (its
+			// recipe makes the banned ShellphoneDummy, so nothing is read for it) takes the latest of the Cell Phone and both
+			// conches (ItemPool.Build)
+			[ItemID.DemonConch] = Tier.PostEvilBoss
 		};
 
 		// Pick power gates that hold whatever the stage, their ore being in the world from the start: Hellstone (65),

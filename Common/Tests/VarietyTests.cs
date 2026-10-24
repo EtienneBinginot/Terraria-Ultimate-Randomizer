@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Terraria;
 using Terraria.ID;
+using Terraria.ModLoader;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
@@ -19,6 +20,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("SurpriseGatedAndProtected", SurpriseGatedAndProtected);
 			TestRunner.Register("WeightTablesSeparated", WeightTablesSeparated);
 			TestRunner.Register("TierWindowVariety", TierWindowVariety);
+			TestRunner.Register("SparseBucketsWiden", SparseBucketsWiden);
 			TestRunner.Register("OreMappingBijective", OreMappingBijective);
 		}
 
@@ -130,6 +132,37 @@ namespace UltimateRandomizer.Common.Tests
 				if (ItemCategories.IsGear(ItemPool.Info[item].Category)) gear.Add(item);
 			}
 			Check.That(gear.Count >= 25, $"only {gear.Count} different pieces of equipment in 600 early rolls");
+		}
+
+		// A pick in a sparse bucket (ammo or food of the early tiers, an empty summon tier) widens to the tiers below until it has
+		// ItemPool.MinCandidates items, never above the wanted tier while the tiers up to it hold any (pure picks of every bucket)
+		private static void SparseBucketsWiden()
+		{
+			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
+			List<string> failures = new();
+			int widened = 0;
+			for (int c = 0; c < ItemCategories.Count; c++)
+			{
+				ItemCategory category = (ItemCategory)c;
+				int available = 0;
+				for (int t = 0; t < Tiers.Count; t++)
+				{
+					available += ItemPool.BucketSize(category, t);
+					if (available == 0) continue;
+					if (ItemPool.BucketSize(category, t) < ItemPool.MinCandidates) widened++;
+					HashSet<int> picked = new();
+					for (int k = 0; k < 600; k++)
+					{
+						int item = ItemPool.PickFromBucket(category, t, new Random(DetRandom.Hash(6180, c, t, k)), t);
+						picked.Add(item);
+						if (ItemPool.TierOf(item) > t && failures.Count < 20) failures.Add($"{category} tier {t}: {Lang.GetItemNameValue(item)} of tier {ItemPool.TierOf(item)}");
+					}
+					int expected = Math.Min(ItemPool.MinCandidates, available);
+					if (picked.Count < expected && failures.Count < 20) failures.Add($"{category} tier {t}: {picked.Count} different items, {expected} expected ({available} up to this tier)");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"SparseBucketsWiden: {widened} sparse buckets widened");
+			Check.All(failures, "Sparse buckets");
 		}
 
 		private static void OreMappingBijective()

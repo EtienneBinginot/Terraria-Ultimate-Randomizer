@@ -91,7 +91,7 @@ Tests: {
 	SameCategory: Les remplaçants gardent la catégorie
 	ShuffleBijection: Mélange garanti : chaque objet obtenable est donné exactement une fois
 	StackRules: Les tailles de stack sont valides
-	PriceFloor: Les prix des boutiques ne sont jamais sous la valeur de l'objet
+	PriceFloor: Un objet acheté en boutique ne se revend jamais plus cher qu'il n'a coûté, et ne coûte jamais moins que le prix minimum (celui des objets empilables pour un objet empilable)
 	DropRates: Les taux de drop sont valides
 	TierFromRecipes: Les objets fabriqués prennent le tier de leur recette vanilla quand il est plus précoce que leur rareté (combinaisons du Tinkerer)
 	StorageKitOnce: Le kit Magic Storage est donné une fois par monde, et de nouveau dans un autre monde
@@ -124,16 +124,21 @@ Tests: {
 	WorldChestTrueTiers: Les objets des coffres générés avec le monde sont trouvables dès le tier de leur coffre (vrai tier abaissé, jamais relevé)
 	ShopDump: Écrit Shops.tsv, chaque article des boutiques vanilla à chaque palier débloqué avec son remplaçant (tirage aléatoire), puis les emplacements ajoutés qui vendent les objets exclusifs aux boutiques de ce monde, avec prix, conditions et alertes (trop tôt, autre catégorie, objet vendu seulement en boutique perdu), et ShopOnly.tsv, qui indique quel marchand vend chaque objet exclusif aux boutiques de ce monde et à partir de quel palier (lecture seule)
 	WorldExport: Écrit dans Export/ les fichiers .tsv des objets, recettes, butins, sacs, boutiques, coffres, sources du monde et trouvabilité, plus un README, pour un audit de cohérence hors jeu (lecture seule)
-	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques, et aucun emplacement ajouté n'apparaît avant le palier de déblocage de son objet
+	ShopsNotTooEarly: Les remplaçants des boutiques ne dépassent jamais le palier débloqué + 1 + la variation de palier des boutiques, aucune arme, armure, aucun accessoire ni outil ne dépasse le palier débloqué, et aucun emplacement ajouté n'apparaît avant le palier de déblocage de son objet
 	ShopOnlyItemsKept: Les objets que seules les boutiques vendent en vanilla (câblage, Clentaminateur et solutions, graines de biome, bombes, rangement...) restent obtenables dans ce monde : trouvés ou fabriqués à n'importe quel palier, ou vendus dans un emplacement ajouté chez un marchand fiable (une vente tardive est seulement signalée dans le journal)
 	ShopOnlyPlacement: Chaque objet exclusif aux boutiques de ce monde (vendu par un article tiré au hasard, et ni trouvé ni fabriqué nulle part dans ce monde, à aucun palier) a exactement un emplacement ajouté chez un marchand fiable (arrivée connue, ni le Père Noël, ni la Princesse, ni un marchand de passage), visible dès son palier de déblocage, sans dépasser la place libre d'une boutique tant que d'autres en ont, jamais tiré une seconde fois dans cette boutique, identique pour une même graine (les marchands tardifs sont signalés dans le journal)
 	ShopOnlySlots: Chaque boutique avec des emplacements ajoutés, remplie comme le jeu la remplit en ce moment puis complétée comme en jeu, propose chaque objet exclusif débloqué à son prix, et seul un emplacement tiré au hasard cède sa place quand la boutique est pleine
-	ShopNoDuplicates: Sans doublons dans les boutiques, aucune boutique ne vend deux fois le même remplaçant
+	ShopNoDuplicates: Sans doublons dans les boutiques, aucun marchand ne vend deux fois le même remplaçant, tous ses onglets confondus
+	ShopPricesAffordable: Les prix des boutiques restent entre leur plancher (la moitié de la valeur, le prix minimum) et le plafond de leur palier, les objets sans valeur hors équipement coûtent quelques pièces de cuivre ou d'argent, et les objets empilables bon marché gardent leur petit prix
+	ShopSpread: Aucun objet tiré au hasard n'est vendu par plus de marchands que la limite des réglages, à aucun palier, à part quelques-uns qu'une petite catégorie ne laisse pas choisir
+	ShopPylonsGuaranteed: Les neuf pylônes de téléportation et la Solution rouge ont chacun un emplacement ajouté chez un marchand fiable, quel que soit le monde
+	ShopAddedSlotsOnTime: Aucun emplacement ajouté n'ouvre avant le plus tardif du palier et du vrai palier de son objet, moins la marge de palier
 	ModdedRecipesRandomized: Avec Magic Storage, ses recettes sont reconstruites avec un ingrédient clé de leur palier, et les paliers de ses améliorations de stockage suivent leurs lingots dans l'ordre
 	ModdedItemsInPool: Les objets de Magic Storage peuvent être donnés au hasard ; ceux des mods utilitaires (tModLoader, Recipe Browser) et les objets créatifs jamais
 	ModdedDropsPermuted: Les butins des ennemis et boss des autres mods sont permutés avec ceux de tout le monde, à leur palier estimé
 	ModdedStationsTiered: Les stations des autres mods prennent le palier de leur objet, ne sont données qu'aux recettes de leur palier, et les thématiques sont garanties quand elles ne sont pas protégées
 	TierFloorsHold: Les planchers de tier audités tiennent : matériaux de progression stricte sans tolérance, le Suiveur compté comme le Cerveau, ennemis tardifs et butins globaux, coffres à clé, niveaux de minage, baisse par les sources fiables
+	TiersConsistent: Le tier de chaque objet est son vrai tier, et les erreurs de tier relevées par l'audit restent corrigées
 	GuaranteeScalesWithPlayers: Les stations garanties sont partagées entre joueurs, les stations aléatoires plus rares
 	LockedDropsRedistributed: Les chances des butins verrouillés passent aux butins aléatoires débloqués de l'ennemi, plafonnées à 100 %
 	LockedVanillaDropRemoved: Un butin d'origine remplacé encore verrouillé par la progression ne tombe pas ; un butin débloqué tombe comme prévu
@@ -145,6 +150,9 @@ Tests: {
 	DropPermutationSurprise: Les surprises de la permutation remplacent à peu près la part réglée des drops mélangés, jamais un matériau ni l'exemplaire que garde chaque objet (sauf blocs, créatures et minerais)
 	PermutationDuplicatesCapped: Un objet garde au plus son nombre limité d'exemplaires mélangés par condition de drop (les autres deviennent des surprises), et toujours au moins un dans chacune
 	PermutationKeepsStartDrops: Avec les limites par défaut, le gel et la lentille restent des matériaux de départ (les exemplaires gardés sont sur les premiers ennemis rencontrés)
+	ExtraStacksSmall: Les drops bonus et surprises aléatoires viennent en petites piles : quelques potions ou plats, des dizaines de munitions, clés et invocations une par une
+	GatesNotOnLowerOwners: Aucun drop bonus ni surprise aléatoire ne donne un verrou de progression, une clé ou une invocation au-dessus du palier de son ennemi, sauf un jackpot
+	StrongEnemiesDropEarly: Les ennemis puissants qui arrivent avec le mode difficile donnent leur butin permuté dès le mode difficile ; les ennemis martiens, au palier martien
 	BossPermutationConserves: La permutation des boss ne perd et ne double rien : chaque drop de boss et contenu de sac mélangé est toujours dans un boss ou un sac
 	BossBagMatchesBoss: Chaque sac de trésor contient les drops mélangés du mode normal de son boss, avec leur chance et leur quantité dans le sac d'où ils viennent
 	BossPermutationTiers: Les drops de boss ne passent qu'entre boss du même groupe de tiers, avec les mêmes restrictions
@@ -186,9 +194,11 @@ Tests: {
 	SurpriseGatedAndProtected: Les surprises respectent la progression et les objets protégés
 	WeightTablesSeparated: Les poids du loot favorisent l'équipement, ceux des ingrédients jamais
 	TierWindowVariety: Les tirages de début de partie donnent beaucoup d'objets différents
+	SparseBucketsWiden: Un palier pauvre d'une catégorie s'élargit aux paliers inférieurs pour varier les objets
 	OreMappingBijective: Chaque minerai du monde existe encore, comme drop d'un seul autre minerai du monde ; les minerais absents restent eux-mêmes, et le choix d'une paire hardmode ne change aucun minerai d'un autre palier ; un pour un même quand les deux minerais d'une paire sont présents
 	TreeShakeReplacement: Les arbres secoués donnent des objets aléatoires et gardent les glands
 	HerbReplacementTable: Chaque herbe a un ensemble fixe de remplaçants valides
+	HerbTableDistinct: La table de remplacement d'une herbe ne contient jamais deux fois le même objet
 	ExtractinatorRules: L'Extractinator garde les pièces et échange les minerais contre des minerais
 	AnglerRewardsValid: Les récompenses du Pêcheur sont des objets valides, pièces conservées
 	TreeCritterSwap: Les critters qui tombent des arbres sont aussi remplacés
@@ -238,12 +248,14 @@ Tests: {
 	PotOnlyUnfound: Les pots ne donnent que des objets garantis que personne n'a encore trouvés
 	GuaranteesNotBelowTier: Aucun objet garanti n'arrive avant son tier (Manipulateur antique et Sceau céleste pas avant le Cultiste lunatique)
 	StationsOneGuardian: Chaque station d'artisanat a un seul gardien, un ennemi courant de son palier, et ne vient jamais des pots ni des coffres
+	BiomeKeysGuaranteed: Les clés de biome de ce monde sont garanties sur des ennemis du mode difficile et trouvables dès le mode difficile
+	GuardiansInThisWorld: Les gardiens des stations sont des ennemis qui apparaissent vraiment dans ce monde, jamais seulement dans le biome maléfique qu'il n'a pas
 	IngredientReplacementsFindable: Les nouveaux ingrédients s'obtiennent (trouvés ou fabriqués) au palier pour lequel leur recette a été reconstruite
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
 	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
 	NoSelfIngredient: Aucune recette n'utilise son propre résultat
 	ResultNotInGroup: Aucune recette randomisée ne donne un objet accepté par son propre groupe d'ingrédients
-	IngredientValueCoherent: Les recettes reconstruites gardent à peu près la valeur des ingrédients vanilla
+	IngredientValueCoherent: Les recettes reconstruites valent au plus le double des ingrédients vanilla, et au moins le quart sauf si un plafond de quantité les retient
 	ProtectedIngredientsKept: Les ingrédients protégés ne sont jamais remplacés
 	RecipeGroupsSane: Chaque groupe de recette (n'importe quel bois, lingot de fer...) garde son ingrédient
 	RecipePlanDeterminism: Ingrédients et stations identiques après reconstruction
@@ -286,10 +298,15 @@ Tests: {
 	UncraftablePricedByIngredients: Les recettes coquilles actives comptent comme randomisées : ce qu'elles fabriquent se vend au prix de ses ingrédients, pas à son prix d'origine
 	RecipePickaxeMineable: Aucune recette reconstruite de pioche ou de foreuse ne reçoit un nouvel ingrédient dont le minage exige une puissance de pioche au moins égale à la sienne
 	RecipeNotBeforeItsTier: Aucune recette reconstruite ou échangée n'est faisable avant le palier de l'objet qu'elle donne (son palier, ou son vrai palier s'il est plus tard) : pas de pioche en chlorophyte en début de mode difficile
-	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent entre la moitié et le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana, pas de fragment de nébuleuse gardé pour un objet bon marché échangé
+	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent entre le quart et le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana, pas de fragment de nébuleuse gardé pour un objet bon marché échangé
 	ProtectedRecipesGated: Un résultat protégé dont les ingrédients sont reconstruits attend le palier débloqué de son vrai palier comme les autres : ni clé de nuit ni clé de lumière avant le mode difficile
 	PickaxeIngredientsBelowLevel: Une recette de pioche ou de foreuse ne reçoit jamais de minerai ni de lingot (ni rien qui en soit fait) dont le minage exige sa propre puissance de pioche ou plus : pas de pioche en orichalque faite de lingots de chlorophyte
 	StationsCraftable: Chaque station d'artisanat a une recette refaite avec des matériaux trouvés, faisable à son palier sans son gardien ; l'établi à la main dès le début
+	HouseRecipesSimple: La torche, la plateforme en bois et la porte en bois ont une recette aléatoire simple : un ou deux matériaux de départ, quelques-uns de chaque, valant au plus le double de la recette vanilla, sur une station de base ou à la main
+	IngredientCountCaps: Aucun nouvel ingrédient n'est demandé au-delà de son plafond : quelques exemplaires d'un objet qu'on ne peut que fabriquer, une dizaine d'un objet lent (gemmes, étoiles filantes, herbes, poissons, créatures, éclats, âmes)
+	NoNeverIngredients: Aucune recette planifiée active ne demande un ingrédient impossible à obtenir (un miroir de glace, une guimauve) ; une recette gardée vanilla le voit remplacé
+	NoEmptyLiveRecipes: Aucune recette active n'a une liste d'ingrédients vide (une fabrication gratuite)
+	SwapStationsInTime: Un résultat échangé n'arrive jamais sur une station plus tardive que son propre palier plus la tolérance (pas d'arc en tungstène à l'établi lunaire)
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
 	BellCurveBounds: Les stats tirées restent toujours dans leur plage
 	ExtremenessEffect: Le réglage de rareté rend les valeurs extrêmes plus rares
@@ -1894,13 +1911,28 @@ Configs: {
 		}
 
 		MinimumPrice: {
-			Label: Prix minimum (pièces de cuivre)
-			Tooltip: 100 cuivre = 1 argent.
+			Label: "Prix minimum (pièces de cuivre)"
+			Tooltip: "Pour les objets non empilables. 100 cuivre = 1 argent."
+		}
+
+		MinimumStackablePrice: {
+			Label: "Prix minimum des objets empilables (pièces de cuivre)"
+			Tooltip: "Les munitions, blocs, potions et autres objets empilables s'achètent un par un : ils gardent leur petit prix, jusqu'à ce minimum."
+		}
+
+		PriceCeiling: {
+			Label: "Plafond de prix (par palier)"
+			Tooltip: "Aucun prix au-dessus d'un prix de base du palier de l'objet x cette valeur (armes, armures, accessoires et outils : 4 fois plus), pour qu'un objet en boutique reste abordable quand il est vendu. Les objets qui valent plus (hors équipement : cosmétiques, meubles, familiers...) sont rarement vendus. Jamais moins de la moitié de la valeur de l'objet. 0 : pas de plafond."
 		}
 
 		NoDuplicatesInShop: {
 			Label: Pas de doublons dans une boutique
 			Tooltip: ""
+		}
+
+		MaxShopsPerItem: {
+			Label: "Nombre maximum de marchands vendant le même objet"
+			Tooltip: "Dans tout le monde, un objet tiré au hasard est vendu par ce nombre de marchands au plus, pour que les boutiques restent variées. Chaque marchand ne le vend que dans un de ses onglets. 0 : pas de limite."
 		}
 
 		ShopsFollowProgression: {
@@ -2074,8 +2106,18 @@ Configs: {
 		}
 
 		IngredientStackCap: {
-			Label: Quantité maximale d'un ingrédient
-			Tooltip: Les quantités sont choisies pour que les ingrédients valent à peu près autant que ceux de la recette vanilla, jusqu'à cette limite par ingrédient.
+			Label: "Quantité maximale d'un ingrédient"
+			Tooltip: "Quantité maximale d'un nouvel ingrédient courant (blocs, bois, gel, butins courants). Les quantités suivent à peu près la valeur des ingrédients vanilla, dans cette limite et les deux suivantes."
+		}
+
+		CraftedIngredientStackCap: {
+			Label: "Quantité maximale d'un ingrédient fabriqué"
+			Tooltip: "Quantité maximale d'un nouvel ingrédient qui ne s'obtient qu'en le fabriquant (jamais trouvé). Chacun demande sa propre fabrication, et les quantités s'additionnent vite. Un peu plus est permis quand sa propre recette est bon marché."
+		}
+
+		SlowIngredientStackCap: {
+			Label: "Quantité maximale d'un ingrédient lent"
+			Tooltip: "Quantité maximale d'un nouvel ingrédient qui s'obtient lentement : gemmes, étoiles filantes, herbes, poissons, créatures, éclats, âmes, butins peu courants."
 		}
 
 		IngredientReusePenalty: {

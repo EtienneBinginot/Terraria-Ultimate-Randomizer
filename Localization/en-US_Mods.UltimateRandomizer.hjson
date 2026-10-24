@@ -91,7 +91,7 @@ Tests: {
 	SameCategory: Replacements keep the category
 	ShuffleBijection: Guaranteed shuffle: every obtainable item is given exactly once
 	StackRules: Stack sizes are valid
-	PriceFloor: Shop prices are never below the item value
+	PriceFloor: Shop prices never resell for more than they cost, and never go below the minimum price (the stackable one for a stackable item)
 	DropRates: Drop rates are valid
 	TierFromRecipes: Crafted items take the tier of their vanilla recipe when it is earlier than their rarity (Tinkerer combinations)
 	StorageKitOnce: The Magic Storage kit is given once per world, and again in another world
@@ -124,16 +124,21 @@ Tests: {
 	WorldChestTrueTiers: Items of world-generated chests are found from their chest's tier (true tier lowered, never raised)
 	ShopDump: Writes Shops.tsv, every vanilla shop entry at each unlocked tier with its replacement (a random roll), then the added slots selling this world's shop-only items, with price, conditions and flags (too early, other category, shop-only item lost), and ShopOnly.tsv, which merchant sells each shop-only item of this world and from which tier (read-only)
 	WorldExport: Writes items, recipes, drops, bags, shops, chests, worldsources and findability .tsv files plus a README into Export/ next to the other dumps, for an offline coherence audit (read-only)
-	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter, and no added slot appears before its item's unlock tier
+	ShopsNotTooEarly: Shop replacements never go above the unlocked tier + 1 + the shop's tier jitter, no weapon, armor, accessory or tool goes above the unlocked tier, and no added slot appears before its item's unlock tier
 	ShopOnlyItemsKept: Items only shops sell in vanilla (wiring, Clentaminator and solutions, biome seeds, bombs, storage...) stay obtainable in this world: found or crafted at any tier, or sold in an added slot of a reliable merchant (late sales are only logged)
 	ShopOnlyPlacement: Every shop-only item of this world (sold by a random shop entry, and neither found nor crafted anywhere in this world, at any tier) has exactly one added slot at a reliable merchant (known arrival, not Santa, the Princess or a visitor), shown from its unlock tier, without exceeding a shop's free capacity while others have room, never rolled again in that shop, the same for the same seed (late merchants are logged)
 	ShopOnlySlots: Each shop with added slots, filled as the game fills it right now and given its added slots as in game, shows every unlocked shop-only item at its price, and only a rolled slot ever gives way when the shop is full
-	ShopNoDuplicates: With no duplicates in shops, no shop sells the same replacement twice
+	ShopNoDuplicates: With no duplicates in shops, no merchant sells the same replacement twice, all its tabs together
+	ShopPricesAffordable: Shop prices stay between their floor (half the value, the minimum price) and their tier's ceiling, items without a value other than gear cost a few copper or silver, and cheap stackable items keep their small price
+	ShopSpread: No randomized item is sold by more merchants than the limit of the settings at any tier, apart from a few that a small category leaves no choice
+	ShopPylonsGuaranteed: The nine teleportation pylons and the Red Solution each have an added slot at a reliable merchant, whatever the world
+	ShopAddedSlotsOnTime: No added slot opens before the later of its item's tier and true tier minus the tier allowance
 	ModdedRecipesRandomized: With Magic Storage, its recipes are rebuilt with a key of their tier, and its storage upgrades' tiers follow their bars in order
 	ModdedItemsInPool: Magic Storage's items may be given at random; the items of utility mods (tModLoader, Recipe Browser) and creative items never are
 	ModdedDropsPermuted: The drops of other mods' enemies and bosses are permuted with everyone's, at their estimated tier
 	ModdedStationsTiered: Other mods' stations get the tier of their item, are only given to recipes of their tier, and the themed ones are guaranteed when unprotected
 	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
+	TiersConsistent: Every item's tier is its true tier, and the audited tier errors stay fixed
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
 	LockedVanillaDropRemoved: A replaced original drop still locked by progression does not drop; an unlocked one drops as planned
@@ -145,6 +150,9 @@ Tests: {
 	DropPermutationSurprise: Permutation surprises replace about the set share of the shuffled drops, never a material nor the copy every item but blocks, critters and ores keeps
 	PermutationDuplicatesCapped: An item keeps at most its capped number of shuffled copies per drop condition (the others become surprises), and always at least one in each
 	PermutationKeepsStartDrops: With the default caps, Gel and Lens stay among the start materials (the copies kept are on the enemies met first)
+	ExtraStacksSmall: Random extra drops and surprises come in small stacks: potions and food a few, ammo by dozens, keys and summons one at a time
+	GatesNotOnLowerOwners: No random extra drop nor surprise gives a hard gate, key or summon above the tier of its enemy, except a jackpot
+	StrongEnemiesDropEarly: Strong enemies coming with hardmode drop their permuted loot from hardmode on; Martian enemies drop at the Martian tier
 	BossPermutationConserves: The boss permutation loses and duplicates nothing: every shuffled boss drop and treasure bag content is still in some boss or bag
 	BossBagMatchesBoss: Each treasure bag holds the shuffled normal-mode drops of its boss, with their chance and stack in the bag they come from
 	BossPermutationTiers: Boss drops only move between bosses of the same group of tiers, with the same restrictions
@@ -186,9 +194,11 @@ Tests: {
 	SurpriseGatedAndProtected: Surprises respect progression and protected items
 	WeightTablesSeparated: Loot weights favor equipment, ingredient weights never pick it
 	TierWindowVariety: Early random rolls give many different items
+	SparseBucketsWiden: A sparse tier of a category widens to the tiers below for variety
 	OreMappingBijective: Each ore of this world still exists, as the drop of exactly one other ore of the world; absent ores stay themselves, and deciding a hardmode pair changes no ore of another tier; one-to-one even with both ores of a pair present
 	TreeShakeReplacement: Shaken trees give random items and keep acorns
 	HerbReplacementTable: Each herb has a fixed set of valid replacements
+	HerbTableDistinct: A herb's replacement table never holds the same item twice
 	ExtractinatorRules: The Extractinator keeps coins and swaps ores for ores
 	AnglerRewardsValid: Angler rewards are replaced by valid items, coins kept
 	TreeCritterSwap: Critters falling from trees are swapped too
@@ -238,12 +248,14 @@ Tests: {
 	PotOnlyUnfound: Pots only give guaranteed items nobody has found yet
 	GuaranteesNotBelowTier: No guaranteed item comes before its tier (Ancient Manipulator and Celestial Sigil from the Lunatic Cultist on)
 	StationsOneGuardian: Every crafting station has exactly one guardian, a common enemy of its tier, and never comes from pots or chests
+	BiomeKeysGuaranteed: The biome keys of this world are guaranteed on hardmode enemies and found from hardmode on
+	GuardiansInThisWorld: Station guardians are enemies this world really spawns, never only in the evil biome it lacks
 	IngredientReplacementsFindable: New ingredients are had (found or crafted) by the tier their recipe was rebuilt for
 	RecipesDoable: At least 85% of the randomized recipes can be made at their level
 	AvailabilityConsistent: The planned item availability matches an independent recomputation over the applied recipes
 	NoSelfIngredient: No recipe uses its own result
 	ResultNotInGroup: No randomized recipe gives an item its own ingredient group accepts
-	IngredientValueCoherent: Rebuilt recipes keep about the value of the vanilla ingredients
+	IngredientValueCoherent: Rebuilt recipes are worth at most twice the vanilla ingredients, and at least a quarter unless a count cap holds them
 	ProtectedIngredientsKept: Protected ingredients are never replaced
 	RecipeGroupsSane: Every recipe group (any wood, any iron bar...) still has its ingredient
 	RecipePlanDeterminism: Ingredients and stations are the same after a rebuild
@@ -286,10 +298,15 @@ Tests: {
 	UncraftablePricedByIngredients: Live shell recipes count as randomized: what they make sells for its ingredients' value, not its vanilla price
 	RecipePickaxeMineable: No rebuilt pickaxe or drill recipe gets a new ingredient that needs at least that pick power to be mined
 	RecipeNotBeforeItsTier: No rebuilt or swapped recipe is doable before the tier of the item it gives (its own tier, or its true tier when later): no Chlorophyte Pickaxe in early hardmode
-	RecipeValueSane: Planned recipes ask for sane stacks (the stack cap, or three times a vanilla stack) and rebuilt ones are worth half to twice their vanilla recipe (value-0 items count their own recipe): no 9999 Ruby Walls for a Mana Crystal, no Nebula Fragment kept for a cheap swapped item
+	RecipeValueSane: Planned recipes ask for sane stacks (their count cap, or three times a vanilla stack) and rebuilt ones are worth a quarter to twice their vanilla recipe (value-0 items count their own recipe): no 9999 Ruby Walls for a Mana Crystal, no Nebula Fragment kept for a cheap swapped item
 	ProtectedRecipesGated: A protected result whose ingredients are rebuilt waits for the unlocked tier of its true tier like any other: no Key of Night or Key of Light before hardmode
 	PickaxeIngredientsBelowLevel: A pickaxe or drill recipe never gets an ore or bar (or anything made of one) that needs its own pick power or more to be mined: no Orichalcum Pickaxe made of Chlorophyte Bars
 	StationsCraftable: Every crafting station has a rebuilt recipe of found materials, doable by its tier without its guardian; the Work Bench by hand at the start
+	HouseRecipesSimple: Torch, Wood Platform and Wooden Door have a simple random recipe: one or two start materials, a few of each, worth at most twice the vanilla recipe, at a basic station or by hand
+	IngredientCountCaps: No new ingredient asks for more than its count cap: a few of a crafted-only item, about ten of a slow one (gems, Fallen Stars, herbs, fish, critters, shards, souls)
+	NoNeverIngredients: No live planned recipe needs an ingredient that is never had (an Ice Mirror, a Marshmallow); a recipe kept vanilla gets a replacement for it
+	NoEmptyLiveRecipes: No live recipe has an empty ingredient list (a free craft)
+	SwapStationsInTime: A swapped result never lands on a station later than its own tier and the allowance (no Tungsten Bow at the Lunar Crafting Station)
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
 	BellCurveBounds: Rolled stats always stay inside their range
 	ExtremenessEffect: The rarity setting makes extreme values rarer
@@ -1894,13 +1911,28 @@ Configs: {
 		}
 
 		MinimumPrice: {
-			Label: Minimum price (copper coins)
-			Tooltip: 100 copper = 1 silver.
+			Label: "Minimum price (copper coins)"
+			Tooltip: "For the items that don't stack. 100 copper = 1 silver."
+		}
+
+		MinimumStackablePrice: {
+			Label: "Minimum price of stackable items (copper coins)"
+			Tooltip: "Ammo, blocks, potions and other stackable items are bought one at a time: they keep their own small price down to this one."
+		}
+
+		PriceCeiling: {
+			Label: "Price ceiling (by tier)"
+			Tooltip: "No price above a base price of the item's tier x this value (weapons, armor, accessories and tools: 4 times more), so a shop item stays affordable when it is sold. Items worth more than that, other than gear (vanity, furniture, pets...), are seldom sold. Never below half the item's value. 0: no ceiling."
 		}
 
 		NoDuplicatesInShop: {
 			Label: No duplicates in a shop
 			Tooltip: ""
+		}
+
+		MaxShopsPerItem: {
+			Label: "Most merchants selling the same item"
+			Tooltip: "Across the whole world, a randomized item is sold by this many merchants at most, so that the shops stay varied. Each merchant sells it in one of its tabs only. 0: no limit."
 		}
 
 		ShopsFollowProgression: {
@@ -2074,8 +2106,18 @@ Configs: {
 		}
 
 		IngredientStackCap: {
-			Label: Maximum amount of an ingredient
-			Tooltip: The amounts are set so the ingredients are worth roughly what the vanilla ones were, up to this limit per ingredient.
+			Label: "Maximum amount of an ingredient"
+			Tooltip: "Largest amount of a new common ingredient (blocks, wood, gel, common drops). The amounts loosely follow the value of the vanilla ingredients, within this limit and the two below."
+		}
+
+		CraftedIngredientStackCap: {
+			Label: "Maximum amount of a crafted-only ingredient"
+			Tooltip: "Largest amount of a new ingredient that can only be crafted (never found). Each one is a craft of its own, so large amounts add up fast. A little more is allowed when its own recipe is cheap."
+		}
+
+		SlowIngredientStackCap: {
+			Label: "Maximum amount of a slow ingredient"
+			Tooltip: "Largest amount of a new ingredient that is gathered slowly: gems, Fallen Stars, herbs, fish, critters, shards, souls, uncommon drops."
 		}
 
 		IngredientReusePenalty: {
