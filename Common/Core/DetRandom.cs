@@ -61,6 +61,8 @@ namespace UltimateRandomizer.Common.Core
 		public const int ShopPermutation = 44;
 		// The re-rolls of a bag entry whose item an earlier entry of the same bag already gives (BagPlan.Variant)
 		public const int BagVariety = 45;
+		// The per-kill jackpot (RandomNpcDropRule.KillJackpot), keyed by runtime values only (never planned)
+		public const int KillJackpot = 46;
 		public const int Fallback = 0xFA11;
 	}
 

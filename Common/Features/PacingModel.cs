@@ -218,10 +218,19 @@ namespace UltimateRandomizer.Common.Features
 
 		// Jackpots (ItemPool.LastJackpotGap) per 100 early kills, expected from the runtime rolls of the kills: the extra drops
 		// (one lucky roll per kill, as RandomNpcDropRule does) and the replaced original drops (one lucky roll each), weighted
-		// by their chances. Loot bonuses and giants are left out
-		public static double JackpotsPer100Kills(int kills, int seed)
+		// by their chances; the per-kill jackpot (KillJackpotChance); the bonus item of giants and minis, at their chances
+		// (every early enemy that may be one, EnemyIndividualNPC.Scalable). Loot bonuses are left out
+		public static double JackpotsPer100Kills(int kills, int seed) => JackpotsPer100Kills(kills, seed, out _, out _);
+
+		// perKill, giantsMinis: the shares of the per-kill jackpot and of the giants' and minis' bonus items (per 100 kills)
+		public static double JackpotsPer100Kills(int kills, int seed, out double perKill, out double giantsMinis)
 		{
+			perKill = giantsMinis = 0;
 			if (!LootConfig.Instance.RandomizeMobDrops || kills <= 0) return 0;
+			EnemiesConfig enemies = EnemiesConfig.Instance;
+			float killChance = ProgressionConfig.Instance.KillJackpotChance;
+			float giantChance = enemies.GiantBonusDrop ? enemies.GiantChance / 100f : 0f;
+			float miniChance = enemies.MiniBonusDrop ? enemies.MiniChance / 100f : 0f;
 			Random rng = new(seed);
 			float swapChance = SwapChance();
 			List<int> pool = EnemySwapPool.NaturalEnemies(0);
@@ -250,8 +259,52 @@ namespace UltimateRandomizer.Common.Features
 				{
 					if (drop.JackpotGap > 0) jackpots += Math.Clamp(drop.Chance, 0f, 1f);
 				}
-				// Permutation: the original entries are not replaced as they spawn (no luck nor madness on them)
-				if (DropPermutation.InStyle(killed)) continue;
+				if (sample != null && RandomNpcDropRule.GiantBonusAllowed(killed, sample.type))
+				{
+					// Its chance times whether the forced roll finds something useful above the limit (one roll per kill: less
+					// noise than rolling the chance too)
+					if (killChance > 0 && worth > 0 && RandomNpcDropRule.KillJackpot(owner, 100f, 1f, new Random(rng.Next()), out _) > ItemID.None)
+					{
+						double share = Math.Min(1.0, killChance * worth / 100.0);
+						jackpots += share;
+						perKill += share;
+					}
+					// The giant's or mini's bonus item is a jackpot when its roll went above the limit (BonusDrops)
+					if (EnemyIndividualNPC.Scalable(sample))
+					{
+						bool lucky = rng.NextDouble() < luckyChance * worth;
+						if (giantChance > 0)
+						{
+							RandomNpcDropRule.GiantDrop(owner, rng.Next(), lucky, RandomNpcDropRule.GiantWildMultiplier * worth);
+							if (ItemPool.LastJackpotGap > 0)
+							{
+								jackpots += giantChance;
+								giantsMinis += giantChance;
+							}
+						}
+						if (miniChance > 0)
+						{
+							RandomNpcDropRule.MiniDrop(owner, rng.Next(), lucky, RandomNpcDropRule.MiniWildMultiplier * worth);
+							if (ItemPool.LastJackpotGap > 0)
+							{
+								jackpots += miniChance;
+								giantsMinis += miniChance;
+							}
+						}
+					}
+				}
+				// Permutation: the original entries are rolled by our rule (DropRolledOriginals), not replaced as they spawn: no
+				// madness on them, only luck on their locked entries (KillDrops leaves the originals out), kept as rarely as a
+				// lucky roll that far above the limit
+				if (DropPermutation.InStyle(killed))
+				{
+					foreach (PlannedDrop drop in RandomNpcDropRule.OriginalDrops(killed, owner))
+					{
+						if (!drop.Rolled || !drop.Locked || !ItemPool.IsJackpotWorthy(drop.Item)) continue;
+						jackpots += Math.Clamp(drop.Chance, 0f, 1f) * Math.Min(1f, luckyChance * worth) * ItemPool.LuckyKeepChance(drop.LockGap);
+					}
+					continue;
+				}
 				foreach (Terraria.GameContent.ItemDropRules.DropRateInfo entry in LootSnapshot.ForNpc(killed))
 				{
 					Random wild = new(rng.Next());
@@ -261,6 +314,8 @@ namespace UltimateRandomizer.Common.Features
 				}
 			}
 			ItemPool.ClearJackpot();
+			perKill *= 100.0 / kills;
+			giantsMinis *= 100.0 / kills;
 			return jackpots * 100 / kills;
 		}
 

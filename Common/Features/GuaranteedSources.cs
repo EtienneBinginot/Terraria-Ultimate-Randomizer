@@ -1640,29 +1640,34 @@ namespace UltimateRandomizer.Common.Features
 		// (tenthAnniversaryWorld, dontStarveWorld, remixWorld: all synced in message 7), plus npc.boss for the legacy boss
 		// checks (their drops are a boss's); in drunk worlds both evils exist. The remix seed's easy and hard mode drops count
 		// in a remix world (each in its part of the game). Other conditions (events, biomes...) are left to the drop chance.
-		public static bool WorldAllows(List<IItemDropRuleCondition> conditions)
+		public static bool WorldAllows(List<IItemDropRuleCondition> conditions) => WorldAllows(conditions, ProgressionSystem.PlannedExpert, ProgressionSystem.PlannedMaster);
+
+		// The same for an explicit difficulty (the codex: the live one it shows, tests)
+		public static bool WorldAllows(List<IItemDropRuleCondition> conditions, bool expert, bool master)
 		{
 			if (conditions == null) return true;
 			foreach (IItemDropRuleCondition condition in conditions)
 			{
-				if (WorldVerdict(condition) == false) return false;
+				if (WorldVerdict(condition, expert, master) == false) return false;
 			}
 			return true;
 		}
 
 		// What the world (difficulty, evil, secret seeds) decides about a drop condition; null when it does not decide it
-		public static bool? WorldVerdict(IItemDropRuleCondition condition) => condition switch
+		public static bool? WorldVerdict(IItemDropRuleCondition condition) => WorldVerdict(condition, ProgressionSystem.PlannedExpert, ProgressionSystem.PlannedMaster);
+
+		public static bool? WorldVerdict(IItemDropRuleCondition condition, bool expert, bool master) => condition switch
 		{
-			Conditions.IsExpert => ProgressionSystem.PlannedExpert,
-			Conditions.NotExpert => !ProgressionSystem.PlannedExpert,
-			Conditions.IsMasterMode => ProgressionSystem.PlannedMaster,
-			Conditions.NotMasterMode => !ProgressionSystem.PlannedMaster,
+			Conditions.IsExpert => expert,
+			Conditions.NotExpert => !expert,
+			Conditions.IsMasterMode => master,
+			Conditions.NotMasterMode => !master,
 			Conditions.IsCrimson => HasEvil(true),
 			Conditions.IsCorruption => HasEvil(false),
-			Conditions.IsCrimsonAndNotExpert => HasEvil(true) && !ProgressionSystem.PlannedExpert,
-			Conditions.IsCorruptionAndNotExpert => HasEvil(false) && !ProgressionSystem.PlannedExpert,
-			Conditions.LegacyHack_IsBossAndExpert => ProgressionSystem.PlannedExpert,
-			Conditions.LegacyHack_IsBossAndNotExpert => !ProgressionSystem.PlannedExpert,
+			Conditions.IsCrimsonAndNotExpert => HasEvil(true) && !expert,
+			Conditions.IsCorruptionAndNotExpert => HasEvil(false) && !expert,
+			Conditions.LegacyHack_IsBossAndExpert => expert,
+			Conditions.LegacyHack_IsBossAndNotExpert => !expert,
 			Conditions.TenthAnniversaryIsUp => Main.tenthAnniversaryWorld,
 			Conditions.TenthAnniversaryIsNotUp => !Main.tenthAnniversaryWorld,
 			Conditions.DontStarveIsUp => Main.dontStarveWorld,

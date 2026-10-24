@@ -53,10 +53,12 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("JackpotPacing", JackpotPacing);
 		}
 
-		// Jackpots of a simulated early hour before the first boss, at most this many with the default settings (a sanity
-		// bound, not a target: luck and madness of the kills, giants left out). 1.3.4 had 6 with about 0.9 % of jackpot chances
-		// early; back to 5 % / 2 % at every tier, 20 until the logged value is known
-		public const double MaxJackpotsPerHour = 20;
+		// Jackpots of a simulated early hour before the first boss with the default settings: luck and madness of the kills,
+		// the per-kill jackpot, giants and minis. 1.3.4 had 6 with about 0.9 % of jackpot chances early; the permutation style
+		// fell to about 0.4 (0.75 with giants and minis); 0.20.0 aims at about 2 with the per-kill jackpot (KillJackpotChance).
+		// Not measured yet: a sanity range only; tune KillJackpotChance from the logged "Jackpots:" value
+		public const double MinJackpotsPerHour = 0.8;
+		public const double MaxJackpotsPerHour = 5;
 
 		private static void Log(string text) => ModContent.GetInstance<UltimateRandomizer>().Logger.Info(text);
 
@@ -188,22 +190,30 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "First work bench");
 		}
 
-		// Jackpots per early hour (luck and madness of the kills, with their share of the progression), logged; bounded before
-		// the first boss with the default settings
+		// Jackpots per early hour (luck and madness of the kills, the per-kill jackpot, giants and minis, with their share of
+		// the progression), logged per hour; between MinJackpotsPerHour and MaxJackpotsPerHour before the first boss with the
+		// default settings
 		private static void JackpotPacing()
 		{
 			int tier = ProgressionSystem.UnlockedTier;
-			double per100 = PacingModel.JackpotsPer100Kills(3000, 46);
-			double perHour = per100 * PacingModel.KillsPerHour / 100;
-			Log($"Jackpots: {perHour:0.00}/h at tier {tier} ({per100:0.00} per 100 kills, {PacingModel.KillsPerHour} kills per hour)");
+			double per100 = PacingModel.JackpotsPer100Kills(3000, 46, out double perKill, out double giantsMinis);
+			double hour = PacingModel.KillsPerHour / 100.0;
+			double perHour = per100 * hour;
+			Log($"Jackpots: {perHour:0.00}/h at tier {tier} ({per100:0.00} per 100 kills, {PacingModel.KillsPerHour} kills per hour): per-kill jackpot {perKill * hour:0.00}/h, "
+				+ $"giants and minis {giantsMinis * hour:0.00}/h, drops (luck and madness) {(per100 - perKill - giantsMinis) * hour:0.00}/h");
 			RequireDefaults();
 			ProgressionConfig progression = ProgressionConfig.Instance;
-			foreach (string field in new[] { "RuntimeJackpotChance", "WildDropChance", "WildTierDecay", "TierAllowance", "TierGating" })
+			foreach (string field in new[] { "RuntimeJackpotChance", "WildDropChance", "WildTierDecay", "KillJackpotChance", "TierAllowance", "TierGating" })
 			{
 				if (!IsDefault(progression, field)) Check.Skip($"{field} is not at its default value");
 			}
-			if (tier != 0) Check.Skip($"the world is at tier {tier}, the bound is for the start");
-			Check.That(perHour <= MaxJackpotsPerHour, $"{perHour:0.00} jackpots per early hour, at most {MaxJackpotsPerHour}");
+			EnemiesConfig enemies = EnemiesConfig.Instance;
+			foreach (string field in new[] { "GiantChance", "MiniChance", "GiantBonusDrop", "MiniBonusDrop" })
+			{
+				if (!IsDefault(enemies, field)) Check.Skip($"{field} is not at its default value");
+			}
+			if (tier != 0) Check.Skip($"the world is at tier {tier}, the bounds are for the start");
+			Check.That(perHour >= MinJackpotsPerHour && perHour <= MaxJackpotsPerHour, $"{perHour:0.00} jackpots per early hour, expected {MinJackpotsPerHour} to {MaxJackpotsPerHour}");
 		}
 
 		private static void PacingVariety()

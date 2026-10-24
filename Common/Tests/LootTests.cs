@@ -38,6 +38,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("SpawnedEnemyNoExtraDrops", SpawnedEnemyNoExtraDrops);
 			TestRunner.Register("CrittersNoJackpot", CrittersNoJackpot);
 			TestRunner.Register("BagNeverJackpot", BagNeverJackpot);
+			TestRunner.Register("KillJackpotRate", KillJackpotRate);
 			TestRunner.Register("JackpotTail", JackpotTail);
 			TestRunner.Register("GuaranteeScalesWithPlayers", GuaranteeScalesWithPlayers);
 			TestRunner.Register("LockedDropsRedistributed", LockedDropsRedistributed);
@@ -1280,15 +1281,83 @@ namespace UltimateRandomizer.Common.Tests
 		// tiers ahead already come normally. 1.3.0 raised 5 % / 2 % to 7 % / 3 % (weak enemies only get a share of them:
 		// JackpotWorth); 1.3.2 went back to 5 % / 2 %, the far jackpots were too many; after 1.3.4, 2 % / 1 %, a share of them
 		// early (JackpotStartShare 30 %) and at most one tier above the limit; then back to 5 % / 2 % at every tier, no cap, each
-		// extra tier 3 times rarer, and an allowance of 1 (2 before)
+		// extra tier 3 times rarer, and an allowance of 1 (2 before). 0.20.0: a per-kill jackpot of 1.2 % (the permutation style
+		// had made madness rare), each extra tier 4 times rarer
 		private static void JackpotRatesLower()
 		{
 			float Default(string field) => Convert.ToSingle(typeof(ProgressionConfig).GetField(field).GetCustomAttributes(typeof(System.ComponentModel.DefaultValueAttribute), false)
 				.OfType<System.ComponentModel.DefaultValueAttribute>().First().Value);
 			Check.Equal(5f, Default("WildDropChance"), "default WildDropChance");
 			Check.Equal(2f, Default("RuntimeJackpotChance"), "default RuntimeJackpotChance");
-			Check.Equal(3f, Default("WildTierDecay"), "default WildTierDecay");
+			Check.Equal(4f, Default("WildTierDecay"), "default WildTierDecay");
+			Check.Equal(1.2f, Default("KillJackpotChance"), "default KillJackpotChance");
 			Check.Equal(1f, Default("TierAllowance"), "default TierAllowance");
+		}
+
+		// The per-kill jackpot through the function kills use (RandomNpcDropRule.KillJackpot), with a seeded rng and explicit
+		// chances: about chance x worth of the kills get one (within 30 %: a forced roll may find nothing useful twice), each a
+		// useful item above the progression limit by its gap; at 0 % never one. Before hardmode at the wall (a simulated
+		// progression whose limit is ItemPool.PreHardmodeCap), at most about 1 forced roll in WildTierDecay gives a hardmode item
+		private static void KillJackpotRate()
+		{
+			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
+			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) Check.Skip("no madness outside Coherent mode");
+			if (!ProgressionConfig.Instance.TierGating || ItemPool.GatingLimit(0) >= Tiers.Max) Check.Skip("no progression limit");
+			const int Kills = 20000;
+			const float Chance = 5f, Worth = 0.6f;
+			int owner = NPCID.Zombie;
+			int minLimit = RandomNpcDropRule.MinLimit(owner);
+			int limit = ItemPool.GatingLimit(minLimit);
+			Random rng = new(4242);
+			List<string> failures = new();
+			int hits = 0;
+			try
+			{
+				for (int i = 0; i < Kills; i++)
+				{
+					int item = RandomNpcDropRule.KillJackpot(owner, Chance, Worth, rng, out int gap);
+					if (item <= ItemID.None)
+					{
+						if (gap != 0 && failures.Count < 10) failures.Add($"no item but a gap of {gap}");
+						continue;
+					}
+					hits++;
+					int itemLimit = Math.Min(ItemPool.GatingLimitFor(item, minLimit), limit);
+					if (!ItemPool.IsJackpotWorthy(item) && failures.Count < 10) failures.Add($"{Lang.GetItemNameValue(item)} is not useful");
+					if ((ItemPool.TrueTierOf(item) <= itemLimit || gap != ItemPool.TrueTierOf(item) - itemLimit) && failures.Count < 10)
+					{
+						failures.Add($"{Lang.GetItemNameValue(item)}: true tier {ItemPool.TrueTierOf(item)}, limit {itemLimit}, gap {gap}");
+					}
+				}
+				for (int i = 0; i < 2000; i++)
+				{
+					if (RandomNpcDropRule.KillJackpot(owner, 0f, 1f, rng, out _) > ItemID.None)
+					{
+						failures.Add("a jackpot at 0 %");
+						break;
+					}
+				}
+				const int WallKills = 4000;
+				int wallTier = ItemPool.PreHardmodeCap;
+				if (ItemPool.GatingLimit(wallTier, false, minLimit) == ItemPool.PreHardmodeCap)
+				{
+					int hardmode = 0;
+					for (int i = 0; i < WallKills; i++)
+					{
+						int item = RandomNpcDropRule.KillJackpot(owner, 100f, 1f, rng, out _, wallTier, false);
+						if (item > ItemID.None && ItemPool.TrueTierOf(item) > ItemPool.PreHardmodeCap) hardmode++;
+					}
+					double most = WallKills / Math.Max(1.01, ProgressionConfig.Instance.WildTierDecay) * 1.2 + 20;
+					if (hardmode > most) failures.Add($"{hardmode} hardmode items in {WallKills} forced rolls at the hardmode wall before hardmode, expected at most {most:0}");
+				}
+			}
+			finally
+			{
+				ItemPool.ClearJackpot();
+			}
+			double expected = Kills * Chance / 100.0 * Worth;
+			if (Math.Abs(hits - expected) > 0.3 * expected) failures.Add($"{hits} jackpots in {Kills} kills, expected about {expected:0}");
+			Check.All(failures, "Per-kill jackpots");
 		}
 
 		// Plans, findability and guarantees never use the madness tail: identical at 0 % and 50 %

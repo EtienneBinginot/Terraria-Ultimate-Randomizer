@@ -16,16 +16,18 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private static readonly Dictionary<int, Dictionary<int, int>> locks = new();
 		private static long chancesVersion = -1;
 		private static bool chancesExpert;
+		private static bool chancesMaster;
 		private static int chancesTier = -1;
 		private static bool chancesHardmode;
 
 		private static void CheckVersion()
 		{
-			if (chancesVersion == CodexSystem.StructureVersion && chancesExpert == Main.expertMode && chancesTier == ProgressionSystem.UnlockedTier && chancesHardmode == Main.hardMode) return;
+			if (chancesVersion == CodexSystem.StructureVersion && chancesExpert == Main.expertMode && chancesMaster == Main.masterMode && chancesTier == ProgressionSystem.UnlockedTier && chancesHardmode == Main.hardMode) return;
 			chances.Clear();
 			locks.Clear();
 			chancesVersion = CodexSystem.StructureVersion;
 			chancesExpert = Main.expertMode;
+			chancesMaster = Main.masterMode;
 			chancesTier = ProgressionSystem.UnlockedTier;
 			chancesHardmode = Main.hardMode;
 		}
@@ -37,9 +39,25 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		{
 			CheckVersion();
 			if (chances.TryGetValue(netId, out Dictionary<int, float> cached)) return cached;
-			List<PlannedDrop> plan = RandomNpcDropRule.Plan(netId, Main.expertMode, includeLocked: true);
+			Dictionary<int, float> result = Compute(netId, Main.expertMode, Main.masterMode, out Dictionary<int, int> locked);
+			if (chances.Count > 500)
+			{
+				chances.Clear();
+				locks.Clear();
+			}
+			chances[netId] = result;
+			locks[netId] = locked;
+			return result;
+		}
+
+		// PlannedChances and LockedDrops for an explicit difficulty (the live one in game, tests). Entries the world forbids
+		// are left out: in Expert a boss's not-expert drops never drop (BossPermutation puts them in its bag), the live
+		// difficulty decides as the codex shows it (Main.expertMode, not the planned one that waits for the slider to settle)
+		public static Dictionary<int, float> Compute(int netId, bool expert, bool master, out Dictionary<int, int> locked)
+		{
+			List<PlannedDrop> plan = RandomNpcDropRule.Plan(netId, expert, includeLocked: true).FindAll(d => Findability.WorldAllows(d.Conditions, expert, master));
 			Dictionary<int, float> result = new();
-			Dictionary<int, int> locked = new();
+			locked = new();
 			List<PlannedDrop> unlocked = plan.FindAll(d => !d.Locked);
 			foreach (PlannedDrop drop in plan)
 			{
@@ -54,13 +72,6 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			}
 			// An item also planned unlocked (another entry) drops now
 			foreach (int item in result.Keys) locked.Remove(item);
-			if (chances.Count > 500)
-			{
-				chances.Clear();
-				locks.Clear();
-			}
-			chances[netId] = result;
-			locks[netId] = locked;
 			return result;
 		}
 
