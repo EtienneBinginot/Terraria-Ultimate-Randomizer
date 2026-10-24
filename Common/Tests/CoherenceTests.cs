@@ -23,6 +23,64 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ItemTierDump", ItemTierDump);
 			TestRunner.Register("WorldChestTrueTiers", WorldChestTrueTiers);
 			TestRunner.Register("TierFloorsHold", TierFloorsHold);
+			TestRunner.Register("TiersConsistent", TiersConsistent);
+		}
+
+		// The bucket of every item is its final true tier (the plans roll an item at the tier it is really found), and the
+		// classification errors of the 1.6.4 audit stay fixed: items without a vanilla recipe or made of tier-0 types at a late
+		// station follow their real source (Venom Bullets, lunar bricks), pets, mounts, trophies and masks their boss, and the
+		// mirrors, phones and conches are no boss summons. Config overrides are left out
+		private static void TiersConsistent()
+		{
+			if (!ItemPool.Ready) Check.Skip("items not classified yet");
+			HashSet<int> overridden = ProgressionConfig.Instance.TierOverrides.Where(o => o?.Item != null && !o.Item.IsUnloaded).Select(o => o.Item.Type).ToHashSet();
+			bool Usable(int item) => ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && !overridden.Contains(item);
+			List<string> failures = new();
+			for (int type = 1; type < ItemPool.Info.Length; type++)
+			{
+				ItemInfo info = ItemPool.Info[type];
+				if (!info.Excluded && info.Tier != info.TrueTier && failures.Count < 20) failures.Add($"{Name(type)}: tier {info.Tier}, true tier {info.TrueTier}");
+			}
+			(int item, Tier tier)[] exactly =
+			{
+				(ItemID.SuperHealingPotion, Tier.PostCultist), (ItemID.RocketIII, Tier.PostPlantera), (ItemID.RocketIV, Tier.PostPlantera),
+				(ItemID.Bezoar, Tier.PostEyeOfCthulhu), (ItemID.EmpressFlightBooster, Tier.PostGolem), (ItemID.StyngerBolt, Tier.PostGolem),
+				(ItemID.Nail, Tier.PostPlantera), (ItemID.PortalGun, Tier.PostMoonLord), (ItemID.GravityGlobe, Tier.PostMoonLord),
+				(ItemID.StaticHook, Tier.PostMechBoss), (ItemID.PogoStick, Tier.PreBoss), (ItemID.TruffleWorm, Tier.Hardmode),
+				(ItemID.LihzahrdPowerCell, Tier.PostPlantera), (ItemID.LihzahrdFurnace, Tier.PostPlantera), (ItemID.Autohammer, Tier.PostPlantera),
+				(ItemID.VialofVenom, Tier.PostPlantera), (ItemID.ShadowKey, Tier.PostSkeletron), (ItemID.Hellforge, Tier.PostEvilBoss),
+				(ItemID.Wire, Tier.PostSkeletron), (ItemID.Actuator, Tier.PostSkeletron), (ItemID.DrillContainmentUnit, Tier.PostMoonLord),
+				(ItemID.TerraBlade, Tier.PostPlantera), (ItemID.ChippysCouch, Tier.PostSkeletron), (ItemID.PedguinHat, Tier.PreBoss),
+				(ItemID.PedguinShirt, Tier.PreBoss), (ItemID.PedguinPants, Tier.PreBoss),
+				// Pets, mounts, trophies, relics and masks: their boss's tier
+				(ItemID.EyeOfCthulhuPetItem, Tier.PostEyeOfCthulhu), (ItemID.KingSlimePetItem, Tier.PostEyeOfCthulhu), (ItemID.SlimySaddle, Tier.PostEyeOfCthulhu),
+				(ItemID.HoneyedGoggles, Tier.PostEvilBoss), (ItemID.EyeofCthulhuTrophy, Tier.PostEyeOfCthulhu), (ItemID.KingSlimeMasterTrophy, Tier.PostEyeOfCthulhu),
+				(ItemID.MoonLordMasterTrophy, Tier.PostMoonLord), (ItemID.BossMaskMoonlord, Tier.PostMoonLord)
+			};
+			foreach ((int item, Tier tier) in exactly)
+			{
+				if (Usable(item) && ItemPool.TierOf(item) != (int)tier) failures.Add($"{Name(item)}: tier {ItemPool.TierOf(item)}, {(int)tier} expected ({ItemPool.Info[item].Source ?? "no source"})");
+			}
+			// No vanilla recipe before a late tier (late ingredients, or tier-0 types at a late station): not tier 0
+			(int item, Tier tier)[] atLeast =
+			{
+				(ItemID.NanoBullet, Tier.PostPlantera), (ItemID.VenomBullet, Tier.PostPlantera), (ItemID.MiniNukeI, Tier.PostPlantera), (ItemID.CursedFlare, Tier.Hardmode),
+				(ItemID.PartyBullet, Tier.Hardmode), (ItemID.ExplodingBullet, Tier.Hardmode), (ItemID.GoldenBullet, Tier.Hardmode), (ItemID.LightKey, Tier.Hardmode),
+				(ItemID.NightKey, Tier.Hardmode), (ItemID.HallowedTorch, Tier.Hardmode), (ItemID.CursedCampfire, Tier.Hardmode), (ItemID.IchorCampfire, Tier.Hardmode),
+				(ItemID.CobaltBrick, Tier.Hardmode), (ItemID.ChlorophyteBrick, Tier.PostMechBoss), (ItemID.ShroomitePlating, Tier.PostPlantera),
+				(ItemID.SolarBrick, Tier.PostCultist), (ItemID.StardustBrick, Tier.PostCultist), (ItemID.SolarPlatform, Tier.PostCultist),
+				(ItemID.MartianPlatform, Tier.PostGolem), (ItemID.MartianCostumeShirt, Tier.PostGolem), (ItemID.MartianUniformTorso, Tier.PostGolem),
+				(ItemID.PearlwoodSword, Tier.Hardmode)
+			};
+			foreach ((int item, Tier tier) in atLeast)
+			{
+				if (Usable(item) && ItemPool.TierOf(item) < (int)tier) failures.Add($"{Name(item)}: tier {ItemPool.TierOf(item)}, at least {(int)tier} expected ({ItemPool.Info[item].Source ?? "no source"})");
+			}
+			foreach (int item in new[] { ItemID.MagicMirror, ItemID.IceMirror, ItemID.CellPhone, ItemID.MagicConch, ItemID.DemonConch, ItemID.Shellphone })
+			{
+				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.Info[item].Category == ItemCategory.BossSummon) failures.Add($"{Name(item)} is a boss summon");
+			}
+			Check.All(failures, "Tier classification");
 		}
 
 		// The tier floors of the audits hold: hard gates get no allowance and are never found before their tier; the Creeper's
@@ -107,7 +165,7 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// World-generated chests lower the true tier of what they hold to the tier the chest is opened (Trident: a water chest,
-		// tier 0), never their Tier; a config override keeps its own
+		// tier 0), and their bucket follows (Tier is the final true tier); a config override keeps its own
 		private static void WorldChestTrueTiers()
 		{
 			if (!ItemPool.Ready) Check.Skip("items not classified yet");
@@ -117,7 +175,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (overridden.Contains(item) || !ItemPool.IsValid(item) || ItemPool.Info[item].Excluded) continue;
 				if (ItemPool.TrueTierOf(item) > tier) failures.Add($"{Name(item)}: true tier {ItemPool.TrueTierOf(item)}, its chest opens at {tier}");
-				if (ItemPool.Info[item].Tier != ItemPool.AllTiers[item]) failures.Add($"{Name(item)}: Tier changed");
+				if (ItemPool.Info[item].Tier != ItemPool.TrueTierOf(item)) failures.Add($"{Name(item)}: bucket tier {ItemPool.Info[item].Tier}, true tier {ItemPool.TrueTierOf(item)}");
 			}
 			Check.All(failures, "World chest items above their chest's tier");
 		}
@@ -531,8 +589,9 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			int[] all = ItemPool.AllTiers;
 			int TierFor(int t) => ItemPool.IsValid(t) && !ItemPool.Info[t].Excluded ? ItemPool.TrueTierOf(t) : t > 0 && t < all.Length ? all[t] : Tiers.Max;
-			List<int> raised = Enumerable.Range(1, ItemPool.Info.Length - 1).Where(t => !ItemPool.Info[t].Excluded && ItemPool.TrueTierOf(t) > ItemPool.TierOf(t)).ToList();
-			Log($"raised: {raised.Count} items; tier > true tier: " + string.Join(", ", raised.GroupBy(t => (ItemPool.TierOf(t), ItemPool.TrueTierOf(t)))
+			// Against the classification tier (the bucket is the final true tier)
+			List<int> raised = Enumerable.Range(1, ItemPool.Info.Length - 1).Where(t => !ItemPool.Info[t].Excluded && t < all.Length && ItemPool.TrueTierOf(t) > all[t]).ToList();
+			Log($"raised: {raised.Count} items; tier > true tier: " + string.Join(", ", raised.GroupBy(t => (all[t], ItemPool.TrueTierOf(t)))
 				.OrderBy(g => g.Key.Item1).ThenBy(g => g.Key.Item2).Select(g => $"{g.Key.Item1}>{g.Key.Item2} {g.Count()}")));
 			Log("raised by category: " + ByCategory(raised));
 			HashSet<int> set = raised.ToHashSet();

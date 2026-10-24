@@ -12,12 +12,15 @@ namespace UltimateRandomizer.Common.Core
 	public struct ItemInfo
 	{
 		public ItemCategory Category;
+		// The tier of its bucket, which the plans work with: its final true tier (the same value as TrueTier). The tier before
+		// the sources (rarity lowered by recipes) is ItemPool.AllTiers
 		public int Tier;
 		// The tier its rarity (or KnownTiers, an override) gives, before vanilla recipes lower it (ItemClassifier.LowerByRecipes)
 		public int RarityTier;
-		// The tier from which it may be given at random (>= Tier): raised for crafted items that no recipe makes before it
-		// (Pearlwood Sword: rarity 0, Pearlwood is hardmode). The buckets and the plans keep Tier; rolls re-pick an item
-		// whose TrueTier is above their ceiling (ItemClassifier.RaiseByRecipes, ItemPool.Repick)
+		// The tier from which it may be given at random: raised for crafted items that no recipe makes before it (Pearlwood
+		// Sword: rarity 0, Pearlwood is hardmode) and by late sources, lowered by reliable ones, the material table, the hand
+		// fixes and world chests (ItemClassifier). Equal to Tier; rolls still re-pick an item whose TrueTier is above their
+		// ceiling (a window bucket, a hard gate: ItemPool.Repick)
 		public int TrueTier;
 		// The earliest vanilla source (drop, bag, shop, recipe, gathered: ItemClassifier.RaiseBySources), -1 without any;
 		// Source describes it, SourceRaised: it raised TrueTier (TierAudit)
@@ -32,7 +35,7 @@ namespace UltimateRandomizer.Common.Core
 		// Its true tier was lowered by a world-generated chest that holds it (ItemClassifier.LowerByWorldChests)
 		public bool FromWorldChest;
 		// Its true tier was lowered by a reliable vanilla source (a boss drop, a shop...), a hand fix (ItemClassifier.TrueTierFixes)
-		// or its recipes settled after them (ItemClassifier.SettleByRecipes): it may be below Tier
+		// or its recipes settled after them (ItemClassifier.SettleByRecipes): it may be below its classification tier (AllTiers)
 		public bool Corrected;
 		// A hard progression gate (ItemClassifier.HardGates: luminite, chlorophyte, ectoplasm, mechanical souls... and what is only
 		// made from them): no TierAllowance (UnlockTierOf, GatingLimitFor)
@@ -94,7 +97,8 @@ namespace UltimateRandomizer.Common.Core
 
 		public static int ContentHash { get; private set; }
 
-		// The tier of every item, excluded ones too (they may be recipe ingredients), after the tiers from recipes (tests)
+		// The classification tier of every item, excluded ones too: its rarity's, lowered by the vanilla recipes, before any
+		// source moved its true tier (tests, reports). The buckets use the final true tiers (ItemInfo.Tier)
 		public static int[] AllTiers { get; private set; } = Array.Empty<int>();
 
 		public static bool Ready => Info.Length > 0;
@@ -146,7 +150,8 @@ namespace UltimateRandomizer.Common.Core
 			int[] reliableTiers = new int[count];
 			int bySources = ItemClassifier.RaiseBySources(trueTiers, overrides, sourceTiers, sourceNames, reliableTiers, out string sourceExamples);
 			// A reliable source lowers the true tier below the rarity's (Slimy Saddle: the King Slime; Plantera's weapons): never
-			// below that source, never a fixed tier (KnownTiers, config overrides). Tier and the buckets never change
+			// below that source, never a fixed tier (KnownTiers, config overrides). These steps only move true tiers: the buckets
+			// are filled from the final ones at the end
 			bool[] corrected = new bool[count];
 			int byReliable = 0;
 			for (int type = 1; type < count; type++)
@@ -159,7 +164,7 @@ namespace UltimateRandomizer.Common.Core
 			}
 			// Then the hand-reviewed materials (MaterialTiers) and the hand fixes (ItemClassifier.TrueTierFixes): their true tier is
 			// exactly the table's, whatever the recipes and sources computed (lower too); null bans them. The config overrides still
-			// win. Tier and the buckets never change
+			// win
 			bool[] fromTable = new bool[count];
 			bool[] fixedTier = new bool[count];
 			bool[] tableBanned = new bool[count];
@@ -227,14 +232,16 @@ namespace UltimateRandomizer.Common.Core
 				bool isProtected = protectedItems.Contains(type);
 				bool special = !isProtected && Protection.IsUpgrade(type);
 				ItemCategory category = special ? ItemCategory.Misc : ItemClassifier.Classify(type, item);
-				int tier = tiers[type];
-				// Banned items stay in their bucket (the buckets never change): rolls re-pick them
+				// The bucket is the final true tier: an item is rolled at the tier it is really found (Venom Bullets at 6, not at
+				// their rarity's 0; the Slimy Saddle at the King Slime's 1, not at 7)
+				int tier = trueTiers[type];
+				// Banned items stay in their bucket: rolls re-pick them
 				bool isBanned = ItemClassifier.IsBanned(item) || tableBanned[type] || ItemClassifier.IsInternal(item, sourced);
 				if (isBanned) banned++;
-				// Final (a material of the table, a world chest item or a corrected one keeps its tier even below its bucket's tier)
+				// Final (a material of the table, a world chest item or a corrected one keeps its tier even below its classification tier)
 				int trueTier = trueTiers[type];
 				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = trueTier, Banned = isBanned, Protected = isProtected,
-					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fixedTier[type] && trueTier > Math.Max(tier, beforeSources[type]),
+					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fixedTier[type] && trueTier > Math.Max(tiers[type], beforeSources[type]),
 					FromTable = fromTable[type], FromWorldChest = fromChest[type], Corrected = corrected[type] && !fromChest[type], HardGate = hardGates[type],
 					Special = special };
 				// Upgrades stay out of the buckets: the buckets (and every plan rolled from them) are the same as when they were protected
@@ -633,11 +640,12 @@ namespace UltimateRandomizer.Common.Core
 			return RepickDisabled || Allowed(picked, ceiling) ? picked : Repick(picked, tier, ceiling, keys, RepickStage.Pick);
 		}
 
-		// The tier the plans work with (rolls aim at it, findability, guaranteed sources, recipe availability)
+		// The tier the plans work with (rolls aim at it, findability, guaranteed sources, recipe availability): the bucket, the
+		// final true tier
 		public static int TierOf(int type) => IsValid(type) ? Info[type].Tier : 0;
 
-		// The tier from which the item may be given (>= TierOf, except the materials of MaterialTiers: exactly the table's, and
-		// what world-generated chests hold: their chest's tier, lower only):
+		// The tier from which the item may be given (the same as TierOf: the materials of MaterialTiers take the table's,
+		// what world-generated chests hold their chest's tier, lower only):
 		// progression checks, jackpot gaps, what the codex shows
 		public static int TrueTierOf(int type) => IsValid(type) ? Info[type].TrueTier : 0;
 

@@ -301,8 +301,10 @@ namespace UltimateRandomizer.Common.Tests
 				if (info.Excluded) continue;
 				// The hand-reviewed materials (MaterialTiers) take the table's tier exactly, lower too; world-generated chests
 				// lower what they hold (Band of Regeneration: a gold chest item, found at 1)
-				if (info.TrueTier < info.Tier && !info.FromTable && !info.FromWorldChest && !info.Corrected) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {info.Tier}");
-				if (info.TrueTier > info.Tier) raised++;
+				// Against the classification tier (AllTiers: the bucket is the final true tier itself)
+				int tier = ItemPool.AllTiers[type];
+				if (info.TrueTier < tier && !info.FromTable && !info.FromWorldChest && !info.Corrected) failures.Add($"{Name(type)}: true tier {info.TrueTier} below its tier {tier}");
+				if (info.TrueTier > tier) raised++;
 			}
 			foreach (int item in new[] { ItemID.PearlwoodSword, ItemID.PearlwoodWorkBench })
 			{
@@ -331,9 +333,9 @@ namespace UltimateRandomizer.Common.Tests
 			};
 			foreach (int item in kept)
 			{
-				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.TrueTierOf(item) > ItemPool.TierOf(item))
+				if (ItemPool.IsValid(item) && !ItemPool.Info[item].Excluded && ItemPool.TrueTierOf(item) > ItemPool.AllTiers[item])
 				{
-					failures.Add($"{Name(item)}: raised from {ItemPool.TierOf(item)} to {ItemPool.TrueTierOf(item)}");
+					failures.Add($"{Name(item)}: raised from {ItemPool.AllTiers[item]} to {ItemPool.TrueTierOf(item)}");
 				}
 			}
 			Log($"Raised tiers: {raised} items");

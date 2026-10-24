@@ -134,6 +134,7 @@ Tests: {
 	ModdedDropsPermuted: The drops of other mods' enemies and bosses are permuted with everyone's, at their estimated tier
 	ModdedStationsTiered: Other mods' stations get the tier of their item, are only given to recipes of their tier, and the themed ones are guaranteed when unprotected
 	TierFloorsHold: The audited tier floors hold: hard gates without allowance, the Creeper as its Brain, late enemies and global drops, lock boxes, mining levels, reliable sources lowering
+	TiersConsistent: Every item's tier is its true tier, and the audited tier errors stay fixed
 	GuaranteeScalesWithPlayers: Guaranteed stations are shared between players, random stations are rarer
 	LockedDropsRedistributed: The chances of locked drops go to the unlocked random drops of the enemy, capped at 100%
 	LockedVanillaDropRemoved: A replaced original drop still locked by progression does not drop; an unlocked one drops as planned
@@ -189,6 +190,7 @@ Tests: {
 	OreMappingBijective: Each ore of this world still exists, as the drop of exactly one other ore of the world; absent ores stay themselves, and deciding a hardmode pair changes no ore of another tier; one-to-one even with both ores of a pair present
 	TreeShakeReplacement: Shaken trees give random items and keep acorns
 	HerbReplacementTable: Each herb has a fixed set of valid replacements
+	HerbTableDistinct: A herb's replacement table never holds the same item twice
 	ExtractinatorRules: The Extractinator keeps coins and swaps ores for ores
 	AnglerRewardsValid: Angler rewards are replaced by valid items, coins kept
 	TreeCritterSwap: Critters falling from trees are swapped too
