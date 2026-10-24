@@ -146,7 +146,7 @@ Tests: {
 	BossPermutationConserves: La permutation des boss ne perd et ne double rien : chaque drop de boss et contenu de sac mélangé est toujours dans un boss ou un sac
 	BossBagMatchesBoss: Chaque sac de trésor contient les drops mélangés du mode normal de son boss, avec leur chance et leur quantité dans le sac d'où ils viennent
 	BossPermutationTiers: Les drops de boss ne passent qu'entre boss du même groupe de tiers, avec les mêmes restrictions
-	WorldDropsReported: Avec la permutation, le bestiaire et les rapports de drops montrent les drops du monde : le plan d'un ennemi, pas ses règles vanilla réduites au silence
+	WorldDropsReported: Avec la permutation, le bestiaire et les rapports de drops montrent les drops du monde : ce qu'un ennemi lâche maintenant, ni ses règles vanilla réduites au silence, ni les entrées encore verrouillées par la progression
 	BossRuntime: Les règles de drop des boss et des sacs suivent vraiment la permutation : les drops coupés sont tirés quelque part, rien ne tombe deux fois
 	PermutationConservation: Chaque entrée de drop vanilla des ennemis, des boss et des sacs de boss se trouve exactement une fois quelque part, à sa place ou déplacée
 	PermutedConditions: Les drops déplacés n'ont que des conditions possibles : ni saisonnière ni de premier kill, les conditions propres à un objet le suivent

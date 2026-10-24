@@ -17,7 +17,7 @@ namespace UltimateRandomizer.Common.Features
 	// permuted entries, the extra and guaranteed drops) instead of vanilla's. While Showing, the silenced wrappers
 	// (PermutableRule) report nothing and RandomNpcDropRule / BossBagRule report their world plan; otherwise every rule
 	// reports vanilla. Both readers keep snapshots taken at load (BestiaryDatabase.Merge, Recipe Browser's LootCache), so
-	// they are rebuilt on the client once the world plan is ready, after each seed or config change, and on leaving the
+	// they are rebuilt on the client once the world plan is ready, after each seed or config change and each new tier, and on leaving the
 	// world (vanilla again). Bag contents are read live by Recipe Browser (GetRulesForItemID + ReportDroprates). Client only:
 	// the server has no bestiary, and its reports stay vanilla
 	public static class WorldDropsReport
@@ -37,13 +37,14 @@ namespace UltimateRandomizer.Common.Features
 		public static IEnumerable<PlannedDrop> Reported(IEnumerable<PlannedDrop> plan) =>
 			plan.Where(d => d.Item > ItemID.None && (d.Rolled || d.Extra || d.Guaranteed));
 
-		// The final plan (everything unlocked: a locked entry still drops on a lucky kill), stable through progression so
-		// that the snapshots don't need rebuilding at each boss; rolled at the tier kills roll at now (planning false), which
-		// moves with progression only with ScaleWeakEnemiesWithProgression (the report is then rebuilt at each new tier)
+		// What drops now: the entries progression still locks are left out (their chances go to the others, as on a kill),
+		// else the bestiary showed a Zenith on an early-hardmode mimic that only a lucky kill drops. Rolled at the tier kills
+		// roll at now (planning false); both move with progression, so the report is rebuilt at each new tier (FollowTier).
+		// The codex (J) still lists the locked entries, as locked
 		public static IEnumerable<PlannedDrop> NpcPlan(int netId)
 		{
 			if (plans != null && plans.TryGetValue(netId, out List<PlannedDrop> plan)) return plan;
-			plan = Reported(RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true, planning: false)).ToList();
+			plan = Reported(RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: false, planning: false)).ToList();
 			if (plans != null) plans[netId] = plan;
 			return plan;
 		}
@@ -51,7 +52,8 @@ namespace UltimateRandomizer.Common.Features
 		// During a rebuild: the plans already computed (the bestiary and Recipe Browser read every net ID)
 		private static Dictionary<int, List<PlannedDrop>> plans;
 
-		public static IEnumerable<PlannedDrop> BagPlanned(int bagType) => Reported(BagPlan.Plan(bagType, lucky: true));
+		// A bag's contents that drop now, as for enemies (NpcPlan)
+		public static IEnumerable<PlannedDrop> BagPlanned(int bagType) => Reported(BagPlan.Plan(bagType, lucky: false));
 
 		public static void Report(IEnumerable<PlannedDrop> plan, List<DropRateInfo> drops, DropRateInfoChainFeed ratesInfo)
 		{
@@ -321,11 +323,8 @@ namespace UltimateRandomizer.Common.Features
 
 		private static void ShopsCold() => shopsCold = true;
 
-		// With ScaleWeakEnemiesWithProgression the reported plans follow the unlocked tier (NpcPlan: kill-time tiers)
-		private static void FollowTier()
-		{
-			if (ProgressionConfig.Instance.ScaleWeakEnemiesWithProgression) dirty = true;
-		}
+		// The reported plans follow the unlocked tier (NpcPlan: what drops now, at kill-time tiers)
+		private static void FollowTier() => dirty = true;
 
 		private static bool expert;
 
