@@ -1950,8 +1950,8 @@ namespace UltimateRandomizer.Common.Features
 			};
 		}
 
-		// The same within the plain stack caps only (IngredientStackCap, OneOffCap): what the candidates' choices weigh (which
-		// key can be worth its slot, what room a surprise has left), so the count caps change counts, not which items are picked
+		// The same within the plain stack caps only (IngredientStackCap, OneOffCap): an upgrade's key, whether a stack within
+		// the plain caps can be worth its slot
 		private static int PlainStack(long value, int x)
 		{
 			long unit = UnitValue(x);
@@ -2289,7 +2289,7 @@ namespace UltimateRandomizer.Common.Features
 
 			// A recipe that could not be rebuilt keeps its vanilla ingredients, unless one of them is made from its result through
 			// the plan (a loop the recipes as set up don't have: Wood <-> Wood Platform stays as it is): those are replaced by
-			// materials had by T that the result does not lead to (within the use caps), the stack keeping the value (a group slot
+			// materials had by T that the result does not lead to (within the use caps), the vanilla count kept, TrimValues capping the value (a group slot
 			// drops its group). A protected one, or one with no replacement, switches the recipe off (RecipePlan.LoopOff) when
 			// its result is still had otherwise; else the recipe stays vanilla, loop and all (a warning: never an item lost)
 			private void KeepOriginals(int i)
