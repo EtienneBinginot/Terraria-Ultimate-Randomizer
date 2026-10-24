@@ -73,6 +73,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("StationsCraftable", StationsCraftable);
 			TestRunner.Register("HouseRecipesSimple", HouseRecipesSimple);
 			TestRunner.Register("IngredientCountCaps", IngredientCountCaps);
+			TestRunner.Register("IngredientCountsFromVanilla", IngredientCountsFromVanilla);
 			TestRunner.Register("NoNeverIngredients", NoNeverIngredients);
 			TestRunner.Register("NoEmptyLiveRecipes", NoEmptyLiveRecipes);
 			TestRunner.Register("SwapStationsInTime", SwapStationsInTime);
@@ -398,16 +399,13 @@ namespace UltimateRandomizer.Common.Tests
 				if (plan.Ingredients[i] == null || SpecialRecipe(plan, i)) continue;
 				long before = RecipeSystem.OriginalIngredientValue(plan.SwapPartner[i] >= 0 ? plan.SwapPartner[i] : i);
 				long after = plan.IngredientValues[i];
-				// A stack held by its count cap (RecipePlanner.StackCap: 30 of a block, 10 of a slow item, 3 of a crafted one) may
-				// lose value, and a recipe cheaper than vanilla is fine since 1.6.6 (the value only shapes the counts): only one
-				// worth less than RaiseFactor of the vanilla value without a capped stack is wrong. A new ingredient's stack is
-				// rounded up, so each one may add up to its own unit value (a x1 of something pricier than its share); never more
-				// than twice the vanilla value
-				bool capped = plan.ValueShort[i] || plan.Ingredients[i].Any(p => p.stack >= RecipePlanner.StackCap(plan, i, p.type));
+				// The counts follow the vanilla counts since 1.7.2 and the value only guards the top: a recipe cheaper than vanilla
+				// is fine, one worth more than MaxValueFactor times the vanilla value is wrong. A new ingredient keeps at least one
+				// unit, so each one may add up to its own unit value (a x1 of something pricier than its share)
 				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
 				bool rebuilt = plan.IngredientTiers[i] >= 0 && !plan.Repaired[i];
 				long roundUp = plan.Ingredients[i].Where(p => rebuilt ? RecipePlanner.IngredientReplaceable(p.type) : !originals.Contains(p.type)).Sum(p => RecipeSystem.EffectiveValue(p.type));
-				if ((!capped && after < before * RecipePlanner.RaiseFactor) || after > before * 2 + Item.silver + roundUp) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {before} -> {after}");
+				if (after > before * RecipePlanner.MaxValueFactor + Item.silver + roundUp) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {before} -> {after}");
 			}
 			Check.All(failures, "Ingredient values changed too much");
 		}
@@ -1903,10 +1901,10 @@ namespace UltimateRandomizer.Common.Tests
 
 		// Planned ingredients are sane: no stack above RecipePlanner.StackCap (its count cap, CountCap, three times a vanilla
 		// stack for a plain material), and a rebuilt recipe is worth at most twice its vanilla recipe (the item's own for a
-		// swap), value-0 items counting their own recipe (EffectiveValue), each new ingredient rounded up by one unit at most,
-		// and at least RaiseFactor of it (cheaper than vanilla is fine since the count caps: it was half before 1.6.6).
-		// Recipes RaiseValue could not bring up (no richer material in time) and a rare short one are tolerated (1 %); the
-		// upgrades are worth at least the upgrade (UpgradeRecipes). The cases of the 1.5.0 run are named
+		// swap), value-0 items counting their own recipe (EffectiveValue), each new ingredient rounded up by one unit at most.
+		// No minimum since 1.7.2 (the counts follow the vanilla counts, cheaper than vanilla is fine): the share below half
+		// and below a quarter is logged. ValueShort (LimitRecipeValue only, outside the upgrades) stays rare; the upgrades are
+		// worth at least the upgrade (UpgradeRecipes). The cases of the 1.5.0 run are named
 		private static void RecipeValueSane()
 		{
 			RequireRandomIngredients();
@@ -1914,7 +1912,7 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			List<string> low = new();
 			List<string> shortOnes = new();
-			int rebuilt = 0, valueShort = 0, shortAboveMin = 0, belowHalf = 0;
+			int rebuilt = 0, valueShort = 0, belowHalf = 0;
 			int[] named = { ItemID.ManaCrystal, ItemID.LifeCrystal, ItemID.SoulBottleFright, ItemID.LunarBlockNebula, ItemID.LunarBlockStardust, ItemID.SolarBrick, ItemID.TrueNightsEdge };
 			UltimateRandomizer mod = ModContent.GetInstance<UltimateRandomizer>();
 			for (int i = 0; i < Count; i++)
@@ -1934,23 +1932,19 @@ namespace UltimateRandomizer.Common.Tests
 				rebuilt++;
 				long roundUp = plan.Ingredients[i].Where(p => RecipePlanner.IngredientReplaceable(p.type)).Sum(p => RecipeSystem.EffectiveValue(p.type));
 				string where = $"{name}: {before} -> {after} ({Ingredients(plan.Ingredients[i])})";
-				if (after > before * 2 + Item.silver + roundUp) failures.Add(where);
+				if (after > before * RecipePlanner.MaxValueFactor + Item.silver + roundUp) failures.Add(where);
 				if (after < before / 2) belowHalf++;
+				if (after < before / 4 && low.Count < 10) low.Add(where);
 				if (plan.ValueShort[i])
 				{
 					valueShort++;
-					// Short of the vanilla value itself (a valuable swapped result, LimitRecipeValue), not of the usual minimum
-					if (after >= Math.Ceiling(before * RecipePlanner.RaiseFactor)) shortAboveMin++;
 					if (shortOnes.Count < 10) shortOnes.Add(where);
 				}
-				else if (after < before * RecipePlanner.RaiseFactor) low.Add(where);
 			}
 			if (rebuilt == 0) Check.Skip("no rebuilt recipe");
-			mod.Logger.Info($"RecipeValueSane: {rebuilt} rebuilt recipes, {belowHalf} below half their vanilla value (allowed: counts are capped), {valueShort} short of " +
-				$"{RecipePlanner.RaiseFactor:P0} (no richer material in time; {shortAboveMin} of them above it){(shortOnes.Count == 0 ? "" : ": " + string.Join("; ", shortOnes))}, " +
-				$"{low.Count} below {RecipePlanner.RaiseFactor:P0} without being short{(low.Count == 0 ? "" : ": " + string.Join("; ", low.Take(10)))}");
+			mod.Logger.Info($"RecipeValueSane: {rebuilt} rebuilt recipes, {belowHalf} below half their vanilla value (allowed: counts follow the vanilla counts){(low.Count == 0 ? "" : "; below a quarter: " + string.Join("; ", low))}; " +
+				$"{valueShort} short of the value LimitRecipeValue asks{(shortOnes.Count == 0 ? "" : ": " + string.Join("; ", shortOnes))}");
 			Check.That(valueShort <= Math.Max(5, rebuilt / 50), $"{valueShort} of {rebuilt} rebuilt recipes short of their value");
-			Check.That(low.Count <= Math.Max(3, rebuilt / 100), $"{low.Count} recipes below {RecipePlanner.RaiseFactor:P0} of their vanilla value: {string.Join("; ", low.Take(10))}");
 			Check.All(failures, "Insane ingredient stacks or values");
 		}
 
@@ -2103,6 +2097,45 @@ namespace UltimateRandomizer.Common.Tests
 			string Top(List<(int stack, string where)> list) => list.Count == 0 ? "none" : string.Join("; ", list.OrderByDescending(x => x.stack).ThenBy(x => x.where, StringComparer.Ordinal).Take(5).Select(x => x.where));
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"IngredientCountCaps: {checkedCount} new ingredients, {crafted.Count} craft-only (largest: {Top(crafted)}), {slow.Count} slow (largest: {Top(slow)})");
 			Check.All(failures, "Ingredients above their count cap");
+		}
+
+		// The new ingredients of a rebuilt recipe (not a shell, an upgrade nor a house item) count, in all, at most the vanilla
+		// count of the ingredients they replace (RecipePlanner.CountBase: the item's own recipe for a swap) times
+		// MaxCountFactor, rounded up, plus one per line (each one rounded, at least one); a key added as a new ingredient may
+		// add the smallest count. Counts no longer follow the value: the share of new lines at the plain cap
+		// (IngredientStackCap: 638 lines at 30 in the 1.7.0 export) is logged, with the Meteorite Bar's recipe (30 Ash Blocks and
+		// 29 walls then). A rare ingredient nothing gives may have been replaced on top (a few tolerated)
+		private static void IngredientCountsFromVanilla()
+		{
+			RequireRandomIngredients();
+			if (CraftingConfig.Instance.LimitRecipeValue) Check.Skip("LimitRecipeValue raises counts to the result's value");
+			RecipePlan plan = RecipePlanner.Get();
+			int cap = CraftingConfig.Instance.IngredientStackCap;
+			List<string> failures = new();
+			List<string> meteorite = new();
+			int checkedCount = 0, lines = 0, atCap = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				if (plan.Ingredients[i] == null || plan.Twin[i]) continue;
+				int item = plan.Results[i].type;
+				if (item == ItemID.MeteoriteBar) meteorite.Add(Ingredients(plan.Ingredients[i]));
+				if (RecipeSystem.IsShell(i) || SpecialRecipe(plan, i) || RecipeSystem.HouseRecipe(i)) continue;
+				int proxy = plan.SwapPartner[i] >= 0 && !plan.Repaired[i] ? plan.SwapPartner[i] : i;
+				List<(int type, int stack)> added = plan.Ingredients[i].Where(p => RecipePlanner.IngredientReplaceable(p.type)).ToList();
+				if (added.Count == 0) continue;
+				checkedCount++;
+				lines += added.Count;
+				atCap += added.Count(p => p.stack >= cap);
+				int total = added.Sum(p => p.stack);
+				int most = (int)Math.Ceiling(RecipePlanner.CountBase(proxy, item) * RecipePlanner.MaxCountFactor) + added.Count + (plan.KeyIngredient[i] ? added.Min(p => p.stack) : 0);
+				string where = $"{Name(RecipeSystem.OriginalResult(i))}{(proxy != i ? " -> " + Name(item) : "")}: {Ingredients(plan.Ingredients[i])} (vanilla {Ingredients(RecipeSystem.OriginalIngredients(proxy))})";
+				if (total > most) failures.Add($"{where}, {total} > {most}");
+				if (added.Any(p => p.stack < 1)) failures.Add($"{where}, an empty stack");
+			}
+			if (checkedCount == 0) Check.Skip("no rebuilt recipe");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"IngredientCountsFromVanilla: {checkedCount} recipes, {lines} new lines, {atCap} at the cap of {cap} ({(lines == 0 ? 0 : atCap / (double)lines):P1}); " +
+				$"Meteorite Bar: {(meteorite.Count == 0 ? "not rebuilt" : string.Join(" | ", meteorite))}{(failures.Count == 0 ? "" : "; over: " + string.Join("; ", failures.Take(10)))}");
+			Check.That(failures.Count <= Math.Max(3, checkedCount / 200), $"{failures.Count} recipes with more new ingredients than their vanilla count allows: {string.Join("; ", failures.Take(10))}");
 		}
 
 		// No live planned recipe needs an ingredient that is never had with this plan (a group slot: its best member), nor

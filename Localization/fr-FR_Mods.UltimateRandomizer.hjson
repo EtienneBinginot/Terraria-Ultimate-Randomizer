@@ -255,7 +255,7 @@ Tests: {
 	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
 	NoSelfIngredient: Aucune recette n'utilise son propre résultat
 	ResultNotInGroup: Aucune recette randomisée ne donne un objet accepté par son propre groupe d'ingrédients
-	IngredientValueCoherent: Les recettes reconstruites valent au plus le double des ingrédients vanilla, et au moins le quart sauf si un plafond de quantité les retient
+	IngredientValueCoherent: Les recettes reconstruites valent au plus le double des ingrédients vanilla (moins cher, c'est permis : les quantités suivent les quantités vanilla)
 	ProtectedIngredientsKept: Les ingrédients protégés ne sont jamais remplacés
 	RecipeGroupsSane: Chaque groupe de recette (n'importe quel bois, lingot de fer...) garde son ingrédient
 	RecipePlanDeterminism: Ingrédients et stations identiques après reconstruction
@@ -298,12 +298,13 @@ Tests: {
 	UncraftablePricedByIngredients: Les recettes coquilles actives comptent comme randomisées : ce qu'elles fabriquent se vend au prix de ses ingrédients, pas à son prix d'origine
 	RecipePickaxeMineable: Aucune recette reconstruite de pioche ou de foreuse ne reçoit un nouvel ingrédient dont le minage exige une puissance de pioche au moins égale à la sienne
 	RecipeNotBeforeItsTier: Aucune recette reconstruite ou échangée n'est faisable avant le palier de l'objet qu'elle donne (son palier, ou son vrai palier s'il est plus tard) : pas de pioche en chlorophyte en début de mode difficile
-	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent entre le quart et le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana, pas de fragment de nébuleuse gardé pour un objet bon marché échangé
+	RecipeValueSane: Les recettes planifiées demandent des quantités raisonnables (le plafond de pile, ou trois fois une quantité vanilla) et les recettes reconstruites valent au plus le double de leur recette vanilla (un objet de valeur nulle compte sa propre recette) : pas 9999 murs en rubis pour un cristal de mana, pas de fragment de nébuleuse gardé pour un objet bon marché échangé
 	ProtectedRecipesGated: Un résultat protégé dont les ingrédients sont reconstruits attend le palier débloqué de son vrai palier comme les autres : ni clé de nuit ni clé de lumière avant le mode difficile
 	PickaxeIngredientsBelowLevel: Une recette de pioche ou de foreuse ne reçoit jamais de minerai ni de lingot (ni rien qui en soit fait) dont le minage exige sa propre puissance de pioche ou plus : pas de pioche en orichalque faite de lingots de chlorophyte
 	StationsCraftable: Chaque station d'artisanat a une recette refaite avec des matériaux trouvés, faisable à son palier sans son gardien ; l'établi à la main dès le début
 	HouseRecipesSimple: La torche, la plateforme en bois et la porte en bois ont une recette aléatoire simple : un ou deux matériaux de départ, quelques-uns de chaque, valant au plus le double de la recette vanilla, sur une station de base ou à la main
 	IngredientCountCaps: Aucun nouvel ingrédient n'est demandé au-delà de son plafond : quelques exemplaires d'un objet qu'on ne peut que fabriquer, une dizaine d'un objet lent (gemmes, étoiles filantes, herbes, poissons, créatures, éclats, âmes)
+	IngredientCountsFromVanilla: Les nouveaux ingrédients d'une recette reconstruite totalisent au plus deux fois et demie les ingrédients vanilla qu'ils remplacent (note la part des quantités au plafond et la recette de la barre de météorite)
 	NoNeverIngredients: Aucune recette planifiée active ne demande un ingrédient impossible à obtenir (un miroir de glace, une guimauve) ; une recette gardée vanilla le voit remplacé
 	NoEmptyLiveRecipes: Aucune recette active n'a une liste d'ingrédients vide (une fabrication gratuite)
 	SwapStationsInTime: Un résultat échangé n'arrive jamais sur une station plus tardive que son propre palier plus la tolérance (pas d'arc en tungstène à l'établi lunaire)
@@ -2052,7 +2053,7 @@ Configs: {
 
 		LimitRecipeValue: {
 			Label: Limiter la valeur des résultats
-			Tooltip: Activé : quand l'objet d'une recette randomisée vaut plus de « Garde-fou de valeur » fois ses nouveaux ingrédients, ceux-ci sont relevés à la valeur des ingrédients vanilla. Désactivé : les nouveaux ingrédients ne suivent que de loin la valeur vanilla.
+			Tooltip: Activé : quand l'objet d'une recette randomisée vaut plus de « Garde-fou de valeur » fois ses nouveaux ingrédients, ceux-ci sont relevés à la valeur des ingrédients vanilla. Désactivé : les quantités suivent les quantités vanilla, la valeur ne sert qu'à les plafonner.
 		}
 
 		RecipeValueGuard: {
@@ -2107,7 +2108,7 @@ Configs: {
 
 		IngredientStackCap: {
 			Label: Quantité maximale d'un ingrédient
-			Tooltip: Quantité maximale d'un nouvel ingrédient courant (blocs, bois, gel, butins courants). Les quantités suivent à peu près la valeur des ingrédients vanilla, dans cette limite et les deux suivantes.
+			Tooltip: Quantité maximale d'un nouvel ingrédient courant (blocs, bois, gel, butins courants). Les quantités suivent les quantités vanilla (de la moitié à deux fois et demie au total), dans cette limite et les deux suivantes ; une recette ne vaut jamais plus du double de ses ingrédients vanilla.
 		}
 
 		CraftedIngredientStackCap: {
