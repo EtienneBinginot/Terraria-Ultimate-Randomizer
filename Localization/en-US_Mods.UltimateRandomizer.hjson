@@ -101,7 +101,7 @@ Tests: {
 	DropTableLength: Enemies get long drop tables (2 to 7 slots: about 1.85 times the former 1 to 4)
 	JackpotUseful: Jackpots are always useful items
 	JackpotNotInEnemyDrops: Jackpots are not listed among the enemy's drops
-	JackpotRatesLower: Jackpots are a little rarer by default
+	JackpotRatesLower: Default jackpot chances (madness, luck, per kill, rarity per tier)
 	JackpotDropsMarked: Drops above the limit are marked as jackpots
 	GiantBonusUseful: A giant's bonus item is useful, and five times as likely to be a jackpot
 	MiniBonusDrop: Minis and giants give one bonus item, boss minions never
@@ -109,6 +109,7 @@ Tests: {
 	SpawnedEnemyNoExtraDrops: Enemies spawned by another enemy give no extra drop, guaranteed drop or jackpot
 	CrittersNoJackpot: Critters never give a jackpot
 	BagNeverJackpot: Opened bags and crates never give a jackpot
+	KillJackpotRate: The per-kill jackpot comes at its chance, always useful and above the progression limit
 	JackpotTail: Each extra tier of a jackpot is much rarer, and only jackpots go above the limit (hardmode included)
 	HardmodeWall: Nothing from hardmode before hardmode except jackpots and boss floors, hints consistent with the limit
 	RepickOnlyChangesFlagged: The re-pick only replaces banned or too advanced items, every other roll is unchanged
@@ -214,7 +215,7 @@ Tests: {
 	PacingExpected: 15 to 25 pieces of random equipment per early hour (default settings; the value is written to client.log)
 	PacingSimulation: The pacing simulation is stable and regular
 	PacingVariety: At least 10 different pieces of equipment per early hour
-	JackpotPacing: Few jackpots in an early hour (logged per hour)
+	JackpotPacing: About 2 jackpots in an early hour, per-kill jackpot, giants and minis included (logged per hour)
 	DropFrequency: Most kills give something (at least 0.6 items per kill; the value is written to client.log)
 	WorkBenchPacing: The work bench is made by hand at the start, and its guardian alone gives one within an hour on average (written to client.log)
 	BasicStationsUnprotected: Basic stations (work bench, furnace, anvil...) are left to the randomizer
@@ -1323,8 +1324,13 @@ Configs: {
 		}
 
 		WildTierDecay: {
-			Label: Jackpots: rarity per extra tier
-			Tooltip: How much rarer each tier above the limit is for jackpots (madness and lucky drops): 3 (default) = one tier above is 3 times more frequent than two tiers above. There is no cap: an early hardmode item is possible, but rare. Higher = jackpots stay closer to the limit.
+			Label: "Jackpots: rarity per extra tier"
+			Tooltip: "How much rarer each tier above the limit is for jackpots (madness, lucky drops and jackpots per kill): 4 (default) = one tier above is 4 times more frequent than two tiers above. There is no cap: an early hardmode item is possible, but rare. Higher = jackpots stay closer to the limit."
+		}
+
+		KillJackpotChance: {
+			Label: "Jackpot per kill (%)"
+			Tooltip: "Chance, on each kill, of one extra jackpot on top of the usual drops, whatever the drop style: always useful equipment or a progression station above the progression limit (each tier further is rarer, see the previous setting), shown with light and sound. Weak enemies get a smaller chance, critters, statues and enemies spawned by another enemy none. Bags never give one. 0 = only the other jackpots."
 		}
 
 		MechTierRequiresAllThree: {

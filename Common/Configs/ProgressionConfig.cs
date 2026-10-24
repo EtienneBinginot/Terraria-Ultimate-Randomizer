@@ -69,18 +69,29 @@ namespace UltimateRandomizer.Common.Configs
 		// are scaled by RandomNpcDropRule.JackpotWorth (weak swarms less). 1.3.0 raised the defaults to 7 % / 3 %: too many far
 		// jackpots, back to 5 % / 2 % in 1.3.2; 2 % / 1 % in 1.3.4 with a share early on and at most one tier above the limit;
 		// after 1.3.4 back to 5 % / 2 % at every tier, with no cap: each extra tier WildTierDecay (3) times rarer. A jackpot is
-		// the only way to get a hardmode item before hardmode
+		// the only way to get a hardmode item before hardmode. The permutation drop style (default since 0.13.x) left the
+		// madness only two sparse extra slots per enemy: jackpots fell from about 1.9 to 0.4 per early hour (0.75 with giants
+		// and minis). 0.20.0 adds a per-kill roll of its own (KillJackpotChance) that works in every drop style, and
+		// WildTierDecay goes from 3 to 4 so that more jackpots do not bring back far hardmode items
 		[Range(0f, 50f)]
 		[Increment(0.5f)]
 		[DefaultValue(5f)]
 		public float WildDropChance;
 
-		// At tier 0 (limit 1), decay 3: of the madness jackpots, about 67 % are one tier above, 22 % two, 7.4 % three (the
-		// first hardmode tier), 2.5 % four, 1.2 % more. Lucky items are kept 3^-(gap-1) of the time (ItemPool.LuckyKeepChance)
+		// At tier 0 (limit 1), decay 4: of the madness jackpots, about 75 % are one tier above, 19 % two, 4.7 % three (the
+		// first hardmode tier), 1.2 % four, 0.4 % more. Lucky items are kept 4^-(gap-1) of the time (ItemPool.LuckyKeepChance)
 		[Range(1.5f, 10f)]
 		[Increment(0.5f)]
-		[DefaultValue(3f)]
+		[DefaultValue(4f)]
 		public float WildTierDecay;
+
+		// Per-kill jackpot (%): on top of the drops, whatever the drop style, one useful item above the progression limit
+		// (the madness tail: WildTierDecay), scaled by RandomNpcDropRule.JackpotWorth. Runtime only, never planned. 1.2 % gives
+		// about 2 jackpots per early hour in total with the other defaults (PacingModel.JackpotsPer100Kills)
+		[Range(0f, 20f)]
+		[Increment(0.1f)]
+		[DefaultValue(1.2f)]
+		public float KillJackpotChance;
 
 		[DefaultValue(false)]
 		public bool MechTierRequiresAllThree;

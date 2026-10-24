@@ -35,6 +35,9 @@ namespace UltimateRandomizer.Common.Features
 		public uint MarkedAt;
 		// Not synced: the burst is still to show (world items only, from PostUpdate)
 		public bool Pending;
+		// Placed in a jackpot chest (Mark with fresh: false), not announced yet: the burst, sound and chat line come once, when
+		// a player takes it (JackpotPlayer, on that player's client). Saved and synced, so that the chest keeps it until then
+		public bool Unannounced;
 
 		public const uint FreshTicks = 120;
 
@@ -63,6 +66,7 @@ namespace UltimateRandomizer.Common.Features
 			jackpot.Above = (byte)AboveUnlocked(item.type, gap);
 			jackpot.MarkedAt = fresh ? Math.Max(1u, Main.GameUpdateCount) : 0;
 			jackpot.Pending = fresh && !Main.dedServ;
+			jackpot.Unannounced = !fresh;
 		}
 
 		// Saved with the item (inventories and chests: jackpot chests are filled at world creation)
@@ -71,12 +75,15 @@ namespace UltimateRandomizer.Common.Features
 			if (Gap == 0) return;
 			tag["gap"] = Gap;
 			tag["above"] = Above;
+			if (Unannounced) tag["unannounced"] = true;
 		}
 
+		// Items of jackpot chests saved before 0.20.0 have no flag: they stay silent
 		public override void LoadData(Item item, TagCompound tag)
 		{
 			Gap = tag.GetByte("gap");
 			Above = tag.GetByte("above");
+			Unannounced = Gap > 0 && tag.GetBool("unannounced");
 		}
 
 		private bool Fresh => Gap > 0 && MarkedAt != 0 && Main.GameUpdateCount - MarkedAt < FreshTicks;
@@ -86,6 +93,7 @@ namespace UltimateRandomizer.Common.Features
 			writer.Write(Gap);
 			writer.Write(Above);
 			writer.Write(Fresh);
+			writer.Write(Unannounced);
 		}
 
 		public override void NetReceive(Item item, BinaryReader reader)
@@ -93,6 +101,7 @@ namespace UltimateRandomizer.Common.Features
 			Gap = reader.ReadByte();
 			Above = reader.ReadByte();
 			bool fresh = reader.ReadBoolean();
+			Unannounced = reader.ReadBoolean() && Gap > 0;
 			MarkedAt = fresh ? Math.Max(1u, Main.GameUpdateCount) : 0;
 			// The position is not set yet here (message 21 reads the mod data first): shown from PostUpdate
 			Pending = fresh && Gap > 0 && !Main.dedServ;
@@ -165,23 +174,27 @@ namespace UltimateRandomizer.Common.Features
 
 		// The smallest jackpot already stands out (a dramatic popup, a magic sound, a chat line, a beam); the effects grow with
 		// the gap above the limit, the texts give the tiers above the unlocked tier and the item's tier
-		private static void Announce(Item item, int gap, int above)
+		private static void Announce(Item item, int gap, int above) => Announce(item.Hitbox, item.type, gap, above);
+
+		// At a place (a world item's, or the player taking it from a chest)
+		public static void Announce(Rectangle where, int itemType, int gap, int above)
 		{
 			Color color = ColorOf(gap);
 			string popup = Language.GetTextValue(gap >= 3 ? "Mods.UltimateRandomizer.Jackpot.PopupBig" : "Mods.UltimateRandomizer.Jackpot.Popup", above);
-			CombatText.NewText(item.Hitbox, color, popup, true, false);
+			CombatText.NewText(where, color, popup, true, false);
 			int dusts = 20 + 12 * gap;
 			for (int i = 0; i < dusts; i++)
 			{
 				int type = gap >= 3 ? DustID.RainbowMk2 : i % 2 == 0 ? DustID.GoldCoin : DustID.TreasureSparkle;
-				Dust dust = Dust.NewDustDirect(item.position, item.width, item.height, type, 0f, 0f, 0, gap >= 3 ? Main.hslToRgb(i / (float)dusts, 1f, 0.6f) : default, 1.2f + 0.3f * gap);
+				Dust dust = Dust.NewDustDirect(where.TopLeft(), where.Width, where.Height, type, 0f, 0f, 0, gap >= 3 ? Main.hslToRgb(i / (float)dusts, 1f, 0.6f) : default, 1.2f + 0.3f * gap);
 				dust.velocity = Main.rand.NextVector2Circular(2f + gap, 2f + gap);
 				dust.noGravity = true;
 			}
+			Vector2 center = where.Center.ToVector2();
 			SoundStyle sound = gap >= 3 ? SoundID.AchievementComplete : SoundID.Item4;
-			SoundEngine.PlaySound(sound.WithVolumeScale(gap >= 3 ? 1.4f : gap == 2 ? 1.2f : 1f), item.Center);
-			if (gap == 1) SoundEngine.PlaySound(SoundID.CoinPickup, item.Center);
-			string line = Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Chat", Lang.GetItemNameValue(item.type), above, JackpotItem.TierName(item.type));
+			SoundEngine.PlaySound(sound.WithVolumeScale(gap >= 3 ? 1.4f : gap == 2 ? 1.2f : 1f), center);
+			if (gap == 1) SoundEngine.PlaySound(SoundID.CoinPickup, center);
+			string line = Language.GetTextValue("Mods.UltimateRandomizer.Jackpot.Chat", Lang.GetItemNameValue(itemType), above, JackpotItem.TierName(itemType));
 			Main.NewText(gap >= 3 ? line.ToUpperInvariant() : line, color);
 		}
 
@@ -210,6 +223,28 @@ namespace UltimateRandomizer.Common.Features
 			color.A = 0;
 			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle((int)bottom.X - width / 2, (int)bottom.Y - height, width, height), color);
 			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle((int)bottom.X - width, (int)bottom.Y - height / 3, width * 2, height / 3), color * 0.6f);
+		}
+	}
+
+	// A jackpot chest's item announces itself once, when the local player takes it (in the inventory or on the cursor): its
+	// own client shows the effects, and the cleared flag travels with the item from then on (inventory syncs, saves)
+	public class JackpotPlayer : ModPlayer
+	{
+		public override void PostUpdate()
+		{
+			if (Main.dedServ || Player.whoAmI != Main.myPlayer) return;
+			Check(Main.mouseItem);
+			foreach (Item item in Player.inventory) Check(item);
+		}
+
+		private void Check(Item item)
+		{
+			if (item == null || item.IsAir || !item.TryGetGlobalItem(out JackpotItem jackpot) || !jackpot.Unannounced) return;
+			jackpot.Unannounced = false;
+			if (jackpot.Gap == 0) return;
+			// The tiers ahead now (the chest was filled long before)
+			jackpot.Above = (byte)JackpotItem.AboveUnlocked(item.type, jackpot.Gap);
+			JackpotEffects.Announce(Player.Hitbox, item.type, jackpot.Gap, Math.Max(jackpot.Gap, jackpot.Above));
 		}
 	}
 

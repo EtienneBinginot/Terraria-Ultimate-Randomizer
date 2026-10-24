@@ -83,6 +83,9 @@ namespace UltimateRandomizer.Common.Core
 		// Multiplies WildDropChance for this roll (0: 1), still with the runtime rng only (giant and mini bonus drops, weak
 		// enemies: RandomNpcDropRule.JackpotWorth). To disable the madness of a roll, leave Wild false
 		public float WildChanceMultiplier;
+		// The madness roll always happens (chance 100 %): the per-kill jackpot (RandomNpcDropRule.KillJackpot) has rolled its
+		// own chance already, only the tier tail (WildTierDecay) and the usefulness check are left
+		public bool ForceWild;
 		// An explicit ceiling (null: none), gated or not: nothing above it, by Tier or TrueTier, jackpots included (the
 		// hardmode wall of fishing and shimmer, chest caps)
 		public int? MaxTier;
@@ -567,7 +570,7 @@ namespace UltimateRandomizer.Common.Core
 			{
 				// Only the runtime rng is used here: without a wild roll, the result is the same as without the flag
 				float baseChance = WildChanceOverride ?? progression.WildDropChance;
-				float wildChance = Math.Min(100f, baseChance * (request.WildChanceMultiplier > 0 ? request.WildChanceMultiplier : 1f));
+				float wildChance = request.ForceWild ? 100f : Math.Min(100f, baseChance * (request.WildChanceMultiplier > 0 ? request.WildChanceMultiplier : 1f));
 				int wildCeiling = maxTier;
 				int wildTier = WildTier(limit, wildChance, progression.WildTierDecay, request.WildRng, wildCeiling);
 				if (wildTier > limit)

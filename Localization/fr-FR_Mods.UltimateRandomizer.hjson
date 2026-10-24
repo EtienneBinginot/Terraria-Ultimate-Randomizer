@@ -101,7 +101,7 @@ Tests: {
 	DropTableLength: Les ennemis ont de longues tables de loot (2 à 7 emplacements : environ 1,85 fois les anciens 1 à 4)
 	JackpotUseful: Les jackpots sont toujours des objets utiles
 	JackpotNotInEnemyDrops: Les jackpots ne comptent pas parmi les drops de l'ennemi
-	JackpotRatesLower: Les jackpots sont un peu plus rares par défaut
+	JackpotRatesLower: Chances de jackpot par défaut (folie, chance, par kill, rareté par palier)
 	JackpotDropsMarked: Les drops au-delà de la limite sont marqués comme jackpots
 	GiantBonusUseful: L'objet bonus d'un géant est utile, avec cinq fois plus de chances d'être un jackpot
 	MiniBonusDrop: Les minis et les géants donnent un objet bonus, jamais les sbires de boss
@@ -109,6 +109,7 @@ Tests: {
 	SpawnedEnemyNoExtraDrops: Les ennemis engendrés par un autre ennemi ne donnent ni drop en plus, ni drop garanti, ni jackpot
 	CrittersNoJackpot: Les bestioles ne donnent jamais de jackpot
 	BagNeverJackpot: Les sacs et caisses ouverts ne donnent jamais de jackpot
+	KillJackpotRate: Le jackpot par kill tombe à sa chance, toujours utile et au-delà de la limite de progression
 	JackpotTail: Chaque palier de plus d'un jackpot est bien plus rare, et seuls les jackpots dépassent la limite (mode difficile compris)
 	HardmodeWall: Rien du mode difficile avant celui-ci sauf les jackpots et les planchers des boss, indices cohérents avec la limite
 	RepickOnlyChangesFlagged: Le nouveau tirage ne remplace que les objets bannis ou trop avancés, tous les autres tirages sont inchangés
@@ -214,7 +215,7 @@ Tests: {
 	PacingExpected: 15 à 25 pièces d'équipement aléatoires par heure en début de partie (réglages par défaut ; valeur écrite dans client.log)
 	PacingSimulation: La simulation du rythme est stable et régulière
 	PacingVariety: Au moins 10 pièces d'équipement différentes par heure en début de partie
-	JackpotPacing: Peu de jackpots dans une heure de début de partie (nombre par heure dans le journal)
+	JackpotPacing: Environ 2 jackpots dans une heure de début de partie, jackpot par kill, géants et minis compris (nombre par heure dans le journal)
 	DropFrequency: La plupart des kills donnent quelque chose (au moins 0,6 objet par kill ; valeur écrite dans client.log)
 	WorkBenchPacing: L'établi se fabrique à la main dès le début, et son gardien seul en donne un en moins d'une heure en moyenne (valeur écrite dans client.log)
 	BasicStationsUnprotected: Les stations de base (établi, fourneau, enclume...) sont confiées au randomizer
@@ -1323,8 +1324,13 @@ Configs: {
 		}
 
 		WildTierDecay: {
-			Label: Jackpots : rareté par palier en plus
-			Tooltip: À quel point chaque palier au-delà de la limite est plus rare pour les jackpots (folie et drops chanceux) : 3 (par défaut) = un palier au-dessus est 3 fois plus fréquent que deux paliers au-dessus. Il n'y a pas de plafond : un objet du mode difficile en début de partie est possible, mais rare. Plus haut = les jackpots restent plus près de la limite.
+			Label: "Jackpots : rareté par palier en plus"
+			Tooltip: "À quel point chaque palier au-delà de la limite est plus rare pour les jackpots (folie, drops chanceux et jackpots par kill) : 4 (par défaut) = un palier au-dessus est 4 fois plus fréquent que deux paliers au-dessus. Il n'y a pas de plafond : un objet du mode difficile en début de partie est possible, mais rare. Plus haut = les jackpots restent plus près de la limite."
+		}
+
+		KillJackpotChance: {
+			Label: "Jackpot par kill (%)"
+			Tooltip: "Chance, à chaque kill, d'obtenir un jackpot en plus des drops habituels, quel que soit le style de drops : toujours un équipement utile ou une station de progression au-delà de la limite de progression (chaque palier plus haut est plus rare, voir le réglage précédent), signalé par de la lumière et un son. Les ennemis faibles ont moins de chances, les bestioles, les statues et les ennemis engendrés par un autre ennemi aucune. Les sacs n'en donnent jamais. 0 = seulement les autres jackpots."
 		}
 
 		MechTierRequiresAllThree: {

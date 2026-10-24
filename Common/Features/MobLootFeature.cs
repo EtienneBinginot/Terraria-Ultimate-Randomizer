@@ -166,6 +166,23 @@ namespace UltimateRandomizer.Common.Features
 		public int OreBar = 10;
 	}
 
+	// Categories of the per-kill jackpot (RandomNpcDropRule.KillJackpot): the gear of the default loot weights, the other
+	// categories are hardly ever useful (ItemPool.IsJackpotWorthy) and would waste the roll
+	public class KillJackpotWeights : WeightTable
+	{
+		public static readonly KillJackpotWeights Instance = new();
+
+		public int WeaponMelee = 10;
+		public int WeaponRanged = 10;
+		public int WeaponMagic = 10;
+		public int WeaponSummon = 8;
+		public int WeaponOther = 3;
+		public int Armor = 10;
+		public int Accessory = 14;
+		public int Tool = 6;
+		public int MountPet = 4;
+	}
+
 	// Extra random drops, on top of the (replaced) original drops: a random number per enemy type, vanilla-like rates
 	public class RandomNpcDropRule : IItemDropRule
 	{
@@ -227,7 +244,45 @@ namespace UltimateRandomizer.Common.Features
 			{
 				DropMarked(npc, item, stack, gap);
 			}
+			// The per-kill jackpot, whatever the drop style; never for boss minions and parts (as the giant bonus)
+			if (LootConfig.Instance.RandomizeMobDrops && GiantBonusAllowed(netId, npc.type))
+			{
+				int jackpot = KillJackpot(BossParts.Owner(npc.type), ProgressionConfig.Instance.KillJackpotChance, worth, new Random(info.rng.Next()), out int jackpotGap);
+				if (jackpot > ItemID.None) DropMarked(npc, jackpot, 1, jackpotGap);
+			}
 			return new ItemDropAttemptResult { State = ItemDropAttemptResultState.Success };
+		}
+
+		// A kill's own jackpot (KillJackpotChance x JackpotWorth, %): one forced madness roll (ItemPool.Roll, ForceWild), a
+		// useful item above the progression limit, each extra tier WildTierDecay times rarer. A roll that found nothing above
+		// the limit (an empty tier: the normal roll stood) tries once more, then gives nothing, never a plain item. Runtime rng
+		// only (never in plans, findability nor guarantees): where the loot drops (server or single player)
+		public const int KillJackpotAttempts = 2;
+
+		public static int KillJackpot(int ownerType, float chancePercent, float worth, Random rng, out int gap)
+		{
+			gap = 0;
+			if (chancePercent <= 0f || worth <= 0f || rng.NextDouble() * 100 >= chancePercent * worth) return ItemID.None;
+			int item = ItemID.None;
+			for (int attempt = 0; attempt < KillJackpotAttempts && gap == 0; attempt++)
+			{
+				RollRequest request = new()
+				{
+					Keys = new[] { RollKey.KillJackpot, rng.Next(), attempt },
+					SourceTier = NpcTiers.EffectiveTier(ownerType),
+					OriginalItem = -1,
+					Policy = CategoryPolicy.Weighted,
+					Weights = KillJackpotWeights.Instance,
+					MinLimit = MinLimit(ownerType),
+					Wild = true,
+					ForceWild = true,
+					WildRng = new Random(rng.Next())
+				};
+				item = ItemPool.Roll(request);
+				gap = item > ItemID.None ? ItemPool.LastJackpotGap : 0;
+			}
+			ItemPool.ClearJackpot();
+			return gap > 0 ? item : ItemID.None;
 		}
 
 		// Permutation style: the original entries of the enemy's plan (moved contents with this enemy's conditions, kept items
