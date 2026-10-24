@@ -278,6 +278,8 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> rows = new();
 			foreach ((int netId, List<PlannedDrop> normal) in npcPlans)
 			{
+				// A boss part that never drops (its plan is its owner's, listed under the owner)
+				if (RandomNpcDropRule.NeverDrops(netId)) continue;
 				DropPermutation.Placed[] table = null;
 				try
 				{

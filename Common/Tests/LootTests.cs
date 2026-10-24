@@ -50,6 +50,9 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("DropPermutationSurprise", DropPermutationSurprise);
 			TestRunner.Register("PermutationDuplicatesCapped", PermutationDuplicatesCapped);
 			TestRunner.Register("PermutationKeepsStartDrops", PermutationKeepsStartDrops);
+			TestRunner.Register("ExtraStacksSmall", ExtraStacksSmall);
+			TestRunner.Register("GatesNotOnLowerOwners", GatesNotOnLowerOwners);
+			TestRunner.Register("StrongEnemiesDropEarly", StrongEnemiesDropEarly);
 		}
 
 		// Seeds of the permutation tests: the world's and two fixed ones (DropPermutation.Build is pure in the seed)
@@ -442,7 +445,7 @@ namespace UltimateRandomizer.Common.Tests
 						grouped.Add(i);
 						DropPermutation.Place place = plan.Places[i];
 						int source = plan.ContentOf[i];
-						if (place.Tier != NpcTiers.BaseTier(place.Owner)) failures.Add($"seed {seed}: {NpcName(place.Owner)} placed at tier {place.Tier}, base tier {NpcTiers.BaseTier(place.Owner)}");
+						if (place.Tier != DropPermutation.PlaceTierOf(place.Owner)) failures.Add($"seed {seed}: {NpcName(place.Owner)} placed at tier {place.Tier}, place tier {DropPermutation.PlaceTierOf(place.Owner)}");
 						if (!members.Contains(source) && failures.Count < 20) failures.Add($"seed {seed}: {NpcName(place.Owner)} gets the content of {NpcName(plan.Places[source].Owner)} from another group");
 						if (!tiers.Contains(plan.Places[source].Tier) && failures.Count < 20) failures.Add($"seed {seed}: a tier {plan.Places[source].Tier} content in a group of tiers {string.Join(",", tiers.OrderBy(t => t))}");
 						if (source == i) stayed++;
@@ -1316,6 +1319,161 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		private static string NpcName(int netId) => ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) ? sample.TypeName : netId.ToString();
+
+		// What is wrong with the stack range of a random extra drop or surprise (null: nothing): single use openers and summons
+		// one at a time, potions and food a few, ammo and throwing weapons by dozens at most (StackRules.ExtraRange)
+		private static string ExtraStackProblem(int item, int min, int max)
+		{
+			if (!ItemPool.IsValid(item)) return null;
+			string what = $"{Lang.GetItemNameValue(item)} {min}-{max}";
+			if (min < 1 || max < min) return what + ": empty range";
+			if (StackRules.IsSingleUse(item) && max != 1) return what + ": a single use item";
+			ItemCategory category = ItemPool.Info[item].Category;
+			if (category is ItemCategory.Potion or ItemCategory.Food && max > StackRules.ExtraConsumableCap) return what + ": too many potions or food";
+			if (category == ItemCategory.Ammo && max > StackRules.ExtraAmmoCap) return what + ": too much ammo";
+			if (StackRules.IsThrown(item) && max > StackRules.ExtraThrownCap) return what + ": too many throwing weapons";
+			return null;
+		}
+
+		// Random extra drops and surprises keep their chances but come in small stacks: pure checks of StackRules.ExtraRange
+		// (fewer ammo above the source's tier, materials as their caps say), then every extra slot of every enemy and boss
+		// (bags carry their boss's) and every surprise and synthetic entry of this world's permutation
+		private static void ExtraStacksSmall()
+		{
+			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
+			List<string> failures = new();
+			void Fail(string message)
+			{
+				if (failures.Count < 30) failures.Add(message);
+			}
+			foreach (int item in new[] { ItemID.SuperHealingPotion, ItemID.InfernoPotion, ItemID.IchorBullet, ItemID.ChlorophyteArrow, ItemID.TempleKey, ItemID.FrozenKey,
+				ItemID.Shuriken, ItemID.MechanicalSkull, ItemID.CelestialSigil, ItemID.BBQRibs })
+			{
+				foreach (int tier in new[] { 0, Tiers.Max })
+				{
+					(int min, int max) = StackRules.ExtraRange(item, tier);
+					if (ExtraStackProblem(item, min, max) is string problem) Fail($"pure, source tier {tier}: {problem}");
+				}
+			}
+			if (StackRules.ExtraRange(ItemID.Gel, 0) != StackRules.Range(ItemID.Gel)) Fail($"Gel: {StackRules.ExtraRange(ItemID.Gel, 0)} instead of {StackRules.Range(ItemID.Gel)}");
+			if (StackRules.Cap(ItemID.ChlorophyteArrow) >= StackRules.ExtraAmmoCap && StackRules.ExtraRange(ItemID.ChlorophyteArrow, 0).max >= StackRules.ExtraRange(ItemID.ChlorophyteArrow, Tiers.Max).max)
+			{
+				Fail("Chlorophyte Arrows: no fewer from a source far below them");
+			}
+			if (!LootConfig.Instance.RandomizeMobDrops)
+			{
+				Check.All(failures, "Extra stacks");
+				return;
+			}
+			int extras = 0, surprises = 0;
+			foreach (int netId in ContentSamples.NpcsByNetId.Keys.OrderBy(n => n))
+			{
+				int type = BossParts.Owner(ContentSamples.NpcsByNetId[netId].type);
+				foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(netId, type, false, planning: true))
+				{
+					extras++;
+					if (ExtraStackProblem(drop.Item, drop.StackMin, drop.StackMax) is string problem) Fail($"{NpcName(netId)} extra: {problem}");
+				}
+			}
+			if (SeedSystem.WorldReady)
+			{
+				DropPermutation.WorldPlan plan = DropPermutation.Current;
+				for (int p = 0; p < plan.Places.Count; p++)
+				{
+					DropPermutation.Place place = plan.Places[p];
+					if (!plan.Surprised[p] && !place.Synthetic) continue;
+					DropRateInfo entry = plan.ByUnit[place.Owner][place.Index].Entry;
+					surprises++;
+					if (ExtraStackProblem(entry.itemId, entry.stackMin, entry.stackMax) is string problem) Fail($"{NpcName(place.Owner)} surprise: {problem}");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ExtraStacksSmall: {extras} extra slots, {surprises} surprises and synthetic entries checked");
+			Check.All(failures, "Extra stacks");
+		}
+
+		// No random extra drop nor surprise gives a hard gate or a single use opener or summon (Temple Key, Lihzahrd Power
+		// Cell, biome keys, boss summons...) above the tier of its source, but a jackpot (an extra aimed beyond its jitter):
+		// every enemy's and boss's extra slots, this world's surprises and synthetic entries
+		private static void GatesNotOnLowerOwners()
+		{
+			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			if (!RandomNpcDropRule.GateAbove(ItemID.TempleKey, (int)Core.Tier.PostMechBoss) || RandomNpcDropRule.GateAbove(ItemID.TempleKey, Tiers.Max))
+			{
+				Check.That(false, "GateAbove is wrong for the Temple Key");
+			}
+			List<string> failures = new();
+			void Fail(string message)
+			{
+				if (failures.Count < 30) failures.Add(message);
+			}
+			int checkedDrops = 0;
+			foreach (int netId in ContentSamples.NpcsByNetId.Keys.OrderBy(n => n))
+			{
+				int type = BossParts.Owner(ContentSamples.NpcsByNetId[netId].type);
+				int sourceTier = RandomNpcDropRule.SourceTier(type, true);
+				foreach (PlannedDrop drop in RandomNpcDropRule.ExtraDrops(netId, type, false, planning: true))
+				{
+					checkedDrops++;
+					bool jackpot = ItemPool.TierOf(drop.Item) > sourceTier + 1;
+					if (RandomNpcDropRule.GateAbove(drop.Item, sourceTier) && !jackpot)
+					{
+						Fail($"{NpcName(netId)} (tier {sourceTier}) extra: {Lang.GetItemNameValue(drop.Item)} (true tier {ItemPool.TrueTierOf(drop.Item)})");
+					}
+				}
+			}
+			DropPermutation.WorldPlan plan = DropPermutation.Current;
+			for (int p = 0; p < plan.Places.Count; p++)
+			{
+				DropPermutation.Place place = plan.Places[p];
+				if (!plan.Surprised[p] && !place.Synthetic) continue;
+				int item = plan.ByUnit[place.Owner][place.Index].Entry.itemId;
+				checkedDrops++;
+				if (RandomNpcDropRule.GateAbove(item, place.Tier)) Fail($"{NpcName(place.Owner)} (tier {place.Tier}) surprise: {Lang.GetItemNameValue(item)} (true tier {ItemPool.TrueTierOf(item)})");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"GatesNotOnLowerOwners: {checkedDrops} random entries checked");
+			Check.All(failures, "Gates on lower owners");
+		}
+
+		// Strong enemies that come with hardmode (mimics, the Wyvern, Giant Tortoises, Moss Hornets: tier 6 to 8 by their stats)
+		// get places of their spawn tier (DropPermutation.PlaceTierOf), so their permuted table drops from hardmode on; an
+		// event enemy weaker than its event gets the event's tier (Martian Madness after Golem), its extra slots too
+		private static void StrongEnemiesDropEarly()
+		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			List<string> failures = new();
+			int hardmode = (int)Core.Tier.Hardmode;
+			foreach (int martian in new[] { NPCID.MartianEngineer, NPCID.RayGunner, NPCID.BrainScrambler, NPCID.GrayGrunt })
+			{
+				int tier = DropPermutation.PlaceTierOf(martian);
+				if (tier != (int)Core.Tier.PostGolem) failures.Add($"{NpcName(martian)}: place tier {tier}, {(int)Core.Tier.PostGolem} expected");
+				if (RandomNpcDropRule.SourceTier(martian, true) < (int)Core.Tier.PostGolem) failures.Add($"{NpcName(martian)}: extras rolled at tier {RandomNpcDropRule.SourceTier(martian, true)}");
+			}
+			if (!DropPermutation.InStyle(NPCID.Mimic))
+			{
+				Check.All(failures, "Strong enemies");
+				return;
+			}
+			DropPermutation.WorldPlan plan = DropPermutation.Current;
+			int tested = 0;
+			foreach (int npc in new[] { NPCID.Mimic, NPCID.IceMimic, NPCID.WyvernHead, NPCID.GiantTortoise, NPCID.MossHornet, NPCID.RuneWizard })
+			{
+				if (!DropPermutation.IsPermutable(npc)) continue;
+				int unit = DropPermutation.UnitOf(npc);
+				int spawn = NpcTiers.SpawnTier(npc);
+				int placeTier = DropPermutation.PlaceTierOf(unit);
+				if (spawn >= 0 && placeTier > spawn) failures.Add($"{NpcName(npc)}: place tier {placeTier} above its spawn tier {spawn}");
+				foreach (DropPermutation.Place place in plan.Places.Where(p => p.Owner == unit && p.Tier != placeTier)) failures.Add($"{NpcName(npc)}: a place at tier {place.Tier}");
+				List<DropPermutation.Placed> rolled = DropPermutation.For(npc).Where(p => p.Rolled && p.Entry.itemId > ItemID.None && !DropHelper.KeepOriginal(p.Entry.itemId)).ToList();
+				if (rolled.Count == 0) continue;
+				tested++;
+				int early = rolled.Count(p => ItemPool.UnlockTierOf(p.Entry.itemId) <= hardmode && Findability.ConditionTier(p.Entry.conditions, placeTier) <= hardmode);
+				if (early == 0) failures.Add($"{NpcName(npc)} (stats tier {NpcTiers.BaseTier(npc)}): none of its {rolled.Count} permuted entries drops at tier {hardmode}");
+			}
+			if (tested == 0) Check.Skip("none of the strong hardmode enemies has a permuted table");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"StrongEnemiesDropEarly: {tested} strong enemies checked");
+			Check.All(failures, "Strong enemies");
+		}
 
 		private static void SnapshotsCaptured()
 		{

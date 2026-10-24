@@ -414,7 +414,7 @@ namespace UltimateRandomizer.Common.Features
 			return result.ToList();
 		}
 
-		// The synthetic entry of an eligible enemy without any vanilla entry: a random item of its base tier with a vanilla-like
+		// The synthetic entry of an eligible enemy without any vanilla entry: a random item of its place tier (PlaceTierOf) with a vanilla-like
 		// chance, created whatever the settings (EnemiesWithoutDropsCanDrop only gates the random extra slot), so the places of
 		// the world don't depend on them. Its item follows the item pool (categories, protections)
 		public static bool TrySynthetic(int unit, int seed, out DropRateInfo entry)
@@ -422,7 +422,7 @@ namespace UltimateRandomizer.Common.Features
 			entry = default;
 			if (LootSnapshot.ForNpc(unit).Count > 0 || !ItemPool.Ready) return false;
 			int key = DetRandom.NpcKey(unit);
-			int tier = NpcTiers.BaseTier(unit);
+			int tier = PlaceTierOf(unit);
 			RollRequest request = new()
 			{
 				Keys = new[] { RollKey.DropPermutation, seed, key },
@@ -431,12 +431,36 @@ namespace UltimateRandomizer.Common.Features
 				Policy = CategoryPolicy.Weighted,
 				IgnoreGating = true
 			};
-			int item = ItemPool.Roll(request, out int rolledTier);
+			int item = RandomNpcDropRule.RollBelowGates(request, out int rolledTier);
 			if (item <= ItemID.None) return false;
 			int denominator = DropRates.Denominator(item, rolledTier, tier, false, DetRandom.Get(RollKey.DropPermutation, seed, key, 1));
-			(int min, int max) = StackRules.RollRange(item, DetRandom.Get(RollKey.DropPermutation, seed, key, 2));
+			(int min, int max) = StackRules.RollExtraRange(item, tier, DetRandom.Get(RollKey.DropPermutation, seed, key, 2));
 			entry = new DropRateInfo(item, min, max, 1f / Math.Max(1, denominator), null);
 			return true;
+		}
+
+		// The tier of an enemy's places: its base tier (NpcTiers: its stats), but for a vanilla enemy spawning from a known stage
+		// (NpcTiers.SpawnTier) the tier it is met from when that is lower: mimics, the Wyvern, Giant Tortoises or Moss Hornets
+		// come with hardmode but are tier 6 to 8 by their stats, and their whole table waited for that tier (the Wyvern's Souls
+		// of Flight went to a tier-7 Dark Mage). An event enemy: its event's tier, also when it is weaker than its event
+		// (Martian Madness after Golem: EventTier). Their random extra slots keep the stats tier (RandomNpcDropRule.SourceTier):
+		// a strong enemy still unlocks more loot later
+		public static int PlaceTierOf(int unit)
+		{
+			int tier = NpcTiers.BaseTier(unit);
+			int type = ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? sample.type : unit;
+			int spawn = type > 0 && type < NPCID.Count ? NpcTiers.SpawnTier(type) : -1;
+			if (spawn < 0) return tier;
+			return GuaranteedSources.IsEventEnemy(type) ? spawn : Math.Min(tier, spawn);
+		}
+
+		// The stage a vanilla event enemy comes with (NpcTiers.SpawnTier: the Old One's Army waves, the eclipse, the moons,
+		// Martian Madness), -1 for the others
+		public static int EventTier(int type)
+		{
+			if (type <= 0 || type >= NPCID.Count) return -1;
+			int spawn = NpcTiers.SpawnTier(type);
+			return spawn >= 0 && GuaranteedSources.IsEventEnemy(type) ? spawn : -1;
 		}
 
 		// The places of this world: every rolled entry whose item is not kept, of every table, and the synthetic ones
@@ -448,7 +472,7 @@ namespace UltimateRandomizer.Common.Features
 				List<DropRateInfo> entries = LootSnapshot.ForNpc(unit);
 				bool[] rolled = RolledEntries(entries, LootSnapshot.RulesOf(unit));
 				int key = DetRandom.NpcKey(unit);
-				int tier = NpcTiers.BaseTier(unit);
+				int tier = PlaceTierOf(unit);
 				for (int i = 0; i < entries.Count; i++)
 				{
 					if (!rolled[i] || DropHelper.KeepOriginal(entries[i].itemId)) continue;
@@ -571,8 +595,8 @@ namespace UltimateRandomizer.Common.Features
 				AllowJackpot = false,
 				IgnoreGating = true
 			};
-			item = ItemPool.Roll(request, out int rolledTier);
-			(stackMin, stackMax) = item > ItemID.None ? StackRules.RollRange(item, DetRandom.Get(RollKey.DropSurprise, seed, place.OwnerKey, place.Index, 1)) : (0, 0);
+			item = RandomNpcDropRule.RollBelowGates(request, out int rolledTier);
+			(stackMin, stackMax) = item > ItemID.None ? StackRules.RollExtraRange(item, place.Tier, DetRandom.Get(RollKey.DropSurprise, seed, place.OwnerKey, place.Index, 1)) : (0, 0);
 			dropRate = content.dropRate;
 			if (item > ItemID.None)
 			{

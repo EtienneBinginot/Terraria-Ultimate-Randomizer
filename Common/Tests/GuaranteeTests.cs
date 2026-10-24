@@ -46,6 +46,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("PotOnlyUnfound", PotOnlyUnfound);
 			TestRunner.Register("GuaranteesNotBelowTier", GuaranteesNotBelowTier);
 			TestRunner.Register("StationsOneGuardian", StationsOneGuardian);
+			TestRunner.Register("BiomeKeysGuaranteed", BiomeKeysGuaranteed);
+			TestRunner.Register("GuardiansInThisWorld", GuardiansInThisWorld);
 		}
 
 		// Every crafting station (GuaranteedSources.PlacerRequirements) has exactly one guardian: a natural, common enemy of its
@@ -739,7 +741,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				DropPermutation.WorldPlan enemies = DropPermutation.Build(seed, 0f);
 				BossPermutation.WorldPlan bosses = BossPermutation.Build(seed);
-				foreach ((int unit, DropPermutation.Placed[] table) in enemies.ByUnit) CheckTable(seed, Lang.GetNPCNameValue(unit), unit, table, OwnerTier(unit), LootSnapshot.ForNpc(unit));
+				foreach ((int unit, DropPermutation.Placed[] table) in enemies.ByUnit) CheckTable(seed, Lang.GetNPCNameValue(unit), unit, table, DropPermutation.PlaceTierOf(unit), LootSnapshot.ForNpc(unit));
 				foreach ((int unit, DropPermutation.Placed[] table) in bosses.ByUnit) CheckTable(seed, Lang.GetNPCNameValue(unit), unit, table, OwnerTier(unit), LootSnapshot.ForNpc(unit));
 				foreach ((int bag, DropPermutation.Placed[] table) in bosses.ByBag)
 				{
@@ -855,6 +857,89 @@ namespace UltimateRandomizer.Common.Tests
 			if (found > (int)Core.Tier.PostPlantera) failures.Add($"this world: the Temple Key's hosts give it at tier {found}");
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"TempleKeyOutsideTemple: placed in {placed} plans, found at tier {found}");
 			Check.All(failures, "Temple Key");
+		}
+
+		// The biome keys of this world (both evils' in a drunk world, else only its own evil's) are guaranteed from hardmode on
+		// natural hardmode enemies and found at tier 4 (Findability); most of them in their own biome
+		private static void BiomeKeysGuaranteed()
+		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			List<GuaranteedSources.Requirement> keys = GuaranteedSources.BiomeKeyRequirements().ToList();
+			if (keys.Count == 0) Check.Skip("the biome keys are protected");
+			List<string> failures = new();
+			WorldEvil evil = BiomeSlots.CurrentEvil;
+			int hardmode = (int)Core.Tier.Hardmode;
+			bool Listed(int item) => keys.Any(k => k.Item == item);
+			if (ItemPool.IsRandomizable(ItemID.CorruptionKey) && Listed(ItemID.CorruptionKey) != (evil != WorldEvil.Crimson)) failures.Add($"Corruption Key required: {Listed(ItemID.CorruptionKey)} in a {evil} world");
+			if (ItemPool.IsRandomizable(ItemID.CrimsonKey) && Listed(ItemID.CrimsonKey) != (evil != WorldEvil.Corruption)) failures.Add($"Crimson Key required: {Listed(ItemID.CrimsonKey)} in a {evil} world");
+			int own = 0;
+			foreach (GuaranteedSources.Requirement key in keys)
+			{
+				string name = Name(key.Item);
+				if (!GuaranteedSources.Requirements.Any(r => r.Item == key.Item && r.Tier <= hardmode)) failures.Add($"{name} is not guaranteed at tier {hardmode}");
+				List<int> hosts = GuaranteedSources.HostsOf(key.Item).ToList();
+				if (hosts.Count == 0)
+				{
+					failures.Add($"{name} has no guaranteed host");
+					continue;
+				}
+				foreach (int host in hosts.Where(h => GuaranteedSources.HostTier(h) < hardmode)) failures.Add($"{name} on {Lang.GetNPCNameValue(host)} (tier {GuaranteedSources.HostTier(host)})");
+				if (Findability.Tier(key.Item) > hardmode) failures.Add($"{name} found at tier {Findability.Tier(key.Item)}");
+				if (GuaranteedSources.TryPlacement(key.Item, out GuaranteedSources.Placement place) && key.Biomes.Any(b => (int)b == place.Biome)) own++;
+				foreach (PlannedDrop drop in hosts.SelectMany(GuaranteedSources.For).Where(d => d.Item == key.Item))
+				{
+					if (drop.StackMax != 1) failures.Add($"{name}: {drop.StackMin}-{drop.StackMax} at once");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"BiomeKeysGuaranteed: {keys.Count} keys, {own} in their own biome");
+			Check.All(failures, "Biome keys");
+		}
+
+		// The station guardians of this world (and of other seeds with this world's evil) are enemies it really spawns: never
+		// in a slot of the evil it lacks, met steadily in their placement's biome, and an enemy of the absent evil only where
+		// the spawn map puts it in a biome of this world. A kill of another form of a host (the Lihzahrd Crawler, a wall
+		// crawler on the ground) rolls its guaranteed drops too (GuaranteedSources.ForKill)
+		private static void GuardiansInThisWorld()
+		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			List<GuaranteedSources.Requirement> stations = GuaranteedSources.PlacerRequirements().ToList();
+			if (stations.Count == 0) Check.Skip("every station is protected");
+			if (!BiomeSlots.SpawnsPlanned) Check.Skip("the spawns follow no biome map");
+			List<string> failures = new();
+			int absentNatives = 0;
+			for (int i = -1; i < 3; i++)
+			{
+				int seed = i < 0 ? SeedSystem.WorldSeed : Seed(i);
+				BiomeSlotMap map = i >= 0 && BiomeSlots.Active ? BiomeSlots.Build(seed, EnemiesConfig.Instance.BiomeExtraEnemies) : BiomeSlots.SpawnMap;
+				GuaranteedSources.PlanWith(seed, map, out _, out Dictionary<int, GuaranteedSources.Placement> places);
+				HashSet<int> absent = map.Slots.Where(s => s.AbsentEvil).Select(s => s.Biome).ToHashSet();
+				using (BiomeSlots.WithMap(map))
+				{
+					foreach (GuaranteedSources.Requirement station in stations)
+					{
+						if (!places.TryGetValue(station.Item, out GuaranteedSources.Placement place) || place.Hosts == null || place.Hosts.Count == 0 || place.Boss) continue;
+						int type = BiomeSlots.TypeOf(place.Hosts[0]);
+						string where = $"seed {seed}: {Name(station.Item)} on {Lang.GetNPCNameValue(type)}";
+						if (BiomeSlots.NeverSpawns(type)) failures.Add($"{where}, which never spawns in this world");
+						if (place.Biome >= 0 && absent.Contains(place.Biome)) failures.Add($"{where} in {BiomeSlots.BiomeName(place.Biome)}, a biome of the absent evil");
+						if (place.Biome >= 0 && BiomeSlots.SteadyShareAt(place.Biome, type, place.Tier, SlotTime.Any) <= 0) failures.Add($"{where}, not met in {BiomeSlots.BiomeName(place.Biome)}");
+						List<(int biome, double share, SlotTime time)> planned = BiomeSlots.PlannedBiomes(type);
+						if (planned.Count == 0 || planned.All(b => absent.Contains(b.biome))) failures.Add($"{where}, met in no biome of this world");
+						if (map.Slots.Any(s => s.AbsentEvil && BiomeSlots.TypeOf(s.Original) == type) && !map.Slots.Any(s => !s.AbsentEvil && BiomeSlots.TypeOf(s.Original) == type)) absentNatives++;
+					}
+				}
+			}
+			// The other forms of a host carry its guaranteed drops at kill time
+			foreach ((int form, int host) in new[] { (NPCID.LihzahrdCrawler, NPCID.Lihzahrd), (NPCID.BloodCrawler, NPCID.BloodCrawlerWall), (NPCID.BloodCrawlerWall, NPCID.BloodCrawler) })
+			{
+				List<PlannedDrop> kill = GuaranteedSources.ForKill(form);
+				foreach (PlannedDrop drop in GuaranteedSources.For(host).Where(d => !kill.Any(k => k.Item == d.Item)))
+				{
+					failures.Add($"a {Lang.GetNPCNameValue(form)} kill misses {Name(drop.Item)} of its {Lang.GetNPCNameValue(host)} form");
+				}
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"GuardiansInThisWorld: {absentNatives} guardian(s) native to the absent evil only, placed in this world's biomes");
+			Check.All(failures, "Station guardians");
 		}
 
 		// Pure (fresh config instances): ProgressionConfig.Migrate removes an old default protected list held whole, keeps the
