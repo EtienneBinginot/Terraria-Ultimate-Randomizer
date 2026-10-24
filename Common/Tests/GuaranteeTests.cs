@@ -5,6 +5,7 @@ using Terraria;
 using Terraria.GameContent.ItemDropRules;
 using Terraria.ID;
 using Terraria.ModLoader;
+using Terraria.ModLoader.Config;
 using UltimateRandomizer.Common.Configs;
 using UltimateRandomizer.Common.Core;
 using UltimateRandomizer.Common.Features;
@@ -21,6 +22,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ProgressionStationsGuaranteed", ProgressionStationsGuaranteed);
 			TestRunner.Register("ProtectionsRemoved", ProtectionsRemoved);
 			TestRunner.Register("AbsentEvilBoss", AbsentEvilBoss);
+			TestRunner.Register("TempleKeyOutsideTemple", TempleKeyOutsideTemple);
+			TestRunner.Register("ConfigMigration", ConfigMigration);
 			TestRunner.Register("UpgradesOutOfPools", UpgradesOutOfPools);
 			TestRunner.Register("BasicStationsFindable", BasicStationsFindable);
 			TestRunner.Register("GuaranteedReachability", GuaranteedReachability);
@@ -520,14 +523,22 @@ namespace UltimateRandomizer.Common.Tests
 
 		// The protections the item pool no longer needs (default settings): the progression materials, mirrors, phones and
 		// conches are randomizable, the Shellphone's other modes and the Lihzahrd Altar banned; the summons found in the world,
-		// the Pwnhammer and the Temple Key are guaranteed and found at their tier; the lunar armor and Luminite Bar recipes are
-		// rebuilt with a key had from the Moon Lord's tier; no permutation of enemies or bosses (this seed and others) moves a
-		// hard gate below its true tier. Items the player listed in the protected items are not checked
+		// the Pwnhammer, the Shadow Key and the Temple Key are guaranteed and found at their tier, in a biome open by then (never
+		// the one they open); every opener (keys) has a source in time; the lunar armor and Luminite Bar recipes are rebuilt
+		// with a key had from the Moon Lord's tier; no permuted table of enemies or bosses (this seed and others) holds a hard
+		// gate below its true tier, read from the owner's tier and the entry's conditions. Items the player listed in the
+		// protected items are not checked (an old default list still there is logged)
 		private static void ProtectionsRemoved()
 		{
 			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
 			ProgressionConfig cfg = ProgressionConfig.Instance;
 			HashSet<int> listed = cfg.ProtectedItems.Where(d => d != null && !d.IsUnloaded).Select(d => d.Type).ToHashSet();
+			UltimateRandomizer mod = ModContent.GetInstance<UltimateRandomizer>();
+			// ProgressionConfig.Migrate removes them at load: still there, the player listed them again after the migration
+			if (ProgressionConfig.OldProtectedDefaults.Any(old => old.All(listed.Contains)))
+			{
+				mod.Logger.Info($"ProtectionsRemoved: the protected items hold an old default list ({listed.Count} items): those are not checked");
+			}
 			List<string> failures = new();
 			void Fail(string message)
 			{
@@ -567,37 +578,77 @@ namespace UltimateRandomizer.Common.Tests
 				else guaranteed++;
 				if (!GuaranteedSources.HostsOf(item).Any()) Fail($"{Name(item)} has no guaranteed host");
 				if (Findability.Tier(item) > tier) Fail($"{Name(item)} found at tier {Findability.Tier(item)} > {tier}");
+				// In a biome open at that tier, not the one the item opens (its hosts are met elsewhere too)
+				SpawnBiome? excluded = GuaranteedSources.ExcludedBiomeOf(item);
+				if (GuaranteedSources.TryPlacement(item, out GuaranteedSources.Placement place))
+				{
+					int open = place.Biome >= 0 ? GuaranteedSources.AllowedTier(place.Biome) : 0;
+					if (open < 0 || open > tier) Fail($"{Name(item)} in {BiomeSlots.BiomeName(place.Biome)}, open from tier {open} > {tier}");
+					if (excluded is SpawnBiome biome)
+					{
+						if (place.Biome == (int)biome) Fail($"{Name(item)} placed in {biome}, the biome it opens");
+						foreach (int host in place.Hosts.Where(h => GuaranteedSources.OnlyIn(h, biome))) Fail($"{Name(item)} on {Lang.GetNPCNameValue(host)}, met only in {biome}");
+					}
+				}
 			}
-			// Pure: a gate band of a single owner joins the band below, its gate staying in place; a gate on a place below its
-			// true tier stays; with two owners from the gate's tier on, the band stays apart
-			string Bands(int[] tiers, int[] gates, int[] owners) => string.Join(" ", DropPermutation.GateBands(Enumerable.Range(0, tiers.Length).ToList(), i => tiers[i], i => gates[i], i => owners[i])
+			// Every opener has a source by its tier (any chance): crafted, a natural enemy's or a boss's plan (its conditions
+			// counted), a global drop (biome keys: left running), a guaranteed host
+			RecipePlan recipes = RecipePlanner.Get();
+			foreach ((int item, int tier) in Openers.Where(o => ItemPool.IsValid(o.item) && !listed.Contains(o.item)))
+			{
+				int source = OpenerSourceTier(item, recipes);
+				if (source > tier) Fail($"{Name(item)} has no source before tier {(source == Findability.Never ? "never" : source.ToString())} (needed at {tier})");
+			}
+			// Pure: fixed cuts (5, 7, 9) whatever the group holds. A gate band of a single owner joins the band below, its gate
+			// staying in place; a gate on a place below its true tier stays; with two owners from the gate's tier on, the band
+			// stays apart; a group without gates is cut too, so that adding a place holding a gate moves no other place; a place
+			// that never drops (-1) joins the lowest band, without lowering it
+			int[] cuts = { 5, 7, 9 };
+			string Bands(int[] tiers, int[] gates, int[] owners) => string.Join(" ", DropPermutation.GateBands(Enumerable.Range(0, tiers.Length).ToList(), i => tiers[i], i => gates[i], i => owners[i], cuts)
 				.Select(b => "[" + string.Join(",", b) + "]"));
-			string alone = Bands(new[] { 8, 8, 8, 9, 9, 9 }, new[] { -1, -1, -1, 9, -1, -1 }, new[] { 1, 2, 3, 4, 4, 4 });
-			if (alone != "[3] [0,1,2,4,5]") Fail($"gate bands of a single owner: {alone}");
-			string apart = Bands(new[] { 8, 8, 8, 9, 9, 9 }, new[] { 9, -1, -1, 9, -1, -1 }, new[] { 1, 2, 3, 4, 5, 5 });
-			if (apart != "[0] [1,2] [3,4,5]") Fail($"gate bands of two owners: {apart}");
-			string none = Bands(new[] { 5, 5, 6 }, new[] { 5, -1, -1 }, new[] { 1, 2, 3 });
-			if (none != "[0,1,2]") Fail($"a gate at the group's lowest tier: {none}");
-			// Hard gates never move below their true tier
+			void Expect(string what, string actual, string expected)
+			{
+				if (actual != expected) Fail($"gate bands, {what}: {actual}, expected {expected}");
+			}
+			Expect("a single owner", Bands(new[] { 8, 8, 8, 9, 9, 9 }, new[] { -1, -1, -1, 9, -1, -1 }, new[] { 1, 2, 3, 4, 4, 4 }), "[3] [0,1,2,4,5]");
+			Expect("two owners", Bands(new[] { 8, 8, 8, 9, 9, 9 }, new[] { 9, -1, -1, 9, -1, -1 }, new[] { 1, 2, 3, 4, 5, 5 }), "[0] [1,2] [3,4,5]");
+			Expect("a gate at the group's lowest tier", Bands(new[] { 5, 5, 6 }, new[] { 5, -1, -1 }, new[] { 1, 2, 3 }), "[0,1,2]");
+			Expect("no gate", Bands(new[] { 6, 6, 7, 7 }, new[] { -1, -1, -1, -1 }, new[] { 1, 2, 3, 4 }), "[0,1] [2,3]");
+			Expect("a gate added", Bands(new[] { 6, 6, 7, 7, 7 }, new[] { -1, -1, -1, -1, 7 }, new[] { 1, 2, 3, 4, 5 }), "[0,1] [2,3,4]");
+			Expect("a place that never drops", Bands(new[] { -1, 8, 8 }, new[] { -1, -1, -1 }, new[] { 1, 2, 3 }), "[0,1,2]");
+			Expect("a gate on a place that never drops", Bands(new[] { -1, 8, 8 }, new[] { 9, 7, -1 }, new[] { 1, 2, 3 }), "[0] [1,2]");
+			if (!DropPermutation.GateCuts().Contains(ItemPool.TrueTierOf(ItemID.LunarOre))) Fail("the gate cuts miss Luminite's true tier");
+			// No permuted table gives a hard gate before its true tier: the final tables (not the permutation's own indices),
+			// each entry at its owner's boss or enemy tier raised by the entry's conditions (those of the place)
 			int gatesMoved = 0;
+			int OwnerTier(int unit) => NpcTiers.BaseTier(BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? sample.type : unit));
+			// vanilla: the items the table had in vanilla (a gate vanilla put there stays, whatever its tier)
+			void CheckTable(int seed, string what, int unit, DropPermutation.Placed[] table, int ownerTier, List<DropRateInfo> vanilla)
+			{
+				for (int i = 0; i < table.Length; i++)
+				{
+					DropPermutation.Placed placed = table[i];
+					if (!placed.Permuted || placed.Surprise || placed.FromNetId == unit && placed.FromIndex == i) continue;
+					int item = placed.Entry.itemId;
+					if (!ItemPool.IsHardGate(item) || vanilla.Any(e => e.itemId == item)) continue;
+					gatesMoved++;
+					int from = Findability.ConditionTier(placed.Entry.conditions, ownerTier);
+					if (from != Findability.Never && from < ItemPool.TrueTierOf(item))
+					{
+						Fail($"seed {seed}: {what} entry {i} (tier {from}) gives {Name(item)} (true tier {ItemPool.TrueTierOf(item)})");
+					}
+				}
+			}
 			foreach (int seed in new[] { SeedSystem.WorldSeed, Seed(0), Seed(1) })
 			{
 				DropPermutation.WorldPlan enemies = DropPermutation.Build(seed, 0f);
 				BossPermutation.WorldPlan bosses = BossPermutation.Build(seed);
-				foreach ((string what, List<DropPermutation.Place> places, int[] contentOf) in new[] { ("enemy", enemies.Places, enemies.ContentOf), ("boss", bosses.Places, bosses.ContentOf) })
+				foreach ((int unit, DropPermutation.Placed[] table) in enemies.ByUnit) CheckTable(seed, Lang.GetNPCNameValue(unit), unit, table, OwnerTier(unit), LootSnapshot.ForNpc(unit));
+				foreach ((int unit, DropPermutation.Placed[] table) in bosses.ByUnit) CheckTable(seed, Lang.GetNPCNameValue(unit), unit, table, OwnerTier(unit), LootSnapshot.ForNpc(unit));
+				foreach ((int bag, DropPermutation.Placed[] table) in bosses.ByBag)
 				{
-					for (int p = 0; p < places.Count; p++)
-					{
-						DropPermutation.Place source = places[contentOf[p]];
-						int gate = DropPermutation.GateTier(source.Entry.itemId);
-						if (gate < 0 || contentOf[p] == p) continue;
-						gatesMoved++;
-						int placeTier = DropPermutation.PlaceTier(places[p]);
-						if (placeTier < gate)
-						{
-							Fail($"seed {seed}: {what} {Lang.GetNPCNameValue(places[p].Owner)} entry {places[p].Index} (tier {placeTier}) gets {Name(source.Entry.itemId)} (true tier {gate})");
-						}
-					}
+					int owner = BossPermutation.BagUnit(bag);
+					if (owner > 0) CheckTable(seed, Name(bag), -1, table, OwnerTier(owner), LootSnapshot.ForItem(bag));
 				}
 			}
 			// Lunar recipes: rebuilt for the Moon Lord's tier, with an ingredient had no earlier
@@ -632,8 +683,113 @@ namespace UltimateRandomizer.Common.Tests
 				}
 				if (lunar == 0) Fail("no lunar recipe found");
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"ProtectionsRemoved: {guaranteed} summons and tools guaranteed, {gatesMoved} hard gate contents moved, {lunar} lunar recipes checked");
+			mod.Logger.Info($"ProtectionsRemoved: {guaranteed} summons and tools guaranteed, {gatesMoved} hard gate contents moved, {lunar} lunar recipes checked");
 			Check.All(failures, "Protections removed");
+		}
+
+		// The items opening something (chests, the Temple), at the tier they are needed from
+		private static readonly (int item, int tier)[] Openers =
+		{
+			(ItemID.GoldenKey, (int)Core.Tier.PostSkeletron), (ItemID.ShadowKey, (int)Core.Tier.PostSkeletron), (ItemID.TempleKey, (int)Core.Tier.PostPlantera),
+			(ItemID.JungleKey, (int)Core.Tier.Hardmode), (ItemID.CorruptionKey, (int)Core.Tier.Hardmode), (ItemID.CrimsonKey, (int)Core.Tier.Hardmode),
+			(ItemID.HallowedKey, (int)Core.Tier.Hardmode), (ItemID.FrozenKey, (int)Core.Tier.Hardmode), (ItemID.DungeonDesertKey, (int)Core.Tier.Hardmode),
+			(ItemID.LightKey, (int)Core.Tier.PostMechBoss), (ItemID.NightKey, (int)Core.Tier.PostMechBoss)
+		};
+
+		// The earliest tier an item has a source from, whatever its chance (Findability.Never: none): the recipe plan (found
+		// or crafted), a natural enemy's or a boss's plan at its tier raised by the entry's conditions (not from a host met
+		// only in the biome the item opens), a global drop rule, a guaranteed host
+		private static int OpenerSourceTier(int item, RecipePlan recipes)
+		{
+			int best = item < recipes.Availability.Length ? recipes.Availability[item] : Findability.Never;
+			if (LootSnapshot.GlobalDrops().Any(d => d.itemId == item)) best = Math.Min(best, (int)Core.Tier.Hardmode);
+			best = Math.Min(best, GuaranteedSources.Requirements.Where(r => r.Item == item).Select(GuaranteedSources.FoundTier).DefaultIfEmpty(Findability.Never).Min());
+			void From(int npc, int tier)
+			{
+				if (GuaranteedSources.ExcludedHost(item, npc)) return;
+				foreach (PlannedDrop drop in RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false).Where(d => d.Item == item && Findability.WorldAllows(d.Conditions)))
+				{
+					best = Math.Min(best, Findability.ConditionTier(drop.Conditions, tier));
+				}
+			}
+			for (int t = 0; t < Tiers.Count && t < best; t++)
+			{
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) From(npc, t);
+			}
+			foreach (int boss in NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, BiomeSlots.CurrentEvil) && NpcTiers.BaseTier(b) < best)) From(boss, NpcTiers.BaseTier(boss));
+			return best;
+		}
+
+		// The Temple Key is never guaranteed in the Temple nor on enemies met only there (it opens the Temple), in this world
+		// and with other seeds and spawn maps; this world's guaranteed hosts give it after Plantera at the latest
+		private static void TempleKeyOutsideTemple()
+		{
+			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
+			if (!GuaranteedSources.Requirements.Any(r => r.Item == ItemID.TempleKey)) Check.Skip("the Temple Key is protected");
+			Check.That(GuaranteedSources.ExcludedBiomeOf(ItemID.TempleKey) == SpawnBiome.Temple, "the Temple is not excluded for the Temple Key");
+			Check.That(GuaranteedSources.OnlyIn(NPCID.Golem, SpawnBiome.Temple), "Golem is not counted as a Temple enemy");
+			List<string> failures = new();
+			int placed = 0;
+			for (int i = -1; i < 4; i++)
+			{
+				// -1: this world
+				int seed = i < 0 ? SeedSystem.WorldSeed : Seed(i);
+				BiomeSlotMap map = i >= 0 && BiomeSlots.Active ? BiomeSlots.Build(seed, EnemiesConfig.Instance.BiomeExtraEnemies) : BiomeSlots.SpawnMap;
+				GuaranteedSources.PlanWith(seed, map, out _, out Dictionary<int, GuaranteedSources.Placement> places);
+				if (!places.TryGetValue(ItemID.TempleKey, out GuaranteedSources.Placement place))
+				{
+					failures.Add($"seed {seed}: the Temple Key has no host");
+					continue;
+				}
+				placed++;
+				if (place.Biome == (int)SpawnBiome.Temple) failures.Add($"seed {seed}: the Temple Key is guaranteed in the Temple");
+				using (BiomeSlots.WithMap(map))
+				{
+					foreach (int host in place.Hosts)
+					{
+						// Read from the map's slots directly, not through OnlyIn
+						List<(int biome, double share, SlotTime time)> biomes = BiomeSlots.PlannedBiomes(BiomeSlots.TypeOf(host));
+						bool templeOnly = BossParts.Owner(BiomeSlots.TypeOf(host)) == NPCID.Golem || biomes.Count > 0 && biomes.All(b => b.biome == (int)SpawnBiome.Temple);
+						if (templeOnly) failures.Add($"seed {seed}: the Temple Key on {Lang.GetNPCNameValue(host)}, met only in the Temple");
+					}
+				}
+			}
+			GuaranteedSources.Requirement key = GuaranteedSources.Requirements.First(r => r.Item == ItemID.TempleKey);
+			int found = GuaranteedSources.FoundTier(key);
+			if (found > (int)Core.Tier.PostPlantera) failures.Add($"this world: the Temple Key's hosts give it at tier {found}");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"TempleKeyOutsideTemple: placed in {placed} plans, found at tier {found}");
+			Check.All(failures, "Temple Key");
+		}
+
+		// Pure (fresh config instances): ProgressionConfig.Migrate removes an old default protected list held whole, keeps the
+		// player's additions, leaves a partial or a new list alone, never runs twice, and sets the version
+		private static void ConfigMigration()
+		{
+			ProgressionConfig Make(int version, params int[] items)
+			{
+				ProgressionConfig cfg = new() { ConfigVersion = version };
+				cfg.ProtectedItems = items.Select(i => new ItemDefinition(i)).ToList();
+				return cfg;
+			}
+			string Show(ProgressionConfig cfg) => string.Join(",", cfg.ProtectedItems.Select(d => d.Type).OrderBy(t => t));
+			List<string> failures = new();
+			int[] newest = ProgressionConfig.OldProtectedDefaults[0];
+			int[] oldest = ProgressionConfig.OldProtectedDefaults[^1];
+			ProgressionConfig plain = Make(0, newest);
+			if (!ProgressionConfig.Migrate(plain) || plain.ProtectedItems.Count != 0) failures.Add($"old default list: {Show(plain)} left");
+			if (plain.ConfigVersion != ProgressionConfig.CurrentVersion) failures.Add($"version {plain.ConfigVersion} after the migration");
+			ProgressionConfig added = Make(0, newest.Append(ItemID.Zenith).ToArray());
+			ProgressionConfig.Migrate(added);
+			if (Show(added) != ItemID.Zenith.ToString()) failures.Add($"old list with the Zenith added: {Show(added)} left");
+			ProgressionConfig first = Make(0, oldest.Append(ItemID.Zenith).ToArray());
+			ProgressionConfig.Migrate(first);
+			if (Show(first) != ItemID.Zenith.ToString()) failures.Add($"first default list with the Zenith added: {Show(first)} left");
+			ProgressionConfig partial = Make(0, ItemID.Pwnhammer, ItemID.Zenith);
+			if (ProgressionConfig.Migrate(partial) || Show(partial) != string.Join(",", new[] { ItemID.Pwnhammer, ItemID.Zenith }.OrderBy(t => t))) failures.Add($"a list of the player's: {Show(partial)}");
+			ProgressionConfig done = Make(ProgressionConfig.CurrentVersion, newest);
+			if (ProgressionConfig.Migrate(done) || done.ProtectedItems.Count != newest.Length) failures.Add("migrated again");
+			if (ProgressionConfig.Migrate(plain)) failures.Add("a second run changed something");
+			Check.All(failures, "Config migration");
 		}
 
 		// The evil boss a world lacks takes no part in the boss permutation (plans for a Crimson, a Corruption and a drunk
@@ -643,7 +799,7 @@ namespace UltimateRandomizer.Common.Tests
 		private static void AbsentEvilBoss()
 		{
 			if (!ItemPool.Ready || !SeedSystem.WorldReady) Check.Skip("no world");
-			if (!BossPermutation.InStyle(NPCID.BrainofCthulhu) || !BossPermutation.InStyle(NPCID.EaterofWorldsHead)) Check.Skip("bosses don't use the permutation style");
+			if (!BossPermutation.InStyle(NPCID.EyeofCthulhu)) Check.Skip("bosses don't use the permutation style");
 			List<string> failures = new();
 			int seed = SeedSystem.WorldSeed;
 			foreach (WorldEvil evil in new[] { WorldEvil.Crimson, WorldEvil.Corruption, WorldEvil.Both })
@@ -669,6 +825,20 @@ namespace UltimateRandomizer.Common.Tests
 				int absentBoss = current == WorldEvil.Crimson ? NPCID.EaterofWorldsHead : NPCID.BrainofCthulhu;
 				int absentUnit = BossPermutation.UnitOf(absentBoss);
 				int absentBag = BossPermutation.BagOf(absentUnit);
+				// Its vanilla table and bag run as they are: out of the style, nothing silenced, nothing replaced
+				if (BossPermutation.InStyle(absentUnit) || !BossPermutation.LeftVanilla(absentUnit)) failures.Add($"{Lang.GetNPCNameValue(absentBoss)} (absent) is in the permutation style");
+				List<DropRateInfo> snapshot = LootSnapshot.ForNpc(absentUnit);
+				List<PlannedDrop> drops = RandomNpcDropRule.OriginalDrops(absentUnit, BossParts.Owner(absentBoss));
+				if (drops.Count != snapshot.Count) failures.Add($"{Lang.GetNPCNameValue(absentBoss)} (absent): {drops.Count} drops for {snapshot.Count} vanilla entries");
+				else if (drops.Where((d, i) => d.Item != snapshot[i].itemId).Any()) failures.Add($"{Lang.GetNPCNameValue(absentBoss)} (absent): its drops are replaced");
+				if (Main.ItemDropsDB.GetRulesForNPCID(absentUnit, false).SelectMany(r => BossPermutation.Wrappers(r)).Any(w => w.Silenced)) failures.Add($"{Lang.GetNPCNameValue(absentBoss)} (absent): a vanilla rule is silenced");
+				if (absentBag > 0)
+				{
+					if (BossPermutation.BagInStyle(absentBag) || LootSubstitutionItem.BagEnabled(absentBag, LootConfig.Instance)) failures.Add($"{Name(absentBag)} (absent boss) is randomized");
+					if (Main.ItemDropsDB.GetRulesForItemID(absentBag).SelectMany(r => BossPermutation.Wrappers(r)).Any(w => w.Silenced)) failures.Add($"{Name(absentBag)} (absent boss): a vanilla rule is silenced");
+					List<int> bagItems = BagPlan.Plan(absentBag, lucky: true).Select(d => d.Item).ToList();
+					if (!bagItems.SequenceEqual(LootSnapshot.ForItem(absentBag).Select(d => d.itemId))) failures.Add($"{Name(absentBag)} (absent boss): its plan is not its vanilla content");
+				}
 				HashSet<int> elsewhere = NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, current))
 					.SelectMany(b => RandomNpcDropRule.Plan(b, Main.expertMode, lucky: true, guaranteed: false)).Select(d => d.Item).ToHashSet();
 				int checkedItems = 0;

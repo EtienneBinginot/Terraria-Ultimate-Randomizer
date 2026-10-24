@@ -201,6 +201,8 @@ Tests: {
 	ProgressionStationsGuaranteed: Unprotected progression stations and boss summons drop from frequent enemies of their tier (1 % or more)
 	ProtectionsRemoved: Progression materials, mirrors, summons and progression tools are randomized, still found at their tier, and no permutation moves a hard gate below its tier
 	AbsentEvilBoss: The evil boss a world lacks takes no part in the boss permutation and is no source
+	TempleKeyOutsideTemple: The Temple Key is never guaranteed in the Temple nor on enemies met only there
+	ConfigMigration: Old saved settings: an old default list of protected items is removed, the player's choices kept
 	UpgradesOutOfPools: Life and mana upgrades are never rolled, guaranteed or used as ingredients, and drops keep them
 	BasicStationsFindable: Every basic station can be found at the start (enemies and pots)
 	GuaranteedReachability: Every guaranteed item is carried by natural enemies of its tier, or by the progression bosses of its tier

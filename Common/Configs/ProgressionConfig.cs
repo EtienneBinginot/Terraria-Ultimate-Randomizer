@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
+using Newtonsoft.Json;
 using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.ModLoader.Config;
@@ -191,5 +194,66 @@ namespace UltimateRandomizer.Common.Configs
 		[Header("Tiers")]
 		[ReloadRequired]
 		public List<TierOverride> TierOverrides = new();
+
+		// Saved settings migration (Migrate). Not public: hidden from the config menu, still saved by tML's serializer
+		// (Newtonsoft keeps non-public members marked JsonProperty). 0 in files saved before the migration existed
+		public const int CurrentVersion = 1;
+
+		[JsonProperty]
+		internal int ConfigVersion;
+
+		// The defaults ProtectedItems had before 06c5f48 (newest first). tML only saves a value that differs from its default
+		// (DefaultValueHandling.IgnoreAndPopulate, ReferenceDefaultsPreservingResolver), so an untouched list already loads
+		// as the new empty default; a list the player added items to was saved whole, old defaults included
+		public static readonly int[][] OldProtectedDefaults =
+		{
+			new int[]
+			{
+				ItemID.Pwnhammer, ItemID.TempleKey, ItemID.LihzahrdPowerCell, ItemID.GoldenKey, ItemID.ShadowKey, ItemID.QueenSlimeCrystal, ItemID.TruffleWorm,
+				ItemID.LihzahrdAltar
+			},
+			new int[]
+			{
+				ItemID.GuideVoodooDoll, ItemID.Pwnhammer, ItemID.TempleKey, ItemID.LihzahrdPowerCell, ItemID.GoldenKey, ItemID.ShadowKey, ItemID.MechanicalEye,
+				ItemID.MechanicalWorm, ItemID.MechanicalSkull, ItemID.SuspiciousLookingEye, ItemID.WormFood, ItemID.BloodySpine, ItemID.SlimeCrown,
+				ItemID.Abeemination, ItemID.DeerThing, ItemID.QueenSlimeCrystal, ItemID.TruffleWorm, ItemID.CelestialSigil, ItemID.LihzahrdAltar
+			},
+			new int[]
+			{
+				ItemID.GuideVoodooDoll, ItemID.ClothierVoodooDoll, ItemID.Pwnhammer, ItemID.TempleKey, ItemID.LihzahrdPowerCell, ItemID.SoulofLight,
+				ItemID.SoulofNight, ItemID.GoldenKey, ItemID.ShadowKey, ItemID.MechanicalEye, ItemID.MechanicalWorm, ItemID.MechanicalSkull,
+				ItemID.SuspiciousLookingEye, ItemID.WormFood, ItemID.BloodySpine, ItemID.SlimeCrown, ItemID.Abeemination, ItemID.DeerThing,
+				ItemID.QueenSlimeCrystal, ItemID.TruffleWorm, ItemID.CelestialSigil, ItemID.GoblinBattleStandard, ItemID.PirateMap, ItemID.SnowGlobe,
+				ItemID.PumpkinMoonMedallion, ItemID.NaughtyPresent, ItemID.SolarTablet, ItemID.LihzahrdAltar
+			}
+		};
+
+		// Runs on every machine when the mod loads (a client joining a server gets the server's migrated values, version
+		// included). Applied in memory: the file is rewritten the next time the player saves the settings, and until then
+		// the migration (idempotent) runs again at each load
+		public override void OnLoaded() => Migrate(this);
+
+		// Pure: brings a config loaded from an older file to the current defaults, never touching what the player chose.
+		// Version 1: a protected items list still holding every item of an old default list (the player added items to it)
+		// loses those old defaults (randomized and guaranteed now: Protection), keeping the additions. The other defaults
+		// changed then (ProtectProgressionMaterials, LootConfig.DropTableStyle) need nothing: a value equal to its old default
+		// was never saved, a saved one is the player's choice. True when something changed
+		public static bool Migrate(ProgressionConfig cfg)
+		{
+			if (cfg.ConfigVersion >= CurrentVersion) return false;
+			bool changed = false;
+			if (cfg.ProtectedItems != null)
+			{
+				HashSet<int> listed = cfg.ProtectedItems.Where(d => d != null && !d.IsUnloaded).Select(d => d.Type).ToHashSet();
+				// The largest old list held whole
+				int[] old = OldProtectedDefaults.Where(list => list.All(listed.Contains)).OrderByDescending(list => list.Length).FirstOrDefault();
+				if (old != null)
+				{
+					changed = cfg.ProtectedItems.RemoveAll(d => d != null && !d.IsUnloaded && Array.IndexOf(old, d.Type) >= 0) > 0;
+				}
+			}
+			cfg.ConfigVersion = CurrentVersion;
+			return changed;
+		}
 	}
 }

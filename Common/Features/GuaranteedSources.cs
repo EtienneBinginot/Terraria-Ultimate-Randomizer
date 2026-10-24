@@ -28,7 +28,26 @@ namespace UltimateRandomizer.Common.Features
 			public bool Critical;
 			// A tool (pickaxe of a mining level): dropped one at a time, as rarely as a station
 			public bool Tool;
+			// A biome whose enemies never carry it (ExcludedBiomeOf: the Temple for the Temple Key, which opens it); null: none
+			public SpawnBiome? ExcludedBiome;
 		}
+
+		// The biome an item can't come from: the Temple Key opens the Jungle Temple, so a Temple enemy (or Golem, summoned
+		// inside) carrying it would lock it away for good
+		public static SpawnBiome? ExcludedBiomeOf(int item) => item == ItemID.TempleKey ? SpawnBiome.Temple : null;
+
+		// Is this enemy met only in that biome (this world's spawn map, every tier)? Golem counts as a Temple one (its altar
+		// is inside). An enemy without any planned biome is not
+		public static bool OnlyIn(int npc, SpawnBiome biome)
+		{
+			int type = BiomeSlots.TypeOf(npc);
+			if (biome == SpawnBiome.Temple && BossParts.Owner(type) == NPCID.Golem) return true;
+			List<(int biome, double share, SlotTime time)> biomes = BiomeSlots.PlannedBiomes(type);
+			return biomes.Count > 0 && biomes.All(b => b.biome == (int)biome);
+		}
+
+		// A source that can't give this item in time: met only in the biome it opens (ExcludedBiomeOf)
+		public static bool ExcludedHost(int item, int npc) => ExcludedBiomeOf(item) is SpawnBiome biome && OnlyIn(npc, biome);
 
 		// The critical stations' chance follows from the pacing model (CriticalChance): the kills of a simulated early hour
 		// that land on the item's hosts give the first one after this many minutes on average, before pots and chests
@@ -273,14 +292,15 @@ namespace UltimateRandomizer.Common.Features
 			}
 		}
 
-		// The progression tools a boss gives in vanilla (Protection.ProgressionTools: the Pwnhammer from hardmode, the Temple
-		// Key after Plantera) when unprotected: their boss's drop is permuted away, or randomized. Dropped one at a time, as
-		// rarely as a station, by the enemies of their tier (hardmode biomes, the Temple or the Dungeon after Plantera)
+		// The progression tools a boss or a container gives in vanilla (Protection.ProgressionTools: the Pwnhammer from hardmode,
+		// the Shadow Key after Skeletron, the Temple Key after Plantera) when unprotected: their boss's drop is permuted away,
+		// or randomized, their chests and lock boxes randomized. Dropped one at a time, as rarely as a station, by the enemies
+		// of their tier (hardmode biomes, the Dungeon...), never by those met only in the biome they open (ExcludedBiomeOf)
 		public static IEnumerable<Requirement> ProgressionToolRequirements()
 		{
 			foreach ((int item, Core.Tier tier) in Protection.ProgressionTools)
 			{
-				if (ItemPool.IsRandomizable(item)) yield return new Requirement { Item = item, Tier = (int)tier, Station = true };
+				if (ItemPool.IsRandomizable(item)) yield return new Requirement { Item = item, Tier = (int)tier, Station = true, ExcludedBiome = ExcludedBiomeOf(item) };
 			}
 		}
 
@@ -375,7 +395,8 @@ namespace UltimateRandomizer.Common.Features
 			// A hard gate (no allowance) is never required before its true tier
 			return all.GroupBy(r => r.Item).Select(g => new Requirement
 			{
-				Item = g.Key, Tier = ItemPool.IsHardGate(g.Key) ? Math.Max(g.Min(r => r.Tier), ItemPool.TrueTierOf(g.Key)) : g.Min(r => r.Tier), Station = g.Any(r => r.Station), Critical = g.Any(r => r.Critical), Tool = g.Any(r => r.Tool)
+				Item = g.Key, Tier = ItemPool.IsHardGate(g.Key) ? Math.Max(g.Min(r => r.Tier), ItemPool.TrueTierOf(g.Key)) : g.Min(r => r.Tier), Station = g.Any(r => r.Station), Critical = g.Any(r => r.Critical), Tool = g.Any(r => r.Tool),
+				ExcludedBiome = ExcludedBiomeOf(g.Key)
 			}).OrderBy(r => r.Tier).ThenBy(r => DetRandom.ItemKey(r.Item)).ToList();
 		}
 
@@ -444,6 +465,9 @@ namespace UltimateRandomizer.Common.Features
 			{
 				Random rng = new(DetRandom.Hash(seed, RollKey.Guaranteed, DetRandom.ItemKey(requirement.Item)));
 				bool single = requirement.Station || requirement.Tool;
+				// Never in the biome it opens, nor on the enemies met only there (the Temple Key)
+				SpawnBiome? excluded = requirement.ExcludedBiome;
+				bool Excluded(int host) => excluded is SpawnBiome biome && OnlyIn(host, biome);
 				Placement place = new() { Biome = -1, Tier = Tiers.Clamp(requirement.Tier), Time = SlotTime.Any, Forced = new List<int>() };
 				List<int> chosen = null;
 				List<float> chances = null;
@@ -478,7 +502,7 @@ namespace UltimateRandomizer.Common.Features
 				{
 					// A biome of the item's own tier, never a lower one (the guaranteed drop has no progression lock)
 					int t = Tiers.Clamp(requirement.Tier);
-					List<BiomeEligible> eligible = Eligible(t);
+					List<BiomeEligible> eligible = Eligible(t).Where(b => excluded is not SpawnBiome biome || b.Biome != (int)biome).ToList();
 					List<BiomeHosts> candidates = eligible.Select(b => ChooseHosts(b, perItem, load, false)).Where(c => c != null).Select(c => c.Value).ToList();
 					// Full hosts only when no biome of the tier works without them
 					if (candidates.Count == 0) candidates = eligible.Select(b => ChooseHosts(b, perItem, load, true)).Where(c => c != null).Select(c => c.Value).ToList();
@@ -503,8 +527,9 @@ namespace UltimateRandomizer.Common.Features
 				// No biome: common hosts of a tier, the total chance split between them (the hosts not full yet first)
 				bool UseCommon(int t)
 				{
-					if (common[t].Count == 0) return false;
-					chosen = common[t].Select(h => (h, roll: rng.Next())).OrderBy(x => load.Full(x.h) ? 1 : 0).ThenBy(x => x.roll)
+					List<int> open = common[t].Where(h => !Excluded(h)).ToList();
+					if (open.Count == 0) return false;
+					chosen = open.Select(h => (h, roll: rng.Next())).OrderBy(x => load.Full(x.h) ? 1 : 0).ThenBy(x => x.roll)
 						.Select(x => x.h).Take(perItem).ToList();
 					place.Forced = chosen.Where(load.Full).ToList();
 					float chance = (single ? UnknownShareStationChance : UnknownShareMaterialChance) * UnknownShareHosts / chosen.Count;
@@ -516,7 +541,7 @@ namespace UltimateRandomizer.Common.Features
 				// The Lunatic Cultist is also where the Ancient Manipulator comes from in vanilla
 				bool UseBosses(int t)
 				{
-					List<int> bosses = BossHosts(t);
+					List<int> bosses = BossHosts(t).Where(b => !Excluded(b)).ToList();
 					if (bosses.Count == 0) return false;
 					chosen = bosses;
 					chances = bosses.Select(_ => 1f).ToList();
@@ -579,6 +604,8 @@ namespace UltimateRandomizer.Common.Features
 			int found = Findability.Never;
 			foreach (int host in HostsOf(requirement.Item))
 			{
+				// Met only in the biome the item opens: no way in (Assign never picks one, a test plan's map might)
+				if (requirement.ExcludedBiome is SpawnBiome biome && OnlyIn(host, biome)) continue;
 				int from = boss ? Math.Max(HostTier(host), Tiers.Clamp(requirement.Tier)) : HostTier(host);
 				found = Math.Min(found, from);
 			}
@@ -1140,11 +1167,12 @@ namespace UltimateRandomizer.Common.Features
 			}
 
 			float minChance = ProgressionConfig.Instance.MinFindableChance / 100f;
-			void AddPlan(List<PlannedDrop> plan, int sourceTier)
+			void AddPlan(List<PlannedDrop> plan, int sourceTier, int npc)
 			{
 				foreach (PlannedDrop drop in plan)
 				{
-					if (drop.Chance < minChance || !WorldAllows(drop.Conditions)) continue;
+					// The Temple Key on a Temple enemy or Golem: behind the door it opens (GuaranteedSources.ExcludedHost)
+					if (drop.Chance < minChance || !WorldAllows(drop.Conditions) || GuaranteedSources.ExcludedHost(drop.Item, npc)) continue;
 					// The conditions of the place (permuted drops take the receiving enemy's: hardmode, Plantera...)
 					int from = ConditionTier(drop.Conditions, sourceTier);
 					if (from == Never) continue;
@@ -1154,12 +1182,12 @@ namespace UltimateRandomizer.Common.Features
 			for (int t = 0; t < Tiers.Count; t++)
 			{
 				// Event, moon and seasonal enemies (in the pool when SwapEventEnemies is on) are no reliable source
-				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) AddPlan(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false), t);
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) AddPlan(RandomNpcDropRule.Plan(npc, Main.expertMode, lucky: true, guaranteed: false), t, npc);
 			}
 			// Not the evil boss this world lacks (BossPermutation.AbsentEvil): its summon needs its biome
 			foreach (int boss in NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, BiomeSlots.CurrentEvil)))
 			{
-				AddPlan(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss));
+				AddPlan(RandomNpcDropRule.Plan(boss, Main.expertMode, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss), boss);
 			}
 			// A bag's content is found once the bag is (bags may hold bags: repeat until nothing changes)
 			Dictionary<int, List<PlannedDrop>> bagPlans = LootSnapshot.Items.Keys.Where(b => !SeasonalBags.Contains(b)).OrderBy(b => b)
@@ -1172,9 +1200,11 @@ namespace UltimateRandomizer.Common.Features
 				{
 					int tier = BagContentTier(bag, result);
 					if (tier == Never) continue;
+					int unit = BossPermutation.BagUnit(bag);
 					foreach (PlannedDrop drop in plan)
 					{
 						if (drop.Chance < minChance || drop.Item <= 0 || drop.Item >= result.Length || !WorldAllows(drop.Conditions)) continue;
+						if (unit > 0 && GuaranteedSources.ExcludedHost(drop.Item, unit)) continue;
 						int from = ConditionTier(drop.Conditions, tier);
 						if (from == Never) continue;
 						int dropTier = Math.Max(from, Gated(drop.Item));

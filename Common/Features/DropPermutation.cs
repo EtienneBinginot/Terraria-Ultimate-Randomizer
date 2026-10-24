@@ -212,9 +212,10 @@ namespace UltimateRandomizer.Common.Features
 		// joining or leaving a group (a setting changed which entries are kept) does not move the others
 		public static int Rank(int seed, Place place) => DetRandom.Hash(seed, RollKey.DropPermutation, place.OwnerKey, place.Index);
 
-		// Pure: ContentOf for these places and this seed. In each group (each of its GateBands) the places are sorted by rank,
-		// and each takes the content of the next one (a random cycle: no content stays at its place, but a hard gate alone in
-		// its band). Removing one place only changes the content of the place before it
+		// Pure: ContentOf for these places and this seed. In each group (each of its GateBands, cut at fixed tiers) the places
+		// are sorted by rank, and each takes the content of the next one (a random cycle: no content stays at its place, but
+		// a hard gate alone in its band). Removing one place only changes the content of the place before it (or, when it
+		// leaves a band with a single owner, merges that band into the one below)
 		public static int[] Permute(IReadOnlyList<Place> places, int seed, out List<List<int>> groups)
 		{
 			int[] contentOf = Enumerable.Range(0, places.Count).ToArray();
@@ -242,19 +243,36 @@ namespace UltimateRandomizer.Common.Features
 			return tier == Findability.Never ? -1 : tier;
 		}
 
-		// Pure: the parts of a group its contents cycle in. The group itself, unless it holds a hard gate whose true tier is
-		// above its lowest place (Luminite with the Lunatic Cultist, Ectoplasm with early Dungeon enemies). Then the true
-		// tiers of those gates cut the places into bands by placeTier (from one cut to the next), and every content cycles in
-		// its own place's band: a gate only reaches places of its true tier or later. A band of a single owner (the Moon
-		// Lord alone from tier 9) would only shuffle that owner's own loot: it joins the band below, its gates too high for
-		// it staying where they are, as does a gate whose own place is below its true tier (vanilla put it there). Each band
-		// keeps the group's order
-		public static List<List<int>> GateBands(List<int> group, Func<int, int> placeTier, Func<int, int> gateTier, Func<int, int> ownerOf)
+		// The tiers that cut a group into gate bands: the true tiers of every hard gate of the item pool, whichever gates the
+		// group holds and whatever its lowest place, so that a place joining or leaving a group (a setting changed which
+		// entries are kept) never moves the cuts of the others. Read once per item pool (load time: the tier overrides need
+		// a reload)
+		private static int[] gateCuts = Array.Empty<int>();
+		private static ItemInfo[] gateCutsFor;
+
+		public static IReadOnlyList<int> GateCuts()
+		{
+			if (gateCutsFor == ItemPool.Info) return gateCuts;
+			gateCuts = Enumerable.Range(1, Math.Max(0, ItemPool.Info.Length - 1)).Where(ItemPool.IsHardGate).Select(ItemPool.TrueTierOf).Distinct().OrderBy(t => t).ToArray();
+			gateCutsFor = ItemPool.Info;
+			return gateCuts;
+		}
+
+		public static List<List<int>> GateBands(List<int> group, Func<int, int> placeTier, Func<int, int> gateTier, Func<int, int> ownerOf) =>
+			GateBands(group, placeTier, gateTier, ownerOf, GateCuts());
+
+		// Pure: the parts of a group its contents cycle in. The cuts (GateCuts) split its places into bands by placeTier (from
+		// one cut to the next), and every content cycles in its own place's band: a hard gate only reaches places of its true
+		// tier or later. A place that never drops (tier -1) joins the band of the group's lowest dropping place (it gives
+		// nothing early). A band of a single owner (the Moon Lord alone from tier 9) would only shuffle that owner's own loot:
+		// it joins the band below, its gates too high for it staying where they are, as does a gate whose own place is below
+		// its true tier (vanilla put it there). Each band keeps the group's order
+		public static List<List<int>> GateBands(List<int> group, Func<int, int> placeTier, Func<int, int> gateTier, Func<int, int> ownerOf, IReadOnlyList<int> fixedCuts)
 		{
 			if (group.Count < 2) return new List<List<int>> { group };
-			int lowest = group.Min(placeTier);
-			List<int> cuts = group.Select(gateTier).Where(g => g > lowest).Distinct().OrderBy(g => g).ToList();
-			if (cuts.Count == 0) return new List<List<int>> { group };
+			// Over the places that drop: one that never does lowers nothing
+			int lowest = group.Select(placeTier).Where(t => t >= 0).DefaultIfEmpty(-1).Min();
+			List<int> cuts = fixedCuts.Where(c => c >= 0).Distinct().OrderBy(c => c).ToList();
 			List<List<int>> stay = new();
 			Dictionary<int, List<int>> byCut = new();
 			List<int> Band(int cut)
@@ -266,14 +284,18 @@ namespace UltimateRandomizer.Common.Features
 			{
 				int tier = placeTier(p);
 				if (gateTier(p) > tier) stay.Add(new List<int> { p });
-				else Band(cuts.Where(c => c <= tier).DefaultIfEmpty(-1).Max()).Add(p);
+				else
+				{
+					int banded = tier < 0 ? lowest : tier;
+					Band(cuts.Where(c => c <= banded).DefaultIfEmpty(-1).Max()).Add(p);
+				}
 			}
 			cuts.Insert(0, -1);
 			for (int k = cuts.Count - 1; k > 0; k--)
 			{
 				if (!byCut.TryGetValue(cuts[k], out List<int> band) || band.Select(ownerOf).Distinct().Count() >= 2) continue;
 				byCut.Remove(cuts[k]);
-				// The lowest band takes any gate up to the group's lowest tier
+				// The lowest band takes any gate up to the group's lowest dropping tier
 				int floor = k == 1 ? lowest : cuts[k - 1];
 				foreach (int p in band)
 				{
@@ -283,7 +305,7 @@ namespace UltimateRandomizer.Common.Features
 			}
 			// In the group's order (a merged band had its members appended)
 			Dictionary<int, int> position = group.Select((p, i) => (p, i)).ToDictionary(x => x.p, x => x.i);
-			return stay.Concat(byCut.OrderBy(b => b.Key).Select(b => b.Value.OrderBy(p => position[p]).ToList())).ToList();
+			return stay.Concat(byCut.Where(b => b.Value.Count > 0).OrderBy(b => b.Key).Select(b => b.Value.OrderBy(p => position[p]).ToList())).ToList();
 		}
 
 		// Load-time facts (samples, snapshot): cached until unload
@@ -657,7 +679,7 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Same test as DropPermutation.RolledEntries
-		private bool Silenced => (BagType > 0 ? BossPermutation.BagActive(BagType) : DropPermutation.Active(NetId) || BossPermutation.Active(NetId)) && DropPermutation.Silences(items);
+		internal bool Silenced => (BagType > 0 ? BossPermutation.BagActive(BagType) : DropPermutation.Active(NetId) || BossPermutation.Active(NetId)) && DropPermutation.Silences(items);
 
 		// Load time only (BossPermutation.Track): the wrapper reporting each entry of a capture, by entry index
 		public static Dictionary<int, int> Tracked;

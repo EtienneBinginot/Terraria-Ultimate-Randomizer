@@ -27,10 +27,15 @@ namespace UltimateRandomizer.Common.Core
 		// (GuaranteedSources.SummonRequirements); the critters can still be caught and the crystal broken as in vanilla
 		public static readonly int[] WorldSummons = { ItemID.TruffleWorm, ItemID.EmpressButterfly, ItemID.LihzahrdPowerCell, ItemID.QueenSlimeCrystal };
 
-		// Progression tools a boss gives in vanilla (the Pwnhammer for the altars, the Temple Key for the Jungle Temple's door),
-		// at the tier they are needed from: randomized, and guaranteed on the enemies of that tier
-		// (GuaranteedSources.ProgressionToolRequirements)
-		public static readonly (int item, Tier tier)[] ProgressionTools = { (ItemID.Pwnhammer, Tier.Hardmode), (ItemID.TempleKey, Tier.PostPlantera) };
+		// Progression tools a boss or a randomized container gives in vanilla (the Pwnhammer for the altars, the Shadow Key for
+		// the Underworld's Shadow Chests, found in the Dungeon's locked chests and Golden Lock Boxes, the Temple Key for the
+		// Jungle Temple's door), at the tier they are needed from: randomized, and guaranteed on the enemies of that tier
+		// (GuaranteedSources.ProgressionToolRequirements). The other openers keep a source of their own: the Golden Key moves
+		// with the Dungeon enemies' drops, the biome keys are global drops (left running), the Light and Night Keys are crafted
+		public static readonly (int item, Tier tier)[] ProgressionTools =
+		{
+			(ItemID.Pwnhammer, Tier.Hardmode), (ItemID.ShadowKey, Tier.PostSkeletron), (ItemID.TempleKey, Tier.PostPlantera)
+		};
 
 		// Sorted with the boss summons (SortingPriorityBossSpawns) without summoning anything: life and mana crystals,
 		// mirrors, phones, conches. Not summons (never guaranteed as one, nor protected by AutoProtectBossSummons); the

@@ -258,6 +258,7 @@ namespace UltimateRandomizer.Common.Tests
 		private static void EaterOfWorldsParts()
 		{
 			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
+			if (BossPermutation.LeftVanilla(NPCID.EaterofWorldsHead)) Check.Skip("no Corruption in this world: the Eater of Worlds keeps its vanilla table");
 			if (!BossPermutation.InStyle(NPCID.EaterofWorldsHead)) Check.Skip("bosses don't use the permutation style");
 			int head = NPCID.EaterofWorldsHead;
 			List<PlannedDrop> expected = RandomNpcDropRule.OriginalDrops(head, BossParts.Owner(head));

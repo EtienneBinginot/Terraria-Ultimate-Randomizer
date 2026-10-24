@@ -201,6 +201,8 @@ Tests: {
 	ProgressionStationsGuaranteed: Les stations de progression et les invocations de boss non protégées tombent d'ennemis fréquents de leur palier (1 % ou plus)
 	ProtectionsRemoved: Les matériaux de progression, miroirs, invocations et outils de progression sont randomisés, restent trouvables à leur palier, et aucune permutation ne place un verrou de progression avant son palier
 	AbsentEvilBoss: Le boss maléfique absent du monde ne participe pas à la permutation des boss et ne compte pas comme source
+	TempleKeyOutsideTemple: La clé du temple n'est jamais garantie dans le temple ni sur des ennemis qu'on ne croise que là
+	ConfigMigration: Anciens réglages sauvegardés : une ancienne liste par défaut d'objets protégés est retirée, les choix du joueur sont gardés
 	UpgradesOutOfPools: Les améliorations de vie et de mana ne sont jamais tirées au sort, garanties ni utilisées comme ingrédients, et les drops les gardent
 	BasicStationsFindable: Chaque station de base se trouve dès le début (ennemis et pots)
 	GuaranteedReachability: Chaque objet garanti est porté par des ennemis naturels de son tier, ou par les boss de progression de son tier

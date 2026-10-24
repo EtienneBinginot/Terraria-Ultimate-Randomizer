@@ -139,7 +139,8 @@ namespace UltimateRandomizer.Common.Features
 		// are fought in drunk and zenith worlds: BiomeSlots.CurrentEvil, from the synced world data). Its summon can't be used
 		// without its biome, so its places are left out of the permutation: its own contents are missing as in vanilla (Shadow
 		// Scales in a Crimson world), and no content of the other evil boss is sent where nobody can get it. Its table and bag
-		// stay vanilla
+		// are not in the permutation style at all (InStyle, BagInStyle: LeftVanilla): its vanilla rules run, unsilenced, and
+		// LootSubstitution leaves what they give as it is, should it be fought anyway
 		public static bool AbsentEvil(int unit, WorldEvil evil)
 		{
 			int owner = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? sample.type : unit);
@@ -496,24 +497,35 @@ namespace UltimateRandomizer.Common.Features
 
 		public static DropPermutation.Placed[] ForBag(int bag) => Current.ByBag.TryGetValue(bag, out DropPermutation.Placed[] table) ? table : None;
 
-		// The boss permutation applies to this net ID with these settings (style: the configured one when null)
-		public static bool InStyle(int netId, DropTableStyle? style = null)
+		// The boss permutation applies to this net ID with these settings (style: the configured one when null). Not to the
+		// evil boss this world lacks (LeftVanilla)
+		public static bool InStyle(int netId, DropTableStyle? style = null) => PermutationStyle(style) && IsSource(netId) && !AbsentEvil(netId, BiomeSlots.CurrentEvil);
+
+		private static bool PermutationStyle(DropTableStyle? style)
 		{
 			LootConfig cfg = LootConfig.Instance;
-			return cfg.RandomizeMobDrops && (style ?? cfg.DropTableStyle) == DropTableStyle.Permutation && IsSource(netId);
+			return cfg.RandomizeMobDrops && (style ?? cfg.DropTableStyle) == DropTableStyle.Permutation;
 		}
+
+		// The permutation style, but the evil boss this world lacks (AbsentEvil: none of its places is permuted): its vanilla
+		// table runs as it is, nothing replaced (LootSubstitution, OriginalDrops)
+		public static bool LeftVanilla(int netId, DropTableStyle? style = null) => PermutationStyle(style) && IsSource(netId) && AbsentEvil(netId, BiomeSlots.CurrentEvil);
 
 		// At kill time: the wrapped vanilla rules of this boss are silent, RandomNpcDropRule rolls its plan
 		public static bool Active(int netId) => SeedSystem.WorldReady && ItemPool.Ready && InStyle(netId);
 
 		// The bag's contents follow the permutation (randomized bags, permutation style): its wrapped rules are silent and
 		// BossBagRule rolls its plan
-		public static bool BagInStyle(int bag, DropTableStyle? style = null)
+		public static bool BagInStyle(int bag, DropTableStyle? style = null) => PermutedBag(bag, style) && !AbsentEvil(BagUnit(bag), BiomeSlots.CurrentEvil);
+
+		private static bool PermutedBag(int bag, DropTableStyle? style)
 		{
 			LootConfig cfg = LootConfig.Instance;
-			return cfg.RandomizeMobDrops && cfg.RandomizeBossBags && (style ?? cfg.DropTableStyle) == DropTableStyle.Permutation
-				&& bag > ItemID.None && bag < ItemID.Sets.BossBag.Length && ItemID.Sets.BossBag[bag] && BagUnit(bag) > 0;
+			return cfg.RandomizeBossBags && PermutationStyle(style) && bag > ItemID.None && bag < ItemID.Sets.BossBag.Length && ItemID.Sets.BossBag[bag] && BagUnit(bag) > 0;
 		}
+
+		// The bag of the evil boss this world lacks in the permutation style: opened as vanilla (LeftVanilla)
+		public static bool BagLeftVanilla(int bag, DropTableStyle? style = null) => PermutedBag(bag, style) && AbsentEvil(BagUnit(bag), BiomeSlots.CurrentEvil);
 
 		public static bool BagActive(int bag) => SeedSystem.WorldReady && ItemPool.Ready && BagInStyle(bag);
 
