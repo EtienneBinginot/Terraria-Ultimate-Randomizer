@@ -189,7 +189,7 @@ namespace UltimateRandomizer.Common.Features
 			// Weak swarm enemies (and critters: never) get a share of the jackpot chances (luck and madness)
 			float worth = JackpotWorth(npc);
 			IEnumerable<PlannedDrop> drops = KillDrops(netId, BossParts.Owner(npc.type), info.IsExpertMode, DropHelper.RollLucky(worth), new Random(info.rng.Next()), worth)
-				.Concat(GuaranteedSources.For(npc.type));
+				.Concat(GuaranteedSources.ForKill(npc.type));
 			// Stronger enemies (type and individual) drop more often. Guaranteed drops (stations...) leave adaptive power
 			// out, so that how fast they are found does not depend on the player's equipment
 			float bonus = EnemyIndividualNPC.LootBonus(npc);
@@ -303,7 +303,7 @@ namespace UltimateRandomizer.Common.Features
 			int gap = ItemPool.LastJackpotGap;
 			// Not the WildRng seed of the roll
 			Random rng = new(unchecked(key * 31 + 17));
-			(int min, int max) = StackRules.Range(item);
+			(int min, int max) = StackRules.ExtraRange(item, NpcTiers.EffectiveTier(owner));
 			drops.Add((item, Math.Max(1, rng.Next(min, Math.Max(min, max) + 1)), gap));
 			return drops;
 		}
@@ -386,13 +386,57 @@ namespace UltimateRandomizer.Common.Features
 			return true;
 		}
 
+		// A boss part that never gives anything (the Destroyer's body, Prime's arms, Golem's head and fists, the Wall of Flesh's
+		// eyes, the Moon Lord's head and hands, the saucer's turrets and cannons): it is never a boss as it dies
+		// (ExtraDropsAllowedNow), and has no vanilla rule of its own for the permutation to roll. Not the Eater of Worlds'
+		// segments: vanilla makes the last one a boss. For the export and the tools: its plan is that of its owner
+		public static bool NeverDrops(int netId)
+		{
+			if (!ContentSamples.NpcsByNetId.TryGetValue(netId, out NPC sample) || sample.boss) return false;
+			int type = sample.type;
+			if (!BossParts.IsPart(type) || !NpcTiers.IsBoss(BossParts.Owner(type)) || BossParts.Owner(type) == NPCID.EaterofWorldsHead) return false;
+			return LootSnapshot.ForNpc(netId).Count == 0;
+		}
+
+		// A hard gate (ItemPool.IsHardGate) or an opener or summon used up at once (StackRules.IsSingleUse) above the tier of
+		// its source: never a random extra drop nor a surprise there, outside a jackpot (Queen Slime gave the Temple Key, which
+		// opened the Temple before Plantera)
+		public static bool GateAbove(int item, int sourceTier) => (ItemPool.IsHardGate(item) || StackRules.IsSingleUse(item)) && ItemPool.TrueTierOf(item) > sourceTier;
+
+		public const int GateRerolls = 4;
+
+		// A random extra or surprise roll (IgnoreGating: the final plan) that gave a gate above its source (GateAbove) is
+		// rolled again a few times, each with its own keys (the first roll's keys and results stay as they were); a jackpot
+		// (aimed beyond the roll's jitter, AllowJackpot) keeps its gate. 0 when every roll gives one
+		public static int RollBelowGates(RollRequest request, out int tier)
+		{
+			int item = ItemPool.Roll(request, out tier);
+			bool jackpot = request.AllowJackpot && tier > request.SourceTier + request.TierJitterUp;
+			if (!GateAbove(item, request.SourceTier) || jackpot) return item;
+			int[] keys = request.Keys;
+			for (int attempt = 1; attempt <= GateRerolls; attempt++)
+			{
+				request.Keys = keys.Append(GateRerollKey - attempt).ToArray();
+				// The jackpot was the first roll's: no new one
+				request.AllowJackpot = false;
+				item = ItemPool.Roll(request, out tier);
+				if (!GateAbove(item, request.SourceTier)) return item;
+			}
+			tier = 0;
+			return ItemID.None;
+		}
+
+		// Appended to the keys of a gate reroll (minus the attempt): no other roll uses negative keys there
+		private const int GateRerollKey = -7000;
+
 		// The progression lock of an enemy's drops never goes below this tier (a boss always gives the items of its own level)
 		public static int MinLimit(int type) => NpcTiers.IsBoss(type) ? NpcTiers.BaseTier(type) : 0;
 
 		// The tier an enemy's drops are rolled at. Kill time: EffectiveTier (ScaleWeakEnemiesWithProgression follows the
 		// unlocked tier). Planning (the lucky plan: findability, guarantees, hints, recipe availability): BaseTier, so the
-		// world caches never depend on progression
-		public static int SourceTier(int type, bool planning) => planning ? NpcTiers.BaseTier(type) : NpcTiers.EffectiveTier(type);
+		// world caches never depend on progression. An event enemy weaker than its event: at least the event's tier
+		// (DropPermutation.EventTier: Martian Madness comes after Golem)
+		public static int SourceTier(int type, bool planning) => Math.Max(planning ? NpcTiers.BaseTier(type) : NpcTiers.EffectiveTier(type), DropPermutation.EventTier(type));
 
 		// Everything an enemy can drop in this world: the replaced original drops, then the extra ones and the guaranteed ones.
 		// Every entry comes from the final plan (everything unlocked: the same items from the first day to the Moon Lord).
@@ -575,7 +619,8 @@ namespace UltimateRandomizer.Common.Features
 					MinLimit = minLimit,
 					Weights = permutationSlots ? cfg.PermutationExtraWeights : null
 				};
-				int item = ItemPool.Roll(request, out int tier);
+				int item = RollBelowGates(request, out int tier);
+				if (item <= ItemID.None) continue;
 				float chance;
 				if (slotStyle == DropTableStyle.Simple)
 				{
@@ -589,7 +634,7 @@ namespace UltimateRandomizer.Common.Features
 				}
 				int lockGap = DropHelper.LockGap(item, minLimit);
 				item = Wild(request, item, lockGap, wildRng, wildMultiplier, out int gap);
-				(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
+				(int stackMin, int stackMax) = StackRules.RollExtraRange(item, sourceTier, DetRandom.Get(RollKey.MobDrop, npcKey, slot, item));
 				drops.Add(new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap, LockGap = lockGap });
 			}
 			if (critterSlots)
@@ -597,7 +642,7 @@ namespace UltimateRandomizer.Common.Features
 				// The vanilla-like style's first small frequent drop (same roll, same keys), at its own chance: not scaled by
 				// abundance like the rest of the permutation style. No madness: critters have no jackpot (JackpotWorth 0)
 				float critterChance = Math.Clamp((critterCommon ?? cfg.CritterCommonDropChance) / 100f, 0f, 1f);
-				if (critterChance > 0.0001f) drops.Add(CommonDrop(npcKey, 0, sourceTier, critterChance, null, 0f));
+				if (critterChance > 0.0001f && CommonDrop(npcKey, 0, sourceTier, critterChance, null, 0f) is PlannedDrop critterDrop) drops.Add(critterDrop);
 			}
 			if (permutationSlots) return drops;
 
@@ -605,12 +650,16 @@ namespace UltimateRandomizer.Common.Features
 			// chance: every full 100 % is one sure drop, the rest the chance of one more (each a different item).
 			// Critters get only a share of it (CritterDropFactor): they come in swarms and die in one hit
 			float commonTotal = cfg.CommonDropChance / 100f * abundanceFactor * (critter ? Math.Max(0f, cfg.CritterDropFactor) : 1f);
-			for (int c = 0; !isBoss && commonTotal > 0.0001f && c < 20; c++, commonTotal -= 1f) drops.Add(CommonDrop(npcKey, c, sourceTier, Math.Min(1f, commonTotal), wildRng, wildMultiplier));
+			for (int c = 0; !isBoss && commonTotal > 0.0001f && c < 20; c++, commonTotal -= 1f)
+			{
+				if (CommonDrop(npcKey, c, sourceTier, Math.Min(1f, commonTotal), wildRng, wildMultiplier) is PlannedDrop common) drops.Add(common);
+			}
 			return drops;
 		}
 
-		// The c-th small frequent drop of an NPC type (material, potion, ammo...: CommonDropWeights)
-		private static PlannedDrop CommonDrop(int npcKey, int c, int sourceTier, float chance, Random wildRng, float wildMultiplier)
+		// The c-th small frequent drop of an NPC type (material, potion, ammo...: CommonDropWeights). Null when every roll gave
+		// a gate above the source (RollBelowGates)
+		private static PlannedDrop? CommonDrop(int npcKey, int c, int sourceTier, float chance, Random wildRng, float wildMultiplier)
 		{
 			RollRequest common = new()
 			{
@@ -622,10 +671,11 @@ namespace UltimateRandomizer.Common.Features
 				TierJitterDown = 1,
 				IgnoreGating = true
 			};
-			int planned = ItemPool.Roll(common);
+			int planned = RollBelowGates(common, out _);
+			if (planned <= ItemID.None) return null;
 			int lockGap = DropHelper.LockGap(planned, 0);
 			int item = Wild(common, planned, lockGap, wildRng, wildMultiplier, out int gap);
-			(int stackMin, int stackMax) = StackRules.RollRange(item, DetRandom.Get(RollKey.MobDrop, npcKey, 2000 + c, item));
+			(int stackMin, int stackMax) = StackRules.RollExtraRange(item, sourceTier, DetRandom.Get(RollKey.MobDrop, npcKey, 2000 + c, item));
 			return new PlannedDrop { Item = item, StackMin = stackMin, StackMax = stackMax, Chance = chance, Extra = true, JackpotGap = gap, LockGap = lockGap };
 		}
 

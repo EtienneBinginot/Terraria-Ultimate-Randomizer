@@ -146,6 +146,9 @@ Tests: {
 	DropPermutationSurprise: Permutation surprises replace about the set share of the shuffled drops, never a material nor the copy every item but blocks, critters and ores keeps
 	PermutationDuplicatesCapped: An item keeps at most its capped number of shuffled copies per drop condition (the others become surprises), and always at least one in each
 	PermutationKeepsStartDrops: With the default caps, Gel and Lens stay among the start materials (the copies kept are on the enemies met first)
+	ExtraStacksSmall: Random extra drops and surprises come in small stacks: potions and food a few, ammo by dozens, keys and summons one at a time
+	GatesNotOnLowerOwners: No random extra drop nor surprise gives a hard gate, key or summon above the tier of its enemy, except a jackpot
+	StrongEnemiesDropEarly: Strong enemies coming with hardmode drop their permuted loot from hardmode on; Martian enemies drop at the Martian tier
 	BossPermutationConserves: The boss permutation loses and duplicates nothing: every shuffled boss drop and treasure bag content is still in some boss or bag
 	BossBagMatchesBoss: Each treasure bag holds the shuffled normal-mode drops of its boss, with their chance and stack in the bag they come from
 	BossPermutationTiers: Boss drops only move between bosses of the same group of tiers, with the same restrictions
@@ -240,6 +243,8 @@ Tests: {
 	PotOnlyUnfound: Pots only give guaranteed items nobody has found yet
 	GuaranteesNotBelowTier: No guaranteed item comes before its tier (Ancient Manipulator and Celestial Sigil from the Lunatic Cultist on)
 	StationsOneGuardian: Every crafting station has exactly one guardian, a common enemy of its tier, and never comes from pots or chests
+	BiomeKeysGuaranteed: The biome keys of this world are guaranteed on hardmode enemies and found from hardmode on
+	GuardiansInThisWorld: Station guardians are enemies this world really spawns, never only in the evil biome it lacks
 	IngredientReplacementsFindable: New ingredients are had (found or crafted) by the tier their recipe was rebuilt for
 	RecipesDoable: At least 85% of the randomized recipes can be made at their level
 	AvailabilityConsistent: The planned item availability matches an independent recomputation over the applied recipes

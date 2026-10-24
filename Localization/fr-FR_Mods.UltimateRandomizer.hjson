@@ -146,6 +146,9 @@ Tests: {
 	DropPermutationSurprise: Les surprises de la permutation remplacent à peu près la part réglée des drops mélangés, jamais un matériau ni l'exemplaire que garde chaque objet (sauf blocs, créatures et minerais)
 	PermutationDuplicatesCapped: Un objet garde au plus son nombre limité d'exemplaires mélangés par condition de drop (les autres deviennent des surprises), et toujours au moins un dans chacune
 	PermutationKeepsStartDrops: Avec les limites par défaut, le gel et la lentille restent des matériaux de départ (les exemplaires gardés sont sur les premiers ennemis rencontrés)
+	ExtraStacksSmall: Les drops bonus et surprises aléatoires viennent en petites piles : quelques potions ou plats, des dizaines de munitions, clés et invocations une par une
+	GatesNotOnLowerOwners: Aucun drop bonus ni surprise aléatoire ne donne un verrou de progression, une clé ou une invocation au-dessus du palier de son ennemi, sauf un jackpot
+	StrongEnemiesDropEarly: Les ennemis puissants qui arrivent avec le mode difficile donnent leur butin permuté dès le mode difficile ; les ennemis martiens, au palier martien
 	BossPermutationConserves: La permutation des boss ne perd et ne double rien : chaque drop de boss et contenu de sac mélangé est toujours dans un boss ou un sac
 	BossBagMatchesBoss: Chaque sac de trésor contient les drops mélangés du mode normal de son boss, avec leur chance et leur quantité dans le sac d'où ils viennent
 	BossPermutationTiers: Les drops de boss ne passent qu'entre boss du même groupe de tiers, avec les mêmes restrictions
@@ -240,6 +243,8 @@ Tests: {
 	PotOnlyUnfound: Les pots ne donnent que des objets garantis que personne n'a encore trouvés
 	GuaranteesNotBelowTier: Aucun objet garanti n'arrive avant son tier (Manipulateur antique et Sceau céleste pas avant le Cultiste lunatique)
 	StationsOneGuardian: Chaque station d'artisanat a un seul gardien, un ennemi courant de son palier, et ne vient jamais des pots ni des coffres
+	BiomeKeysGuaranteed: Les clés de biome de ce monde sont garanties sur des ennemis du mode difficile et trouvables dès le mode difficile
+	GuardiansInThisWorld: Les gardiens des stations sont des ennemis qui apparaissent vraiment dans ce monde, jamais seulement dans le biome maléfique qu'il n'a pas
 	IngredientReplacementsFindable: Les nouveaux ingrédients s'obtiennent (trouvés ou fabriqués) au palier pour lequel leur recette a été reconstruite
 	RecipesDoable: Au moins 85 % des recettes randomisées sont faisables à leur niveau
 	AvailabilityConsistent: La disponibilité prévue des objets correspond à un recalcul indépendant sur les recettes appliquées
