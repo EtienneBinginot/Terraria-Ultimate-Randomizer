@@ -274,7 +274,14 @@ namespace UltimateRandomizer.Common.Features
 						avail[result] = resultTier;
 						changed = true;
 						int placed = ContentSamples.ItemsByType.TryGetValue(result, out Item sample) ? sample.createTile : -1;
-						if (placed >= TileID.Dirt && tileAvail.TryGetValue(placed, out int current) && resultTier < current) tileAvail[placed] = resultTier;
+						if (placed >= TileID.Dirt)
+						{
+							// The vanilla tiles another mod's tile acts as too (TileAvailability counts its item as their placer)
+							foreach (int tile in Stations.ActsAs(placed).Prepend(placed))
+							{
+								if (tileAvail.TryGetValue(tile, out int current) && resultTier < current) tileAvail[tile] = resultTier;
+							}
+						}
 					}
 				}
 			}
@@ -1357,8 +1364,9 @@ namespace UltimateRandomizer.Common.Features
 		// protected tier
 		private static int TileAvailability(int tile, Dictionary<int, List<int>> itemsByTile, int[] avail)
 		{
-			// Tiles without an item (Demon Altar...) are part of the world
-			if (!itemsByTile.TryGetValue(tile, out List<int> placers)) return 0;
+			// Tiles no item places itself (Demon Altar...) are part of the world, whatever acts as them (Magic Storage's altars:
+			// counted as placers, they made every altar recipe "never" while the world's altars make them from the start)
+			if (!itemsByTile.TryGetValue(tile, out List<int> placers) || Stations.WorldTile(tile)) return 0;
 			int best = KeepsVanillaSource(placers) ? ProtectedStationTier(tile) : Never;
 			foreach (int placer in placers)
 			{

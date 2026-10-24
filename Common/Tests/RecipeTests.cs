@@ -157,15 +157,24 @@ namespace UltimateRandomizer.Common.Tests
 			Check.That(ratio >= 0.85, $"only {ratio:P0} of the recipes can be made at their level (e.g. {string.Join(", ", examples)})");
 		}
 
-		// Items placing each tile, built here independently of the planner
+		// Items placing each tile, built here independently of the planner: also the items placing another mod's tile that
+		// counts as it for crafting (ModTile.AdjTiles: Magic Storage's combined stations)
 		private static Dictionary<int, List<int>> Placers()
 		{
 			Dictionary<int, List<int>> placers = new();
+			void Add(int tile, int type)
+			{
+				if (!placers.TryGetValue(tile, out List<int> list)) placers[tile] = list = new List<int>();
+				if (!list.Contains(type)) list.Add(type);
+			}
 			foreach ((int type, Item item) in ContentSamples.ItemsByType)
 			{
 				if (item.createTile < TileID.Dirt) continue;
-				if (!placers.TryGetValue(item.createTile, out List<int> list)) placers[item.createTile] = list = new List<int>();
-				list.Add(type);
+				Add(item.createTile, type);
+				if (item.createTile >= TileID.Count && TileLoader.GetTile(item.createTile)?.AdjTiles is int[] adj)
+				{
+					foreach (int tile in adj.Where(t => t >= TileID.Dirt && t < TileID.Count)) Add(tile, type);
+				}
 			}
 			return placers;
 		}
@@ -174,7 +183,8 @@ namespace UltimateRandomizer.Common.Tests
 		// their tier (bought...); tiles no item places (Demon Altar) are part of the world
 		private static int StationTier(int tile, Dictionary<int, List<int>> placers, int[] avail)
 		{
-			if (!placers.TryGetValue(tile, out List<int> items)) return 0;
+			// Nothing placing the tile itself: the world's own (Demon Altar), whatever acts as it (Magic Storage's altars)
+			if (!placers.TryGetValue(tile, out List<int> items) || !items.Any(p => ContentSamples.ItemsByType[p].createTile == tile)) return 0;
 			Stations.StationInfo info = Stations.Info(tile);
 			// A protected progression station no recipe makes (bought, found) is usable from its tier; a crafted or
 			// unprotected one through its recipe or its guaranteed drops (avail)
