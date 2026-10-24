@@ -98,11 +98,19 @@ namespace UltimateRandomizer.Common.Tests
 			RecipePlan plan = RecipePlanner.Get();
 			int total = 0, rebuildable = 0, rebuilt = 0;
 			List<string> examples = new();
+			List<string> ownCondition = new();
 			for (int i = 0; i < Count; i++)
 			{
 				if (Main.recipe[i].Mod?.Name != "MagicStorage" || RecipeSystem.VanillaDisabled(i) || RecipeSystem.IsShell(i)) continue;
 				total++;
 				string where = $"{Name(RecipeSystem.OriginalResult(i))} (recipe {i})";
+				// A recipe with a condition of its mod stays as it is on purpose (Cooked Marshmallow near a campfire): logged
+				if (RecipeSystem.HasModdedCondition(i))
+				{
+					if (!RecipeSystem.LeftAlone(i)) failures.Add($"{where}: randomized with a condition of its mod");
+					ownCondition.Add(where);
+					continue;
+				}
 				if (RecipeSystem.LeftAlone(i)) failures.Add($"{where}: left alone");
 				if (RecipePlanner.Rebuildable(i)) rebuildable++;
 				if (plan.Ingredients[i] == null || plan.Repaired[i]) continue;
@@ -116,7 +124,8 @@ namespace UltimateRandomizer.Common.Tests
 				if (coherent && highest < Math.Min(original, t) - 1) failures.Add($"{where}: original tier {original}, rebuilt for {t}, its ingredients all had at {highest}");
 				if (examples.Count < 8) examples.Add($"{Name(plan.Results[i].type)} T{t} (was {original}, key {(plan.PlannedKeys[i] > 0 ? Name(plan.PlannedKeys[i]) : "-")})");
 			}
-			Log($"ModdedRecipesRandomized: {total} Magic Storage recipes, {rebuildable} rebuildable, {rebuilt} rebuilt; e.g. {string.Join(", ", examples)}");
+			Log($"ModdedRecipesRandomized: {total} Magic Storage recipes, {rebuildable} rebuildable, {rebuilt} rebuilt; e.g. {string.Join(", ", examples)}; " +
+				$"left alone for a condition of their mod: {(ownCondition.Count == 0 ? "none" : string.Join(", ", ownCondition))}");
 			if (total == 0) Check.Skip("Magic Storage has no recipe");
 			if (rebuildable > 0 && rebuilt == 0) failures.Add("no Magic Storage recipe was rebuilt");
 			Check.All(failures, "Magic Storage recipes");

@@ -67,22 +67,34 @@ namespace UltimateRandomizer.Common.Tests
 				list.Add(type);
 			}
 			Dictionary<int, int> best = new();
+			// A modded item's best recipe, logged to check its tier makes sense (ingredient tiers, stations)
+			Dictionary<int, string> bestModded = new();
 			int count = Math.Min(Recipe.numRecipes, Features.RecipeSystem.RecipeCount);
 			for (int i = 0; i < count; i++)
 			{
 				Recipe recipe = Main.recipe[i];
-				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i) || recipe.Mod != null && recipe.Mod.Name != "ModLoader") continue;
+				if (recipe == null || Features.RecipeSystem.VanillaDisabled(i)) continue;
 				int result = Features.RecipeSystem.OriginalResult(i);
-				// The same recipes as the lowering: the live recipe's conditions stay, its ingredients are randomized (the originals)
-				if (!ItemClassifier.SetsTier(recipe, Features.RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToList())) continue;
+				// The same recipes as the lowering (vanilla ones, and other mods' recipes of their own items: IsTierRecipe): the live
+				// recipe's conditions stay, its result and ingredients are randomized (the originals)
+				if (!ItemClassifier.SetsTier(recipe, Features.RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToList(), result)) continue;
 				if (result <= 0 || result >= tiers.Length) continue;
 				int tier = 0;
+				List<string> parts = new();
 				foreach ((int type, _) in Features.RecipeSystem.OriginalIngredients(i))
 				{
 					if (type <= 0 || type >= tiers.Length) continue;
-					tier = Math.Max(tier, ItemClassifier.IngredientChoices(Features.RecipeSystem.OriginalGroups(i), type).Where(t => t > 0 && t < tiers.Length).Select(t => tiers[t]).DefaultIfEmpty(Tiers.Max).Min());
+					int part = ItemClassifier.IngredientChoices(Features.RecipeSystem.OriginalGroups(i), type).Where(t => t > 0 && t < tiers.Length).Select(t => tiers[t]).DefaultIfEmpty(Tiers.Max).Min();
+					tier = Math.Max(tier, part);
+					parts.Add($"{Lang.GetItemNameValue(type)} {part}");
 				}
-				foreach (int tile in Features.RecipeSystem.OriginalTiles(i).Where(t => t >= 0)) tier = Math.Max(tier, ItemClassifier.StationTier(tile, placers, t => tiers[t]));
+				foreach (int tile in Features.RecipeSystem.OriginalTiles(i).Where(t => t >= 0))
+				{
+					int station = ItemClassifier.StationTier(tile, placers, t => tiers[t]);
+					tier = Math.Max(tier, station);
+					parts.Add($"station {(TileID.Search.TryGetName(tile, out string tileName) ? tileName : "tile" + tile)} {station}");
+				}
+				if (tier < best.GetValueOrDefault(result, int.MaxValue) && result >= ItemID.Count) bestModded[result] = string.Join(", ", parts);
 				best[result] = Math.Min(best.GetValueOrDefault(result, int.MaxValue), tier);
 			}
 			int lowered = 0;
@@ -95,11 +107,13 @@ namespace UltimateRandomizer.Common.Tests
 				lowered++;
 				string name = Lang.GetItemNameValue(item);
 				if (overridden.Contains(item) || ItemClassifier.HasKnownTier(item)) failures.Add($"{name}: a fixed tier lowered to {info.Tier}");
-				else if (!best.TryGetValue(item, out int recipeTier)) failures.Add($"{name}: lowered to {info.Tier} without a vanilla recipe");
+				else if (!best.TryGetValue(item, out int recipeTier)) failures.Add($"{name}: lowered to {info.Tier} without a recipe setting tiers");
 				else if (info.Tier < recipeTier) failures.Add($"{name}: tier {info.Tier} below its best recipe's {recipeTier}");
 				else if (info.Tier > recipeTier) failures.Add($"{name}: tier {info.Tier}, its best recipe allows {recipeTier}");
 			}
 			Terraria.ModLoader.ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Tiers from recipes: {lowered} items lowered");
+			foreach ((int item, string recipe) in bestModded.Where(p => ItemPool.IsValid(p.Key) && ItemPool.Info[p.Key].Tier < ItemPool.Info[p.Key].RarityTier).Take(12))
+				Terraria.ModLoader.ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Tiers from recipes: {Lang.GetItemNameValue(item)} lowered to {ItemPool.Info[item].Tier} by {recipe}");
 			if (count == 0) Check.Skip("no recipe stored");
 			Check.All(failures, "Tiers from recipes");
 		}

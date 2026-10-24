@@ -826,16 +826,32 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> permuted = new();
 			int slots = Math.Clamp(cfg.PermutationExtraSlots, 0, 3);
 			float factor = Math.Max(0f, cfg.CritterDropFactor);
+			// Plus one small frequent drop at CritterCommonDropChance (none at 0), last, whatever the abundance
+			float commonChance = Math.Clamp(cfg.CritterCommonDropChance / 100f, 0f, 1f);
+			int commons = commonChance > 0.0001f ? 1 : 0;
 			foreach (int npc in new[] { NPCID.Bunny, NPCID.Mouse, NPCID.Butterfly })
 			{
 				foreach (float abundance in new[] { 1f, 3f })
 				{
 					List<PlannedDrop> extras = RandomNpcDropRule.ExtraDrops(npc, npc, Main.expertMode, abundance, style: DropTableStyle.Permutation);
-					if (extras.Count != slots) permuted.Add($"{NpcName(npc)}: {extras.Count} random drops in the permutation style at abundance {abundance}, {slots} expected");
+					if (extras.Count != slots + commons) permuted.Add($"{NpcName(npc)}: {extras.Count} random drops in the permutation style at abundance {abundance}, {slots + commons} expected");
+					// The frequent drop: the same item at any chance (explicit chances, not the config), none at 0 %, no jackpot
+					List<PlannedDrop> sure = RandomNpcDropRule.ExtraDrops(npc, npc, Main.expertMode, abundance, style: DropTableStyle.Permutation, critterCommon: 100f);
+					List<PlannedDrop> none = RandomNpcDropRule.ExtraDrops(npc, npc, Main.expertMode, abundance, style: DropTableStyle.Permutation, critterCommon: 0f);
+					if (none.Count != slots) permuted.Add($"{NpcName(npc)}: {none.Count} random drops with no frequent drop, {slots} expected");
+					if (sure.Count != slots + 1 || Math.Abs(sure[^1].Chance - 1f) > 1e-4f) permuted.Add($"{NpcName(npc)}: no sure frequent drop at 100 %");
+					else
+					{
+						ItemCategory category = ItemPool.IsValid(sure[^1].Item) ? ItemPool.Info[sure[^1].Item].Category : ItemCategory.Misc;
+						if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Chaos && CommonDropWeights.Instance.Get(category) <= 0)
+							permuted.Add($"{NpcName(npc)}: frequent drop {Lang.GetItemNameValue(sure[^1].Item)} ({category}) has no common drop weight");
+						if (commons == 1 && (extras.Count != slots + 1 || extras[^1].Item != sure[^1].Item || Math.Abs(extras[^1].Chance - commonChance) > 1e-4f || extras[^1].JackpotGap > 0))
+							permuted.Add($"{NpcName(npc)}: frequent drop not {Lang.GetItemNameValue(sure[^1].Item)} at {commonChance:P0}");
+					}
 					// Each slot is the same roll as without the factor (same item), at CritterDropFactor times its chance (capped at
 					// 100 %: a sure slot without the factor stays at least min(1, factor))
 					List<PlannedDrop> unscaled = RandomNpcDropRule.ExtraDrops(npc, npc, Main.expertMode, abundance, style: DropTableStyle.Permutation, critterFactor: 1f);
-					for (int s = 0; s < Math.Min(extras.Count, unscaled.Count); s++)
+					for (int s = 0; s < Math.Min(slots, Math.Min(extras.Count, unscaled.Count)); s++)
 					{
 						PlannedDrop with = extras[s];
 						PlannedDrop without = unscaled[s];

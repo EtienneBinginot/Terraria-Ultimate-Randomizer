@@ -207,9 +207,11 @@ namespace UltimateRandomizer.Common.Tests
 			for (int t = 1; t < naive.Length; t++) naive[t] = Findability.Tier(t);
 			bool changed = true;
 			int passes = 0;
-			while (changed && passes++ < 200)
+			// To the true fixed point (each change lowers a tier: it ends), as the planner does since a pass cap left long chains out
+			while (changed)
 			{
 				changed = false;
+				passes++;
 				for (int i = 0; i < Count; i++)
 				{
 					Recipe recipe = Main.recipe[i];
@@ -238,6 +240,7 @@ namespace UltimateRandomizer.Common.Tests
 					}
 				}
 			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Availability recomputed in {passes} passes");
 			List<string> differences = Enumerable.Range(1, naive.Length - 1).Where(t => naive[t] != plan.Availability[t])
 				.Select(t => $"{Name(t)}: {Show(naive[t])} recomputed, {Show(plan.Availability[t])} in the plan").Take(5).ToList();
 			Check.All(differences, "Availability differs from a recomputation");
