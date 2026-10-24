@@ -31,6 +31,7 @@ def section(title, lines, limit=12):
 # ---- Recipes
 ING = re.compile(r"(\S+) x(\d+) \[tier (\S+), avail (\S+), value (\S+)\]")
 at30, lines_total, craftonly_big, never_ing, early, late_gear, empty_live, over_value, big_total = [], 0, [], [], [], [], [], [], []
+locked, locked_keyed = 0, []
 for r in rows("recipes.tsv"):
     if r["switched off"] or r["protected"] == "True": continue
     ings = ING.findall(r["planned ingredients"])
@@ -47,6 +48,10 @@ for r in rows("recipes.tsv"):
     if cat(res) in GEAR and d is not None and d > (tier(res) or rt) + 1 and r["rebuilt"] == "True": late_gear.append(f'{r["index"]} {res} true {tier(res)} doable {d}')
     vv, pv = num(r["vanilla value"], 0), num(r["planned value"], 0)
     if r["rebuilt"] == "True" and r["swapped"] != "True" and vv and pv > vv * 2 + 100 and r["upgrade shell"] != "True": over_value.append(f'{r["index"]} {res}: {vv} -> {pv}')
+    # Station locks (1.8.0+ exports): no key, the planned station is had exactly at T
+    if r.get("station lock") == "True":
+        locked += 1
+        if r["key ingredient"]: locked_keyed.append(f'{r["index"]} {res}: key {r["key ingredient"]}')
     if r["rebuilt"] == "True" and total > 40: big_total.append(f'{r["index"]} {res}: {total} items ({r["planned ingredients"][:120]})')
 section(f"Recipe ingredient lines at >=30 (of {lines_total})", at30)
 section("Recipe totals above 40 items", big_total)
@@ -56,6 +61,7 @@ section("Rebuilt recipes doable before their result tier", early)
 section("Gear craftable 2+ tiers after its true tier", late_gear)
 section("Live randomized recipes without ingredients", empty_live)
 section("Recipes above 2x vanilla value", over_value)
+section(f"Station-locked recipes (of {locked}) that also have a key", locked_keyed)
 
 # ---- Drops and bags
 def drops_checks(name, label):

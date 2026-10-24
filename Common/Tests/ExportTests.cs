@@ -223,11 +223,11 @@ namespace UltimateRandomizer.Common.Tests
 					RecipeSystem.OriginalIngredientValue(i), plan.IngredientValues != null ? plan.IngredientValues[i] : 0,
 					twin || loopOff || shell && !RecipePlanner.ShellActive(plan, i) ? "off" : Show(doable),
 					plan.IngredientTiers != null ? plan.IngredientTiers[i] : -1, plan.LockKeys != null && plan.LockKeys[i] > 0 ? Internal(plan.LockKeys[i]) : "",
-					vanillaResult > 0 ? Internal(vanillaResult) : ""));
+					vanillaResult > 0 ? Internal(vanillaResult) : "", plan.StationLocks != null && plan.StationLocks[i]));
 			}
 			return ("index\tmod\tresult\tstack\tresult item tier\tvanilla ingredients\tvanilla stations\tplanned ingredients\tplanned stations\tkey ingredient\t" +
 				"randomized\trebuilt\tswapped\tswap partner\tshell\tupgrade shell\tprotected\thouse\tswitched off\trepaired\tvalue short\t" +
-				"vanilla value\tplanned value\tplanned doable tier\tingredient tier T\tlock key\tvanilla result", rows);
+				"vanilla value\tplanned value\tplanned doable tier\tingredient tier T\tlock key\tvanilla result\tstation lock", rows);
 		}
 
 		// ---- drops.tsv and bags.tsv
@@ -487,7 +487,7 @@ namespace UltimateRandomizer.Common.Tests
 		private const string Readme =
 			"Ultimate Randomizer world export (test WorldExport). Tab separated, one header line, overwritten at each run. Tier 0 = PreBoss ... 9 = PostMoonLord, 'never' = not obtainable.\n" +
 			"items.tsv: one row per item (columns of ItemTiers.tsv + mod). tier = planned tier, true tier = tier once sources are considered, findability tier = first tier found in this world (incl. guarantees), planned recipe tier = recipe availability.\n" +
-			"recipes.tsv: one row per recipe index. vanilla/planned ingredients 'internal xN [tier of item, availability tier, value]'. flags: randomized (live recipe differs from vanilla), rebuilt (ingredients rebuilt by the planner), swapped + partner (result swap), shell (recipe of an item no recipe makes), upgrade shell, protected (not touchable), house, mining chain, switched off (twin or loopoff), repaired, value short. planned doable tier = max availability of planned ingredients and stations (off = switched off). ingredient tier T = tier the ingredients were rebuilt for (-1 none).\n" +
+			"recipes.tsv: one row per recipe index. vanilla/planned ingredients 'internal xN [tier of item, availability tier, value]'. flags: randomized (live recipe differs from vanilla), rebuilt (ingredients rebuilt by the planner), swapped + partner (result swap), shell (recipe of an item no recipe makes), upgrade shell, station lock (no key: its planned station is had exactly at T), protected (not touchable), house, mining chain, switched off (twin or loopoff), repaired, value short. planned doable tier = max availability of planned ingredients and stations (off = switched off). ingredient tier T = tier the ingredients were rebuilt for (-1 none).\n" +
 			"drops.tsv: for each NPC with a plan (lucky final plan, no progression lock), normal and expert. kind: permuted (content moved from origin npc/index), kept, replaced (original item swapped), surprise, extra (random extra drop), guaranteed (GuaranteedSources). lock gap = tiers progression would lock it (0 in the lucky plan). jackpot gap = runtime only (0).\n" +
 			"bags.tsv: same columns for every bag/crate plan (BagPlan.Plan, lucky).\n" +
 			"shops.tsv: every vanilla shop entry at simulated unlocked tiers 0..9 with its replacement (slot kind: roll, guaranteed shop-only item, or unchanged) and price.\n" +

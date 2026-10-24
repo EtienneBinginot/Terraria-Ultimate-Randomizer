@@ -41,6 +41,10 @@ namespace UltimateRandomizer.Common.Core
 		// made from them), and every material or bar of true tier HighMaterialTier or more (HighMaterial): no TierAllowance
 		// (UnlockTierOf, GatingLimitFor), never rolled nor permuted onto a source of a lower tier
 		public bool HardGate;
+		// A hard gate only by the high-tier rule (HighMaterial, HighStation): at its own vanilla source it keeps the allowance
+		// (UnlockTierOf, GatingLimitFor with vanillaPlace): the rule is that it never comes earlier than vanilla, and a vanilla
+		// source is not earlier
+		public bool HighGate;
 		public bool Excluded;
 		public bool Protected;
 		// A life or mana upgrade (Protection.Upgrades): replaceable, Misc, but in no bucket (never rolled, never a new
@@ -250,7 +254,8 @@ namespace UltimateRandomizer.Common.Core
 				int trueTier = trueTiers[type];
 				info[type] = new ItemInfo { Category = category, Tier = tier, RarityTier = rarityTiers[type], TrueTier = trueTier, Banned = isBanned, Protected = isProtected,
 					SourceTier = sourceTiers[type], Source = sourceNames[type], SourceRaised = !fixedTier[type] && trueTier > Math.Max(tiers[type], beforeSources[type]),
-					FromTable = fromTable[type], FromWorldChest = fromChest[type], Corrected = corrected[type] && !fromChest[type], HardGate = hardGates[type] || HighMaterial(category, trueTier),
+					FromTable = fromTable[type], FromWorldChest = fromChest[type], Corrected = corrected[type] && !fromChest[type], HardGate = hardGates[type] || HighMaterial(category, trueTier) || HighStation(type, trueTier),
+					HighGate = !hardGates[type] && (HighMaterial(category, trueTier) || HighStation(type, trueTier)),
 					Special = special };
 				// Upgrades stay out of the buckets: the buckets (and every plan rolled from them) are the same as when they were protected
 				if (!isProtected && !special) lists[(int)category, tier].Add(type);
@@ -407,9 +412,10 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		// Worth a jackpot: equipment that does something (weapons, armor with defense, accessories, tools, mounts) or a
-		// progression station; never a music box (an accessory), vanity, a pet or light pet, nor a dye
+		// progression station (not a hard-gated one: HighStation); never a music box (an accessory), vanity, a pet or light pet,
+		// nor a dye
 		public static bool IsJackpotWorthy(int type) =>
-			IsValid(type) && !Info[type].Banned && (ItemCategories.IsGear(Info[type].Category) && UsefulGear(type) || Array.IndexOf(ProgressionStations(), type) >= 0);
+			IsValid(type) && !Info[type].Banned && (ItemCategories.IsGear(Info[type].Category) && UsefulGear(type) || Array.IndexOf(ProgressionStations(), type) >= 0 && !Info[type].HardGate);
 
 		private static bool UsefulGear(int type)
 		{
@@ -446,6 +452,13 @@ namespace UltimateRandomizer.Common.Core
 		public static int GatingLimitFor(int type, int minLimit) =>
 			IsHardGate(type) ? GatingLimit(ProgressionSystem.UnlockedTier, Main.hardMode, minLimit, 0) : GatingLimit(minLimit);
 
+		// The same for an item at its own vanilla source (vanillaPlace: not moved to another owner, not rolled into another
+		// item, no surprise): a high-tier item (HighGate) keeps the allowance there, like any item
+		public static int GatingLimitFor(int type, int minLimit, bool vanillaPlace) =>
+			vanillaPlace && IsHighGate(type) ? GatingLimit(minLimit) : GatingLimitFor(type, minLimit);
+
+		public static bool IsHighGate(int type) => IsValid(type) && Info[type].HighGate;
+
 		public static bool IsHardGate(int type) => IsValid(type) && Info[type].HardGate;
 
 		// High-tier materials never come down (user decision): a material or a bar of the mechanical bosses' tier or later
@@ -455,6 +468,11 @@ namespace UltimateRandomizer.Common.Core
 		public const int HighMaterialTier = (int)Tier.PostMechBoss;
 
 		public static bool HighMaterial(ItemCategory category, int trueTier) => category is ItemCategory.Material or ItemCategory.OreBar && trueTier >= HighMaterialTier;
+
+		// The same for the crafting stations of that tier (Autohammer, Lihzahrd Furnace, Lunar Crafting Station, Blend-O-Matic,
+		// Steampunk Boiler...): a recipe the station locks (RecipePlanner StationLocks) has no other gate, so the station is never
+		// had before its true tier (no allowance, never a jackpot: IsJackpotWorthy)
+		public static bool HighStation(int type, int trueTier) => trueTier >= HighMaterialTier && Stations.PlacedTile(type, out int tile) && Stations.CraftingStation(tile);
 
 		// Tests only (PlanDiff, restored in finally): the planning rules of worlds made before the hardmode wall (allowance
 		// 2, no wall in GatingLimit and UnlockTier), to measure how much of a world's plan the wall changes
@@ -483,6 +501,9 @@ namespace UltimateRandomizer.Common.Core
 		// The unlocked tier from which gated rolls give this item: UnlockTier of its true tier, without the allowance for a hard
 		// gate (Chlorophyte Bars wait for the mechanical bosses, Luminite for the Moon Lord)
 		public static int UnlockTierOf(int type) => UnlockTier(TrueTierOf(type), IsHardGate(type) ? 0 : Allowance);
+
+		// At its own vanilla source (GatingLimitFor with vanillaPlace)
+		public static int UnlockTierOf(int type, bool vanillaPlace) => vanillaPlace && IsHighGate(type) ? UnlockTier(TrueTierOf(type)) : UnlockTierOf(type);
 
 		public static int Roll(in RollRequest request) => Roll(request, out _);
 

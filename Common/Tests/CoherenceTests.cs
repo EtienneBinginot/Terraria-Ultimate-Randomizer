@@ -208,9 +208,10 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// High-tier materials never come down (ItemPool.HighMaterial): every material or bar of true tier HighMaterialTier or
-		// more is a hard gate (no allowance, never found before its true tier), and gated rolls of material (the extras, the
-		// surprises, bags and shops roll that way) from a source and a progression below its true tier never give it, whatever
-		// the tier jitter. The Turtle Shell stays a hardmode material (Giant Tortoise, any hardmode jungle)
+		// more is a hard gate (no allowance), never found before its true tier except at its own vanilla source (there it keeps
+		// the allowance: never earlier than vanilla), and gated rolls of materials and of bars (the extras, the surprises, bags
+		// and shops roll that way) replacing a low-tier item, from a source and a progression below the high tiers, never give
+		// one, whatever the tier jitter. The Turtle Shell stays a hardmode material (Giant Tortoise, any hardmode jungle)
 		private static void HighMaterialsGated()
 		{
 			if (!ItemPool.Ready) Check.Skip("items not classified yet");
@@ -218,6 +219,7 @@ namespace UltimateRandomizer.Common.Tests
 			HashSet<int> overridden = ProgressionConfig.Instance.TierOverrides.Where(o => o?.Item != null && !o.Item.IsUnloaded).Select(o => o.Item.Type).ToHashSet();
 			List<string> failures = new();
 			List<int> high = new();
+			int vanillaEarly = 0;
 			for (int item = 1; item < ItemPool.Info.Length; item++)
 			{
 				if (!ItemPool.IsValid(item) || ItemPool.Info[item].Excluded || overridden.Contains(item)) continue;
@@ -225,22 +227,49 @@ namespace UltimateRandomizer.Common.Tests
 				high.Add(item);
 				if (!ItemPool.IsHardGate(item)) failures.Add($"{Name(item)} (true tier {ItemPool.TrueTierOf(item)}) is no hard gate");
 				if (ItemPool.UnlockTierOf(item) != ItemPool.TrueTierOf(item)) failures.Add($"{Name(item)}: unlocked at {ItemPool.UnlockTierOf(item)}, true tier {ItemPool.TrueTierOf(item)}");
-				if (SeedSystem.WorldReady && Findability.Tier(item) < ItemPool.TrueTierOf(item)) failures.Add($"{Name(item)}: found at {Findability.Tier(item)}, true tier {ItemPool.TrueTierOf(item)}");
+				if (!SeedSystem.WorldReady) continue;
+				int found = Findability.Tier(item), trueTier = ItemPool.TrueTierOf(item);
+				if (found >= trueTier) continue;
+				// Earlier than its true tier: only from its own vanilla source (Findability's source, its vanilla table), within
+				// the allowance
+				(Findability.SourceKind kind, int id) source = Findability.BaseSource(item);
+				bool vanilla = found == Findability.BaseTier(item) && VanillaSourceOf(item, source.kind, source.id);
+				if (!vanilla) failures.Add($"{Name(item)}: found at {found} ({source.kind} {source.id}), true tier {trueTier}, not from its vanilla source");
+				else
+				{
+					vanillaEarly++;
+					if (found < ItemPool.UnlockTier(trueTier)) failures.Add($"{Name(item)}: found at {found} at its vanilla source, before its allowance ({ItemPool.UnlockTier(trueTier)})");
+				}
+			}
+			// The stations of those tiers too (ItemPool.HighStation: a station-locked recipe has no other gate): hard gates, never
+			// a jackpot
+			int highStations = 0;
+			foreach (int placer in new[] { ItemID.Autohammer, ItemID.LihzahrdFurnace, ItemID.LunarCraftingStation, ItemID.BlendOMatic, ItemID.SteampunkBoiler })
+			{
+				if (!ItemPool.IsRandomizable(placer) || overridden.Contains(placer) || ItemPool.TrueTierOf(placer) < ItemPool.HighMaterialTier) continue;
+				highStations++;
+				if (!ItemPool.IsHardGate(placer)) failures.Add($"{Name(placer)} (true tier {ItemPool.TrueTierOf(placer)}) is no hard gate");
+				if (ItemPool.IsJackpotWorthy(placer)) failures.Add($"{Name(placer)} (true tier {ItemPool.TrueTierOf(placer)}) may be a jackpot");
 			}
 			if (ItemPool.IsValid(ItemID.TurtleShell) && !overridden.Contains(ItemID.TurtleShell) && ItemPool.TrueTierOf(ItemID.TurtleShell) != (int)Tier.Hardmode)
 				failures.Add($"{Name(ItemID.TurtleShell)}: true tier {ItemPool.TrueTierOf(ItemID.TurtleShell)}, {(int)Tier.Hardmode} expected");
 			if (high.Count == 0) Check.Skip("no high-tier material");
-			// Rolls of material from sources below the high tiers, at their own progression: the jitter and the allowance may
-			// reach the high tiers, the hard ceiling never
+			// Rolls of materials and of bars replacing a tier 0 item (a high original would lift the ceiling to its own tier: its
+			// source already gives it) from sources below the high tiers, at their own progression: the jitter and the allowance
+			// may reach the high tiers, the hard ceiling never
 			int rolls = 0, highRolled = 0;
-			int sample = high[0];
+			List<int> samples = new[] { ItemCategory.Material, ItemCategory.OreBar }
+				.Select(c => Enumerable.Range(1, ItemPool.Info.Length - 1).FirstOrDefault(i => ItemPool.IsRandomizable(i) && ItemPool.Info[i].Category == c && ItemPool.TrueTierOf(i) == 0))
+				.Where(i => i > 0).ToList();
+			if (samples.Count < 2) failures.Add($"no tier 0 material and bar to roll from ({samples.Count} found)");
+			foreach (int sample in samples)
 			for (int tier = 0; tier < ItemPool.HighMaterialTier; tier++)
 			{
 				for (int k = 0; k < 150; k++)
 				{
 					RollRequest request = new()
 					{
-						Keys = new[] { 0x4d415447, tier, k },
+						Keys = new[] { 0x4d415447, tier, k, sample },
 						SourceTier = tier,
 						OriginalItem = sample,
 						Policy = CategoryPolicy.SameAsOriginal,
@@ -258,8 +287,22 @@ namespace UltimateRandomizer.Common.Tests
 					if (ItemPool.TrueTierOf(rolled) > tier && failures.Count < 30) failures.Add($"a material roll at tier {tier} gave {Name(rolled)} (true tier {ItemPool.TrueTierOf(rolled)})");
 				}
 			}
-			Log($"HighMaterialsGated: {high.Count} high-tier materials (e.g. {string.Join(", ", high.Take(8).Select(Name))}); {rolls} material rolls below tier {ItemPool.HighMaterialTier}, {highRolled} gave a high-tier one");
+			Log($"HighMaterialsGated: {high.Count} high-tier materials (e.g. {string.Join(", ", high.Take(8).Select(Name))}), {highStations} high-tier stations checked, {vanillaEarly} found early at their vanilla source; {rolls} rolls of {string.Join(", ", samples.Select(Name))} below tier {ItemPool.HighMaterialTier}, {highRolled} gave a high-tier one");
+			Check.That(rolls > 0, "no material roll");
 			Check.All(failures, "High-tier materials below their tier");
+		}
+
+		// Is a findability source of an item one of its vanilla sources? An enemy whose vanilla table has it (its boss's parts
+		// share the table), or a bag whose vanilla table, or whose boss's, has it
+		private static bool VanillaSourceOf(int item, Findability.SourceKind kind, int id)
+		{
+			bool InTable(List<Terraria.GameContent.ItemDropRules.DropRateInfo> table) => table.Any(e => e.itemId == item);
+			return kind switch
+			{
+				Findability.SourceKind.Npc => InTable(LootSnapshot.ForNpc(id)) || InTable(LootSnapshot.ForNpc(BossParts.Owner(id))),
+				Findability.SourceKind.Bag => InTable(LootSnapshot.ForItem(id)) || BossPermutation.BagUnit(id) is int unit && unit != 0 && InTable(LootSnapshot.ForNpc(unit)),
+				_ => false
+			};
 		}
 
 		private static void TierCoherence()

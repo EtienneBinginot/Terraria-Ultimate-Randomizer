@@ -88,6 +88,15 @@ namespace UltimateRandomizer.Common.Core
 
 		public static bool IsModded(int tile) => tile >= TileID.Count;
 
+		// A crafting station a recipe may be planned at, placed by an item: a progression or themed vanilla one, or another
+		// mod's tile some recipes require. Load-time facts only
+		public static bool CraftingStation(int tile)
+		{
+			StationInfo info = Info(tile);
+			if (info.World || info.Kind is StationKind.Basic or StationKind.Unknown) return false;
+			return !IsModded(tile) || RecipesRequiring(tile) > 0;
+		}
+
 		// A modded station required by at least this many recipes is a progression one (a mod's anvil or forge), any other a
 		// themed one
 		public const int ModdedProgressionRecipes = 10;

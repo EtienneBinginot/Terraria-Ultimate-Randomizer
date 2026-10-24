@@ -58,12 +58,14 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		// Tiers by which progression still locks an item of a final plan (0: unlocked). Enemy drops and bag contents are not
-		// replaced by a stand-in while locked: they simply do not drop. Only Coherent mode gates (Shuffle and Chaos never did)
-		public static int LockGap(int item, int minLimit)
+		// replaced by a stand-in while locked: they simply do not drop. Only Coherent mode gates (Shuffle and Chaos never did).
+		// vanillaPlace: the item is its source's own vanilla content (PlannedDrop.VanillaPlace)
+		public static int LockGap(int item, int minLimit, bool vanillaPlace = false)
 		{
 			if (GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent || !ItemPool.IsValid(item)) return 0;
-			// A hard gate (Chlorophyte Bar...) gets no allowance
-			return Math.Max(0, ItemPool.TrueTierOf(item) - ItemPool.GatingLimitFor(item, minLimit));
+			// A hard gate (Chlorophyte Bar...) gets no allowance, except a high-tier one at its own vanilla source (Butterfly
+			// Dust on the hardmode moths, Hallowed Bars in a mechanical boss's bag: never earlier than vanilla)
+			return Math.Max(0, ItemPool.TrueTierOf(item) - ItemPool.GatingLimitFor(item, minLimit, vanillaPlace));
 		}
 
 		// What an original drop (enemy) or bag item becomes as it spawns: the final replacement (everything unlocked, the one
@@ -80,7 +82,8 @@ namespace UltimateRandomizer.Common.Features
 			RollRequest request = ReplacementRequest(rollKind, sourceKey, originalItem, sourceTier, minLimit, variant, mixMaterials);
 			request.IgnoreGating = true;
 			int planned = ItemPool.Roll(request);
-			int locked = LockGap(planned, minLimit);
+			// A roll that kept the original item leaves the source's own vanilla drop
+			int locked = LockGap(planned, minLimit, planned == originalItem);
 			if (locked > 0)
 			{
 				if (!lucky || rng == null || locked > 1 && rng.NextDouble() >= ItemPool.LuckyKeepChance(locked)) return 0;

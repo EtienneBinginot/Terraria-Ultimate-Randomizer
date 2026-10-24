@@ -147,10 +147,11 @@ namespace UltimateRandomizer.Common.Features
 					item = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), entry.itemId, bagTier, minLimit, true,
 						variant: Variant(bagType, entry.itemId), mixMaterials: MixesMaterials(bagType));
 					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);
-					if (!lucky && !DropHelper.KeepOriginal(entry.itemId)) lockGap = DropHelper.LockGap(item, minLimit);
+					if (!lucky && !DropHelper.KeepOriginal(entry.itemId)) lockGap = DropHelper.LockGap(item, minLimit, item == entry.itemId);
 				}
 				if (lockGap > 0 && !includeLocked) continue;
-				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions, Original = entry.itemId, LockGap = lockGap });
+				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions, Original = entry.itemId, LockGap = lockGap,
+					VanillaPlace = item == entry.itemId });
 			}
 			return drops;
 		}
@@ -162,14 +163,16 @@ namespace UltimateRandomizer.Common.Features
 		{
 			List<PlannedDrop> drops = new();
 			int minLimit = MinLimit(bagType);
+			int unit = BossPermutation.BagUnit(bagType);
 			foreach (DropPermutation.Placed placed in BossPermutation.ForBag(bagType))
 			{
 				DropRateInfo entry = placed.Entry;
-				int lockGap = placed.Rolled && !lucky && !DropHelper.KeepOriginal(entry.itemId) ? DropHelper.LockGap(entry.itemId, minLimit) : 0;
+				// The bag's own content or its boss's (a mechanical boss's Hallowed Bars): its vanilla source
+				bool vanillaPlace = !placed.Surprise && placed.FromNetId == unit;
+				int lockGap = placed.Rolled && !lucky && !DropHelper.KeepOriginal(entry.itemId) ? DropHelper.LockGap(entry.itemId, minLimit, vanillaPlace) : 0;
 				drops.Add(new PlannedDrop { Item = entry.itemId, StackMin = entry.stackMin, StackMax = entry.stackMax, Chance = entry.dropRate, Conditions = entry.conditions,
-					Original = entry.itemId, LockGap = lockGap, Rolled = placed.Rolled });
+					Original = entry.itemId, LockGap = lockGap, Rolled = placed.Rolled, VanillaPlace = vanillaPlace });
 			}
-			int unit = BossPermutation.BagUnit(bagType);
 			int type = BossParts.Owner(ContentSamples.NpcsByNetId.TryGetValue(unit, out NPC sample) ? sample.type : unit);
 			List<PlannedDrop> extras = RandomNpcDropRule.ExtraDrops(unit, type, false, planning: lucky);
 			if (lucky)

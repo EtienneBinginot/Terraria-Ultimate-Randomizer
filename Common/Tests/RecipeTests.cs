@@ -878,8 +878,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Ore pair groups");
 		}
 
-		// Share of the vanilla recipes the plan changes, and why the others keep their result (values logged even when passing):
-		// nearly all of them change (new ingredients), and few swap their result, about the swap chance
+		// Share of the vanilla recipes the plan changes (values logged even when passing): nearly all of them get new
+		// ingredients, and none changes its result (no result swap since 1.8.0)
 		private static void RecipeRandomizationShare()
 		{
 			if (!CraftingConfig.Instance.RandomizeRecipes || !RecipeSystem.Applied) Check.Skip("recipes are not randomized");
@@ -1112,7 +1112,8 @@ namespace UltimateRandomizer.Common.Tests
 
 		// The planned key takes about a third of a rebuilt recipe's count (RecipePlanner.KeyCountShare, at least 1), the random
 		// ingredients the rest: over the keyed recipes of two ingredients or more (no lock key added, no value raise), the key's
-		// mean share of the new units is between 20 % and 50 % (the count caps and the one-unit minimum blur it)
+		// mean share of the new units is between 15 % and 50 % (the count caps and the one-unit minimum blur it, and TrimValues
+		// lowers the most valuable ingredient first, often the key of the recipe's tier)
 		private static void RecipeKeyShare()
 		{
 			RequireRandomIngredients();
@@ -1139,17 +1140,17 @@ namespace UltimateRandomizer.Common.Tests
 			if (checkedCount < 20) Check.Skip($"only {checkedCount} keyed recipes with random ingredients");
 			double mean = sum / checkedCount;
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"RecipeKeyShare: {checkedCount} keyed recipes, the key {mean:P1} of the new units on average (aim {RecipePlanner.KeyCountShare:P0}); {keyAlone} with the key alone");
-			Check.That(mean >= 0.2 && mean <= 0.5, $"the key is {mean:P1} of the new units on average, about {RecipePlanner.KeyCountShare:P0} expected");
+			Check.That(mean >= 0.15 && mean <= 0.5, $"the key is {mean:P1} of the new units on average, about {RecipePlanner.KeyCountShare:P0} expected");
 		}
 
 		// A recipe locked by its station (RecipePlan.StationLocks) has no planned key, is rebuilt above tier 0, and its planned
 		// stations are had no earlier than its tier with the final plan (RecipePlanner.StationAvailability), so it is not doable
 		// before it (RecipeNotBeforeItsTier checks the doable tier too); never a house, shell, upgrade nor a station's recipe.
-		// Logs how many and a few of them
+		// Vanilla stations lock recipes too (a recipe made at its vanilla station had exactly at its tier). Logs how many and a
+		// few of them
 		private static void RecipeStationLocks()
 		{
 			RequireRandomIngredients();
-			if (!CraftingConfig.Instance.RandomizeStations) Check.Skip("stations are not randomized");
 			RecipePlan plan = RecipePlanner.Get();
 			List<string> failures = new();
 			List<string> examples = new();

@@ -1414,7 +1414,8 @@ namespace UltimateRandomizer.Common.Features
 		// Pick power needed to mine an item: its tile's (RecipePlanner.PickToMine). A randomized ore may come from any ore tile
 		// of its tier (OreMap: a permutation inside the tier), so the strongest of them, as RecipePlanner.OresFrom counts them;
 		// each of those tiles is a mining level of that tier or earlier (RecipePlanner.WorldMiningLevels), a modded one too. A
-		// need no pickaxe can meet (a modded tile above every pickaxe) counts as the strongest pickaxe's, never as Never
+		// need no pickaxe can meet (a modded tile above every guaranteeable pickaxe) stays as it is: no pickaxe is found for it,
+		// so mining never finds that item (its level gets no guarantee: MiningRequirements)
 		public static int MiningNeed(int item)
 		{
 			int need = RecipePlanner.PickToMine(item);
@@ -1426,11 +1427,8 @@ namespace UltimateRandomizer.Common.Features
 					if (OreMap.IsOre(type) && ItemPool.IsRandomizable(type) && ItemPool.Info[type].Tier == tier && OreMap.IsFindable(type)) need = Math.Max(need, RecipePlanner.PickToMine(type));
 				}
 			}
-			if (strongestPick < 0) strongestPick = RecipePlanner.GuaranteeablePickaxes().Select(RecipePlanner.PickPower).DefaultIfEmpty(0).Max();
-			return strongestPick > 0 ? Math.Min(need, strongestPick) : need;
+			return need;
 		}
-
-		private static int strongestPick = -1;
 
 		// Without the guaranteed sources (used to decide what must be guaranteed)
 		public static int BaseTier(int item)
@@ -1460,7 +1458,6 @@ namespace UltimateRandomizer.Common.Features
 			baseMined = null;
 			tiers = null;
 			nonMinedTiers = null;
-			strongestPick = -1;
 			// The shop-only items are the ones not found in time
 			ShopPermutation.Reset();
 		}
@@ -1499,6 +1496,8 @@ namespace UltimateRandomizer.Common.Features
 			// Drops and bag contents are locked by the item's true tier (DropHelper.LockGap), herbs by the same progression
 			// checks. Mined ores keep their tier: mining is not gated, and the mining levels use it (RecipePlanner.MiningTier)
 			int Gated(int item) => ItemPool.UnlockTierOf(item);
+			// A drop at its own vanilla source keeps the allowance of a high-tier item (DropHelper.LockGap)
+			int GatedDrop(PlannedDrop drop) => ItemPool.UnlockTierOf(drop.Item, drop.VanillaPlace);
 
 			// A herb only when a plant still gives it (HerbTier: its own plant may give other items only). A block that needs a
 			// pickaxe (Obsidian 55, Ebonstone and Pearlstone 65) is mined
@@ -1533,7 +1532,7 @@ namespace UltimateRandomizer.Common.Features
 					// The conditions of the place (permuted drops take the receiving enemy's: hardmode, Plantera...)
 					int from = SourceConditionTier(drop.Conditions, sourceTier);
 					if (from == Never) continue;
-					Add(drop.Item, Math.Max(from, Gated(drop.Item)), SourceKind.Npc, npc);
+					Add(drop.Item, Math.Max(from, GatedDrop(drop)), SourceKind.Npc, npc);
 				}
 			}
 			for (int t = 0; t < Tiers.Count; t++)
@@ -1567,7 +1566,7 @@ namespace UltimateRandomizer.Common.Features
 						if (unit > 0 && GuaranteedSources.ExcludedHost(drop.Item, unit)) continue;
 						int from = SourceConditionTier(drop.Conditions, tier);
 						if (from == Never) continue;
-						int dropTier = Math.Max(from, Gated(drop.Item));
+						int dropTier = Math.Max(from, GatedDrop(drop));
 						if (dropTier < result[drop.Item])
 						{
 							result[drop.Item] = dropTier;

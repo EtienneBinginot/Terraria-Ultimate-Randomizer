@@ -775,9 +775,11 @@ namespace UltimateRandomizer.Common.Features
 				if (newKey <= 0) continue;
 				result.PlannedKeys[i] = newKey;
 				// A station lock that did not hold: keyed now
+				bool wasLock = result.StationLocks[i];
 				result.StationLocks[i] = false;
-				// Only an appended key is a LockResults key (KeyIngredient: doable by U + 1); a replaced one keeps the recipe's T
-				if (slot < 0) result.KeyIngredient[i] = true;
+				// Only an appended key is a LockResults key (KeyIngredient: doable by U + 1); a replaced one keeps the recipe's T,
+				// and so does a former station lock (no key slot, but planned at its T like any rebuilt recipe)
+				if (slot < 0 && !wasLock) result.KeyIngredient[i] = true;
 				if (later) result.IngredientTiers[i] = Math.Min(t + 1, Tiers.Max);
 				placed++;
 				handled.Add(i);
@@ -3123,11 +3125,14 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (covered <= level.tier) continue;
 				// The weakest vanilla pickaxe of that level, then the cheapest (a modded one only when no vanilla one is left), a
-				// randomizable one first (a protected one keeps its vanilla sources)
+				// randomizable one first (a protected one keeps its vanilla sources); one unlocked by the level's tier before all
+				// (a hard gate such as the Chlorophyte Pickaxe is guaranteed from its true tier only: CollectRequirements)
 				int chosen = pickaxes.Where(p => PickPower(p) >= level.pick)
-					.OrderBy(p => ItemPool.IsRandomizable(p) ? 0 : 1).ThenBy(p => p < ItemID.Count ? 0 : 1).ThenBy(PickPower).ThenBy(StackRules.ValueOf).ThenBy(p => p).DefaultIfEmpty(0).First();
+					.OrderBy(p => ItemPool.UnlockTierOf(p) <= level.tier ? 0 : 1).ThenBy(p => ItemPool.IsRandomizable(p) ? 0 : 1).ThenBy(p => p < ItemID.Count ? 0 : 1)
+					.ThenBy(PickPower).ThenBy(StackRules.ValueOf).ThenBy(p => p).DefaultIfEmpty(0).First();
 				if (chosen <= 0) continue;
-				covered = level.tier;
+				// The tier the guarantee really comes at covers the weaker levels
+				covered = ItemPool.IsHardGate(chosen) ? Math.Max(level.tier, ItemPool.TrueTierOf(chosen)) : level.tier;
 				yield return new GuaranteedSources.Requirement { Item = chosen, Tier = level.tier, Tool = true };
 			}
 		}

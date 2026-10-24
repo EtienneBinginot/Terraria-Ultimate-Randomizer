@@ -145,6 +145,10 @@ namespace UltimateRandomizer.Common.Features
 		public bool Rolled;
 		// Permutation style: a moved content replaced by a random item (PermutationSurpriseChance)
 		public bool Surprise;
+		// The source's own vanilla content: an entry of its owner's vanilla table (the permutation kept it or moved it within
+		// the same owner, no surprise; a replacement roll that kept the original). A high-tier item keeps its allowance there
+		// (DropHelper.LockGap, Findability)
+		public bool VanillaPlace;
 
 		public bool Locked => LockGap > 0;
 	}
@@ -487,17 +491,20 @@ namespace UltimateRandomizer.Common.Features
 		{
 			List<PlannedDrop> drops = new();
 			int minLimit = MinLimit(type);
-			DropPermutation.Placed[] table = BossPermutation.InStyle(netId, style) ? BossPermutation.For(netId)
+			bool bossStyle = BossPermutation.InStyle(netId, style);
+			DropPermutation.Placed[] table = bossStyle ? BossPermutation.For(netId)
 				: DropPermutation.InStyle(netId, style) ? DropPermutation.For(netId) : null;
 			if (table != null)
 			{
+				int unit = bossStyle ? BossPermutation.UnitOf(netId) : DropPermutation.UnitOf(netId);
 				foreach (DropPermutation.Placed placed in table)
 				{
 					DropRateInfo entry = placed.Entry;
+					bool vanillaPlace = !placed.Surprise && placed.FromNetId == unit;
 					// Entries vanilla still rolls (rules left running) are not replaced: they drop as they are
-					int lockGap = placed.Rolled && !DropHelper.KeepOriginal(entry.itemId) ? DropHelper.LockGap(entry.itemId, minLimit) : 0;
+					int lockGap = placed.Rolled && !DropHelper.KeepOriginal(entry.itemId) ? DropHelper.LockGap(entry.itemId, minLimit, vanillaPlace) : 0;
 					drops.Add(new PlannedDrop { Item = entry.itemId, StackMin = entry.stackMin, StackMax = entry.stackMax, Chance = entry.dropRate, Conditions = entry.conditions,
-						Original = placed.Surprise ? placed.Replaced : entry.itemId, LockGap = lockGap, Rolled = placed.Rolled, Surprise = placed.Surprise });
+						Original = placed.Surprise ? placed.Replaced : entry.itemId, LockGap = lockGap, Rolled = placed.Rolled, Surprise = placed.Surprise, VanillaPlace = vanillaPlace });
 				}
 				return drops;
 			}
@@ -512,9 +519,10 @@ namespace UltimateRandomizer.Common.Features
 				{
 					item = DropHelper.Replacement(RollKey.MobDrop, DetRandom.NpcKey(type), entry.itemId, SourceTier(type, planning), minLimit, true);
 					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);
-					if (!DropHelper.KeepOriginal(entry.itemId)) lockGap = DropHelper.LockGap(item, minLimit);
+					if (!DropHelper.KeepOriginal(entry.itemId)) lockGap = DropHelper.LockGap(item, minLimit, item == entry.itemId);
 				}
-				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions, Original = entry.itemId, LockGap = lockGap });
+				drops.Add(new PlannedDrop { Item = item, StackMin = min, StackMax = max, Chance = entry.dropRate, Conditions = entry.conditions, Original = entry.itemId, LockGap = lockGap,
+					VanillaPlace = item == entry.itemId });
 			}
 			return drops;
 		}
