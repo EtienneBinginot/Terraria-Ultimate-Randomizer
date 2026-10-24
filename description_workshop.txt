@@ -1,33 +1,37 @@
 [h1]Ultimate Randomizer[/h1]
-A complete randomizer that shuffles nearly everything: loot, chests, crafting, shops, enemies, their stats and where they live. Every world gets its own seed, the randomness follows your progression, and with the default settings everything you need stays findable.
+We wanted a randomizer where every new world feels like a different game, without ever getting stuck. So this mod shuffles almost everything: what enemies drop, what's in chests, recipes, shops, which monsters live where, and how strong they are. It still follows your progression, and with the default settings everything you need can be found.
 
-Originally made for the YouTube videos of [b]Pootouf & Nouke[/b]: [url=https://www.youtube.com/@pounouke]youtube.com/@pounouke[/url]
+We made it for our YouTube videos ([b]Pootouf & Nouke[/b]): [url=https://www.youtube.com/@pounouke]youtube.com/@pounouke[/url]
 
-[h2]What gets randomized[/h2]
+[h2]What changes[/h2]
 [list]
-[*][b]Loot:[/b] enemy and boss drops (shuffled between enemies of the same tier by default), plus extra random drops on every enemy (loot abundance x3 by default), critters included. Treasure bags, crates, chests, pots, fishing, mined ores, shaken trees, herbs, the Extractinator, the Angler's rewards.
-[*][b]Jackpots:[/b] every kill has a small chance of a jackpot (about one every 30 minutes early on): an item a few tiers ahead of your progression, with light and sound. Jackpot chests too.
-[*][b]Crafting:[/b] recipe results, ingredients and crafting stations, planned so that everything can still be crafted. Shimmer transmutations too.
-[*][b]Economy and town:[/b] shops (value-based prices), a random starting kit, the arrival order of town NPCs.
-[*][b]Enemies:[/b] spawns redistributed between the biomes, stats on a bell curve, giants and minis, random boss health and damage. Damage stays within x3 in total, because defense is subtracted from it.
-[*][b]Adaptive power:[/b] gear far ahead of the world makes enemies tougher (mostly their health), so a lucky early weapon stays fun.
+[*][b]Loot.[/b] Enemy and boss drops are shuffled between enemies of the same tier, and every enemy has a couple of extra random drops on top. Critters drop things too. Treasure bags, crates, chests, pots, fishing, ores, shaken trees, herbs, the Extractinator and the Angler are all randomized.
+[*][b]Jackpots.[/b] Now and then a kill drops something a few tiers ahead of where you are, with a flash and a sound. Expect about one every half hour early on. A few chests in each world are jackpot chests.
+[*][b]Crafting.[/b] Recipes get new ingredients, and most of them a different crafting station. Everything is planned so it all stays craftable. Shimmer is shuffled as well.
+[*][b]Shops and town.[/b] Shops sell random items at prices based on their value. You start with a random kit, and town NPCs move in in a random order.
+[*][b]Enemies.[/b] Monsters are spread over different biomes. Their health, damage, defense and size vary, sometimes a lot: watch out for giants (and the tiny minis). Bosses get random health and damage too. Damage can't go past x3, so it stays fair.
+[*][b]Adaptive power.[/b] If you get lucky and find gear far ahead of the world, enemies get tougher (mostly more health), so the run stays fun instead of trivial.
 [/list]
 
-[h2]Modes[/h2]
+[h2]Three modes[/h2]
 [list]
-[*][b]Coherent[/b] (default): items keep their category and tier and unlock as you defeat bosses.
-[*][b]Guaranteed shuffle:[/b] every item is swapped with another of the same category and tier.
-[*][b]Chaos:[/b] anything from anywhere.
+[*][b]Coherent[/b] (default): items keep their type and tier, and unlock as you beat bosses.
+[*][b]Guaranteed shuffle:[/b] every item is swapped with another one of the same type and tier.
+[*][b]Chaos:[/b] anything can come from anywhere. Good luck.
 [/list]
-Progression items are protected. Boss summons, progression tools and the ingredients you need are guaranteed on the common enemies of a biome of their tier. Crafting stations are small quests: a randomized recipe for their tier, and one guardian enemy as a backup.
+
+[h2]You won't get stuck[/h2]
+Boss summons, pickaxes and the materials you need are always dropped by the common enemies of a biome you can reach at that point. Crafting stations are little quests: each one has its own random recipe, and one enemy also carries it as a backup. In Expert and Master, a boss's normal-mode drops come in its treasure bag, as usual.
 
 [h2]Codex and hints[/h2]
-Press [b]J[/b]: drops of the enemies you killed, bags you opened, craft tree, enemies of each biome. The Guide sells hints about crafting stations, pickaxes and boss summons (Crafting and Bosses tabs, with a search box). For a crafted item, the hint gives the whole tree: every ingredient and station, down to the enemy that drops it or the ore to mine.
+Press [b]J[/b] to open the codex: what each enemy you killed can drop, what was in the bags you opened, the crafting tree and the enemies of every biome. If you're lost, the Guide sells hints for crafting stations, pickaxes and boss summons. A hint shows the whole path to the item, from the enemy or ore down to the last crafting step. The Bestiary and Recipe Browser show this world's drops.
 
 [h2]Settings and multiplayer[/h2]
-Everything is configurable, in English and French. The seed is saved with the world and shared in multiplayer.
-Commands: /rseed (show or change the seed), /rjournal, /rchests (worlds created before the mod).
-Do not enable it together with tRandomizer.
+Nearly everything can be tuned in the mod settings (in English and French). Each world has its own seed, saved with it and shared in multiplayer. Other mods' items, recipes and enemies are mixed in too, on a best-effort basis; Magic Storage is supported.
+
+Commands: [b]/rseed[/b] shows or changes the seed, [b]/rjournal[/b] opens the codex, [b]/rchests[/b] randomizes the chests of a world created before you installed the mod.
+
+Don't enable it together with tRandomizer.
 
 [hr][/hr]
 
