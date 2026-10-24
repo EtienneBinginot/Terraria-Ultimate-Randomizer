@@ -17,8 +17,10 @@ namespace UltimateRandomizer.Common.Codex
 	// Where a hint says the item comes from. The order is the preference between sources of the same tier.
 	public enum HintKind : byte { Creature, Recipe, Boss, Bag, Chest, Pot, Shop, World }
 
-	// House: what a house needs besides its table and chair (door, platform, torch); Upgrade: life and mana upgrades
-	public enum HintTargetKind : byte { Station, Summon, Pickaxe, House, Upgrade }
+	// House: what a house needs besides its table and chair (door, platform, torch); Upgrade: life and mana upgrades;
+	// Storage: Magic Storage's network pieces and storage unit upgrades (when that mod is loaded). Never saved nor synced,
+	// new kinds still go at the end
+	public enum HintTargetKind : byte { Station, Summon, Pickaxe, House, Upgrade, Storage }
 
 	// How a part of a recipe hint's tree is obtained: crafted (its parts follow), from the source the Guide would name for
 	// it, gathered or mined in the world, already explained above, or nothing known
@@ -221,8 +223,45 @@ namespace UltimateRandomizer.Common.Codex
 			foreach (int item in RecipeSystem.HouseItems) Add(item, 0, HintTargetKind.House);
 			// Life and mana upgrades, at the tier their recipe waits for
 			foreach (int item in Protection.Upgrades) Add(item, Protection.UpgradeTier(item), HintTargetKind.Upgrade);
+			// Magic Storage's pieces, at their tier like any item
+			foreach (int item in StorageItems()) Add(item, ItemPool.TierOf(item), HintTargetKind.Storage);
 			rawTargets = byItem;
 			return byItem;
+		}
+
+		public const string MagicStorage = "MagicStorage";
+
+		// Magic Storage's items worth a hint, when that mod is loaded: one item per tile of its storage network (its tiles that
+		// are not crafting stations: heart, units, components, connectors, accesses; the item named like the tile, else the
+		// lowest style: the plain Storage Unit, not the upgraded ones) and its storage unit upgrades ("Upgrade..." items)
+		public static List<int> StorageItems()
+		{
+			List<int> items = new();
+			if (!ModLoader.TryGetMod(MagicStorage, out Mod mod)) return items;
+			Dictionary<int, ModItem> byTile = new();
+			foreach (ModItem modItem in mod.GetContent<ModItem>())
+			{
+				if (modItem.Name.StartsWith("Upgrade", StringComparison.Ordinal))
+				{
+					items.Add(modItem.Type);
+					continue;
+				}
+				if (!Stations.PlacedTile(modItem.Type, out int tile) || TileLoader.GetTile(tile) is not ModTile modTile || modTile.Mod != mod) continue;
+				// The combined crafting stations and altars are stations, not storage
+				if (modTile.AdjTiles is { Length: > 0 }) continue;
+				if (byTile.TryGetValue(tile, out ModItem old) && !BetterStoragePlacer(modItem, old, modTile)) continue;
+				byTile[tile] = modItem;
+			}
+			items.AddRange(byTile.Values.Select(m => m.Type));
+			items.Sort();
+			return items;
+		}
+
+		private static bool BetterStoragePlacer(ModItem item, ModItem old, ModTile tile)
+		{
+			if ((item.Name == tile.Name) != (old.Name == tile.Name)) return item.Name == tile.Name;
+			int style = ContentSamples.ItemsByType[item.Type].placeStyle, oldStyle = ContentSamples.ItemsByType[old.Type].placeStyle;
+			return style != oldStyle ? style < oldStyle : item.Type < old.Type;
 		}
 
 		// Every target with a source, by tier, whatever the progression

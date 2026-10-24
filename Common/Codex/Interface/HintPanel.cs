@@ -21,8 +21,8 @@ namespace UltimateRandomizer.Common.Codex.Interface
 	public enum HintPurchase { Bought, TooPoor, NotNext, NotSynced, NoTarget, Locked }
 
 	// The Guide's categories: crafting (stations, pickaxes, house items), bosses (boss and event summons), upgrades (life and
-	// mana crystals, life fruit)
-	public enum HintTab : byte { Crafting, Bosses, Upgrades }
+	// mana crystals, life fruit), storage (Magic Storage's pieces and upgrades: only shown when that mod is loaded)
+	public enum HintTab : byte { Crafting, Bosses, Upgrades, Storage }
 
 	// Buying hint levels: the local player pays with its own coins (inventory, piggy bank, safe...: Player.BuyItem, like
 	// a shop purchase, which vanilla also does on the client) and records the level. In multiplayer the level goes to
@@ -276,7 +276,7 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		private CodexButton toBuyButton, knownButton;
 		// The category shown
 		private HintTab tab;
-		private readonly CodexButton[] tabButtons = new CodexButton[3];
+		private readonly CodexButton[] tabButtons = new CodexButton[ModLoader.HasMod(HintFacts.MagicStorage) ? 4 : 3];
 		private UIPanel searchPanel;
 		private UISearchBar searchBar;
 		private string search = "";
@@ -320,11 +320,14 @@ namespace UltimateRandomizer.Common.Codex.Interface
 			panel.Append(close);
 
 			// The two tabs, then a smaller filter inside the tab
-			string[] tabKeys = { "Hint.TabCrafting", "Hint.TabBosses", "Hint.TabUpgrades" };
-			for (int k = 0; k < tabButtons.Length; k++)
+			string[] tabKeys = { "Hint.TabCrafting", "Hint.TabBosses", "Hint.TabUpgrades", "Hint.TabStorage" };
+			int count = tabButtons.Length;
+			for (int k = 0; k < count; k++)
 			{
 				HintTab shown = (HintTab)k;
-				tabButtons[k] = TabButton(tabKeys[k], () => ShowCategory(shown), k == 0 ? 0 : 4, k / 3f, k == 1 ? -8 : -4, 1 / 3f, 54, 34, 0.9f);
+				// Outer tabs lose 4 pixels for the gaps, inner ones 8; smaller text when the storage tab is there too
+				float width = k == 0 || k == count - 1 ? -4 : -8;
+				tabButtons[k] = TabButton(tabKeys[k], () => ShowCategory(shown), k == 0 ? 0 : 4, k / (float)count, width, 1f / count, 54, 34, count > 3 ? 0.75f : 0.9f);
 			}
 			toBuyButton = TabButton("Hint.TabToBuy", () => ShowTab(false), -166, 0.5f, 162, 0f, 94, 24, 0.68f);
 			knownButton = TabButton("Hint.TabKnown", () => ShowTab(true), 4, 0.5f, 162, 0f, 94, 24, 0.68f);
@@ -468,10 +471,12 @@ namespace UltimateRandomizer.Common.Codex.Interface
 		{
 			HintTargetKind.Summon => HintTab.Bosses,
 			HintTargetKind.Upgrade => HintTab.Upgrades,
+			HintTargetKind.Storage => HintTab.Storage,
 			_ => HintTab.Crafting
 		};
 
-		// Boss and event summons in the bosses tab, upgrades in theirs, stations, pickaxes and house items in the crafting one
+		// Boss and event summons in the bosses tab, upgrades and Magic Storage's pieces in theirs, stations, pickaxes and house
+		// items in the crafting one
 		public static List<HintTarget> TabTargets(bool known, HintTab tab) => TabTargets(known).Where(t => TabOf(t) == tab).ToList();
 
 		// What a tab shows below the targets on sale: those that come later (to buy tab only), greyed and not sold, in the

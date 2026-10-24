@@ -43,6 +43,40 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("HintSummonTiers", HintSummonTiers);
 			TestRunner.Register("HintLockedShown", HintLockedShown);
 			TestRunner.Register("StationHints", StationHints);
+			TestRunner.Register("MagicStorageHints", MagicStorageHints);
+		}
+
+		// Magic Storage (when loaded): its Storage Heart and at least one storage unit upgrade are hint targets of the storage
+		// kind with a source, at their item tier (which their price follows), in the storage tab; no crafting station among its pieces
+		private static void MagicStorageHints()
+		{
+			if (!ModLoader.TryGetMod(HintFacts.MagicStorage, out Mod mod)) Check.Skip("Magic Storage is not loaded");
+			List<HintTarget> targets = TargetsOrSkip();
+			List<string> failures = new();
+			List<int> pieces = HintFacts.StorageItems();
+			if (!mod.TryFind("StorageHeart", out ModItem heart)) failures.Add("no StorageHeart item in Magic Storage");
+			else if (!pieces.Contains(heart.Type)) failures.Add("the Storage Heart is not among the storage items");
+			List<int> upgrades = pieces.Where(i => ItemLoader.GetItem(i)?.Name.StartsWith("Upgrade") == true).ToList();
+			if (upgrades.Count == 0) failures.Add("no storage unit upgrade among the storage items");
+			foreach (int item in pieces.Where(i => Stations.PlacedTile(i, out int tile) && Stations.CraftingStation(tile))) failures.Add($"{HintFacts.ItemName(item)}: a crafting station");
+			void Hinted(int item)
+			{
+				HintTarget target = targets.FirstOrDefault(t => t.Item == item);
+				string name = HintFacts.ItemName(item);
+				if (target == null)
+				{
+					failures.Add($"{name}: not a hint target{(HintFacts.RawTarget(item) == null ? "" : " (no source)")}");
+					return;
+				}
+				if (HintFacts.For(item) == null) failures.Add($"{name}: no hint");
+				if (target.Tier != Tiers.Clamp(ItemPool.TierOf(item)) && target.Kind == HintTargetKind.Storage) failures.Add($"{name}: tier {target.Tier}, its item tier is {ItemPool.TierOf(item)}");
+				if (target.Kind == HintTargetKind.Storage && HintPanelState.TabOf(target) != HintTab.Storage) failures.Add($"{name}: not in the storage tab");
+			}
+			if (heart != null) Hinted(heart.Type);
+			if (upgrades.Count > 0 && !upgrades.Any(u => targets.Any(t => t.Item == u))) failures.Add($"no storage unit upgrade is a hint target with a source ({upgrades.Count} upgrades)");
+			foreach (int upgrade in upgrades.Where(u => targets.Any(t => t.Item == u))) Hinted(upgrade);
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Magic Storage hints: {pieces.Count} storage items, {pieces.Count(i => targets.Any(t => t.Item == i))} hint targets");
+			Check.All(failures, "Magic Storage hints");
 		}
 
 		// A crafting station's last hint level tells both its ways: its recipe (every ingredient, with its stations or "by
@@ -190,8 +224,8 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, $"Hint trees giving other hints away ({hiddenSeen} parts kept for their own hint)");
 		}
 
-		// The Guide's three categories: boss and event summons in Bosses, life and mana upgrades in Upgrades, stations, pickaxes
-		// and house items in Crafting, each target once
+		// The Guide's categories: boss and event summons in Bosses, life and mana upgrades in Upgrades, Magic Storage's pieces
+		// in Storage, stations, pickaxes and house items in Crafting, each target once
 		private static void HintTabsSplit()
 		{
 			TargetsOrSkip();
@@ -200,15 +234,18 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				List<HintTarget> all = HintPanelState.TabTargets(known);
 				List<HintTarget> crafting = HintPanelState.TabTargets(known, HintTab.Crafting), bosses = HintPanelState.TabTargets(known, HintTab.Bosses),
-					upgrades = HintPanelState.TabTargets(known, HintTab.Upgrades);
-				if (crafting.Count + bosses.Count + upgrades.Count != all.Count || crafting.Intersect(bosses).Any() || crafting.Intersect(upgrades).Any() || bosses.Intersect(upgrades).Any())
+					upgrades = HintPanelState.TabTargets(known, HintTab.Upgrades), storage = HintPanelState.TabTargets(known, HintTab.Storage);
+				if (crafting.Count + bosses.Count + upgrades.Count + storage.Count != all.Count || crafting.Intersect(bosses).Any() || crafting.Intersect(upgrades).Any() || bosses.Intersect(upgrades).Any()
+					|| storage.Intersect(crafting.Concat(bosses).Concat(upgrades)).Any())
 				{
-					failures.Add($"known {known}: {crafting.Count} + {bosses.Count} + {upgrades.Count} of {all.Count}");
+					failures.Add($"known {known}: {crafting.Count} + {bosses.Count} + {upgrades.Count} + {storage.Count} of {all.Count}");
 				}
 				// Judged on the items themselves, not on the kind the filter reads
 				failures.AddRange(bosses.Where(t => !Protection.IsBossSummon(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among the bosses"));
 				failures.AddRange(crafting.Where(t => Protection.IsBossSummon(t.Item) || Protection.IsUpgrade(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among crafting"));
 				failures.AddRange(upgrades.Where(t => !Protection.IsUpgrade(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among the upgrades"));
+				HashSet<int> storageItems = HintFacts.StorageItems().ToHashSet();
+				failures.AddRange(storage.Where(t => !storageItems.Contains(t.Item)).Select(t => $"{HintFacts.ItemName(t.Item)} among storage"));
 			}
 			Check.All(failures, "Hint categories");
 		}
@@ -608,7 +645,7 @@ namespace UltimateRandomizer.Common.Tests
 			List<HintTarget> locked = HintFacts.LockedTargets();
 			if (locked.Count == 0) Check.Skip("nothing is more than one tier ahead");
 			List<string> failures = new();
-			foreach (HintTab tab in new[] { HintTab.Crafting, HintTab.Bosses, HintTab.Upgrades })
+			foreach (HintTab tab in new[] { HintTab.Crafting, HintTab.Bosses, HintTab.Upgrades, HintTab.Storage })
 			{
 				HashSet<int> onSale = HintPanelState.TabTargets(false, tab).Select(t => t.Item).ToHashSet();
 				HashSet<int> known = HintPanelState.TabTargets(true, tab).Select(t => t.Item).ToHashSet();

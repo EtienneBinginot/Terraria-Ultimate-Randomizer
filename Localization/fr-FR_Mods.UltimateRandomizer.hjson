@@ -240,6 +240,7 @@ Tests: {
 	HintSummonTiers: Les invocations de boss sont proposées quand leur boss est la prochaine étape (cellule énergétique après Plantera, œil mécanique en mode difficile)
 	HintLockedShown: Les indices pour plus tard sont listés en grisé avec le moment où ils viendront, et ne sont jamais vendus
 	StationHints: Le dernier indice sur une station donne à la fois sa recette (ingrédients et stations) et son gardien
+	MagicStorageHints: Avec Magic Storage, son Cœur de stockage et ses améliorations d'unité de stockage ont des indices avec une source
 	GuaranteedHostsNotEvents: Les drops garantis ne sont jamais sur des ennemis d'invasion, de lune, saisonniers ou météo
 	GuaranteedDeterminism: Les sources garanties sont identiques après reconstruction
 	FindabilityDeterminism: La trouvabilité des objets est identique après reconstruction
@@ -649,6 +650,7 @@ Codex: {
 		TabCrafting: Artisanat
 		TabBosses: Boss
 		TabUpgrades: Améliorations
+		TabStorage: Stockage
 		GhostButton: Le fantôme du Guide
 		GhostIntro: Hououou... Même depuis l'au-delà, je peux encore te dire d'où viennent les choses. Contre quelques pièces, bien sûr.
 		NothingHere: Rien dans cet onglet pour l'instant : regarde dans les autres.
