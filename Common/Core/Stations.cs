@@ -176,6 +176,8 @@ namespace UltimateRandomizer.Common.Core
 		}
 
 		private static Dictionary<int, List<int>> placers;
+		// Tiles some item places itself (createTile), not only through another mod's tile acting as them
+		private static HashSet<int> placedDirectly;
 
 		// Items placing each tile (content samples are fixed once loaded), and items placing another mod's tile that acts as
 		// this vanilla one (ActsAs: Magic Storage's combined stations count as a Hellforge, a Tinkerer's Workshop...). Do not
@@ -184,6 +186,7 @@ namespace UltimateRandomizer.Common.Core
 		{
 			if (placers != null) return placers;
 			Dictionary<int, List<int>> result = new();
+			HashSet<int> direct = new();
 			void Add(int tile, int type)
 			{
 				if (!result.TryGetValue(tile, out List<int> list)) result[tile] = list = new List<int>();
@@ -193,9 +196,19 @@ namespace UltimateRandomizer.Common.Core
 			{
 				if (sample == null || sample.createTile < TileID.Dirt) continue;
 				Add(sample.createTile, type);
+				direct.Add(sample.createTile);
 				foreach (int tile in ActsAs(sample.createTile)) Add(tile, type);
 			}
+			placedDirectly = direct;
 			return placers = result;
+		}
+
+		// A tile no item places itself is part of the world (the Demon Altar), even when another mod's tile acts as it (Magic
+		// Storage's portable altars): those placers only add a way, they never make the world's own tiles later
+		public static bool WorldTile(int tile)
+		{
+			PlacersByTile();
+			return !placedDirectly.Contains(tile);
 		}
 
 		// The vanilla tiles another mod's tile also counts as for crafting (ModTile.AdjTiles), in a stable order
