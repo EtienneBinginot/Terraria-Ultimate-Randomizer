@@ -1445,8 +1445,8 @@ Configs: {
 		}
 
 		CritterCommonDropChance: {
-			Label: "Chance du drop fréquent des critters (permutation)"
-			Tooltip: "Style de drops par permutation uniquement : chance (%) à chaque mort qu'un critter donne un petit drop fréquent (matériau, potion, munitions, nourriture, bloc...), en plus de ses emplacements de drops aléatoires. Jamais de jackpot. 0 = aucun drop fréquent."
+			Label: Chance du drop fréquent des critters (permutation)
+			Tooltip: Style de drops par permutation uniquement : chance (%) à chaque mort qu'un critter donne un petit drop fréquent (matériau, potion, munitions, nourriture, bloc...), en plus de ses emplacements de drops aléatoires. Jamais de jackpot. 0 = aucun drop fréquent.
 		}
 
 		DropRateMultiplier: {

@@ -1445,8 +1445,8 @@ Configs: {
 		}
 
 		CritterCommonDropChance: {
-			Label: "Critter frequent drop chance (permutation)"
-			Tooltip: "Permutation drop style only: chance (%) per kill that a critter gives one small frequent drop (material, potion, ammo, food, block...), on top of its random extra slots. Never a jackpot. 0 = no frequent drop."
+			Label: Critter frequent drop chance (permutation)
+			Tooltip: Permutation drop style only: chance (%) per kill that a critter gives one small frequent drop (material, potion, ammo, food, block...), on top of its random extra slots. Never a jackpot. 0 = no frequent drop.
 		}
 
 		DropRateMultiplier: {
