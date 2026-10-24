@@ -47,6 +47,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ZenithWeapons", ZenithWeapons);
 			TestRunner.Register("IngredientReuse", IngredientReuse);
 			TestRunner.Register("CraftedValueFromIngredients", CraftedValueFromIngredients);
+			TestRunner.Register("ShimmerNoMoneyLoop", ShimmerNoMoneyLoop);
 			TestRunner.Register("ProtectedRecipesDoable", ProtectedRecipesDoable);
 			TestRunner.Register("RecipeKeyIngredient", RecipeKeyIngredient);
 			TestRunner.Register("RecipeNoStationTwins", RecipeNoStationTwins);
@@ -1001,6 +1002,36 @@ namespace UltimateRandomizer.Common.Tests
 
 		// An item made through a randomized recipe sells for at most its ingredients' value, and keeps that value through
 		// a save/load, a network round trip, a split and a stack
+		// An item crafted cheaply (a crafted unit value) never shimmers into more money than it was worth: whatever the vanilla
+		// value of what it gives (a randomized transformation up to 3 times its own, decrafted ingredients), the stack it gives
+		// sells for at most the input's value, and an item without crafted value gives vanilla-valued items. Pure
+		private static void ShimmerNoMoneyLoop()
+		{
+			List<string> failures = new();
+			foreach (int inputUnit in new[] { 0, 1, 7, 50, 999, 25000 })
+			{
+				foreach (int stack in new[] { 1, 3, 99, 9999 })
+				{
+					foreach (int outputVanilla in new[] { 1, 13, 100, 5000, 300000 })
+					{
+						foreach (int count in new[] { 1, 2, 5 })
+						{
+							// count output items per input item (decrafting), one for one for a transformation
+							long input = (long)inputUnit * stack;
+							long outputs = (long)stack * count;
+							double share = CraftedValueItem.ShimmerShare(input, outputVanilla * outputs);
+							int unit = CraftedValueItem.ShimmerUnit(share, outputVanilla);
+							long sold = (unit < 0 ? outputVanilla : unit) * outputs;
+							if (sold > input) failures.Add($"unit {inputUnit} x{stack} into {outputs} items of vanilla value {outputVanilla}: sells for {sold}, input worth {input}");
+							if (unit > outputVanilla) failures.Add($"unit {unit} above the vanilla value {outputVanilla}");
+						}
+					}
+				}
+			}
+			if (CraftedValueItem.ShimmerShare(0, 0) != 1 || CraftedValueItem.ShimmerUnit(1, 100) != -1) failures.Add("nothing to cap: the vanilla value should stay");
+			Check.All(failures, "Shimmer money loops");
+		}
+
 		private static void CraftedValueFromIngredients()
 		{
 			if (!CraftingConfig.Instance.CraftedValueFromIngredients) Check.Skip("crafted items keep their vanilla value");

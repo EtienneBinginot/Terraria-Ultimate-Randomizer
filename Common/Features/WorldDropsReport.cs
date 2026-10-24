@@ -249,6 +249,8 @@ namespace UltimateRandomizer.Common.Features
 		// player and server: PostWorldLoad; clients: when the seed arrives)
 		public static void Warm()
 		{
+			// Single player: the shops too. A client waits for the tiles (WorldDropsReportSystem), the server opens no shop
+			if (Main.netMode == NetmodeID.SinglePlayer) WarmShops();
 			if (!SeedSystem.WorldReady || !ItemPool.Ready || !LootConfig.Instance.RandomizeMobDrops) return;
 			try
 			{
@@ -263,6 +265,21 @@ namespace UltimateRandomizer.Common.Features
 			catch (Exception e)
 			{
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Could not prepare the world drop plans: {e}");
+			}
+		}
+
+		// The shop permutation reads the recipe plan and findability (the whole planning chain): built here, not on the first
+		// shop click
+		public static void WarmShops()
+		{
+			if (!SeedSystem.WorldReady || !ItemPool.Ready || !EconomyConfig.Instance.RandomizeShops) return;
+			try
+			{
+				_ = ShopPermutation.Current;
+			}
+			catch (Exception e)
+			{
+				ModContent.GetInstance<UltimateRandomizer>().Logger.Warn($"Could not prepare the shop permutation: {e}");
 			}
 		}
 
@@ -285,6 +302,14 @@ namespace UltimateRandomizer.Common.Features
 
 		public static void MarkDirty() => dirty = true;
 
+		// Client: ticks since the world plans changed, the shop permutation is warmed a few seconds later (the spawn map and
+		// the guaranteed sources it reads need the world's tiles); -1 once done
+		private static int shopWarmTicks = -1;
+
+		private static void ShopsCold() => shopWarmTicks = 0;
+
+		private const int ShopWarmDelay = 180;
+
 		private static bool expert;
 
 		// Net IDs read per frame while rebuilding (the whole loop is about 700 of them)
@@ -294,20 +319,29 @@ namespace UltimateRandomizer.Common.Features
 		{
 			SeedSystem.OnSeedChanged += MarkDirty;
 			SeedSystem.OnSeedChanged += WorldDropsReport.Warm;
+			SeedSystem.OnSeedChanged += ShopsCold;
 			WorldCaches.Reset += MarkDirty;
+			WorldCaches.Reset += ShopsCold;
 		}
 
 		public override void Unload()
 		{
 			SeedSystem.OnSeedChanged -= MarkDirty;
 			SeedSystem.OnSeedChanged -= WorldDropsReport.Warm;
+			SeedSystem.OnSeedChanged -= ShopsCold;
 			WorldCaches.Reset -= MarkDirty;
+			WorldCaches.Reset -= ShopsCold;
 			WorldDropsReport.Unload();
 		}
 
 		public override void PostUpdateEverything()
 		{
 			if (Main.dedServ || Main.gameMenu) return;
+			if (shopWarmTicks >= 0 && Main.netMode == NetmodeID.MultiplayerClient && SeedSystem.WorldReady && ++shopWarmTicks >= ShopWarmDelay)
+			{
+				shopWarmTicks = -1;
+				WorldDropsReport.WarmShops();
+			}
 			bool wanted = WorldDropsReport.Wanted();
 			// The extra drops depend on the game mode (journey mode can change it in a world)
 			if (expert != Main.expertMode)
@@ -327,6 +361,7 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (WorldDropsReport.Showing || WorldDropsReport.Pending) WorldDropsReport.Rebuild(false);
 			dirty = false;
+			shopWarmTicks = -1;
 		}
 	}
 }

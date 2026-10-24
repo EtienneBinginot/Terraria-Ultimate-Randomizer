@@ -939,6 +939,10 @@ namespace UltimateRandomizer.Common.Features
 				placements = null;
 				// The shop-only places too (Findability.Reset)
 				Findability.Reset();
+				// The world's own map changed (the world evil arrived; a test map has this world's evil): everything planned
+				// from the old one (recipe plan, applied recipes, shop permutation, decraft rules) is rebuilt too, on the next
+				// tick, not inside the build that noticed it. The reset clears frequentMap: no loop
+				if (frequentMap.Evil != map.Evil) SeedSystem.RequestCacheReset();
 			}
 			hostTiers = null;
 			frequentMap = map;
@@ -1075,6 +1079,8 @@ namespace UltimateRandomizer.Common.Features
 
 		private static int[] baseTiers;
 		private static int[] tiers;
+		// Moved by each reset: a result computed across one (a reset during the computation) is returned but not kept
+		private static int version;
 
 		static Findability()
 		{
@@ -1109,16 +1115,18 @@ namespace UltimateRandomizer.Common.Features
 		// Including the guaranteed sources (GuaranteedSources.FoundTier)
 		public static int Tier(int item)
 		{
-			if (tiers == null)
+			int[] values = tiers;
+			if (values == null)
 			{
-				int[] result = (int[])BaseTiers().Clone();
+				int started = version;
+				values = (int[])BaseTiers().Clone();
 				foreach (GuaranteedSources.Requirement requirement in GuaranteedSources.Requirements)
 				{
-					result[requirement.Item] = Math.Min(result[requirement.Item], GuaranteedSources.FoundTier(requirement));
+					values[requirement.Item] = Math.Min(values[requirement.Item], GuaranteedSources.FoundTier(requirement));
 				}
-				tiers = result;
+				if (started == version) tiers = values;
 			}
-			return item > 0 && item < tiers.Length ? tiers[item] : Never;
+			return item > 0 && item < values.Length ? values[item] : Never;
 		}
 
 		// Without the guaranteed sources (used to decide what must be guaranteed)
@@ -1130,6 +1138,7 @@ namespace UltimateRandomizer.Common.Features
 
 		public static void Reset()
 		{
+			version++;
 			baseTiers = null;
 			tiers = null;
 			// The shop-only items are the ones not found in time
@@ -1139,6 +1148,7 @@ namespace UltimateRandomizer.Common.Features
 		private static int[] BaseTiers()
 		{
 			if (baseTiers != null) return baseTiers;
+			int started = version;
 			int[] result = new int[ItemPool.Info.Length];
 			Array.Fill(result, Never);
 			void Add(int item, int tier)
@@ -1216,7 +1226,7 @@ namespace UltimateRandomizer.Common.Features
 					}
 				}
 			}
-			baseTiers = result;
+			if (started == version) baseTiers = result;
 			return result;
 		}
 

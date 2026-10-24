@@ -816,14 +816,37 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// Critters get a share (CritterDropFactor) of the small frequent drop, here at abundance 3
+		// Permutation style: the enemies' PermutationExtraSlots slots, each at CritterDropFactor times an enemy slot's rate (at
+		// most DropRateMultiplier / 1 before it), and no small frequent drop. Checked with the style given explicitly
 		private static void CrittersDrop()
 		{
 			LootConfig cfg = LootConfig.Instance;
 			if (!cfg.RandomizeMobDrops || cfg.DropTableStyle == DropTableStyle.MirrorOriginal || !cfg.CrittersCanDrop) Check.Skip("critters get no random drops");
 			if (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle) Check.Skip("shuffle mode has no extra drops");
-			if (cfg.DropTableStyle == DropTableStyle.Permutation) Check.Skip("the permutation style has no small frequent drop");
+			List<string> permuted = new();
+			int slots = Math.Clamp(cfg.PermutationExtraSlots, 0, 3);
+			float cap = Math.Min(1f, cfg.DropRateMultiplier * Math.Max(0f, cfg.CritterDropFactor)) + 1e-4f;
+			foreach (int npc in new[] { NPCID.Bunny, NPCID.Mouse, NPCID.Butterfly })
+			{
+				foreach (float abundance in new[] { 1f, 3f })
+				{
+					List<PlannedDrop> extras = RandomNpcDropRule.ExtraDrops(npc, npc, Main.expertMode, abundance, style: DropTableStyle.Permutation);
+					if (extras.Count != slots) permuted.Add($"{NpcName(npc)}: {extras.Count} random drops in the permutation style at abundance {abundance}, {slots} expected");
+					foreach (PlannedDrop extra in extras.Where(d => d.Chance > cap)) permuted.Add($"{NpcName(npc)}: extra drop at {extra.Chance:P1}, at most {cap:P1}");
+				}
+			}
+			if (cfg.DropTableStyle == DropTableStyle.Permutation)
+			{
+				Check.All(permuted, "Critters in the permutation style");
+				return;
+			}
 			float first = Math.Min(1f, cfg.CommonDropChance / 100f * 3f * cfg.CritterDropFactor);
-			if (first <= 0.0001f) Check.Skip("critters get no small frequent drop with these settings");
+			if (first <= 0.0001f)
+			{
+				// No small frequent drop with these settings: the permutation slots are still checked
+				Check.All(permuted, "Critters in the permutation style");
+				return;
+			}
 			List<string> failures = new();
 			foreach (int npc in new[] { NPCID.Bunny, NPCID.Mouse, NPCID.Butterfly })
 			{
@@ -834,6 +857,7 @@ namespace UltimateRandomizer.Common.Tests
 				List<PlannedDrop> now = RandomNpcDropRule.Plan(npc, Main.expertMode, abundance: 3f);
 				if (now.Any(d => d.Extra) && now.Where(d => d.Extra).Max(d => d.Chance) < first - 0.001f) failures.Add($"{NpcName(npc)}: no drop at {first * 100:0} % or more now");
 			}
+			failures.AddRange(permuted);
 			Check.All(failures, "Critters without their frequent drop");
 		}
 

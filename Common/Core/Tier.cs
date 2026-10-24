@@ -53,8 +53,21 @@ namespace UltimateRandomizer.Common.Core
 			return (int)Tier.PreBoss;
 		}
 
+		// The difficulty the planners read (Main.expertMode, masterMode): Journey's slider changes it in a world in progress
+		private static (int mode, bool expert, bool master) difficulty;
+
+		private static (int, bool, bool) Difficulty() => (Main.GameMode, Main.expertMode, Main.masterMode);
+
 		public static void Refresh(bool notify = true)
 		{
+			// Every machine plans by itself (clients get the game mode and the slider synced): a change rebuilds the world
+			// caches; the world's own difficulty, read as it activates (notify false), is no change
+			(int, bool, bool) now = Difficulty();
+			if (now != difficulty)
+			{
+				difficulty = now;
+				if (notify && SeedSystem.WorldReady) SeedSystem.NotifyConfigChanged();
+			}
 			int tier = ComputeUnlockedTier();
 			if (tier != UnlockedTier)
 			{

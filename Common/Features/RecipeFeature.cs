@@ -29,6 +29,8 @@ namespace UltimateRandomizer.Common.Features
 		private static bool[] originalDisabled;
 		private static bool[] shell;
 		private static bool applied;
+		// A live recipe changed since other mods' recipe caches were last rebuilt (RefreshOtherMods)
+		private static bool otherModsStale;
 
 		// Shell recipes: one per item no recipe made when this mod added its recipes (walls, blocks, furniture found in the
 		// world..., and the life and mana upgrades), with no ingredient and no station, switched off as set up (so the item classification, the guaranteed
@@ -325,7 +327,13 @@ namespace UltimateRandomizer.Common.Features
 		{
 			if (SeedSystem.WorldReady && CraftingConfig.Instance.RandomizeRecipes && ItemPool.Ready) Apply();
 			else Restore();
-			RefreshOtherMods();
+			// Magic Storage's rebuild is slow: only when a recipe really changed, and never while the world unloads (the next
+			// world's refresh does it, or the stale flag waits for it)
+			if (otherModsStale && SeedSystem.WorldReady)
+			{
+				otherModsStale = false;
+				RefreshOtherMods();
+			}
 		}
 
 		// Magic Storage indexes the recipes by result, ingredient and station once, when the game loads: without a rebuild its
@@ -534,6 +542,8 @@ namespace UltimateRandomizer.Common.Features
 
 		private static void SetResult(Item result, int type, int stack)
 		{
+			if (result.type == type && result.stack == stack) return;
+			otherModsStale = true;
 			if (result.type != type) result.SetDefaults(type);
 			result.stack = stack;
 		}
@@ -546,6 +556,7 @@ namespace UltimateRandomizer.Common.Features
 				same = recipe.requiredItem[k].type == ingredients[k].type && recipe.requiredItem[k].stack == ingredients[k].stack;
 			}
 			if (same) return;
+			otherModsStale = true;
 			recipe.requiredItem.Clear();
 			foreach ((int type, int stack) in ingredients) recipe.requiredItem.Add(new Item(type, stack));
 		}
@@ -554,18 +565,22 @@ namespace UltimateRandomizer.Common.Features
 		private static void SetGroups(Recipe recipe, int[] groups)
 		{
 			if (recipe.acceptedGroups.SequenceEqual(groups)) return;
+			otherModsStale = true;
 			recipe.acceptedGroups.Clear();
 			recipe.acceptedGroups.AddRange(groups);
 		}
 
 		private static void SetDisabled(Recipe recipe, bool disabled)
 		{
-			if (recipe.Disabled != disabled) SetDisabledMethod?.Invoke(recipe, new object[] { disabled });
+			if (recipe.Disabled == disabled) return;
+			otherModsStale = true;
+			SetDisabledMethod?.Invoke(recipe, new object[] { disabled });
 		}
 
 		private static void SetTiles(Recipe recipe, int[] tiles)
 		{
 			if (recipe.requiredTile.SequenceEqual(tiles)) return;
+			otherModsStale = true;
 			recipe.requiredTile.Clear();
 			recipe.requiredTile.AddRange(tiles);
 		}

@@ -20,8 +20,9 @@ namespace UltimateRandomizer.Common.Features
 	// reforging) call SetDefaults, then Prefix, then the globals' LoadData/NetReceive, where the value is set again with
 	// the multiplier of the item's prefix. Item.Prefix multiplies the current value, so a reforge (ResetPrefix ->
 	// Refresh -> our NetReceive at prefix 0, then Prefix) also ends on the right value.
-	// Accepted: a shimmer transformation gives a new item with its vanilla value (randomized shimmer results are capped
-	// relative to the vanilla values, see ShimmerFeature).
+	// Shimmer: what a crafted-value item shimmers into keeps the discount (ShimmerUnit), else crafting cheaply then shimmering
+	// would sell for the full price (randomized shimmer results are also capped relative to the vanilla values, ShimmerFeature).
+	// Shimmering runs in single player or on the server: the changed item is synced again with its value.
 	public class CraftedValueItem : GlobalItem
 	{
 		public override bool InstancePerEntity => true;
@@ -61,6 +62,69 @@ namespace UltimateRandomizer.Common.Features
 		}
 
 		public static int UnitValueOf(Item item) => item.TryGetGlobalItem(out CraftedValueItem crafted) ? crafted.CraftedUnitValue : -1;
+
+		// The share of their vanilla value the items a shimmer gives keep: what the input was worth (its crafted unit value
+		// times its stack) over the vanilla value of everything it gives, at most 1. Pure (ShimmerNoMoneyLoop test)
+		public static double ShimmerShare(long inputValue, long outputVanillaValue) =>
+			outputVanillaValue <= 0 ? 1 : Math.Clamp(inputValue / (double)outputVanillaValue, 0, 1);
+
+		// The unit value of an item of vanilla value outputVanilla given with that share; -1: its vanilla value
+		public static int ShimmerUnit(double share, int outputVanilla)
+		{
+			if (outputVanilla <= 0 || share >= 1) return -1;
+			return (int)Math.Floor(outputVanilla * Math.Max(0, share));
+		}
+
+		// While an item with a crafted value shimmers: the share the items it gives keep (-1: none shimmering)
+		private static double shimmerShare = -1;
+
+		public override void Load() => On_Item.GetShimmered += CapShimmer;
+
+		private static void CapShimmer(On_Item.orig_GetShimmered orig, Item item)
+		{
+			int before = item.type;
+			int unit = UnitValueOf(item);
+			if (unit < 0 || shimmerShare >= 0)
+			{
+				orig(item);
+				return;
+			}
+			double share = ShimmerShare((long)unit * Math.Max(1, item.stack), ShimmerOutputValue(item));
+			shimmerShare = share;
+			try
+			{
+				orig(item);
+			}
+			finally
+			{
+				shimmerShare = -1;
+			}
+			if (item.IsAir || item.type == before) return;
+			SetUnitValue(item, ShimmerUnit(share, VanillaValue(item.type)));
+			if (Main.netMode == NetmodeID.Server) NetMessage.SendData(MessageID.SyncItem, -1, -1, null, item.whoAmI);
+		}
+
+		// The vanilla value of what a stack shimmers into: its transformation one for one (vanilla tries it before decrafting),
+		// else its decrafted ingredients
+		private static long ShimmerOutputValue(Item item)
+		{
+			int equivalent = ItemID.Sets.ShimmerCountsAsItem[item.type] != -1 ? ItemID.Sets.ShimmerCountsAsItem[item.type] : item.type;
+			int stack = Math.Max(1, item.stack);
+			int target = ItemID.Sets.ShimmerTransformToItem[equivalent];
+			if (target > 0) return (long)VanillaValue(target) * stack;
+			int index = Terraria.GameContent.ShimmerTransforms.GetDecraftingRecipeIndex(equivalent);
+			if (index < 0 || index >= Recipe.numRecipes) return 0;
+			Recipe recipe = Main.recipe[index];
+			long crafts = stack / Math.Max(1, recipe.createItem.stack);
+			return crafts * recipe.requiredItem.Sum(i => (long)VanillaValue(i.type) * i.stack);
+		}
+
+		// The extra stack of a transformation beyond the new item's max stack, and decrafted ingredients
+		public override void OnSpawn(Item item, IEntitySource source)
+		{
+			if (shimmerShare < 0 || item.IsAir) return;
+			SetUnitValue(item, ShimmerUnit(shimmerShare, VanillaValue(item.type)));
+		}
 
 		// Sets the unit value of an instance (-1: back to vanilla)
 		public static void SetUnitValue(Item item, int unit)
