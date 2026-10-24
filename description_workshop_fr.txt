@@ -1,37 +1,42 @@
 [h1]Ultimate Randomizer[/h1]
-On voulait un randomizer où chaque nouveau monde ressemble à une autre partie, sans jamais se retrouver bloqué. Ce mod mélange donc presque tout : ce que lâchent les ennemis, le contenu des coffres, les recettes, les boutiques, quels monstres vivent où et à quel point ils sont costauds. Tout ça suit ta progression, et avec les réglages par défaut tout ce dont tu as besoin reste trouvable.
+Un randomizer qui rend chaque monde différent tout en gardant le jeu terminable. Il mélange presque tout : drops des ennemis, contenu des coffres, recettes, boutiques, apparitions et statistiques des ennemis. L'aléatoire suit la progression, et avec les réglages par défaut chaque objet nécessaire reste trouvable.
 
-On l'a fait pour nos vidéos YouTube ([b]Pootouf & Nouke[/b]) : [url=https://www.youtube.com/@pounouke]youtube.com/@pounouke[/url]
+Créé à l'origine pour les vidéos YouTube de [b]Pootouf & Nouke[/b] : [url=https://www.youtube.com/@pounouke]youtube.com/@pounouke[/url]
 
-[h2]Ce qui change[/h2]
+[h2]Fonctionnalités[/h2]
 [list]
-[*][b]Le butin.[/b] Les drops des ennemis et des boss sont échangés entre ennemis du même tier, et chaque ennemi a en plus quelques drops aléatoires. Même les petites créatures donnent des objets. Sacs de trésor, caisses, coffres, pots, pêche, minerais, arbres secoués, herbes, Extractinator et Pêcheur : tout est aléatoire.
-[*][b]Les jackpots.[/b] De temps en temps, un ennemi lâche un objet quelques tiers au-dessus de ton niveau, avec un flash et un son. Compte environ un toutes les demi-heures en début de partie. Chaque monde a aussi quelques coffres jackpot.
-[*][b]L'artisanat.[/b] Les recettes ont de nouveaux ingrédients, et la plupart changent de station. Tout est prévu pour que tout reste fabricable. Le chatoiement (shimmer) est mélangé aussi.
-[*][b]Boutiques et ville.[/b] Les marchands vendent des objets au hasard, à un prix qui dépend de leur valeur. Tu commences avec un kit aléatoire, et les PNJ arrivent dans un ordre aléatoire.
-[*][b]Les ennemis.[/b] Les monstres sont répartis dans d'autres biomes. Leur vie, leurs dégâts, leur défense et leur taille varient, parfois beaucoup : méfie-toi des géants (et des minis). Les boss ont aussi une vie et des dégâts aléatoires. Les dégâts ne dépassent jamais x3, pour rester jouable.
-[*][b]Puissance adaptative.[/b] Si tu as la chance de trouver un équipement très en avance, les ennemis deviennent plus coriaces (surtout plus de vie), pour que la partie reste fun au lieu de devenir trop facile.
+[*][b]Butin.[/b] Les drops des ennemis et des boss sont échangés entre ennemis du même tier, et chaque ennemi reçoit quelques drops aléatoires supplémentaires. Les créatures peuvent aussi donner des objets. Sacs de trésor, caisses, coffres, pots, pêche, minerais, arbres secoués, herbes, Extractinator et récompenses du Pêcheur sont également aléatoires.
+[*][b]Jackpots.[/b] Chaque ennemi vaincu a une faible chance de donner un objet quelques tiers au-dessus de la progression actuelle, avec un effet visuel et sonore (environ un toutes les 30 minutes en début de partie). Chaque monde contient aussi quelques coffres jackpot.
+[*][b]Artisanat.[/b] Les recettes reçoivent de nouveaux ingrédients, et la plupart changent de station. Toutes les recettes sont planifiées pour rester fabricables. Les transmutations du chatoiement (shimmer) sont aussi aléatoires.
+[*][b]Boutiques et ville.[/b] Les boutiques vendent des objets aléatoires, à un prix fixé selon leur valeur. Le kit de départ et l'ordre d'arrivée des PNJ sont aléatoires.
+[*][b]Ennemis.[/b] Les ennemis sont redistribués entre les biomes. Vie, dégâts, défense et taille varient d'un ennemi à l'autre, avec des géants et des minis occasionnels. La vie et les dégâts des boss sont aussi aléatoires. Les dégâts totaux sont limités à x3.
+[*][b]Puissance adaptative.[/b] Un équipement très en avance sur la progression du monde rend les ennemis plus résistants, surtout en vie, pour qu'une trouvaille chanceuse ne rende pas le jeu trivial.
 [/list]
 
-[h2]Trois modes[/h2]
+[h2]Modes[/h2]
 [list]
-[*][b]Cohérent[/b] (par défaut) : les objets gardent leur type et leur tier, et se débloquent en battant les boss.
-[*][b]Mélange garanti :[/b] chaque objet est échangé avec un autre du même type et du même tier.
-[*][b]Chaos :[/b] n'importe quoi peut venir de n'importe où. Bon courage.
+[*][b]Cohérent[/b] (par défaut) : les objets gardent leur catégorie et leur tier, et se débloquent au fil des boss vaincus.
+[*][b]Mélange garanti :[/b] chaque objet est échangé avec un autre de même catégorie et de même tier.
+[*][b]Chaos :[/b] n'importe quel objet peut venir de n'importe quelle source.
 [/list]
 
-[h2]Tu ne resteras pas bloqué[/h2]
-Les invocations de boss, les pioches et les matériaux nécessaires tombent toujours sur les ennemis courants d'un biome accessible à ce moment-là. Les stations d'artisanat sont de petites quêtes : chacune a sa propre recette aléatoire, et un ennemi la porte aussi en secours. En Expert et en Maître, les drops du mode normal d'un boss sont dans son sac de trésor, comme d'habitude.
+[h2]Progression garantie[/h2]
+Les invocations de boss, les pioches et les matériaux nécessaires sont toujours donnés par des ennemis courants d'un biome accessible à ce stade. Chaque station d'artisanat a sa propre recette aléatoire, et un ennemi la porte aussi en secours. En mode Expert et Maître, les drops du mode normal d'un boss se trouvent dans son sac de trésor, comme dans le jeu de base.
 
 [h2]Codex et indices[/h2]
-Appuie sur [b]J[/b] pour ouvrir le codex : ce que peuvent lâcher les ennemis que tu as tués, le contenu des sacs ouverts, l'arbre de fabrication et les ennemis de chaque biome. Si tu es perdu, le Guide vend des indices pour les stations, les pioches et les invocations de boss. Un indice montre tout le chemin vers l'objet, de l'ennemi ou du minerai jusqu'à la dernière étape de fabrication. Le Bestiaire et Recipe Browser affichent les drops de ton monde.
+Le codex (touche [b]J[/b]) liste les drops possibles de chaque ennemi vaincu, le contenu des sacs ouverts, l'arbre de fabrication et les ennemis de chaque biome. Le Guide vend des indices pour les stations d'artisanat, les pioches et les invocations de boss ; chaque indice montre le chemin complet vers l'objet, de l'ennemi ou du minerai jusqu'à la dernière étape de fabrication. Le Bestiaire et Recipe Browser affichent les drops aléatoires du monde.
 
 [h2]Réglages et multijoueur[/h2]
-Presque tout se règle dans les options du mod (en français et en anglais). Chaque monde a sa propre graine, sauvegardée avec lui et partagée en multijoueur. Les objets, recettes et ennemis des autres mods sont aussi mélangés, au mieux ; Magic Storage est pris en charge.
+Presque tous les systèmes sont configurables dans les réglages du mod, disponibles en français et en anglais. Chaque monde a sa propre graine, sauvegardée avec le monde et partagée en multijoueur. Le contenu des autres mods est pris en compte dans la mesure du possible, et Magic Storage est compatible.
 
-Commandes : [b]/rseed[/b] affiche ou change la graine, [b]/rjournal[/b] ouvre le codex, [b]/rchests[/b] rend aléatoires les coffres d'un monde créé avant l'installation du mod.
+Commandes :
+[list]
+[*][b]/rseed[/b] : afficher ou changer la graine du monde
+[*][b]/rjournal[/b] : ouvrir le codex
+[*][b]/rchests[/b] : rendre aléatoires les coffres d'un monde créé sans le mod
+[/list]
 
-Ne l'active pas en même temps que tRandomizer.
+Incompatible avec tRandomizer : ne pas activer les deux.
 
 [hr][/hr]
 
