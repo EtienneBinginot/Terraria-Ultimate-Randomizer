@@ -71,6 +71,11 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("ProtectedRecipesGated", ProtectedRecipesGated);
 			TestRunner.Register("PickaxeIngredientsBelowLevel", PickaxeIngredientsBelowLevel);
 			TestRunner.Register("StationsCraftable", StationsCraftable);
+			TestRunner.Register("HouseRecipesSimple", HouseRecipesSimple);
+			TestRunner.Register("IngredientCountCaps", IngredientCountCaps);
+			TestRunner.Register("NoNeverIngredients", NoNeverIngredients);
+			TestRunner.Register("NoEmptyLiveRecipes", NoEmptyLiveRecipes);
+			TestRunner.Register("SwapStationsInTime", SwapStationsInTime);
 		}
 
 		private static int Count => Math.Min(RecipeSystem.RecipeCount, Recipe.numRecipes);
@@ -385,7 +390,6 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			RequireRandomIngredients();
 			RecipePlan plan = RecipePlanner.Get();
-			int cap = CraftingConfig.Instance.IngredientStackCap;
 			List<string> failures = new();
 			for (int i = 0; i < Count; i++)
 			{
@@ -394,14 +398,16 @@ namespace UltimateRandomizer.Common.Tests
 				if (plan.Ingredients[i] == null || SpecialRecipe(plan, i)) continue;
 				long before = RecipeSystem.OriginalIngredientValue(plan.SwapPartner[i] >= 0 ? plan.SwapPartner[i] : i);
 				long after = plan.IngredientValues[i];
-				// A stack held by the cap may lose value; a new ingredient's stack is rounded up, so each one may add up to its
-				// own unit value (a x1 of something pricier than its share). Nothing else excuses a change: a rebuilt recipe is
-				// worth 0.6 to 1.6 times the vanilla one
-				bool capped = plan.ValueShort[i] || plan.Ingredients[i].Any(p => p.stack >= Math.Min(cap, StackRules.MaxStackOf(p.type)));
+				// A stack held by its count cap (RecipePlanner.StackCap: 30 of a block, 10 of a slow item, 3 of a crafted one) may
+				// lose value, and a recipe cheaper than vanilla is fine since 1.6.6 (the value only shapes the counts): only one
+				// worth less than RaiseFactor of the vanilla value without a capped stack is wrong. A new ingredient's stack is
+				// rounded up, so each one may add up to its own unit value (a x1 of something pricier than its share); never more
+				// than twice the vanilla value
+				bool capped = plan.ValueShort[i] || plan.Ingredients[i].Any(p => p.stack >= RecipePlanner.StackCap(plan, i, p.type));
 				HashSet<int> originals = RecipeSystem.OriginalIngredients(i).Select(o => o.type).ToHashSet();
 				bool rebuilt = plan.IngredientTiers[i] >= 0 && !plan.Repaired[i];
 				long roundUp = plan.Ingredients[i].Where(p => rebuilt ? RecipePlanner.IngredientReplaceable(p.type) : !originals.Contains(p.type)).Sum(p => RecipeSystem.EffectiveValue(p.type));
-				if ((!capped && after < before / 2) || after > before * 2 + Item.silver + roundUp) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {before} -> {after}");
+				if ((!capped && after < before * RecipePlanner.RaiseFactor) || after > before * 2 + Item.silver + roundUp) failures.Add($"{Name(RecipeSystem.OriginalResult(i))}: {before} -> {after}");
 			}
 			Check.All(failures, "Ingredient values changed too much");
 		}
@@ -1895,9 +1901,10 @@ namespace UltimateRandomizer.Common.Tests
 			Check.All(failures, "Recipes doable before their item's tier");
 		}
 
-		// Planned ingredients are sane: no stack above RecipePlanner.StackCap (the ingredient stack cap, three times a vanilla
-		// stack, a few of a one-off item), and a rebuilt recipe is worth half to twice its vanilla recipe (the item's own for a
-		// swap), value-0 items counting their own recipe (EffectiveValue), each new ingredient rounded up by one unit at most.
+		// Planned ingredients are sane: no stack above RecipePlanner.StackCap (its count cap, CountCap, three times a vanilla
+		// stack for a plain material), and a rebuilt recipe is worth at most twice its vanilla recipe (the item's own for a
+		// swap), value-0 items counting their own recipe (EffectiveValue), each new ingredient rounded up by one unit at most,
+		// and at least RaiseFactor of it (cheaper than vanilla is fine since the count caps: it was half before 1.6.6).
 		// Recipes RaiseValue could not bring up (no richer material in time) and a rare short one are tolerated (1 %); the
 		// upgrades are worth at least the upgrade (UpgradeRecipes). The cases of the 1.5.0 run are named
 		private static void RecipeValueSane()
@@ -1907,7 +1914,7 @@ namespace UltimateRandomizer.Common.Tests
 			List<string> failures = new();
 			List<string> low = new();
 			List<string> shortOnes = new();
-			int rebuilt = 0, valueShort = 0, shortAboveMin = 0;
+			int rebuilt = 0, valueShort = 0, shortAboveMin = 0, belowHalf = 0;
 			int[] named = { ItemID.ManaCrystal, ItemID.LifeCrystal, ItemID.SoulBottleFright, ItemID.LunarBlockNebula, ItemID.LunarBlockStardust, ItemID.SolarBrick, ItemID.TrueNightsEdge };
 			UltimateRandomizer mod = ModContent.GetInstance<UltimateRandomizer>();
 			for (int i = 0; i < Count; i++)
@@ -1928,21 +1935,22 @@ namespace UltimateRandomizer.Common.Tests
 				long roundUp = plan.Ingredients[i].Where(p => RecipePlanner.IngredientReplaceable(p.type)).Sum(p => RecipeSystem.EffectiveValue(p.type));
 				string where = $"{name}: {before} -> {after} ({Ingredients(plan.Ingredients[i])})";
 				if (after > before * 2 + Item.silver + roundUp) failures.Add(where);
+				if (after < before / 2) belowHalf++;
 				if (plan.ValueShort[i])
 				{
 					valueShort++;
-					// Short of the vanilla value itself (a valuable swapped result), not of the usual minimum
-					if (after >= Math.Ceiling(before * 0.6)) shortAboveMin++;
+					// Short of the vanilla value itself (a valuable swapped result, LimitRecipeValue), not of the usual minimum
+					if (after >= Math.Ceiling(before * RecipePlanner.RaiseFactor)) shortAboveMin++;
 					if (shortOnes.Count < 10) shortOnes.Add(where);
 				}
-				else if (after < before / 2) low.Add(where);
+				else if (after < before * RecipePlanner.RaiseFactor) low.Add(where);
 			}
 			if (rebuilt == 0) Check.Skip("no rebuilt recipe");
-			mod.Logger.Info($"RecipeValueSane: {rebuilt} rebuilt recipes, {valueShort} short of their value (no richer material in time; {shortAboveMin} of them above 60 % " +
-				$"of the vanilla value){(shortOnes.Count == 0 ? "" : ": " + string.Join("; ", shortOnes))}, {low.Count} below half their vanilla value" +
-				$"{(low.Count == 0 ? "" : ": " + string.Join("; ", low.Take(10)))}");
+			mod.Logger.Info($"RecipeValueSane: {rebuilt} rebuilt recipes, {belowHalf} below half their vanilla value (allowed: counts are capped), {valueShort} short of " +
+				$"{RecipePlanner.RaiseFactor:P0} (no richer material in time; {shortAboveMin} of them above it){(shortOnes.Count == 0 ? "" : ": " + string.Join("; ", shortOnes))}, " +
+				$"{low.Count} below {RecipePlanner.RaiseFactor:P0} without being short{(low.Count == 0 ? "" : ": " + string.Join("; ", low.Take(10)))}");
 			Check.That(valueShort <= Math.Max(5, rebuilt / 50), $"{valueShort} of {rebuilt} rebuilt recipes short of their value");
-			Check.That(low.Count <= Math.Max(3, rebuilt / 100), $"{low.Count} recipes below half their vanilla value: {string.Join("; ", low.Take(10))}");
+			Check.That(low.Count <= Math.Max(3, rebuilt / 100), $"{low.Count} recipes below {RecipePlanner.RaiseFactor:P0} of their vanilla value: {string.Join("; ", low.Take(10))}");
 			Check.All(failures, "Insane ingredient stacks or values");
 		}
 
@@ -2016,6 +2024,163 @@ namespace UltimateRandomizer.Common.Tests
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"PickaxeIngredientsBelowLevel: {tested} pickaxe recipes; {plan.UnfitKeys} unfit keys in the plan, {keys.Count} of them in pickaxes"
 				+ $"{(keys.Count == 0 ? "" : ": " + string.Join("; ", keys.Take(10)))}; {string.Join("; ", examples)}");
 			Check.All(failures, "Pickaxes made of what they can't mine");
+		}
+
+		// The house items (Torch, Wood Platform, Wooden Door) have a simple random recipe: one or two new ingredients, start
+		// materials only (never a fish, an ore bar nor anything crafted: a Torch was a Platinum Ore and a Flounder), a few of each
+		// (HouseStackMax, or the vanilla amount), worth at most twice the vanilla recipe (stacks at 1 apart), at a basic station
+		// or none
+		private static void HouseRecipesSimple()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			HashSet<int> start = RecipePlanner.StartMaterials(true);
+			List<string> failures = new();
+			List<string> examples = new();
+			for (int i = 0; i < Count; i++)
+			{
+				if (!RecipeSystem.HouseRecipe(i) || RecipeSystem.VanillaDisabled(i) || plan.Twin[i] || plan.Ingredients[i] == null) continue;
+				(int type, int stack)[] ingredients = plan.Ingredients[i];
+				string where = $"{Name(plan.Results[i].type)} x{plan.Results[i].stack} ({Ingredients(ingredients)})";
+				examples.Add(where);
+				(int type, int stack)[] original = RecipeSystem.OriginalIngredients(i);
+				List<(int type, int stack)> added = ingredients.Where(p => RecipePlanner.IngredientReplaceable(p.type)).ToList();
+				if (added.Count == 0) failures.Add($"{where}: no new ingredient");
+				if (added.Count > RecipePlanner.HouseIngredientMax) failures.Add($"{where}: {added.Count} ingredients, at most {RecipePlanner.HouseIngredientMax}");
+				int most = Math.Max(RecipePlanner.HouseStackMax, original.Sum(o => o.stack));
+				foreach ((int type, int stack) in added)
+				{
+					if (!start.Contains(type)) failures.Add($"{where}: {Name(type)} is no start material");
+					if (stack > most) failures.Add($"{where}: {stack} {Name(type)}, at most {most}");
+				}
+				long before = RecipeSystem.OriginalIngredientValue(i);
+				long after = ingredients.Sum(p => RecipeSystem.EffectiveValue(p.type) * p.stack);
+				if (after > before * 2 + Item.silver && ingredients.Any(p => p.stack > 1)) failures.Add($"{where}: worth {after}, vanilla {before}");
+				foreach (int tile in plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i))
+				{
+					if (Stations.Info(tile).Kind != StationKind.Basic) failures.Add($"{where}: needs {Stations.Name(tile)}");
+				}
+			}
+			if (examples.Count == 0) Check.Skip("no house recipe rebuilt");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"HouseRecipesSimple: {string.Join("; ", examples)}");
+			Check.All(failures, "House recipes not simple");
+		}
+
+		// No new ingredient asks for more than its count cap (RecipePlanner.CountCap, through StackCap): a craft-only item
+		// (never found: each unit is a craft) CraftedIngredientStackCap (a little more when its recipe is cheap), a slow one
+		// (gems, Fallen Stars, fish, critters, shards, souls) SlowIngredientStackCap. The vanilla stacks a recipe keeps are not
+		// new. The largest craft-only and slow counts are logged
+		private static void IngredientCountCaps()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			List<(int stack, string where)> crafted = new();
+			List<(int stack, string where)> slow = new();
+			int checkedCount = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				if (plan.Ingredients[i] == null || plan.Twin[i]) continue;
+				HashSet<(int, int)> vanilla = RecipeSystem.OriginalIngredients(i).ToHashSet();
+				foreach ((int type, int stack) p in plan.Ingredients[i])
+				{
+					if (vanilla.Contains(p) || !RecipePlanner.IngredientReplaceable(p.type)) continue;
+					checkedCount++;
+					int cap = RecipePlanner.StackCap(plan, i, p.type);
+					string where = $"{p.stack} {Name(p.type)} in {Name(plan.Results[i].type)}";
+					if (p.stack > cap) failures.Add($"{where}, at most {cap}");
+					if (RecipePlanner.OneOff(p.type)) continue;
+					if (RecipePlanner.CraftOnly(p.type)) crafted.Add((p.stack, where));
+					else if (RecipePlanner.SlowIngredient(p.type)) slow.Add((p.stack, where));
+				}
+			}
+			if (checkedCount == 0) Check.Skip("no new ingredient");
+			string Top(List<(int stack, string where)> list) => list.Count == 0 ? "none" : string.Join("; ", list.OrderByDescending(x => x.stack).ThenBy(x => x.where, StringComparer.Ordinal).Take(5).Select(x => x.where));
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"IngredientCountCaps: {checkedCount} new ingredients, {crafted.Count} craft-only (largest: {Top(crafted)}), {slow.Count} slow (largest: {Top(slow)})");
+			Check.All(failures, "Ingredients above their count cap");
+		}
+
+		// No live planned recipe needs an ingredient that is never had with this plan (a group slot: its best member), nor
+		// does a recipe kept with its vanilla ingredients when one of them is randomizable and never had (it gets a
+		// replacement, RecipePlanner.KeepOriginals): a Cell Phone of an Ice Mirror, a Cooked Marshmallow of a Marshmallow
+		private static void NoNeverIngredients()
+		{
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			List<string> keptVanilla = new();
+			int checkedCount = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				if (Main.recipe[i].Disabled || plan.Twin[i] || RecipeSystem.LeftAlone(i)) continue;
+				bool planned = plan.Ingredients[i] != null;
+				if (!planned && !RecipePlanner.Rebuildable(i)) continue;
+				checkedCount++;
+				foreach ((int type, _) in plan.Ingredients[i] ?? RecipeSystem.OriginalIngredients(i))
+				{
+					if (IngredientAvail(plan, i, type) < Findability.Never) continue;
+					string where = $"{Name(type)} in {Name(plan.Results[i].type)}{(planned ? "" : " (vanilla ingredients)")}";
+					// A protected ingredient keeps its own (vanilla) sources: logged only
+					if (!ItemPool.IsRandomizable(type)) keptVanilla.Add(where);
+					else failures.Add(where);
+				}
+			}
+			if (checkedCount == 0) Check.Skip("no recipe planned");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"NoNeverIngredients: {checkedCount} recipes; protected ingredients never had: {(keptVanilla.Count == 0 ? "none" : string.Join("; ", keptVanilla.Take(10)))}");
+			Check.All(failures, "Recipes needing an ingredient never had");
+		}
+
+		// No live recipe has an empty ingredient list (a free craft): a shell is on only with ingredients, a planned recipe
+		// always gets some. Other mods' untouched recipes without ingredients are only logged
+		private static void NoEmptyLiveRecipes()
+		{
+			RequireApplied();
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			List<string> untouched = new();
+			int live = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				Recipe recipe = Main.recipe[i];
+				if (recipe.Disabled) continue;
+				live++;
+				if (plan.Ingredients[i] != null && plan.Ingredients[i].Length == 0) failures.Add($"{Name(plan.Results[i].type)}: planned with no ingredient");
+				if (recipe.requiredItem.Count > 0) continue;
+				string where = $"{Name(recipe.createItem.type)} (recipe {i}{(RecipeSystem.IsShell(i) ? ", shell" : "")})";
+				if (RecipeSystem.IsShell(i) || plan.Ingredients[i] != null || RecipeSystem.IsRandomized(i)) failures.Add(where);
+				else untouched.Add(where);
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"NoEmptyLiveRecipes: {live} live recipes; untouched ones without ingredients: {(untouched.Count == 0 ? "none" : string.Join(", ", untouched.Take(10)))}");
+			Check.All(failures, "Live recipes without ingredients");
+		}
+
+		// A swapped result never lands on a station later than its own tier and the allowance (RecipePlanner.SwapStationCap,
+		// StationLevel: a Tungsten Bow at the Lunar Crafting Station, a Thorn Chakram at the Crystal Ball, Glass at the Decay
+		// Chamber). The swapped recipes whose station is only had later with this plan are logged
+		private static void SwapStationsInTime()
+		{
+			RequireApplied();
+			RecipePlan plan = RecipePlanner.Get();
+			List<string> failures = new();
+			List<string> late = new();
+			int swapped = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				if (plan.SwapPartner[i] < 0 || plan.Twin[i] || Main.recipe[i].Disabled) continue;
+				swapped++;
+				int item = plan.Results[i].type;
+				int cap = RecipePlanner.SwapStationCap(item);
+				foreach (int tile in plan.Tiles[i] ?? RecipeSystem.OriginalTiles(i))
+				{
+					string where = $"{Name(item)} (recipe of {Name(RecipeSystem.OriginalResult(i))}) at {Stations.Name(tile)}";
+					if (RecipePlanner.StationLevel(tile) > cap) failures.Add($"{where}: station level {RecipePlanner.StationLevel(tile)}, at most {cap}");
+					int had = RecipePlanner.StationTier(tile, plan.Availability);
+					if (had > cap) late.Add($"{where}: placed from {Show(had)}");
+				}
+			}
+			if (swapped == 0) Check.Skip("no swapped recipe");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"SwapStationsInTime: {swapped} swapped recipes, {late.Count} on a station had after their cap: {(late.Count == 0 ? "none" : string.Join("; ", late.Take(10)))}");
+			Check.All(failures, "Swapped results on late stations");
 		}
 
 		private static string Ingredients((int type, int stack)[] ingredients) => string.Join(", ", ingredients.Select(x => $"{x.stack} {Name(x.type)}"));
