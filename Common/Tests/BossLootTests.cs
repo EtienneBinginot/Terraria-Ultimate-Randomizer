@@ -29,11 +29,12 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// With the permutation, what the bestiary and Recipe Browser read shows the world's drops (WorldDropsReport). The
-		// bestiary entry is compared with an expectation computed apart from the report: the final plan of the enemy (lucky)
-		// filtered to the entries our rules roll, each shown at least as many times as planned; and a vanilla drop of the
-		// enemy that moved away (not kept, not in its plan) is not shown. Its silenced vanilla rules report nothing, and the
-		// entry lists exactly the live report (the old elements removed). Shown for the test when the option is off, then
-		// restored
+		// bestiary entry is compared with an expectation computed apart from the report: what the enemy drops now (its plan
+		// without the entries progression locks) filtered to the entries our rules roll, each shown at least as many times as
+		// planned; an entry progression still locks is not shown (unless the same item also drops now or from a vanilla
+		// rule); and a vanilla drop of the enemy that moved away (not kept, not in its final plan) is not shown. Its silenced
+		// vanilla rules report nothing, and the entry lists exactly the live report (the old elements removed). Shown for the
+		// test when the option is off, then restored
 		private static void WorldDropsReported()
 		{
 			if (Main.dedServ) Check.Skip("no bestiary on a server");
@@ -45,7 +46,7 @@ namespace UltimateRandomizer.Common.Tests
 			WorldDropsReport.Complete();
 			bool was = WorldDropsReport.Showing;
 			List<string> failures = new();
-			int checkedIds = 0, movedAway = 0;
+			int checkedIds = 0, movedAway = 0, lockedChecked = 0;
 			try
 			{
 				if (!was) WorldDropsReport.Rebuild(true);
@@ -57,13 +58,19 @@ namespace UltimateRandomizer.Common.Tests
 					string name = $"{NpcName(netId)} ({netId})";
 					// Independent of WorldDropsReport: the plan, filtered here
 					List<PlannedDrop> plan = RandomNpcDropRule.Plan(netId, Main.expertMode, lucky: true);
-					List<int> expected = plan.Where(d => d.Item > ItemID.None && (d.Rolled || d.Extra || d.Guaranteed)).Select(d => d.Item).ToList();
-					if (expected.Count == 0) continue;
+					List<PlannedDrop> withLocked = RandomNpcDropRule.Plan(netId, Main.expertMode, includeLocked: true);
+					List<int> expected = withLocked.Where(d => !d.Locked && d.Item > ItemID.None && (d.Rolled || d.Extra || d.Guaranteed)).Select(d => d.Item).ToList();
+					HashSet<int> vanillaItems = LootSnapshot.ForNpc(netId).Select(d => d.itemId).ToHashSet();
+					List<int> locked = withLocked.Where(d => d.Locked && d.Item > ItemID.None).Select(d => d.Item)
+						.Where(i => !expected.Contains(i) && !vanillaItems.Contains(i)).Distinct().ToList();
+					if (expected.Count == 0 && locked.Count == 0) continue;
 					// A net ID without a page of its own (the Hornet's size variants) is shown on none
 					BestiaryEntry entry = WorldDropsReport.EntryOf(netId);
 					if (entry == null) continue;
 					checkedIds++;
 					List<int> shown = entry.Info.OfType<ItemDropBestiaryInfoElement>().Select(e => ((DropRateInfo)rateField.GetValue(e)).itemId).ToList();
+					lockedChecked += locked.Count;
+					foreach (int item in locked.Where(shown.Contains).Take(3)) failures.Add($"{name}: {ItemName(item)} still locked by progression but shown in the bestiary");
 					foreach (IGrouping<int, int> item in expected.GroupBy(i => i).Where(g => shown.Count(s => s == g.Key) < g.Count()).Take(3))
 					{
 						failures.Add($"{name}: {ItemName(item.Key)} planned {item.Count()} time(s), shown {shown.Count(s => s == item.Key)} in the bestiary");
@@ -88,7 +95,7 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				if (!was) WorldDropsReport.Rebuild(false);
 			}
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"World drops reported: {checkedIds} net IDs checked, {movedAway} moved-away vanilla drops checked");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"World drops reported: {checkedIds} net IDs checked, {movedAway} moved-away vanilla drops checked, {lockedChecked} locked entries checked");
 			if (checkedIds == 0) Check.Skip("no enemy follows the permutation");
 			Check.All(failures, "World drops reported");
 		}

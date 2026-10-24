@@ -146,7 +146,7 @@ Tests: {
 	BossPermutationConserves: The boss permutation loses and duplicates nothing: every shuffled boss drop and treasure bag content is still in some boss or bag
 	BossBagMatchesBoss: Each treasure bag holds the shuffled normal-mode drops of its boss, with their chance and stack in the bag they come from
 	BossPermutationTiers: Boss drops only move between bosses of the same group of tiers, with the same restrictions
-	WorldDropsReported: With the permutation, the bestiary and the drop reports show the world's drops: the plan of an enemy, not its silenced vanilla rules
+	WorldDropsReported: With the permutation, the bestiary and the drop reports show the world's drops: what an enemy drops now, not its silenced vanilla rules nor the entries progression still locks
 	BossRuntime: The bosses' and bags' drop rules really follow the permutation: silenced drops are rolled somewhere, nothing drops twice
 	PermutationConservation: Every vanilla drop entry of the enemies, bosses and boss bags is somewhere exactly once, at its place or moved
 	PermutedConditions: Moved drops only carry conditions they can meet: no seasonal or first-kill condition, item conditions stay with their item
