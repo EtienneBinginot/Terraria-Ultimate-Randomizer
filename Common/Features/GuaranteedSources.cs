@@ -1240,6 +1240,10 @@ namespace UltimateRandomizer.Common.Features
 	{
 		public const int Never = int.MaxValue;
 
+		// What set an item's base findability tier (tests, export): the world (materials, herbs, ores), an NPC's plan (netId)
+		// or a bag's content
+		public enum SourceKind { None, World, Npc, Bag }
+
 		// Does this world have that evil biome? Both in drunk worlds
 		private static bool HasEvil(bool crimson) => Main.drunkWorld || WorldGen.crimson == crimson;
 
@@ -1270,6 +1274,7 @@ namespace UltimateRandomizer.Common.Features
 		};
 
 		private static int[] baseTiers;
+		private static (SourceKind kind, int id)[] baseSources;
 		private static int[] tiers;
 		// Moved by each reset: a result computed across one (a reset during the computation) is returned but not kept. The
 		// caches built from findability (RecipePlanner, ShopPermutation) check it the same way before storing theirs
@@ -1352,10 +1357,23 @@ namespace UltimateRandomizer.Common.Features
 			return item > 0 && item < values.Length ? values[item] : Never;
 		}
 
+		// The source that gave BaseTier (the first one met at that tier); None when never found
+		public static (SourceKind kind, int id) BaseSource(int item)
+		{
+			BaseTiers();
+			(SourceKind kind, int id)[] values = baseSources;
+			return values != null && item > 0 && item < values.Length ? values[item] : (SourceKind.None, 0);
+		}
+
+		// The evil boss this world lacks, its segments and its minions (Creepers): their drops and bag are never a source, as
+		// its summon is not (its biome is missing; both evils in drunk worlds)
+		public static bool AbsentEvilSource(int npc) => BossPermutation.AbsentEvil(BossParts.Leader(npc), BiomeSlots.CurrentEvil);
+
 		public static void Reset()
 		{
 			version++;
 			baseTiers = null;
+			baseSources = null;
 			tiers = null;
 			// The shop-only items are the ones not found in time
 			ShopPermutation.Reset();
@@ -1367,9 +1385,14 @@ namespace UltimateRandomizer.Common.Features
 			int started = version;
 			int[] result = new int[ItemPool.Info.Length];
 			Array.Fill(result, Never);
-			void Add(int item, int tier)
+			(SourceKind kind, int id)[] sources = new (SourceKind, int)[result.Length];
+			void Add(int item, int tier, SourceKind kind = SourceKind.World, int id = 0)
 			{
-				if (item > 0 && item < result.Length) result[item] = Math.Min(result[item], Math.Max(0, tier));
+				if (item <= 0 || item >= result.Length) return;
+				tier = Math.Max(0, tier);
+				if (tier >= result[item]) return;
+				result[item] = tier;
+				sources[item] = (kind, id);
 			}
 			LootConfig loot = LootConfig.Instance;
 			// Drops and bag contents are locked by the item's true tier (DropHelper.LockGap), herbs by the same progression
@@ -1404,16 +1427,16 @@ namespace UltimateRandomizer.Common.Features
 					// The conditions of the place (permuted drops take the receiving enemy's: hardmode, Plantera...)
 					int from = ConditionTier(drop.Conditions, sourceTier);
 					if (from == Never) continue;
-					Add(drop.Item, Math.Max(from, Gated(drop.Item)));
+					Add(drop.Item, Math.Max(from, Gated(drop.Item)), SourceKind.Npc, npc);
 				}
 			}
 			for (int t = 0; t < Tiers.Count; t++)
 			{
 				// Event, moon and seasonal enemies (in the pool when SwapEventEnemies is on) are no reliable source
-				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n))) AddPlan(RandomNpcDropRule.Plan(npc, ProgressionSystem.PlannedExpert, lucky: true, guaranteed: false), t, npc);
+				foreach (int npc in EnemySwapPool.NaturalEnemies(t).Where(n => !GuaranteedSources.IsEventEnemy(n) && !AbsentEvilSource(n))) AddPlan(RandomNpcDropRule.Plan(npc, ProgressionSystem.PlannedExpert, lucky: true, guaranteed: false), t, npc);
 			}
 			// Not the evil boss this world lacks (BossPermutation.AbsentEvil): its summon needs its biome
-			foreach (int boss in NpcTiers.BossTypes.Where(b => !BossPermutation.AbsentEvil(b, BiomeSlots.CurrentEvil)))
+			foreach (int boss in NpcTiers.BossTypes.Where(b => !AbsentEvilSource(b)))
 			{
 				AddPlan(RandomNpcDropRule.Plan(boss, ProgressionSystem.PlannedExpert, lucky: true, guaranteed: false), NpcTiers.BaseTier(boss), boss);
 			}
@@ -1426,9 +1449,11 @@ namespace UltimateRandomizer.Common.Features
 				changed = false;
 				foreach ((int bag, List<PlannedDrop> plan) in bagPlans)
 				{
+					int unit = BossPermutation.BagUnit(bag);
+					// The absent evil boss's bag (Shadow Scales in a Crimson world): no source, should a drop give the bag itself
+					if (unit > 0 && AbsentEvilSource(unit)) continue;
 					int tier = BagContentTier(bag, result);
 					if (tier == Never) continue;
-					int unit = BossPermutation.BagUnit(bag);
 					foreach (PlannedDrop drop in plan)
 					{
 						if (drop.Chance < minChance || drop.Item <= 0 || drop.Item >= result.Length || !WorldAllows(drop.Conditions)) continue;
@@ -1439,12 +1464,17 @@ namespace UltimateRandomizer.Common.Features
 						if (dropTier < result[drop.Item])
 						{
 							result[drop.Item] = dropTier;
+							sources[drop.Item] = (SourceKind.Bag, bag);
 							changed = true;
 						}
 					}
 				}
 			}
-			if (started == version) baseTiers = result;
+			if (started == version)
+			{
+				baseSources = sources;
+				baseTiers = result;
+			}
 			return result;
 		}
 

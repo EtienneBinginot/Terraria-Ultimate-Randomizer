@@ -289,6 +289,7 @@ Tests: {
 	RecipesRebuilt: At least 90% of the recipes with replaceable ingredients get new ingredients
 	RecipeIngredientCount: A rebuilt recipe has the vanilla number of ingredients give or take the set spread, within the set maximum
 	RecipeIngredientTiers: A rebuilt recipe has no ingredient above its tier, and most have one of exactly its tier
+	IngredientTierSpread: The new ingredients of advanced rebuilt recipes also come from earlier tiers (at least 20 % two tiers or more below)
 	RecipeIngredientsAcyclic: Every crafted ingredient of a rebuilt recipe is made by a recipe planned before it
 	RecipeIngredientUseCaps: No material is an ingredient of more rebuilt recipes than its use cap
 	RecipeExamples: Logs 10 rebuilt recipes (Zenith and Chlorophyte armor among them), which really changed

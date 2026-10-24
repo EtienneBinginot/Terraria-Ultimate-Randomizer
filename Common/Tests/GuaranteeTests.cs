@@ -1060,6 +1060,16 @@ namespace UltimateRandomizer.Common.Tests
 					if (Findability.BaseTier(item) <= NpcTiers.BaseTier(absentBoss)) failures.Add($"{Name(item)} counted as found at tier {Findability.BaseTier(item)} through {Lang.GetNPCNameValue(absentBoss)}");
 				}
 				ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"AbsentEvilBoss: {Lang.GetNPCNameValue(absentBoss)} absent in this world, {checkedItems} of its items found through nothing else");
+				// No item is found through it: its segments, minions (Creepers) and bag included
+				int fromAbsent = 0;
+				for (int item = 1; item < ItemPool.Info.Length; item++)
+				{
+					(Findability.SourceKind kind, int id) = Findability.BaseSource(item);
+					bool absent = kind == Findability.SourceKind.Npc && (BossPermutation.AbsentEvil(BossParts.Leader(id), current) || id == NPCID.Creeper && current == WorldEvil.Corruption)
+						|| kind == Findability.SourceKind.Bag && absentBag > 0 && id == absentBag;
+					if (!absent) continue;
+					if (fromAbsent++ < 20) failures.Add($"{Name(item)} found at tier {Findability.BaseTier(item)} through {(kind == Findability.SourceKind.Bag ? Name(id) : Lang.GetNPCNameValue(id))} (absent evil)");
+				}
 			}
 			Check.All(failures, "Absent evil boss");
 		}

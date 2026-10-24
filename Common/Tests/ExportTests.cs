@@ -467,12 +467,20 @@ namespace UltimateRandomizer.Common.Tests
 				{
 				}
 				string recipe = recipesOf.TryGetValue(type, out List<int> rl) ? $"{rl.Count}: " + string.Join(", ", rl.Take(10)) : "";
+				(Findability.SourceKind kind, int sourceId) = Findability.BaseSource(type);
+				string source = kind switch
+				{
+					Findability.SourceKind.World => "world",
+					Findability.SourceKind.Npc => "npc " + NpcInternal(sourceId),
+					Findability.SourceKind.Bag => "bag " + Internal(sourceId),
+					_ => ""
+				};
 				rows.Add(Row(type, Internal(type), Name(type), ModOf(type), ItemPool.Info[type].Tier, Show(Findability.Tier(type)), Show(Findability.BaseTier(type)),
 					Few(drops.GetValueOrDefault(type)), Few(bags.GetValueOrDefault(type)), shopTier.TryGetValue(type, out int st) ? st.ToString() : "", recipe,
-					herbs.Contains(type) ? "herb" : "", OreMap.IsOre(type) ? "ore" : "", hosts, plan != null && type < plan.Availability.Length ? Show(plan.Availability[type]) : ""));
+					herbs.Contains(type) ? "herb" : "", OreMap.IsOre(type) ? "ore" : "", hosts, plan != null && type < plan.Availability.Length ? Show(plan.Availability[type]) : "", source));
 			}
 			return ("id\tinternal name\tname\tmod\ttier\tfindability tier\tfindability tier without guarantees\tenemy drop sources (count: first 10)\tbag sources (count: first 10)\t" +
-				"first shop tier\tplanned recipes (count: indexes)\therb\tore\tguaranteed hosts\trecipe availability tier", rows);
+				"first shop tier\tplanned recipes (count: indexes)\therb\tore\tguaranteed hosts\trecipe availability tier\tfindability source (without guarantees)", rows);
 		}
 
 		private const string Readme =
@@ -484,6 +492,6 @@ namespace UltimateRandomizer.Common.Tests
 			"shops.tsv: every vanilla shop entry at simulated unlocked tiers 0..9 with its replacement (slot kind: roll, guaranteed shop-only item, or unchanged) and price.\n" +
 			"chests.tsv: only the tier caps and a note: no chest planner API exists (contents are rolled per position).\n" +
 			"worldsources.tsv: best effort: herb replacement tables, guaranteed pot items per tier, ore map. Tree shake, Extractinator, Angler, fishing use runtime randomness and are not exported.\n" +
-			"findability.tsv: per item, the tier, findability tier (with and without guarantees), enemy drop and bag sources (count and first 10), first shop tier, planned recipes, herb/ore flags, guaranteed hosts and recipe availability tier.\n";
+			"findability.tsv: per item, the tier, findability tier (with and without guarantees), enemy drop and bag sources (count and first 10), first shop tier, planned recipes, herb/ore flags, guaranteed hosts, recipe availability tier and the source of the findability tier without guarantees (world, npc or bag).\n";
 	}
 }

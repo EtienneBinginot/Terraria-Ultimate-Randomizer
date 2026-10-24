@@ -58,6 +58,7 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("RecipesRebuilt", RecipesRebuilt);
 			TestRunner.Register("RecipeIngredientCount", RecipeIngredientCount);
 			TestRunner.Register("RecipeIngredientTiers", RecipeIngredientTiers);
+			TestRunner.Register("IngredientTierSpread", IngredientTierSpread);
 			TestRunner.Register("RecipeIngredientsAcyclic", RecipeIngredientsAcyclic);
 			TestRunner.Register("RecipeIngredientUseCaps", RecipeIngredientUseCaps);
 			TestRunner.Register("RecipeExamples", RecipeExamples);
@@ -1561,6 +1562,41 @@ namespace UltimateRandomizer.Common.Tests
 				$"without one, by tier: {(missing.Count == 0 ? "none" : string.Join(", ", missing.OrderBy(p => p.Key).Select(p => $"{p.Key}: {p.Value}")))}");
 			Check.All(failures, "Ingredients above the recipe's tier");
 			Check.That(share >= 0.85, $"only {share:P1} of the rebuilt recipes have an ingredient of their tier");
+		}
+
+		// The new ingredients of an advanced recipe are not all of its top tiers (RecipePlanner.TierFalloff, TopTierBonus, the
+		// tier sizes): of the rebuilt recipes of tier T >= 4 (keyed ones, no house, station, shell or special), at least
+		// MinLowShare of the new ingredients other than the key are had at T-2 or before. Logs the distribution by T
+		private static void IngredientTierSpread()
+		{
+			const double MinLowShare = 0.2;
+			RequireRandomIngredients();
+			RecipePlan plan = RecipePlanner.Get();
+			// T -> counts by distance below T (0, 1, 2, 3+)
+			Dictionary<int, int[]> byTier = new();
+			int total = 0, low = 0;
+			for (int i = 0; i < Count; i++)
+			{
+				int tier = plan.IngredientTiers[i];
+				if (tier < (int)Core.Tier.Hardmode || plan.Ingredients[i] == null || plan.Repaired[i] || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i) || SpecialRecipe(plan, i) || RecipePlanner.StationRecipe(i)) continue;
+				HashSet<int> vanilla = RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
+				foreach ((int type, _) in plan.Ingredients[i])
+				{
+					if (type == plan.PlannedKeys[i] || vanilla.Contains(type) || !RecipePlanner.IngredientReplaceable(type)) continue;
+					int avail = IngredientAvail(plan, i, type);
+					if (avail == Findability.Never) continue;
+					int below = Math.Clamp(tier - avail, 0, 3);
+					if (!byTier.TryGetValue(tier, out int[] counts)) byTier[tier] = counts = new int[4];
+					counts[below]++;
+					total++;
+					if (avail <= tier - 2) low++;
+				}
+			}
+			if (total < 30) Check.Skip($"only {total} new ingredients in rebuilt recipes of tier 4 or more");
+			double share = low / (double)total;
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"IngredientTierSpread: {low} of {total} new ingredients of recipes of tier 4+ are had at T-2 or before ({share:P1}); by T (T, T-1, T-2, T-3 or before): " +
+				string.Join("; ", byTier.OrderBy(p => p.Key).Select(p => $"{p.Key}: {string.Join("/", p.Value)}")));
+			Check.That(share >= MinLowShare, $"only {share:P1} of the new ingredients of advanced recipes come from two tiers or more below (at least {MinLowShare:P0} expected)");
 		}
 
 		// No loop: every ingredient of a rebuilt recipe is found (Findability), or given by a recipe planned before it (the

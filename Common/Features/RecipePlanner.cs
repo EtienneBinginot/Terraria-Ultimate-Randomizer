@@ -1941,12 +1941,21 @@ namespace UltimateRandomizer.Common.Features
 		// between them (a Zenith gets weapons often, never only weapons; weight-0 categories only come from the shape)
 		private const double ShapeBonus = 0.8;
 
-		// Weight of a tier for a slot: by its distance to the tier of the vanilla ingredient the slot follows (0, 1, 2), plus a
-		// pull towards the recipe's own tier and the one before, and a little for any other tier
-		private static readonly float[] BlurWeights = { 3f, 2f, 1f };
-		private const float TopTierWeight = 3f;
-		private const float BelowTopWeight = 1.5f;
-		private const float AnyTierWeight = 0.25f;
+		// Weight of a tier for a slot: TierFalloff to the power of its distance to the tier of the vanilla ingredient the slot
+		// follows (no cut-off: every earlier tier stays possible), TopTierBonus for the recipe's own tier, times the square root
+		// of the candidates of the category at that tier (a full tier such as tier 0 weighs more than a thin one). Until 1.7.4
+		// fixed weights per distance plus a pull towards T and T-1 gave about 80 % of an advanced recipe's new ingredients from
+		// its two top tiers; these give about half (tier-7 recipe), the rest spread over the earlier tiers
+		private const float TierFalloff = 0.6f;
+		private const float TopTierBonus = 1.5f;
+
+		// TierFalloff^distance by plain products (exact everywhere, unlike Pow: every machine plans the same recipes)
+		private static float Falloff(int distance)
+		{
+			float f = 1f;
+			for (int d = 0; d < distance; d++) f *= TierFalloff;
+			return f;
+		}
 
 		// The new ingredients count, in all, the vanilla count of the ingredients they replace (CountBase) times a factor in
 		// [0.5, 2.5], at least one each. Until 1.7.1 the counts followed the value (stacks = value / unit value), so every cheap
@@ -1957,11 +1966,13 @@ namespace UltimateRandomizer.Common.Features
 		public const double MaxCountFactor = MinCountFactor + CountFactorRange;
 
 		// Never more than this many times the vanilla value in all (no "25 arrows for a Hallowed Bar's recipe"), and the least
-		// weight a candidate keeps when its unit value suits its slot badly
+		// weight a candidate keeps when its stack is worth too much for its slot
 		public const double MaxValueFactor = 2.0;
 		private const double MinCloseness = 0.25;
-		// A slot may be worth down to this share of the value it stands for before its candidates weigh less (cheap is fine)
+		// A slot may be worth down to this share of the value it stands for before its candidates weigh less (cheap is fine),
+		// and never less than CheapFloor: a cheap early material for an advanced slot loses little (tier diversity)
 		private const double CheapCloseness = 0.25;
+		private const double CheapFloor = 0.6;
 
 		// Attempts of the first slot of a recipe keeping its result at the non-material categories of its shape
 		private const int ShapeAttempts = 6;
@@ -2714,13 +2725,14 @@ namespace UltimateRandomizer.Common.Features
 
 			// How well an item suits a slot worth share with count units of it: 1 when that stack is worth between CheapCloseness
 			// and MaxValueFactor times the share, less (gently: the square root, never below MinCloseness) for a stack worth more
-			// (bars for a cheap slot) or much less (dirt for a bar's worth). Soft, so a cheap recipe is not all Gel and plain blocks
+			// (bars for a cheap slot), and only a little (never below CheapFloor) for one worth much less (dirt for a bar's worth):
+			// the value guards the top (Affordable, the recipe's cap), cheap early materials keep the tiers varied
 			private double Closeness(int x, double share, int count)
 			{
 				if (share <= 0) return 1;
 				double worth = (double)UnitValue(x) * CountStack(result, count, x);
 				if (worth > share * MaxValueFactor) return Math.Max(MinCloseness, Math.Sqrt(share * MaxValueFactor / worth));
-				if (worth < share * CheapCloseness) return Math.Max(MinCloseness, Math.Sqrt(worth / (share * CheapCloseness)));
+				if (worth < share * CheapCloseness) return Math.Max(CheapFloor, Math.Sqrt(worth / (share * CheapCloseness)));
 				return 1;
 			}
 
@@ -2795,12 +2807,16 @@ namespace UltimateRandomizer.Common.Features
 				int[] groupTiers = groups.Select(g => GroupTier(g.group)).ToArray();
 				int cats = ItemCategories.Count;
 				bool[,] has = new bool[cats, top + 1];
+				// Candidates by category and tier (the tier weights: a full tier weighs more). The whole bucket, not only what this
+				// recipe may use (Usable is per recipe and per slot: too costly for every tier of every attempt)
+				int[,] sizes = new int[cats, top + 1];
 				bool[] hasCategory = new bool[cats];
 				for (int c = 0; c < cats; c++)
 				{
 					if (house && !MaterialLike((ItemCategory)c)) continue;
 					for (int t = 0; t <= top; t++)
 					{
+						sizes[c, t] = pool[c, t].Count;
 						if (pool[c, t].Count > 0) has[c, t] = hasCategory[c] = true;
 					}
 				}
@@ -2808,7 +2824,9 @@ namespace UltimateRandomizer.Common.Features
 				{
 					for (int k = 0; k < groups.Count; k++)
 					{
-						if (groupTiers[k] <= top) has[(int)groups[k].category, groupTiers[k]] = hasCategory[(int)groups[k].category] = true;
+						if (groupTiers[k] > top) continue;
+						has[(int)groups[k].category, groupTiers[k]] = hasCategory[(int)groups[k].category] = true;
+						sizes[(int)groups[k].category, groupTiers[k]]++;
 					}
 				}
 				// Category weights: the ingredient weights, plus the vanilla shape (a swap: SwapHostShape of the host's, the rest the
@@ -2964,7 +2982,7 @@ namespace UltimateRandomizer.Common.Features
 						{
 							if (!has[c, t]) continue;
 							int distance = Math.Abs(t - baseTier);
-							tiers.Add((t, (distance < BlurWeights.Length ? BlurWeights[distance] : 0f) + (t == top ? TopTierWeight : t == top - 1 ? BelowTopWeight : 0f) + AnyTierWeight));
+							tiers.Add((t, Falloff(distance) * (t == top ? TopTierBonus : 1f) * (float)Math.Sqrt(Math.Max(1, sizes[c, t]))));
 						}
 						if (tiers.Count == 0) continue;
 						int tier = WeightedPick(tiers, rng);
