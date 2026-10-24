@@ -362,6 +362,10 @@ namespace UltimateRandomizer.Common.Tests
 					}
 				}
 				if (Findability.Tier(item) > tier) failures.Add($"{Name(item)} found at tier {Findability.Tier(item)} > {tier}");
+				// A summon vanilla finds in the world is found by its own tier (+ allowance), not its boss's (the Truffle Worm
+				// was only found after Plantera)
+				if (Array.IndexOf(Protection.WorldSummons, item) >= 0 && Findability.Tier(item) > ItemPool.TierOf(item) + ItemPool.Allowance)
+					failures.Add($"{Name(item)} (tier {ItemPool.TierOf(item)}) found at tier {Findability.Tier(item)}");
 				if (item < plan.Availability.Length && plan.Availability[item] > tier) failures.Add($"{Name(item)} available at tier {plan.Availability[item]} > {tier}");
 			}
 			// Every station a live recipe needs can be placed (other mods' ones too: Stations.ModdedInfo)

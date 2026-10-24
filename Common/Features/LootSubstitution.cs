@@ -63,7 +63,8 @@ namespace UltimateRandomizer.Common.Features
 		public static int BagReplacement(int bagType, int itemType, System.Random bagRng)
 		{
 			int bagTier = LootSnapshot.BagTier(bagType);
-			return DropHelper.SpawnReplacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), itemType, bagTier, BagPlan.MinLimit(bagType), false, bagRng, 0f, out _);
+			return DropHelper.SpawnReplacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), itemType, bagTier, BagPlan.MinLimit(bagType), false, bagRng, 0f, out _,
+				BagPlan.Variant(bagType, itemType), BagPlan.MixesMaterials(bagType));
 		}
 
 		// The loot source is also used for things that are not drop tables: banners, the Big Mimic's item bursts (it is

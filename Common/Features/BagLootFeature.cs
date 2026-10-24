@@ -15,6 +15,8 @@ namespace UltimateRandomizer.Common.Features
 	// BossBagRule rolls instead
 	public class BagLootItem : GlobalItem
 	{
+		public override void Load() => WorldCaches.Reset += BagPlan.Reset;
+
 		public override void ModifyItemLoot(Item item, ItemLoot itemLoot)
 		{
 			List<IItemDropRule> rules = itemLoot.Get(false).Where(r => r != null).Distinct().ToList();
@@ -71,6 +73,59 @@ namespace UltimateRandomizer.Common.Features
 		// A boss bag's floor is its own tier: its own loot is never locked
 		public static int MinLimit(int bagType) => ItemID.Sets.BossBag[bagType] ? LootSnapshot.BagTier(bagType) : 0;
 
+		// Crates and other non-boss bags: their ore and bar entries become materials in general (DropHelper.MixedMaterialWeights)
+		public static bool MixesMaterials(int bagType) => !ItemID.Sets.BossBag[bagType];
+
+		// Re-rolls of an entry whose final item an earlier entry of the same bag already gives
+		private const int VarietyAttempts = 6;
+
+		// Per non-boss bag: the variant (DropHelper.Replacement) of each original item, 0 when its first roll is new to the bag
+		private static readonly Dictionary<int, Dictionary<int, int>> variants = new();
+
+		public static void Reset()
+		{
+			lock (variants) variants.Clear();
+		}
+
+		// The variant of the replacement of one original item of a bag: the first of a few deterministic re-rolls giving an item
+		// no earlier entry (in snapshot order) nor kept item of the bag gives. Seed and synced settings only (final plans,
+		// gating ignored): the same on every machine, and the same in the plan and when the bag is opened
+		public static int Variant(int bagType, int original)
+		{
+			if (!MixesMaterials(bagType)) return 0;
+			Dictionary<int, int> map;
+			lock (variants)
+			{
+				if (!variants.TryGetValue(bagType, out map)) variants[bagType] = map = BuildVariants(bagType);
+			}
+			return map.TryGetValue(original, out int variant) ? variant : 0;
+		}
+
+		private static Dictionary<int, int> BuildVariants(int bagType)
+		{
+			Dictionary<int, int> map = new();
+			List<int> originals = LootSnapshot.ForItem(bagType).Select(d => d.itemId).Distinct().ToList();
+			HashSet<int> used = originals.Where(DropHelper.KeepOriginal).ToHashSet();
+			int bagTier = LootSnapshot.BagTier(bagType);
+			int minLimit = MinLimit(bagType);
+			int bagKey = DetRandom.ItemKey(bagType);
+			foreach (int original in originals)
+			{
+				if (DropHelper.KeepOriginal(original)) continue;
+				int chosen = DropHelper.Replacement(RollKey.BagDrop, bagKey, original, bagTier, minLimit, true, mixMaterials: true);
+				for (int variant = 1; variant <= VarietyAttempts && used.Contains(chosen); variant++)
+				{
+					int item = DropHelper.Replacement(RollKey.BagDrop, bagKey, original, bagTier, minLimit, true, variant: variant, mixMaterials: true);
+					if (used.Contains(item)) continue;
+					map[original] = variant;
+					chosen = item;
+				}
+				used.Add(chosen);
+			}
+			ItemPool.ClearJackpot();
+			return map;
+		}
+
 		// The content of a bag in this world, from its final plan (everything unlocked). lucky: that final plan as it is.
 		// Otherwise what the bag gives now: the entries progression still locks give nothing and are left out (includeLocked:
 		// kept, flagged). No redistribution: vanilla rules roll the bag (the boss permutation: PermutedPlan)
@@ -89,7 +144,8 @@ namespace UltimateRandomizer.Common.Features
 				int lockGap = 0;
 				if (enabled)
 				{
-					item = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), entry.itemId, bagTier, minLimit, true);
+					item = DropHelper.Replacement(RollKey.BagDrop, DetRandom.ItemKey(bagType), entry.itemId, bagTier, minLimit, true,
+						variant: Variant(bagType, entry.itemId), mixMaterials: MixesMaterials(bagType));
 					(min, max) = DropHelper.ScaledRange(entry.itemId, entry.stackMin, entry.stackMax, item);
 					if (!lucky && !DropHelper.KeepOriginal(entry.itemId)) lockGap = DropHelper.LockGap(item, minLimit);
 				}

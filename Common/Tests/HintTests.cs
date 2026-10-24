@@ -585,7 +585,7 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			List<string> failures = new();
 			foreach ((int item, Tier expected) in new[] { (ItemID.SuspiciousLookingEye, Tier.PreBoss), (ItemID.MechanicalEye, Tier.Hardmode), (ItemID.LihzahrdPowerCell, Tier.PostPlantera),
-				(ItemID.SlimeCrown, Tier.PreBoss), (ItemID.TruffleWorm, Tier.PostPlantera), (ItemID.CelestialSigil, Tier.PostCultist) })
+				(ItemID.SlimeCrown, Tier.PreBoss), (ItemID.TruffleWorm, Tier.Hardmode), (ItemID.CelestialSigil, Tier.PostCultist) })
 			{
 				int tier = Protection.SummonTier(item);
 				if (tier != (int)expected) failures.Add($"{HintFacts.ItemName(item)}: tier {tier}, expected {(int)expected}");

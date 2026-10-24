@@ -1885,9 +1885,10 @@ namespace UltimateRandomizer.Common.Tests
 			{
 				int item = results[i];
 				if (plan.Ingredients[i] == null || plan.IngredientTiers[i] < 0 || plan.Repaired[i] || plan.Twin[i] || RecipeSystem.IsShell(i) || RecipeSystem.HouseRecipe(i)) continue;
-				// Protected results, upgrades and stations keep their vanilla level (RecipePlanner.ResultFloor)
+				// Protected results, upgrades and the planned station placers keep their level (RecipePlanner.ResultFloor); the
+				// other items placing a basic or progression station are checked (an Obsidian Sink was doable a tier early)
 				if (!ItemPool.IsRandomizable(item) || ItemPool.IsSpecial(item)) continue;
-				if (Stations.PlacedTile(item, out int tile) && Stations.Info(tile).Kind is StationKind.Basic or StationKind.Progression || RecipePlanner.StationRecipe(i)) continue;
+				if (RecipePlanner.StationRecipe(i) || RecipePlanner.StationPlacer(item, out _)) continue;
 				int floor = Tiers.Clamp(Math.Max(ItemPool.Info[item].Tier, ItemPool.Info[item].TrueTier));
 				string where = $"{Name(RecipeSystem.OriginalResult(i))}{(plan.SwapPartner[i] >= 0 ? " -> " + Name(item) : "")} (tier {floor}, T {plan.IngredientTiers[i]}, " +
 					$"key {(plan.PlannedKeys[i] > 0 ? Name(plan.PlannedKeys[i]) : "none")}): doable at {Show(doable[i])} ({Ingredients(plan.Ingredients[i])})";
@@ -2149,10 +2150,31 @@ namespace UltimateRandomizer.Common.Tests
 			RecipePlan plan = RecipePlanner.Get();
 			List<string> failures = new();
 			List<string> keptVanilla = new();
-			int checkedCount = 0;
+			int checkedCount = 0, leftAlone = 0;
+			// Other mods' recipes left alone (Magic Storage's Cooked Marshmallow needs a campfire nearby: a condition of its mod)
+			// keep their ingredients: a vanilla ingredient of theirs is had somewhere, a shop included (the plan counts none:
+			// a shop-only item's added slot, or any possible vanilla shop entry when shops are not randomized)
+			List<ShopPermutation.Place> places = null;
+			bool Sold(int type)
+			{
+				if (ShopPermutation.Seller(type, out _, out _)) return true;
+				if (EconomyConfig.Instance.RandomizeShops) return false;
+				places ??= ShopPermutation.CollectPlaces(SeedSystem.WorldSeed);
+				return places.Any(p => p.Original == type && p.Possible);
+			}
 			for (int i = 0; i < Count; i++)
 			{
-				if (Main.recipe[i].Disabled || plan.Twin[i] || RecipeSystem.LeftAlone(i)) continue;
+				if (Main.recipe[i].Disabled || plan.Twin[i]) continue;
+				if (RecipeSystem.LeftAlone(i))
+				{
+					leftAlone++;
+					foreach ((int type, _) in RecipeSystem.OriginalIngredients(i))
+					{
+						if (type <= 0 || type >= ItemID.Count || !ItemPool.IsRandomizable(type) || IngredientAvail(plan, i, type) < Findability.Never || Sold(type)) continue;
+						failures.Add($"{Name(type)} in {Name(RecipeSystem.OriginalResult(i))} (left alone: {Main.recipe[i].Mod?.Name ?? "?"}), had nowhere");
+					}
+					continue;
+				}
 				bool planned = plan.Ingredients[i] != null;
 				if (!planned && !RecipePlanner.Rebuildable(i)) continue;
 				checkedCount++;
@@ -2166,7 +2188,7 @@ namespace UltimateRandomizer.Common.Tests
 				}
 			}
 			if (checkedCount == 0) Check.Skip("no recipe planned");
-			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"NoNeverIngredients: {checkedCount} recipes; protected ingredients never had: {(keptVanilla.Count == 0 ? "none" : string.Join("; ", keptVanilla.Take(10)))}");
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"NoNeverIngredients: {checkedCount} recipes, {leftAlone} left alone; protected ingredients never had: {(keptVanilla.Count == 0 ? "none" : string.Join("; ", keptVanilla.Take(10)))}");
 			Check.All(failures, "Recipes needing an ingredient never had");
 		}
 

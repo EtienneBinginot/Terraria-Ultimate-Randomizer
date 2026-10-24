@@ -1695,6 +1695,15 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (int bag in LootSnapshot.Items.Keys)
 			{
 				ValidatePlan(Lang.GetItemNameValue(bag), BagPlan.Plan(bag), failures);
+				// Variety (BagPlan.Variant): no item given by three different entries of a crate or other non-boss bag under the
+				// same conditions (a fishing crate's ore entries used to share a few ores and bars)
+				if (!BagPlan.MixesMaterials(bag) || !LootSubstitutionItem.BagEnabled(bag, LootConfig.Instance)) continue;
+				foreach (var group in BagPlan.Plan(bag, lucky: true).Where(d => d.Original > 0 && d.Item != d.Original)
+					.GroupBy(d => (d.Item, string.Join(",", (d.Conditions ?? new List<IItemDropRuleCondition>()).Select(c => c.GetType().FullName).OrderBy(n => n)))))
+				{
+					int sources = group.Select(d => d.Original).Distinct().Count();
+					if (sources >= 3) failures.Add($"{Lang.GetItemNameValue(bag)}: {Lang.GetItemNameValue(group.Key.Item)} replaces {sources} entries");
+				}
 			}
 			Check.All(failures, "Invalid bag contents");
 		}

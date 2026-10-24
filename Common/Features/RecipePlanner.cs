@@ -292,13 +292,15 @@ namespace UltimateRandomizer.Common.Features
 		// early (TierAllowance), and so does the vanilla doable tier T starts from: Findability counts gated drops from
 		// UnlockTier, so Chlorophyte Ore "found" in early hardmode gave the Chlorophyte Pickaxe a Cursed Flame key. Random drops
 		// keep that allowance; a recipe rebuilt for the item keeps its level. Only randomizable items: not an upgrade (its own
-		// tier: ResultTier), nor a protected result or an assignable station (the station plan and the guarantees count them
-		// from their vanilla level, RecipeTier)
+		// tier: ResultTier), nor a protected result or the planned placer of an assignable station (StationPlacer: the station plan
+		// and the guarantees count it from the station's tier). The other items placing that station (an Obsidian Sink, a
+		// Lihzahrd Work Bench) are furniture like any other: until 1.7.3 they kept their vanilla level too, and the Obsidian
+		// Sink (tier 2) was doable at tier 1 (Hellstone counted a tier early)
 		public static int ResultFloor(int result)
 		{
 			if (!ProgressionConfig.Instance.TierGating || GeneralConfig.Instance.RandomizerMode != RandomizerMode.Coherent) return 0;
 			if (!ItemPool.IsRandomizable(result) || ItemPool.IsSpecial(result)) return 0;
-			if (Stations.PlacedTile(result, out int tile) && Assignable(tile)) return 0;
+			if (Stations.PlacedTile(result, out int tile) && Assignable(tile) && StationPlacer(result, out _)) return 0;
 			return Tiers.Clamp(Math.Max(ItemPool.TierOf(result), ItemPool.TrueTierOf(result)));
 		}
 

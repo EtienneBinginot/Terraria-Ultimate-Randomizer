@@ -87,10 +87,13 @@ namespace UltimateRandomizer.Common.Core
 		// The tier a summon is needed at. A boss summon: the tier before the one its boss opens, when that boss is the next
 		// step (the Suspicious Looking Eye from the start, the Lihzahrd Power Cell after Plantera), whatever its rarity: a
 		// cheap-looking summon was offered by the Guide long before its boss. Other summons: their own tier, not before their
-		// event matters (NeededFrom, which also keeps the Guide Voodoo Doll until the Underworld is in reach)
+		// event matters (NeededFrom, which also keeps the Guide Voodoo Doll until the Underworld is in reach). A summon found in
+		// the world (WorldSummons) is never needed after the tier vanilla gives it: the Truffle Worm is caught from hardmode,
+		// although Duke Fishron's loot is post-Golem (until 1.7.3 it was only guaranteed after Plantera)
 		public static int SummonTier(int item)
 		{
 			int tier = SummonedBoss.TryGetValue(item, out int boss) ? NpcTiers.BaseTier(boss) - 1 : ItemPool.TierOf(item);
+			if (Array.IndexOf(WorldSummons, item) >= 0 && ItemPool.IsValid(item)) tier = Math.Min(tier, ItemPool.TierOf(item));
 			if (NeededFrom.TryGetValue(item, out Tier from)) tier = Math.Max(tier, (int)from);
 			return Tiers.Clamp(tier);
 		}

@@ -451,7 +451,7 @@ namespace UltimateRandomizer.Common.Core
 		// 2, no wall in GatingLimit and UnlockTier), to measure how much of a world's plan the wall changes
 		public static bool LegacyGating;
 
-		private static int Allowance => LegacyGating ? 2 : ProgressionConfig.Instance.TierAllowance;
+		public static int Allowance => LegacyGating ? 2 : ProgressionConfig.Instance.TierAllowance;
 
 		// The highest tier given before hardmode (except jackpots and boss floors)
 		public const int PreHardmodeCap = (int)Tier.PostSkeletron;

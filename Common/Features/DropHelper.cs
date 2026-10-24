@@ -19,12 +19,15 @@ namespace UltimateRandomizer.Common.Features
 		// The item replacing an original drop of a source (enemy or bag): the same every time in a world, unless a
 		// surprise happens (surpriseRng null = never, for the journal and the tests). wildRng: runtime drops only (madness)
 		// wildMultiplier: scales the madness chance (RandomNpcDropRule.JackpotWorth)
-		public static int Replacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky, Random surpriseRng = null, Random wildRng = null, float wildMultiplier = 1f)
+		// variant > 0: a re-roll of the same entry (BagPlan.Variant: an item already in the bag). mixMaterials: an ore or bar
+		// becomes any material (MixedMaterialWeights), for the non-boss bags whose ore entries would repeat a small pool
+		public static int Replacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky, Random surpriseRng = null, Random wildRng = null, float wildMultiplier = 1f,
+			int variant = 0, bool mixMaterials = false)
 		{
 			// ItemPool.LastJackpotGap then says whether this replacement is a jackpot
 			ItemPool.ClearJackpot();
 			if (KeepOriginal(originalItem)) return originalItem;
-			RollRequest request = ReplacementRequest(rollKind, sourceKey, originalItem, sourceTier, minLimit);
+			RollRequest request = ReplacementRequest(rollKind, sourceKey, originalItem, sourceTier, minLimit, variant, mixMaterials);
 			request.IgnoreGating = lucky;
 			request.Wild = wildRng != null && wildMultiplier > 0f;
 			request.WildRng = wildRng;
@@ -32,17 +35,27 @@ namespace UltimateRandomizer.Common.Features
 			return ItemPool.RollReplacement(request, LootConfig.Instance.SurpriseChance, surpriseRng);
 		}
 
-		private static RollRequest ReplacementRequest(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit) => new()
+		private static RollRequest ReplacementRequest(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, int variant = 0, bool mixMaterials = false)
 		{
-			Keys = new[] { rollKind, sourceKey, DetRandom.ItemKey(originalItem) },
-			SourceTier = Tiers.Clamp(Math.Max(sourceTier, ItemPool.Info[originalItem].Tier)),
-			OriginalItem = originalItem,
-			Policy = CategoryPolicy.SameAsOriginal,
-			TierJitterDown = 0,
-			TierJitterUp = 1,
-			AllowJackpot = true,
-			MinLimit = minLimit
-		};
+			RollRequest request = new()
+			{
+				// Variant 0 keeps the keys of before: only the re-rolled entries change in an ongoing world
+				Keys = variant > 0 ? new[] { rollKind, sourceKey, DetRandom.ItemKey(originalItem), RollKey.BagVariety, variant } : new[] { rollKind, sourceKey, DetRandom.ItemKey(originalItem) },
+				SourceTier = Tiers.Clamp(Math.Max(sourceTier, ItemPool.Info[originalItem].Tier)),
+				OriginalItem = originalItem,
+				Policy = CategoryPolicy.SameAsOriginal,
+				TierJitterDown = 0,
+				TierJitterUp = 1,
+				AllowJackpot = true,
+				MinLimit = minLimit
+			};
+			if (mixMaterials && ItemPool.Info[originalItem].Category == ItemCategory.OreBar)
+			{
+				request.Policy = CategoryPolicy.Weighted;
+				request.Weights = MixedMaterialWeights.Instance;
+			}
+			return request;
+		}
 
 		// Tiers by which progression still locks an item of a final plan (0: unlocked). Enemy drops and bag contents are not
 		// replaced by a stand-in while locked: they simply do not drop. Only Coherent mode gates (Shuffle and Chaos never did)
@@ -58,12 +71,13 @@ namespace UltimateRandomizer.Common.Features
 		// as a lucky roll that far above the limit (ItemPool.LuckyKeepChance), a jackpot when useful. Unlocked: maybe a
 		// surprise (a gated roll: just something else) or the madness tail (wildMultiplier > 0).
 		// rng: the runtime rng (null: no surprise, luck nor madness). jackpotGap: the jackpot mark of the result
-		public static int SpawnReplacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky, Random rng, float wildMultiplier, out int jackpotGap)
+		public static int SpawnReplacement(int rollKind, int sourceKey, int originalItem, int sourceTier, int minLimit, bool lucky, Random rng, float wildMultiplier, out int jackpotGap,
+			int variant = 0, bool mixMaterials = false)
 		{
 			jackpotGap = 0;
 			ItemPool.ClearJackpot();
 			if (KeepOriginal(originalItem)) return originalItem;
-			RollRequest request = ReplacementRequest(rollKind, sourceKey, originalItem, sourceTier, minLimit);
+			RollRequest request = ReplacementRequest(rollKind, sourceKey, originalItem, sourceTier, minLimit, variant, mixMaterials);
 			request.IgnoreGating = true;
 			int planned = ItemPool.Roll(request);
 			int locked = LockGap(planned, minLimit);
@@ -79,6 +93,7 @@ namespace UltimateRandomizer.Common.Features
 				RollRequest surprise = request;
 				surprise.Keys = new[] { rollKind, sourceKey, DetRandom.ItemKey(originalItem), RollKey.Surprise, rng.Next() };
 				surprise.Policy = CategoryPolicy.Weighted;
+				surprise.Weights = null;
 				surprise.IgnoreGating = false;
 				return ItemPool.Roll(surprise);
 			}
@@ -125,5 +140,15 @@ namespace UltimateRandomizer.Common.Features
 			item.stack = Math.Max(1, stack);
 			item.Prefix(-1);
 		}
+	}
+
+	// What the ore and bar entries of crates and other non-boss bags become: materials in general, ores and bars still
+	// among them (a fishing crate's dozen ore entries would otherwise share the few ores and bars of its tiers)
+	public class MixedMaterialWeights : WeightTable
+	{
+		public static readonly MixedMaterialWeights Instance = new();
+
+		public int Material = 60;
+		public int OreBar = 40;
 	}
 }

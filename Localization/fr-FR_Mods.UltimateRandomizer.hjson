@@ -305,7 +305,7 @@ Tests: {
 	HouseRecipesSimple: La torche, la plateforme en bois et la porte en bois ont une recette aléatoire simple : un ou deux matériaux de départ, quelques-uns de chaque, valant au plus le double de la recette vanilla, sur une station de base ou à la main
 	IngredientCountCaps: Aucun nouvel ingrédient n'est demandé au-delà de son plafond : quelques exemplaires d'un objet qu'on ne peut que fabriquer, une dizaine d'un objet lent (gemmes, étoiles filantes, herbes, poissons, créatures, éclats, âmes)
 	IngredientCountsFromVanilla: Les nouveaux ingrédients d'une recette reconstruite totalisent au plus deux fois et demie les ingrédients vanilla qu'ils remplacent (note la part des quantités au plafond et la recette de la barre de météorite)
-	NoNeverIngredients: Aucune recette planifiée active ne demande un ingrédient impossible à obtenir (un miroir de glace, une guimauve) ; une recette gardée vanilla le voit remplacé
+	NoNeverIngredients: Aucune recette planifiée active ne demande un ingrédient impossible à obtenir (un miroir de glace, une guimauve) ; une recette gardée vanilla le voit remplacé, et les ingrédients d'une recette d'un autre mod laissée intacte s'obtiennent quelque part (boutiques comprises)
 	NoEmptyLiveRecipes: Aucune recette active n'a une liste d'ingrédients vide (une fabrication gratuite)
 	SwapStationsInTime: Un résultat échangé n'arrive jamais sur une station plus tardive que son propre palier plus la tolérance (pas d'arc en tungstène à l'établi lunaire)
 	BellCurveShape: Les stats des ennemis suivent une cloche : surtout normales, quelques % loin de la normale
@@ -329,7 +329,7 @@ Tests: {
 	AdaptiveAppliedAtSpawn: Les ennemis reçoivent les multiplicateurs adaptatifs à leur apparition
 	AdaptiveBossParts: Les parties de boss sont renforcées comme leur boss
 	AdaptiveNotCompounded: Un ennemi transformé garde ses multiplicateurs adaptatifs sans les cumuler
-	BagPlansValid: Tous les contenus de sacs sont valides
+	BagPlansValid: Tous les contenus de sacs sont valides, sans objet répété dans une caisse
 	BagsKeepCoins: Les sacs de boss gardent leurs pièces
 	CrittersDrop: Les critters reçoivent leur part du petit drop fréquent
 	WildTail: La queue de folie donne la part prévue au-delà de la limite, plus rare à chaque palier

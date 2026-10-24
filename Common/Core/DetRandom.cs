@@ -59,6 +59,8 @@ namespace UltimateRandomizer.Common.Core
 		public const int BossPermutation = 43;
 		// Where each shop-only item is sold (ShopPermutation), keyed by place and item
 		public const int ShopPermutation = 44;
+		// The re-rolls of a bag entry whose item an earlier entry of the same bag already gives (BagPlan.Variant)
+		public const int BagVariety = 45;
 		public const int Fallback = 0xFA11;
 	}
 

@@ -305,7 +305,7 @@ Tests: {
 	HouseRecipesSimple: Torch, Wood Platform and Wooden Door have a simple random recipe: one or two start materials, a few of each, worth at most twice the vanilla recipe, at a basic station or by hand
 	IngredientCountCaps: No new ingredient asks for more than its count cap: a few of a crafted-only item, about ten of a slow one (gems, Fallen Stars, herbs, fish, critters, shards, souls)
 	IngredientCountsFromVanilla: The new ingredients of a rebuilt recipe count at most two and a half times the vanilla ingredients they replace (logs the share of amounts at the cap and the Meteorite Bar's recipe)
-	NoNeverIngredients: No live planned recipe needs an ingredient that is never had (an Ice Mirror, a Marshmallow); a recipe kept vanilla gets a replacement for it
+	NoNeverIngredients: No live planned recipe needs an ingredient that is never had (an Ice Mirror, a Marshmallow); a recipe kept vanilla gets a replacement for it, and the ingredients of another mod's recipe left alone are had somewhere (a shop included)
 	NoEmptyLiveRecipes: No live recipe has an empty ingredient list (a free craft)
 	SwapStationsInTime: A swapped result never lands on a station later than its own tier and the allowance (no Tungsten Bow at the Lunar Crafting Station)
 	BellCurveShape: Enemy stats are bell-shaped: mostly normal, a few % far from it
@@ -329,7 +329,7 @@ Tests: {
 	AdaptiveAppliedAtSpawn: Enemies get the adaptive multipliers when they spawn
 	AdaptiveBossParts: Boss parts are scaled like their boss
 	AdaptiveNotCompounded: A transformed enemy keeps its adaptive multipliers without stacking them
-	BagPlansValid: Every bag content is valid
+	BagPlansValid: Every bag content is valid, no item repeated in a crate
 	BagsKeepCoins: Boss bags keep their coins
 	CrittersDrop: Critters get their share of the small frequent drop
 	WildTail: The madness tail gives the expected share above the limit, rarer for each tier

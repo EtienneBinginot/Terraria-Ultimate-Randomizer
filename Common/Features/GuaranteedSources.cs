@@ -351,7 +351,9 @@ namespace UltimateRandomizer.Common.Features
 			{
 				if (!Protection.IsBossSummon(type) || !ItemPool.IsRandomizable(type)) continue;
 				if (type == ItemID.WormFood && evil == WorldEvil.Crimson || type == ItemID.BloodySpine && evil == WorldEvil.Corruption) continue;
-				yield return new Requirement { Item = type, Tier = Protection.SummonTier(type), Station = true };
+				// The Truffle Worm on the glowing mushroom enemies when they can carry it, as in vanilla (Requirement.Biomes)
+				SpawnBiome[] biomes = type == ItemID.TruffleWorm ? new[] { SpawnBiome.Mushroom, SpawnBiome.UndergroundMushroom } : null;
+				yield return new Requirement { Item = type, Tier = Protection.SummonTier(type), Station = true, Biomes = biomes };
 			}
 		}
 
