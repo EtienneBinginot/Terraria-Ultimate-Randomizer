@@ -1433,18 +1433,18 @@ Configs: {
 		}
 
 		PermutationSurpriseChance: {
-			Label: "Surprise drops (permutation, %)"
-			Tooltip: "Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays. Copies beyond the limits below always become surprises."
+			Label: Surprise drops (permutation, %)
+			Tooltip: Permutation style only: share of the shuffled drops (except materials, ores and bars) that become a random item of the enemy's level, with the same conditions and the same chance (lower for a rare item: a frequent drop does not become a frequent weapon). Every item except blocks, critters and ores keeps one copy that is never replaced, so an item dropped by a single enemy always stays. Copies beyond the limits below always become surprises.
 		}
 
 		PermutationDuplicateCopies: {
-			Label: "Max copies per item (permutation)"
-			Tooltip: "Permutation style only: vanilla gives the same item to many enemies (every zombie its Shackle and Zombie Arm, every slime its Slime Staff). An item (except materials, ores and bars) keeps at most this many shuffled copies, the most reachable ones; every other copy always becomes a surprise. Classic and Expert drops are counted apart. 0: no limit."
+			Label: Max copies per item (permutation)
+			Tooltip: Permutation style only: vanilla gives the same item to many enemies (every zombie its Shackle and Zombie Arm, every slime its Slime Staff). An item (except materials, ores and bars) keeps at most this many shuffled copies, the most reachable ones; every other copy always becomes a surprise. Classic and Expert drops are counted apart. 0: no limit.
 		}
 
 		PermutationMaterialCopies: {
-			Label: "Max copies per material (permutation)"
-			Tooltip: "Permutation style only: the same limit for materials (Gel, Lens...), so recipes still find them on several enemies. Ores and bars are never limited. 0: no limit."
+			Label: Max copies per material (permutation)
+			Tooltip: Permutation style only: the same limit for materials (Gel, Lens...), so recipes still find them on several enemies. Ores and bars are never limited. 0: no limit.
 		}
 
 		EnemiesWithoutDropsCanDrop: {
