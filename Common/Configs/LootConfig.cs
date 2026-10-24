@@ -67,7 +67,8 @@ namespace UltimateRandomizer.Common.Configs
 		// Fixed chance for every slot
 		Simple,
 		// The original drops of the enemies are shuffled between enemies of the same tier (each keeps its own chance and
-		// stack, the conditions are the receiving enemy's), a few of them turned into surprises (PermutationSurpriseChance),
+		// stack, the conditions are the receiving enemy's), a few of them turned into surprises (PermutationSurpriseChance,
+		// and every copy of an item beyond PermutationDuplicateCopies / PermutationMaterialCopies),
 		// plus random extra drops at vanilla-like rates (PermutationExtraSlots)
 		Permutation
 	}
@@ -109,11 +110,24 @@ namespace UltimateRandomizer.Common.Configs
 
 		// Permutation style: share (%) of the shuffled drops (not materials, ores or bars) that become a random item of the
 		// enemy's level, keeping the conditions of the entry and its chance (capped by a vanilla-like rate for the new item);
-		// never the keeper copy every item but blocks, critters and ores keeps (DropPermutation.SurpriseCandidates)
+		// never the keeper copy every item but blocks, critters and ores keeps (DropPermutation.SurpriseCandidates). The
+		// copies beyond PermutationDuplicateCopies / PermutationMaterialCopies are always surprises, whatever this chance
 		[Range(0f, 100f)]
 		[Increment(1f)]
-		[DefaultValue(10f)]
+		[DefaultValue(15f)]
 		public float PermutationSurpriseChance;
+
+		// Permutation style: the permuted copies an item keeps in each access class (the most reachable ones); every other copy
+		// becomes a surprise. Vanilla gives each zombie variant its Shackle and each slime its Slime Staff: without a cap the
+		// early loot looks vanilla. 0: no limit. Not materials (below), ores, bars, blocks or critters
+		[Range(0, 20)]
+		[DefaultValue(2)]
+		public int PermutationDuplicateCopies;
+
+		// The same cap for materials (Gel, Lens...), higher: recipes expect several enemies to give them. 0: no limit
+		[Range(0, 20)]
+		[DefaultValue(4)]
+		public int PermutationMaterialCopies;
 
 		[DefaultValue(true)]
 		public bool EnemiesWithoutDropsCanDrop;

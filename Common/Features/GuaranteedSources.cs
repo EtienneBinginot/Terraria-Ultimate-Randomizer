@@ -971,6 +971,13 @@ namespace UltimateRandomizer.Common.Features
 		// How many biomes may carry the items of a tier in this world, hosts not loaded yet (tests)
 		public static int CandidateBiomes(int tier) => CandidateBiomeList(tier).Count;
 
+		// The enemies that may guard a station of a tier: met steadily enough (GuardianTime) in a biome open at that tier
+		// (PlaceGuardian's options; a tier without any keeps none). excluded: the station's ExcludedBiome (neither that biome
+		// nor an enemy met only there)
+		public static HashSet<int> GuardianCandidates(int tier, SpawnBiome? excluded = null) =>
+			BiomeCandidates(Tiers.Clamp(tier)).Where(b => excluded is not SpawnBiome x || b.Biome != (int)x).SelectMany(b => b.Hosts)
+				.Where(h => GuardianTime(h.day, h.night) != null && !(excluded is SpawnBiome x && OnlyIn(h.npc, x))).Select(h => h.npc).ToHashSet();
+
 		// The biomes that may carry the items of a tier in the current spawn map, whatever the hosts' load (tests)
 		public static List<int> CandidateBiomeList(int tier) => BiomeCandidates(tier).Where(b => ChooseHosts(b, HostLimit, new HostLoads(), false) != null).Select(b => b.Biome).ToList();
 

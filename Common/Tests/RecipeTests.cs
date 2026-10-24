@@ -93,7 +93,7 @@ namespace UltimateRandomizer.Common.Tests
 		// left out, so no station relies on its guardian through another one); its new ingredients are found, never crafted:
 		// a critical station's (Work Bench, Furnace, Anvil, Table, Chair) among the start materials (RecipePlanner.StartMaterials:
 		// gathered around the spawn in the first minutes, no ore for the Work Bench), another's had by its tier in the biomes
-		// open then (StationMaterialTier). The Work Bench is made by hand. No station shimmers back into its ingredients. A few
+		// open then (StationMaterialTier); never its vanilla ingredient types alone. The Work Bench is made by hand. No station shimmers back into its ingredients. A few
 		// recipes are logged
 		private static void StationsCraftable()
 		{
@@ -134,6 +134,11 @@ namespace UltimateRandomizer.Common.Tests
 				foreach (int i in recipes.Where(i => plan.Ingredients[i] != null && !plan.Repaired[i]))
 				{
 					HashSet<int> vanilla = RecipeSystem.OriginalIngredients(i).Select(x => x.type).ToHashSet();
+					// A swapped recipe: the vanilla types of its item's recipe (its proxy) are vanilla too
+					int partner = plan.SwapPartner != null && i < plan.SwapPartner.Length ? plan.SwapPartner[i] : -1;
+					HashSet<int> vanillaLike = partner >= 0 && partner != i ? vanilla.Concat(RecipeSystem.OriginalIngredients(partner).Select(x => x.type)).ToHashSet() : vanilla;
+					// Rebuilt, never its vanilla ingredient types alone (a Work Bench of 12 Wood looks vanilla)
+					if (vanillaLike.Count > 0 && plan.Ingredients[i].All(x => vanillaLike.Contains(x.type))) failures.Add($"{name}: rebuilt from its vanilla ingredients only ({Describe(i)})");
 					foreach ((int type, _) in plan.Ingredients[i])
 					{
 						if (vanilla.Contains(type) && !RecipePlanner.IngredientReplaceable(type)) continue;

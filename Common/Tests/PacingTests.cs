@@ -73,12 +73,12 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// anyStyle: the test simulates both drop styles itself (PacingModel.Simulate with an explicit style)
-		private static void RequireDefaults(bool anyStyle = false)
+		internal static void RequireDefaults(bool anyStyle = false)
 		{
 			LootConfig loot = LootConfig.Instance;
 			EnemiesConfig enemies = EnemiesConfig.Instance;
 			string[] lootFields = { "SurpriseChance", "DropRateMultiplier", "LootAbundance", "DropSlotsMin", "DropSlotsMax", "RandomizeMobDrops", "RandomizePotDrops", "RandomizeChests", "TierWindow",
-				"PermutationExtraSlots", "PermutationSurpriseChance" };
+				"PermutationExtraSlots", "PermutationSurpriseChance", "PermutationDuplicateCopies", "PermutationMaterialCopies" };
 			foreach (string field in lootFields)
 			{
 				if (!IsDefault(loot, field)) Check.Skip($"{field} is not at its default value");

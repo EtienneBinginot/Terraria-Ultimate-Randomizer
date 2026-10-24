@@ -16,11 +16,13 @@ namespace UltimateRandomizer.Common.Features
 	// place of the same tier and access class (a hard gate never to a place below its true tier: GateBands), and takes that
 	// place's conditions. Every enemy keeps its number of entries,
 	// and every item of a permuted vanilla entry still drops somewhere. An eligible enemy without any vanilla entry gets one
-	// synthetic place (a random item of its level), permuted like the others. A share of the moved contents
-	// (PermutationSurpriseChance) then becomes a random item, never a material nor the keeper copy of an item
-	// (SurpriseCandidates). Bosses and their parts (BossPermutation has their own), minions, town NPCs,
-	// critters and harmless NPCs are left out. Tables are per net ID (variants such as Pinky have rules of their own); a
-	// variant whose snapshot is the same as its type's shares the type's table. Computed from the world seed, the synced
+	// synthetic place (a random item of its level), permuted like the others. Vanilla repeats common items on every
+	// variant (each zombie its Shackle, each slime its Gel and Slime Staff): an item keeps at most a few permuted copies
+	// (PermutationDuplicateCopies, PermutationMaterialCopies for materials; not ores, bars, blocks nor critters) per access
+	// class, its most reachable ones, and every other copy becomes a random item. A share of the kept contents (PermutationSurpriseChance)
+	// becomes one too, never a material nor the keeper copy of an item (SurpriseCandidates). Bosses and their parts
+	// (BossPermutation has their own), minions, town NPCs, critters and harmless NPCs are left out. Tables are per net ID
+	// (variants such as Pinky have rules of their own); a variant whose snapshot is the same as its type's shares the type's table. Computed from the world seed, the synced
 	// settings and the snapshot only: the server (kills) and the clients (journal, codex) get the same plan
 	public static class DropPermutation
 	{
@@ -169,9 +171,13 @@ namespace UltimateRandomizer.Common.Features
 			public List<List<int>> Groups;
 			// Per table net ID (UnitOf)
 			public Dictionary<int, Placed[]> ByUnit;
-			// Per place: its content may become a surprise (SurpriseCandidates), and did
+			// Per place: its content may become a surprise by the chance roll (SurpriseCandidates), is past its item's copy cap
+			// (always a surprise when one can be rolled), and did become one
 			public bool[] SurpriseCandidate;
+			public bool[] Forced;
 			public bool[] Surprised;
+			// The world evil of the spawn map the keepers were ranked with (EarlyShare)
+			public WorldEvil Evil;
 		}
 
 		private static WorldPlan cached;
@@ -459,38 +465,90 @@ namespace UltimateRandomizer.Common.Features
 		// Blocks, critters and ores: found in the world itself (tiles, critters), every copy may become a surprise
 		public static bool FoundInWorld(int item) => ItemPool.IsValid(item) && (ItemPool.Info[item].Category is ItemCategory.Block or ItemCategory.Critter || OreMap.IsOre(item));
 
-		// Materials, ores and bars are never surprises: the permutation keeps them where recipes expect enemies to give them
+		// Materials, ores and bars are never rolled surprises: the permutation keeps them where recipes expect enemies to give
+		// them (materials beyond their copy cap are forced ones all the same: SurpriseCandidates)
 		public static bool SurpriseKind(int item) => ItemPool.IsValid(item) && ItemPool.Info[item].Category is not (ItemCategory.Material or ItemCategory.OreBar);
 
-		// Pure (with the item pool): the places whose content may become a surprise. Not a material, ore or bar, not a
-		// synthetic content (already random), and not the keeper copy: every item but those FoundInWorld keeps one permuted
-		// copy that is never surprised, whatever its other sources (shops, bags, recipes and boss drops are randomized too), so
-		// an item with a single copy is never surprised. The keeper is the most reachable place: no condition at all first,
-		// then the lowest condition tier (Findability.ConditionTier), then the rank. Depends on no setting, so a surprise stays
-		// when the chance or another system's setting moves
-		public static bool[] SurpriseCandidates(IReadOnlyList<Place> places, int[] contentOf, int seed)
+		// The copy cap of an item (SurpriseCandidates): materialCopies for a material, duplicateCopies for the rest; 0 (no
+		// limit) for ores and bars, which recipes need wherever vanilla put them, and for items FoundInWorld
+		public static int CopyCap(int item, int duplicateCopies, int materialCopies)
 		{
-			Dictionary<int, int> keeper = new();
-			(int, int, int, int, int, int) Order(int p)
+			if (!ItemPool.IsValid(item) || FoundInWorld(item) || OreMap.IsOre(item)) return 0;
+			return ItemPool.Info[item].Category switch
+			{
+				ItemCategory.OreBar => 0,
+				ItemCategory.Material => Math.Max(0, materialCopies),
+				_ => Math.Max(0, duplicateCopies)
+			};
+		}
+
+		// Pure (with the item pool): the places whose content may become a surprise (candidates of the chance roll), and those
+		// whose content always does (forced). Never a synthetic content (already random). Every item but those FoundInWorld
+		// ranks its permuted copies from the most reachable: the lowest condition tier (Findability.ConditionTier) first, then
+		// no condition at all, then (a tier-0 material: Gel, Lens, the critical stations' start materials) the owners the early
+		// kills meet most (earlyShare: owner -> share of the early kills, PacingModel.EarlyKillShare; null: not used), then the
+		// rank. Copies are counted per access class (the place's: contents never leave theirs): an item of a NormalvsExpert
+		// drop has its Classic copies and its Expert ones, each class keeps its own keeper and its own cap of copies, so the
+		// item drops in every difficulty. The keeper is never surprised whatever its other sources (shops, bags, recipes and
+		// boss drops are randomized too), so an item with a single copy always stays. Vanilla gives every zombie variant its
+		// own Shackle and every slime its own Gel: the copies past the item's cap (CopyCap, 0: no cap) are forced, so a common
+		// item stops filling the early tables. The kept copies after the keeper are candidates, not materials, ores or bars.
+		// Depends on the caps (and the spawn map) only, so a surprise stays when the chance or another system's setting moves
+		public static bool[] SurpriseCandidates(IReadOnlyList<Place> places, int[] contentOf, int seed, int duplicateCopies, int materialCopies, out bool[] forced, Func<int, double> earlyShare = null)
+		{
+			Dictionary<int, double> shares = new();
+			double Early(int p)
+			{
+				int item = places[contentOf[p]].Entry.itemId;
+				if (earlyShare == null || !ItemPool.IsValid(item) || ItemPool.Info[item].Category != ItemCategory.Material || ItemPool.Info[item].Tier != 0) return 0;
+				int owner = places[p].Owner;
+				if (!shares.TryGetValue(owner, out double share)) shares[owner] = share = earlyShare(owner);
+				return share;
+			}
+			(int, int, double, int, int, int, int) Order(int p)
 			{
 				List<IItemDropRuleCondition> conditions = places[p].Entry.conditions;
 				bool free = conditions == null || conditions.Count == 0;
-				return (free ? 0 : 1, Findability.ConditionTier(conditions, places[p].Tier), Rank(seed, places[p]), places[p].OwnerKey, places[p].Owner, places[p].Index);
+				return (Findability.ConditionTier(conditions, places[p].Tier), free ? 0 : 1, -Early(p), Rank(seed, places[p]), places[p].OwnerKey, places[p].Owner, places[p].Index);
 			}
+			// Each place's position among the copies of its content's item in its access class (0: the keeper); -1 for the
+			// uncounted ones
+			int[] position = Enumerable.Repeat(-1, places.Count).ToArray();
+			Dictionary<(int, string), List<int>> copies = new();
 			for (int p = 0; p < places.Count; p++)
 			{
 				Place source = places[contentOf[p]];
 				int item = source.Entry.itemId;
 				if (source.Synthetic || FoundInWorld(item)) continue;
-				if (!keeper.TryGetValue(item, out int kept) || Order(p).CompareTo(Order(kept)) < 0) keeper[item] = p;
+				(int, string) key = (item, places[p].Access ?? "");
+				if (!copies.TryGetValue(key, out List<int> list)) copies[key] = list = new List<int>();
+				list.Add(p);
+			}
+			foreach (List<int> list in copies.Values)
+			{
+				list.Sort((a, b) => Order(a).CompareTo(Order(b)));
+				for (int k = 0; k < list.Count; k++) position[list[k]] = k;
 			}
 			bool[] candidate = new bool[places.Count];
+			forced = new bool[places.Count];
 			for (int p = 0; p < places.Count; p++)
 			{
 				Place source = places[contentOf[p]];
-				candidate[p] = !source.Synthetic && SurpriseKind(source.Entry.itemId) && !(keeper.TryGetValue(source.Entry.itemId, out int kept) && kept == p);
+				if (source.Synthetic) continue;
+				int item = source.Entry.itemId;
+				int cap = CopyCap(item, duplicateCopies, materialCopies);
+				forced[p] = cap > 0 && position[p] >= cap;
+				candidate[p] = !forced[p] && SurpriseKind(item) && position[p] != 0;
 			}
 			return candidate;
+		}
+
+		// The share of the early kills (PacingModel.EarlyKillShare: spawn map and synced settings, never a drop plan) made on
+		// this table's enemies (variants count as their type)
+		public static double EarlyShare(int owner)
+		{
+			int type = BiomeSlots.TypeOf(owner);
+			return PacingModel.EarlyKillShare(k => k == type);
 		}
 
 		// The surprise roll of a place, in [0, 1): its own hash, so the surprises of a world only grow with the chance
@@ -525,8 +583,10 @@ namespace UltimateRandomizer.Common.Features
 
 		// The whole plan for a seed. The tier is the enemy's base tier, not the effective one: that one follows progression
 		// (ScaleWeakEnemiesWithProgression) and the drops of a world in progress must not move. surpriseChance: share of the
-		// candidates that become surprises, in [0, 1] (PermutationSurpriseChance when null; none in shuffle mode)
-		public static WorldPlan Build(int seed, float? surpriseChance = null)
+		// candidates that become surprises, in [0, 1] (PermutationSurpriseChance when null; none in shuffle mode).
+		// duplicateCopies / materialCopies: the copy caps (PermutationDuplicateCopies / PermutationMaterialCopies when null,
+		// 0: no cap; none in shuffle mode, which only moves the vanilla contents)
+		public static WorldPlan Build(int seed, float? surpriseChance = null, int? duplicateCopies = null, int? materialCopies = null)
 		{
 			List<Place> places = CollectPlaces(seed);
 			int[] contentOf = Permute(places, seed, out List<List<int>> groups);
@@ -555,39 +615,45 @@ namespace UltimateRandomizer.Common.Features
 					FromIndex = source.Index
 				};
 			}
-			// Surprises: a candidate whose own roll is under the chance gets a random item instead of its content
-			float chance = surpriseChance ?? (GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle ? 0f : LootConfig.Instance.PermutationSurpriseChance / 100f);
+			// Surprises: a forced place, or a candidate whose own roll is under the chance, gets a random item instead of its
+			// content (a forced place keeps it when no surprise can be rolled)
+			bool shuffle = GeneralConfig.Instance.RandomizerMode == RandomizerMode.Shuffle;
+			float chance = surpriseChance ?? (shuffle ? 0f : LootConfig.Instance.PermutationSurpriseChance / 100f);
 			chance = Math.Clamp(chance, 0f, 1f);
-			bool[] candidates = SurpriseCandidates(places, contentOf, seed);
+			int copies = duplicateCopies ?? (shuffle ? 0 : LootConfig.Instance.PermutationDuplicateCopies);
+			int materials = materialCopies ?? (shuffle ? 0 : LootConfig.Instance.PermutationMaterialCopies);
+			bool[] candidates = SurpriseCandidates(places, contentOf, seed, copies, materials, out bool[] forced, EarlyShare);
 			bool[] surprised = new bool[places.Count];
-			for (int p = 0; p < places.Count && chance > 0f; p++)
+			for (int p = 0; p < places.Count; p++)
 			{
 				Place place = places[p];
 				Placed placed = byUnit[place.Owner][place.Index];
 				DropRateInfo content = placed.Entry;
-				if (!candidates[p] || SurpriseRoll(seed, place) >= chance || !TrySurprise(place, seed, content, out int item, out int min, out int max, out float rate)) continue;
+				if (!forced[p] && !(candidates[p] && chance > 0f && SurpriseRoll(seed, place) < chance)) continue;
+				if (!TrySurprise(place, seed, content, out int item, out int min, out int max, out float rate)) continue;
 				placed.Entry = new DropRateInfo(item, min, max, rate, content.conditions);
 				placed.Surprise = true;
 				placed.Replaced = content.itemId;
 				byUnit[place.Owner][place.Index] = placed;
 				surprised[p] = true;
 			}
-			return new WorldPlan { Places = places, ContentOf = contentOf, Groups = groups, ByUnit = byUnit, SurpriseCandidate = candidates, Surprised = surprised };
+			return new WorldPlan { Places = places, ContentOf = contentOf, Groups = groups, ByUnit = byUnit, SurpriseCandidate = candidates, Forced = forced, Surprised = surprised, Evil = BiomeSlots.CurrentEvil };
 		}
 
 		private static WorldPlan Empty() => new()
 		{
 			Places = new List<Place>(), ContentOf = Array.Empty<int>(), Groups = new List<List<int>>(), ByUnit = new Dictionary<int, Placed[]>(),
-			SurpriseCandidate = Array.Empty<bool>(), Surprised = Array.Empty<bool>()
+			SurpriseCandidate = Array.Empty<bool>(), Forced = Array.Empty<bool>(), Surprised = Array.Empty<bool>()
 		};
 
-		// The plan of the current world (cleared by WorldCaches.Reset). Before the item pool (and the world) exist the
+		// The plan of the current world (cleared by WorldCaches.Reset; made again when the world's evil arrives on a client: the
+		// keepers follow the spawn map, EarlyShare). Before the item pool (and the world) exist the
 		// synthetic entries can't be rolled: an empty plan, not kept
 		public static WorldPlan Current
 		{
 			get
 			{
-				if (cached != null) return cached;
+				if (cached != null && cached.Evil == BiomeSlots.CurrentEvil) return cached;
 				if (!ItemPool.Ready || !SeedSystem.WorldReady) return Empty();
 				return cached = Build(SeedSystem.WorldSeed);
 			}

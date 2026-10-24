@@ -2596,6 +2596,12 @@ namespace UltimateRandomizer.Common.Features
 					taken.Add(type);
 					planned.Add(type);
 				}
+				// A rebuilt station never takes its vanilla ingredients only (a Work Bench of 12 Wood looks vanilla): its last slot
+				// takes a new type while every planned one is vanilla (a lone slot: the key too), falling back to anything when no
+				// other type can be had. A swapped recipe avoids the vanilla types of both its own recipe and its item's (proxy)
+				HashSet<int> vanillaTypes = isSwapped ? originalTypes.Concat(proxyOriginal.Select(o => o.type)).ToHashSet() : originalTypes;
+				bool NewType(int x) => !vanillaTypes.Contains(x);
+				bool NeedsNew(int slot) => station && slot == slots - 1 && !planned.Any(NewType);
 
 				// The key: a material found exactly at T (had no earlier), so the recipe is doable from T, not before. Without one
 				// of the drawn kinds: any kind, then the vanilla ingredient had exactly at T; else a vanilla recipe stays vanilla,
@@ -2606,8 +2612,12 @@ namespace UltimateRandomizer.Common.Features
 				if (top > 0 && !house)
 				{
 					long keyBudget = Math.Max(1, maxValue - keptValue);
-					key = PickKey(top, catWeight, Usable, rng, FitsHere, keyBudget);
-					if (key == 0) key = PickKey(top, null, Usable, rng, FitsHere, keyBudget);
+					bool newKey = NeedsNew(0);
+					Func<int, bool> keyUsable = newKey ? x => Usable(x) && NewType(x) : Usable;
+					key = PickKey(top, catWeight, keyUsable, rng, FitsHere, keyBudget);
+					if (key == 0) key = PickKey(top, null, keyUsable, rng, FitsHere, keyBudget);
+					if (key == 0 && newKey) key = PickKey(top, catWeight, Usable, rng, FitsHere, keyBudget);
+					if (key == 0 && newKey) key = PickKey(top, null, Usable, rng, FitsHere, keyBudget);
 					if (key == 0) key = VanillaKey(original.Concat(proxyOriginal), top, Usable);
 					if (key == 0 && isSwapped && top < Tiers.Max)
 					{
@@ -2654,8 +2664,11 @@ namespace UltimateRandomizer.Common.Features
 					double room = maxValue - keptValue - spent;
 					int picked = 0;
 					bool wasSurprise = false;
-					for (int attempt = 0; attempt < 12 && picked == 0 && categories.Count > 0; attempt++)
+					// NeedsNew: twelve attempts at a new type, then twelve at anything
+					bool needsNew = NeedsNew(slot);
+					for (int attempt = 0; attempt < (needsNew ? 24 : 12) && picked == 0 && categories.Count > 0; attempt++)
 					{
+						bool fresh = needsNew && attempt < 12;
 						int c = WeightedPick(categories, rng);
 						// The shape's slot: its categories first, in turn
 						if (shaped && attempt < ShapeAttempts) c = shapeFirst[attempt % shapeFirst.Count];
@@ -2682,7 +2695,7 @@ namespace UltimateRandomizer.Common.Features
 						List<(int item, float weight)> options = new();
 						foreach (int x in pool[c, tier])
 						{
-							if (!Usable(x) || uses.GetValueOrDefault(x) >= cap || !Affordable(x) || !FitsHere(x)) continue;
+							if (!Usable(x) || uses.GetValueOrDefault(x) >= cap || !Affordable(x) || !FitsHere(x) || fresh && !NewType(x)) continue;
 							if (surprised && UnitValue(x) > room) continue;
 							options.Add((x, (float)(CommonnessWeight(x) * IngredientPenalty(x, x) * Closeness(x, slotShare))));
 						}
@@ -2701,6 +2714,7 @@ namespace UltimateRandomizer.Common.Features
 					}
 					// A house is built at once: any material found at tier 0 then, whatever its uses; so is a critical station,
 					// from the start materials
+					if (picked == 0 && (house || critical) && needsNew) picked = HouseMaterial(x => Usable(x) && NewType(x), rng);
 					if (picked == 0 && (house || critical)) picked = HouseMaterial(Usable, rng);
 					if (picked == 0) continue;
 					if (wasSurprise && !isShell)
@@ -2754,7 +2768,8 @@ namespace UltimateRandomizer.Common.Features
 					long want = (long)Math.Ceiling(vanillaValue * MinValueFactor);
 					if (cfg.LimitRecipeValue && !isShell && (long)StackRules.ValueOf(result.Results[i].type) * result.Results[i].stack > RecipeSystem.MaxResultValue(proxy, result.IngredientValues[i], cfg.RecipeValueGuard)) want = vanillaValue;
 					if (cfg.LimitRecipeValue && isShell && vanillaValue > (long)(result.IngredientValues[i] * cfg.RecipeValueGuard) + Item.silver) want = vanillaValue;
-					if (result.IngredientValues[i] < want) Raise(i, want, key, top, Usable, FitsHere, Affordable);
+					// A station's richer materials are new types: the raise never brings it back to its vanilla ingredients
+					if (result.IngredientValues[i] < want) Raise(i, want, key, top, station ? x => Usable(x) && NewType(x) : Usable, FitsHere, Affordable);
 				}
 				return true;
 			}

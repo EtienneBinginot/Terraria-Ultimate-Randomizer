@@ -48,6 +48,8 @@ namespace UltimateRandomizer.Common.Tests
 			TestRunner.Register("DropPermutationRuntime", DropPermutationRuntime);
 			TestRunner.Register("DropPermutationStable", DropPermutationStable);
 			TestRunner.Register("DropPermutationSurprise", DropPermutationSurprise);
+			TestRunner.Register("PermutationDuplicatesCapped", PermutationDuplicatesCapped);
+			TestRunner.Register("PermutationKeepsStartDrops", PermutationKeepsStartDrops);
 		}
 
 		// Seeds of the permutation tests: the world's and two fixed ones (DropPermutation.Build is pure in the seed)
@@ -57,8 +59,9 @@ namespace UltimateRandomizer.Common.Tests
 		{
 			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
 			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
-			// Without surprises: these tests check the permutation itself (DropPermutationSurprise checks the surprises)
-			DropPermutation.WorldPlan plan = DropPermutation.Build(seed, 0f);
+			// Without surprises nor copy caps: these tests check the permutation itself (DropPermutationSurprise and
+			// PermutationDuplicatesCapped check the surprises)
+			DropPermutation.WorldPlan plan = DropPermutation.Build(seed, 0f, 0, 0);
 			if (plan.Places.Count < 30) Check.Skip($"only {plan.Places.Count} permutable drop entries");
 			return plan;
 		}
@@ -239,7 +242,8 @@ namespace UltimateRandomizer.Common.Tests
 		}
 
 		// The surprises of the permutation, with explicit chances (not the config): about that share of the candidates becomes a
-		// random item with at most the content's chance and the place's conditions; never a material, ore, bar or synthetic content;
+		// random item with at most the content's chance and the place's conditions; never a material, ore, bar or synthetic content
+		// (but the forced copies past an item's cap, which are never candidates and don't count in the share);
 		// every item but blocks, critters and ores keeps a copy even when every candidate is surprised; a higher chance only adds
 		// surprises (each place has its own roll), with the same items
 		// The same conditions (the same objects, in order): DropRateInfo's constructor copies its conditions list, so the
@@ -260,9 +264,10 @@ namespace UltimateRandomizer.Common.Tests
 			foreach (int seed in PermutationSeeds())
 			{
 				DropPermutation.WorldPlan none = PermutationPlan(seed);
-				DropPermutation.WorldPlan few = DropPermutation.Build(seed, low);
-				DropPermutation.WorldPlan many = DropPermutation.Build(seed, high);
-				DropPermutation.WorldPlan all = DropPermutation.Build(seed, 1f);
+				const int copies = 2, materials = 4;
+				DropPermutation.WorldPlan few = DropPermutation.Build(seed, low, copies, materials);
+				DropPermutation.WorldPlan many = DropPermutation.Build(seed, high, copies, materials);
+				DropPermutation.WorldPlan all = DropPermutation.Build(seed, 1f, copies, materials);
 				if (none.Surprised.Any(s => s)) Fail($"seed {seed}: surprises at 0 %");
 				foreach ((float chance, DropPermutation.WorldPlan plan) in new[] { (low, few), (high, many), (1f, all) })
 				{
@@ -273,16 +278,18 @@ namespace UltimateRandomizer.Common.Tests
 						DropPermutation.Place source = plan.Places[plan.ContentOf[p]];
 						DropPermutation.Placed placed = plan.ByUnit[place.Owner][place.Index];
 						DropRateInfo content = source.Entry;
+						bool forced = plan.Forced[p];
 						if (plan.SurpriseCandidate[p]) candidates++;
+						if (forced && plan.SurpriseCandidate[p]) Fail($"seed {seed} at {chance:P0}: {NpcName(place.Owner)} entry {place.Index} both forced and a candidate");
 						if (!plan.Surprised[p])
 						{
 							if (placed.Surprise || placed.Entry.itemId != content.itemId) Fail($"seed {seed} at {chance:P0}: {NpcName(place.Owner)} entry {place.Index} changed without being a surprise");
 							continue;
 						}
-						surprised++;
+						if (!forced) surprised++;
 						string where = $"seed {seed} at {chance:P0}: {NpcName(place.Owner)} entry {place.Index} ({Lang.GetItemNameValue(content.itemId)})";
-						if (!plan.SurpriseCandidate[p]) Fail($"{where} surprised but not a candidate");
-						if (!DropPermutation.SurpriseKind(content.itemId)) Fail($"{where}: a material, ore or bar surprised");
+						if (!plan.SurpriseCandidate[p] && !forced) Fail($"{where} surprised but neither a candidate nor forced");
+						if (!DropPermutation.SurpriseKind(content.itemId) && !forced) Fail($"{where}: a material, ore or bar surprised");
 						if (source.Synthetic) Fail($"{where}: a synthetic content surprised");
 						// The chance is the content's, capped by a vanilla-like rate for the new item (DropRates.Denominator)
 						if (!placed.Surprise || placed.Replaced != content.itemId || placed.Entry.dropRate <= 0f || placed.Entry.dropRate > content.dropRate || !SameConditions(placed.Entry.conditions, place.Entry.conditions))
@@ -314,6 +321,106 @@ namespace UltimateRandomizer.Common.Tests
 			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Drop permutation surprises (surprised/candidates):{shares}");
 			Check.All(failures, "Drop permutation surprises");
 			if (checkedSeeds == 0) Check.Skip("fewer than 50 surprise candidates");
+		}
+
+		// The copy caps (explicit, not the config), per access class (a NormalvsExpert drop's Classic and Expert copies count
+		// apart): no item keeps more unsurprised permuted copies there than its cap (materials theirs, ores, bars, blocks and
+		// critters none), every forced copy that could be rolled became a surprise, and every item that had a permuted copy in
+		// an access class keeps one there. In this world (Findability.WorldAllows: difficulty, evil, seeds), an item that had a
+		// copy able to drop keeps one able to drop. Logs the tier-0 share of the items vanilla repeats on every zombie
+		// and slime variant, with and without the caps
+		private static void PermutationDuplicatesCapped()
+		{
+			if (!DropPermutation.InStyle(NPCID.BlueSlime)) Check.Skip("the drop table style is not Permutation");
+			List<string> failures = new();
+			void Fail(string message)
+			{
+				if (failures.Count < 25) failures.Add(message);
+			}
+			const int copies = 2, materials = 4;
+			int[] repeated = { ItemID.SlimeStaff, ItemID.SpiffoPlush, ItemID.ZombieArm, ItemID.Shackle, ItemID.Gel, ItemID.Lens };
+			string shares = "";
+			int cappedItems = 0;
+			foreach (int seed in PermutationSeeds())
+			{
+				DropPermutation.WorldPlan plain = PermutationPlan(seed);
+				DropPermutation.WorldPlan capped = DropPermutation.Build(seed, 0f, copies, materials);
+				Dictionary<(int item, string access), int> kept = new(), before = new();
+				HashSet<int> droppable = new(), keptDroppable = new();
+				for (int p = 0; p < capped.Places.Count; p++)
+				{
+					DropPermutation.Place place = capped.Places[p];
+					DropPermutation.Place source = capped.Places[capped.ContentOf[p]];
+					if (source.Synthetic) continue;
+					int item = source.Entry.itemId;
+					(int, string) key = (item, place.Access ?? "");
+					before[key] = before.GetValueOrDefault(key) + 1;
+					if (!capped.Surprised[p]) kept[key] = kept.GetValueOrDefault(key) + 1;
+					if (capped.Forced[p] && !capped.Surprised[p] && capped.ByUnit[place.Owner][place.Index].Entry.itemId != item) Fail($"seed {seed}: a forced place changed without a surprise");
+					// Able to drop in this world: allowed by its difficulty, evil and seeds, at a reachable condition tier
+					if (Findability.WorldAllows(place.Entry.conditions) && Findability.ConditionTier(place.Entry.conditions, place.Tier) != Findability.Never)
+					{
+						droppable.Add(item);
+						if (!capped.Surprised[p]) keptDroppable.Add(item);
+					}
+				}
+				foreach (((int item, string access), int count) in before)
+				{
+					int left = kept.GetValueOrDefault((item, access));
+					int cap = DropPermutation.CopyCap(item, copies, materials);
+					string where = access == "" ? "" : $" ({access})";
+					if (left == 0) Fail($"seed {seed}: {Lang.GetItemNameValue(item)}{where} lost every permuted copy ({count} before)");
+					if (cap > 0 && count > cap) cappedItems++;
+					// A forced copy may stay when its surprise could not be rolled (TrySurprise failed): only a few
+					if (cap > 0 && left > cap + Math.Max(1, (count - cap) / 10)) Fail($"seed {seed}: {Lang.GetItemNameValue(item)}{where} keeps {left} copies, cap {cap}");
+				}
+				foreach (int item in droppable.Where(i => !keptDroppable.Contains(i)).OrderBy(i => i))
+				{
+					Fail($"seed {seed}: {Lang.GetItemNameValue(item)} keeps no copy able to drop in this world");
+				}
+				// Tier 0: the share of the places holding the repeated items, without and with the caps
+				int Share(DropPermutation.WorldPlan plan, out int total)
+				{
+					total = 0;
+					int count = 0;
+					for (int p = 0; p < plan.Places.Count; p++)
+					{
+						DropPermutation.Place place = plan.Places[p];
+						if (place.Tier != 0) continue;
+						total++;
+						if (repeated.Contains(plan.ByUnit[place.Owner][place.Index].Entry.itemId)) count++;
+					}
+					return count;
+				}
+				int was = Share(plain, out int totalWas), now = Share(capped, out int totalNow);
+				shares += $" {seed}: {was}/{totalWas} -> {now}/{totalNow}";
+				if (totalNow > 0 && now > was) Fail($"seed {seed}: the caps raised the tier-0 repeated items from {was} to {now}");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Permutation duplicates (tier-0 places holding Slime Staff, Spiffo Plush, Zombie Arm, Shackle, Gel, Lens, uncapped -> capped):{shares}");
+			Check.All(failures, "Permutation duplicates");
+			if (cappedItems == 0) Check.Skip("no item has more copies than its cap");
+		}
+
+		// With the default caps, the copies of Gel and Lens kept are those of the enemies the early kills meet: both stay start
+		// materials (RecipePlanner.StartMaterials: within StartDropKills early kills on average), so the critical stations'
+		// recipes may take them
+		private static void PermutationKeepsStartDrops()
+		{
+			if (!LootConfig.Instance.RandomizeMobDrops) Check.Skip("enemy drops are not randomized");
+			if (!DropPermutation.InStyle(NPCID.BlueSlime)) Check.Skip("the drop table style is not Permutation");
+			if (!ItemPool.Ready) Check.Skip("the item pool is not built");
+			PacingTests.RequireDefaults();
+			HashSet<int> start = RecipePlanner.StartMaterials(false);
+			List<string> failures = new();
+			string rates = "";
+			foreach (int item in new[] { ItemID.Gel, ItemID.Lens })
+			{
+				double rate = PacingModel.EarlyDropRate(item);
+				rates += $" {Lang.GetItemNameValue(item)} {rate:0.000}/kill";
+				if (!start.Contains(item)) failures.Add($"{Lang.GetItemNameValue(item)} is not a start material ({rate:0.000} per early kill, at least {1 / RecipePlanner.StartDropKills:0.000})");
+			}
+			ModContent.GetInstance<UltimateRandomizer>().Logger.Info($"Permutation start drops:{rates}");
+			Check.All(failures, "Start drops");
 		}
 
 		// Contents only move within their tier group (the origin's tier is one of the group's tiers, always the base tier of
